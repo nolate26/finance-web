@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Research Hub** — plataforma web centralizada de análisis de inversiones. Dark institutional UI. Deployed on Railway (auto-deploy on push to `main`). Reads data files committed to the repo.
+**Research Hub** — plataforma web centralizada de análisis de inversiones. Dark institutional UI, English-language UI. Deployed on Railway (auto-deploy on push to `main`). Reads data files committed to the repo.
 
 ## Development Commands
 
@@ -32,10 +32,14 @@ app/
   api/
     economia/route.ts     # Reads all 3 CSVs, returns JSON
     fondos/route.ts       # Lists CSV files and parses cartera data
-  economia/page.tsx       # Economía tab (client component)
-  fondos/page.tsx         # Fondos tab (client component)
+    companies/route.ts    # Reads companies.csv; supports ?sector= ?search=
+  economia/page.tsx       # Market tab (client component)
+  fondos/page.tsx         # Funds tab (client component)
+  companies/page.tsx      # Companies tab (client component)
+lib/
+  companies.ts            # Shared Company type + SECTOR_MAP (Spanish → English)
 components/
-  Navbar.tsx              # Fixed top nav, tab switching
+  Navbar.tsx              # Fixed top nav — tabs: Market / Funds / Companies
   economia/
     ValuationTable.tsx    # P/E table with mini sparkbar + click to select index
     PEHistoryChart.tsx    # Recharts LineChart with reference lines (avg, ±1σ)
@@ -43,6 +47,11 @@ components/
   fondos/
     CarteraChart.tsx      # Horizontal BarChart overweight/underweight sorted
     CarteraTable.tsx      # Detailed table with inline weight bar
+  companies/
+    KPISummary.tsx        # 5 KPI cards: count, mkt cap, median EV/EBITDA, avg 1Y ret, recs
+    CompanyTable.tsx      # Paginated sortable table (20/page), clickable rows
+    CompanyModal.tsx      # Right-side detail panel: returns chart, multiples, estimates
+    IndustryView.tsx      # Sector grid with median metrics + company chips
 data/
   Economia/               # CSV data files
     historia_pe_5Y.csv    # Daily P/E history for 18 indices (2021–today)
@@ -50,11 +59,21 @@ data/
     tabla_maestra_comps.csv  # Returns by period + EV/EBITDA, P/U, ROE
   Fondos/                 # Fund CSV snapshots
     {FundName}-{DD-MM-YYYY}.csv
+  Companies/
+    companies.csv         # ~105 Chilean listed companies, 57 columns (schema in caude.md)
 ```
 
 ## Data Notes
 
-**Fondos CSVs:** Dynamic column detection by position — col[0]=company, col[1]=portfolio_pct, col[2]=benchmark_pct (header used to extract benchmark name, e.g. `% IPSA` → `IPSA`), col[3]=overweight. Optional named columns: `industria`, `analista`, `top_pick`, `observacion`.
+### companies.csv
+- ~105 rows, one per company. All monetary values in MM CLP.
+- `sector` column uses Spanish labels — map to English via `SECTOR_MAP` in `lib/companies.ts`
+- `recommendation` values: `Mantener` (Hold) / `Comprar` (Buy) / `Vender` (Sell)
+- `"NM"` means "Not Meaningful" (e.g. negative P/E) — treat as `null` everywhere, never display raw
+- Refresh: re-run `scripts/excel_to_csv.py --input data/ss.xlsx --output data/Companies/companies.csv` when source Excel is updated
+
+### Fondos CSVs
+Dynamic column detection by position — col[0]=company, col[1]=portfolio_pct, col[2]=benchmark_pct (header used to extract benchmark name, e.g. `% IPSA` → `IPSA`), col[3]=overweight. Optional named columns: `industria`, `analista`, `top_pick`, `observacion`.
 
 **Fund IDs:** `{NAME}-{DD-MM-YYYY}` — unique across multiple snapshots of the same fund. Quick-switch buttons show the latest snapshot per fund; the dropdown shows all snapshots.
 
@@ -64,9 +83,10 @@ data/
 
 ## Design System
 
-Dark blue institutional theme. Key CSS variables in `app/globals.css`:
+Dark blue institutional theme. All UI text in **English**. Key CSS variables in `app/globals.css`:
 - Background: `#050B18` → `#0A1628` → `#0F2040`
 - Accent: `#3B82F6` (blue), `#06B6D4` (cyan), `#10B981` (green), `#EF4444` (red)
+- Recommendation colors: Buy `#10B981` / Hold `#F59E0B` / Sell `#EF4444`
 - Positive values: green `#10B981` / Negative: red `#EF4444`
 - `.card` class: gradient bg + blue border
 - `.grid-bg` class: subtle grid lines on body
@@ -81,6 +101,7 @@ Dark blue institutional theme. Key CSS variables in `app/globals.css`:
 
 ## Adding New Funds / Data
 
-- Drop new CSVs into `data/Fondos/` matching pattern `FundName-DD-MM-YYYY.csv` — auto-appear in fund selector after committing and pushing
-- Drop updated CSVs into `data/Economia/` — picked up on next API call
+- **Fondos:** Drop new CSVs into `data/Fondos/` matching pattern `FundName-DD-MM-YYYY.csv` — auto-appear in fund selector after committing and pushing
+- **Economía:** Drop updated CSVs into `data/Economia/` — picked up on next API call
+- **Companies:** Replace `data/Companies/companies.csv` — picked up on next API call
 - All API routes read from disk on each request (no caching)

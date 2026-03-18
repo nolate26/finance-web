@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, TrendingUp } from "lucide-react";
+import { BarChart3, TrendingUp, Building2 } from "lucide-react";
 
 const tabs = [
-  { href: "/economia", label: "Economía", icon: TrendingUp },
-  { href: "/fondos", label: "Fondos", icon: BarChart3 },
+  { href: "/economia", label: "Market", icon: TrendingUp },
+  { href: "/fondos", label: "Funds", icon: BarChart3 },
+  { href: "/companies", label: "Companies", icon: Building2 },
 ];
 
 export default function Navbar() {
@@ -61,7 +62,7 @@ export default function Navbar() {
 
       {/* Right side - date */}
       <div className="ml-auto text-xs font-mono" style={{ color: "#475569" }}>
-        {new Date().toLocaleDateString("es-CL", {
+        {new Date().toLocaleDateString("en-US", {
           weekday: "short", day: "2-digit", month: "short", year: "numeric"
         }).toUpperCase()}
       </div>
