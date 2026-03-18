@@ -57,8 +57,9 @@ data/
     historia_pe_5Y.csv    # Daily P/E history for 18 indices (2021–today)
     resumen_pe.csv        # P/E today + hist avg + ±1σ + discount
     tabla_maestra_comps.csv  # Returns by period + EV/EBITDA, P/U, ROE
-  Fondos/                 # Fund CSV snapshots
-    {FundName}-{DD-MM-YYYY}.csv
+  Fondos/                 # Fund CSV snapshots — pattern: {FundName}_{YYYY-MM-DD}.csv
+    # Chile funds: Pionero, Moneda_Renta_Variable (MRV), Orange
+    # LATAM funds: Glory, Mercer, Moneda_Latin_America_Equities_(LX), Moneda_Latin_America_Small_Cap_(LX)
   Companies/
     companies.csv         # ~105 Chilean listed companies, 57 columns (schema in caude.md)
 ```
@@ -73,9 +74,13 @@ data/
 - Refresh: re-run `scripts/excel_to_csv.py --input data/ss.xlsx --output data/Companies/companies.csv` when source Excel is updated
 
 ### Fondos CSVs
+Filename pattern: `{FundName}_{YYYY-MM-DD}.csv` — the date suffix makes each snapshot unique.
+
 Dynamic column detection by position — col[0]=company, col[1]=portfolio_pct, col[2]=benchmark_pct (header used to extract benchmark name, e.g. `% IPSA` → `IPSA`), col[3]=overweight. Optional named columns: `industria`, `analista`, `top_pick`, `observacion`.
 
-**Fund IDs:** `{NAME}-{DD-MM-YYYY}` — unique across multiple snapshots of the same fund. Quick-switch buttons show the latest snapshot per fund; the dropdown shows all snapshots.
+**Fund IDs:** `{FundName}_{YYYY-MM-DD}` — unique key. UI splits funds into Chile / LATAM sub-tabs. Display name mapping lives in `app/api/fondos/route.ts` (`DISPLAY_NAMES`). Chile funds: `Pionero`, `Moneda_Renta_Variable`, `Orange`. LATAM: `Glory`, `Mercer`, `Moneda_Latin_America_Equities_(LX)`, `Moneda_Latin_America_Small_Cap_(LX)`.
+
+**UI layout:** Chile/LATAM region tabs → fund quick-select buttons → snapshot history pills → KPI strip → full-width table → full-width chart.
 
 **CSV parsing:** Done server-side with `papaparse` (header: true, skipEmptyLines: true).
 
@@ -101,7 +106,7 @@ Dark blue institutional theme. All UI text in **English**. Key CSS variables in 
 
 ## Adding New Funds / Data
 
-- **Fondos:** Drop new CSVs into `data/Fondos/` matching pattern `FundName-DD-MM-YYYY.csv` — auto-appear in fund selector after committing and pushing
+- **Fondos:** Drop new CSVs into `data/Fondos/` matching pattern `FundName_YYYY-MM-DD.csv` — auto-appear in fund selector after committing and pushing. To add a new fund to Chile/LATAM classification, update `CHILE_FUNDS` set in `app/api/fondos/route.ts` and add a display name to `DISPLAY_NAMES`.
 - **Economía:** Drop updated CSVs into `data/Economia/` — picked up on next API call
 - **Companies:** Replace `data/Companies/companies.csv` — picked up on next API call
 - All API routes read from disk on each request (no caching)

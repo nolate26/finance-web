@@ -5,6 +5,20 @@ import Papa from "papaparse";
 
 const FONDOS_DIR = path.join(process.cwd(), "data", "Fondos");
 
+// Display names for internal fund keys
+const DISPLAY_NAMES: Record<string, string> = {
+  Moneda_Renta_Variable: "MRV",
+  "Moneda_Latin_America_Equities_(LX)": "LA Equities (LX)",
+  "Moneda_Latin_America_Small_Cap_(LX)": "LA Small Cap (LX)",
+  Pionero: "Pionero",
+  Orange: "Orange",
+  Glory: "Glory",
+  Mercer: "Mercer",
+};
+
+// Funds classified as Chile
+const CHILE_FUNDS = new Set(["Pionero", "Moneda_Renta_Variable", "Orange"]);
+
 export interface CarteraRow {
   company: string;
   portfolioPct: number;
@@ -16,65 +30,64 @@ export interface CarteraRow {
   observacion: string;
 }
 
-export interface FondoData {
+export interface FondoMeta {
   id: string;
   name: string;
+  displayName: string;
   date: string;
+  region: "Chile" | "LATAM";
+}
+
+export interface FondoData extends FondoMeta {
   benchmark: string;
   cartera: CarteraRow[];
   error?: string;
 }
 
-function parseDateFromFilename(date: string): Date {
-  // DD-MM-YYYY → sortable date
-  const [d, m, y] = date.split("-");
-  return new Date(`${y}-${m}-${d}`);
-}
+function getAvailableFondos(): (FondoMeta & { file: string })[] {
+  const files = fs.readdirSync(FONDOS_DIR).filter((f) => f.endsWith(".csv"));
 
-function getAvailableFondos(): { id: string; name: string; file: string; date: string }[] {
-  const files = fs.readdirSync(FONDOS_DIR).filter(f => f.endsWith(".csv"));
   const result = files
-    .map(f => {
-      // Pattern: FundName-DD-MM-YYYY.csv  (e.g. MRV-13-03-2026.csv, Orange-13-03-2026.csv)
-      const match = f.match(/^(.+?)-(\d{2}-\d{2}-\d{4})\.csv$/i);
+    .map((f) => {
+      // Pattern: FundName_YYYY-MM-DD.csv
+      const match = f.match(/^(.+)_(\d{4}-\d{2}-\d{2})\.csv$/);
       if (!match) return null;
-      const name = match[1].toUpperCase();
+      const name = match[1];
       const date = match[2];
-      const id = `${name}-${date}`;
-      return { id, name, file: path.join(FONDOS_DIR, f), date };
+      const id = `${name}_${date}`;
+      const displayName = DISPLAY_NAMES[name] ?? name.replace(/_/g, " ");
+      const region: "Chile" | "LATAM" = CHILE_FUNDS.has(name) ? "Chile" : "LATAM";
+      return { id, name, displayName, date, region, file: path.join(FONDOS_DIR, f) };
     })
-    .filter(Boolean) as { id: string; name: string; file: string; date: string }[];
+    .filter(Boolean) as (FondoMeta & { file: string })[];
 
-  // Sort by fund name then by date ascending
+  // Sort by name then date ascending
   return result.sort((a, b) => {
     if (a.name !== b.name) return a.name.localeCompare(b.name);
-    return parseDateFromFilename(a.date).getTime() - parseDateFromFilename(b.date).getTime();
+    return a.date.localeCompare(b.date);
   });
 }
 
-function parseCSV(filePath: string, fondoName: string, date: string): FondoData {
+function parseCSV(filePath: string, meta: FondoMeta): FondoData {
   const content = fs.readFileSync(filePath, "utf-8");
   const { data: rows } = Papa.parse<Record<string, string>>(content, {
     header: true,
     skipEmptyLines: true,
   });
 
-  if (rows.length === 0) throw new Error("CSV vacío");
+  if (rows.length === 0) throw new Error("Empty CSV");
 
-  // Detect columns dynamically
   const cols = Object.keys(rows[0]);
-  // col[0] = company, col[1] = portfolio_pct, col[2] = benchmark_pct, col[3] = overweight
   const companyCol = cols[0];
   const portfolioCol = cols[1];
   const benchmarkCol = cols[2];
   const overweightCol = cols[3];
 
-  // Extract benchmark name from header (e.g. "% IPSA" → "IPSA")
   const benchmarkName = benchmarkCol.replace(/^%\s*/i, "").trim() || "Benchmark";
 
   const cartera: CarteraRow[] = rows
-    .filter(r => r[companyCol]?.trim())
-    .map(r => ({
+    .filter((r) => r[companyCol]?.trim())
+    .map((r) => ({
       company: r[companyCol].trim(),
       portfolioPct: parseFloat(r[portfolioCol]) || 0,
       benchmarkPct: parseFloat(r[benchmarkCol]) || 0,
@@ -85,8 +98,7 @@ function parseCSV(filePath: string, fondoName: string, date: string): FondoData 
       observacion: r["observacion"] ?? "",
     }));
 
-  const id = `${fondoName}-${date}`;
-  return { id, name: fondoName, date, benchmark: benchmarkName, cartera };
+  return { ...meta, benchmark: benchmarkName, cartera };
 }
 
 export async function GET(request: Request) {
@@ -98,23 +110,22 @@ export async function GET(request: Request) {
 
     if (!fondoId) {
       return NextResponse.json({
-        fondos: available.map(f => ({ id: f.id, name: f.name, date: f.date })),
+        fondos: available.map(({ file: _f, ...rest }) => rest),
       });
     }
 
-    const match = available.find(f => f.id === fondoId);
+    const match = available.find((f) => f.id === fondoId);
     if (!match) {
-      return NextResponse.json({ error: `Fondo '${fondoId}' not found` }, { status: 404 });
+      return NextResponse.json({ error: `Fund '${fondoId}' not found` }, { status: 404 });
     }
 
     try {
-      const data = parseCSV(match.file, match.name, match.date);
+      const { file, ...meta } = match;
+      const data = parseCSV(file, meta);
       return NextResponse.json(data);
     } catch (err) {
-      return NextResponse.json(
-        { id: match.id, name: match.name, date: match.date, benchmark: "", cartera: [], error: String(err) },
-        { status: 200 }
-      );
+      const { file: _f, ...meta } = match;
+      return NextResponse.json({ ...meta, benchmark: "", cartera: [], error: String(err) });
     }
   } catch (error) {
     console.error("Fondos API error:", error);
