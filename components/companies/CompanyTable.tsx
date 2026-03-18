@@ -15,24 +15,34 @@ interface Props {
 
 const PAGE_SIZE = 20;
 
-function fmtPct(v: number | null): string {
-  if (v == null) return "—";
-  return (v >= 0 ? "+" : "") + (v * 100).toFixed(1) + "%";
+function toNum(v: unknown): number | null {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return isNaN(n) ? null : n;
 }
 
-function fmtX(v: number | null): string {
-  if (v == null) return "—";
-  return v.toFixed(1) + "x";
+function fmtPct(v: unknown): string {
+  const n = toNum(v);
+  if (n == null) return "—";
+  return (n >= 0 ? "+" : "") + (n * 100).toFixed(1) + "%";
 }
 
-function fmtPrice(v: number | null): string {
-  if (v == null) return "—";
-  return v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+function fmtX(v: unknown): string {
+  const n = toNum(v);
+  if (n == null) return "—";
+  return n.toFixed(1) + "x";
 }
 
-function fmtMM(v: number | null): string {
-  if (v == null) return "—";
-  return Math.round(v).toLocaleString("en-US");
+function fmtPrice(v: unknown): string {
+  const n = toNum(v);
+  if (n == null) return "—";
+  return n.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+
+function fmtMM(v: unknown): string {
+  const n = toNum(v);
+  if (n == null) return "—";
+  return Math.round(n).toLocaleString("en-US");
 }
 
 function recBadge(rec: string | null) {

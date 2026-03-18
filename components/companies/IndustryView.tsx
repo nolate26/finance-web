@@ -42,12 +42,12 @@ export default function IndustryView({ companies, onSectorClick, activeSector }:
 
         const ebitdaVals = cos
           .map((c) => c.Fv_ebitda_ltm)
-          .filter((v): v is number => v !== null);
+          .filter((v): v is number => typeof v === "number");
         const medEbitda = median(ebitdaVals);
 
         const ret1yVals = cos
           .map((c) => c.ret_1y)
-          .filter((v): v is number => v !== null);
+          .filter((v): v is number => typeof v === "number");
         const medRet1y = median(ret1yVals);
 
         const CHIP_LIMIT = 8;

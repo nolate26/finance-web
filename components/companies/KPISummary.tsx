@@ -39,9 +39,9 @@ export default function KPISummary({ companies }: Props) {
     .filter((v): v is number => typeof v === "number");
   const avgRet1y = average(ret1yValues);
 
-  const buyCount = companies.filter((c) => (c.recomendacion as string) === "Comprar").length;
-  const holdCount = companies.filter((c) => (c.recomendacion as string) === "Mantener").length;
-  const sellCount = companies.filter((c) => (c.recomendacion as string) === "Vender").length;
+  const buyCount = companies.filter((c) => c.recommendation === "Comprar").length;
+  const holdCount = companies.filter((c) => c.recommendation === "Mantener").length;
+  const sellCount = companies.filter((c) => c.recommendation === "Vender").length;
 
   const cards = [
     {
