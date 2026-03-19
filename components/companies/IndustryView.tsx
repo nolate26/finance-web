@@ -63,19 +63,19 @@ export default function IndustryView({ companies, onSectorClick, activeSector }:
               padding: "16px 18px",
               cursor: "pointer",
               border: isActive
-                ? "1px solid rgba(59,130,246,0.5)"
-                : "1px solid rgba(59,130,246,0.15)",
-              boxShadow: isActive ? "0 0 0 1px rgba(59,130,246,0.2)" : "none",
+                ? "1px solid rgba(43,92,224,0.5)"
+                : "1px solid rgba(43,92,224,0.15)",
+              boxShadow: isActive ? "0 0 0 1px rgba(43,92,224,0.2)" : "none",
               transition: "border-color 0.15s, box-shadow 0.15s",
             }}
             onMouseEnter={(e) => {
               if (!isActive) {
-                (e.currentTarget as HTMLElement).style.borderColor = "rgba(59,130,246,0.3)";
+                (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.3)";
               }
             }}
             onMouseLeave={(e) => {
               if (!isActive) {
-                (e.currentTarget as HTMLElement).style.borderColor = "rgba(59,130,246,0.15)";
+                (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.15)";
               }
             }}
           >
@@ -92,7 +92,7 @@ export default function IndustryView({ companies, onSectorClick, activeSector }:
                 style={{
                   fontSize: 13,
                   fontWeight: 600,
-                  color: isActive ? "#fff" : "#CBD5E1",
+                  color: isActive ? "#fff" : "#C5D4FF",
                 }}
               >
                 {displayName}
@@ -104,9 +104,9 @@ export default function IndustryView({ companies, onSectorClick, activeSector }:
                   fontWeight: 700,
                   padding: "2px 7px",
                   borderRadius: 10,
-                  background: isActive ? "rgba(59,130,246,0.2)" : "rgba(59,130,246,0.08)",
-                  color: isActive ? "#3B82F6" : "#475569",
-                  border: `1px solid ${isActive ? "rgba(59,130,246,0.4)" : "rgba(59,130,246,0.15)"}`,
+                  background: isActive ? "rgba(43,92,224,0.2)" : "rgba(43,92,224,0.08)",
+                  color: isActive ? "#2B5CE0" : "#475569",
+                  border: `1px solid ${isActive ? "rgba(43,92,224,0.4)" : "rgba(43,92,224,0.15)"}`,
                 }}
               >
                 {cos.length}
@@ -159,9 +159,9 @@ export default function IndustryView({ companies, onSectorClick, activeSector }:
                     fontSize: 10,
                     padding: "2px 6px",
                     borderRadius: 4,
-                    background: "rgba(6,182,212,0.07)",
-                    color: "#06B6D4",
-                    border: "1px solid rgba(6,182,212,0.15)",
+                    background: "rgba(80,128,255,0.07)",
+                    color: "#5080FF",
+                    border: "1px solid rgba(80,128,255,0.15)",
                     whiteSpace: "nowrap",
                   }}
                 >

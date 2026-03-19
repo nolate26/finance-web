@@ -51,13 +51,13 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return (
     <div className="rounded-lg px-3 py-2 text-xs"
       style={{
-        background: "#0A1628",
-        border: "1px solid rgba(59,130,246,0.3)",
+        background: "#09103A",
+        border: "1px solid rgba(43,92,224,0.3)",
         boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
       }}
     >
       <div className="font-mono mb-1" style={{ color: "#475569" }}>{label}</div>
-      <div className="font-semibold" style={{ color: "#06B6D4" }}>
+      <div className="font-semibold" style={{ color: "#5080FF" }}>
         P/E: {typeof val === "number" ? val.toFixed(2) : "—"}x
       </div>
     </div>
@@ -92,7 +92,7 @@ export default function PEHistoryChart({
     <div className="card flex flex-col gap-0 overflow-hidden">
       {/* Header */}
       <div className="px-5 py-4 border-b flex items-start justify-between gap-4"
-        style={{ borderColor: "rgba(59,130,246,0.12)" }}
+        style={{ borderColor: "rgba(43,92,224,0.12)" }}
       >
         <div>
           <div className="flex items-center gap-3">
@@ -141,9 +141,9 @@ export default function PEHistoryChart({
             onClick={() => onPeriodChange(p.value)}
             className="px-3 py-1 text-xs font-mono rounded transition-all"
             style={{
-              background: period === p.value ? "rgba(59,130,246,0.2)" : "transparent",
-              color: period === p.value ? "#3B82F6" : "#475569",
-              border: `1px solid ${period === p.value ? "rgba(59,130,246,0.4)" : "transparent"}`,
+              background: period === p.value ? "rgba(43,92,224,0.2)" : "transparent",
+              color: period === p.value ? "#2B5CE0" : "#475569",
+              border: `1px solid ${period === p.value ? "rgba(43,92,224,0.4)" : "transparent"}`,
             }}
           >
             {p.label}
@@ -160,7 +160,7 @@ export default function PEHistoryChart({
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={sampled} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(59,130,246,0.07)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(43,92,224,0.07)" />
               <XAxis
                 dataKey="date"
                 tick={{ fill: "#475569", fontSize: 10, fontFamily: "monospace" }}
@@ -189,10 +189,10 @@ export default function PEHistoryChart({
               <Line
                 type="monotone"
                 dataKey="value"
-                stroke="#06B6D4"
+                stroke="#5080FF"
                 strokeWidth={1.5}
                 dot={false}
-                activeDot={{ r: 4, fill: "#06B6D4", stroke: "#0A1628", strokeWidth: 2 }}
+                activeDot={{ r: 4, fill: "#5080FF", stroke: "#09103A", strokeWidth: 2 }}
               />
             </LineChart>
           </ResponsiveContainer>
@@ -200,7 +200,7 @@ export default function PEHistoryChart({
       </div>
 
       {meta && (
-        <div className="px-5 pb-4 flex gap-4 text-[10px]" style={{ color: "#334155" }}>
+        <div className="px-5 pb-4 flex gap-4 text-[10px]" style={{ color: "#2D3E6E" }}>
           <span className="flex items-center gap-1">
             <span className="w-4 h-px inline-block" style={{ background: "rgba(148,163,184,0.4)", borderTop: "1px dashed" }} />
             Prom. Hist.

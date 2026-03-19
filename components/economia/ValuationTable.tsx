@@ -39,7 +39,7 @@ export default function ValuationTable({ data, onSelectIndex, selectedIndex }: P
   return (
     <div className="card overflow-hidden">
       <div className="px-5 py-4 border-b flex items-center justify-between"
-        style={{ borderColor: "rgba(59,130,246,0.12)" }}
+        style={{ borderColor: "rgba(43,92,224,0.12)" }}
       >
         <div>
           <h2 className="text-sm font-semibold text-white">Valuación P/E</h2>
@@ -48,7 +48,7 @@ export default function ValuationTable({ data, onSelectIndex, selectedIndex }: P
           </p>
         </div>
         <span className="text-xs font-mono px-2 py-1 rounded"
-          style={{ background: "rgba(59,130,246,0.08)", color: "#3B82F6" }}
+          style={{ background: "rgba(43,92,224,0.08)", color: "#2B5CE0" }}
         >
           {data.length} índices
         </span>
@@ -56,7 +56,7 @@ export default function ValuationTable({ data, onSelectIndex, selectedIndex }: P
       <div className="overflow-auto">
         <table className="w-full text-xs">
           <thead>
-            <tr style={{ background: "rgba(15,32,64,0.8)" }}>
+            <tr style={{ background: "rgba(13,24,82,0.8)" }}>
               {["Índice", "P/E Hoy", "Prom. Hist.", "Rango ±1σ", "Descuento"].map(h => (
                 <th key={h} className="px-4 py-2.5 text-left font-medium tracking-wide"
                   style={{ color: "#475569" }}
@@ -84,23 +84,23 @@ export default function ValuationTable({ data, onSelectIndex, selectedIndex }: P
                   onClick={() => onSelectIndex(row.Index)}
                   className="cursor-pointer transition-all duration-150 border-t"
                   style={{
-                    borderColor: "rgba(59,130,246,0.07)",
-                    background: active ? "rgba(59,130,246,0.08)" : "transparent",
+                    borderColor: "rgba(43,92,224,0.07)",
+                    background: active ? "rgba(43,92,224,0.08)" : "transparent",
                   }}
                   onMouseEnter={e => {
-                    if (!active) (e.currentTarget as HTMLElement).style.background = "rgba(59,130,246,0.04)";
+                    if (!active) (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.04)";
                   }}
                   onMouseLeave={e => {
                     if (!active) (e.currentTarget as HTMLElement).style.background = "transparent";
                   }}
                 >
-                  <td className="px-4 py-2.5 font-medium" style={{ color: active ? "#fff" : "#CBD5E1" }}>
+                  <td className="px-4 py-2.5 font-medium" style={{ color: active ? "#fff" : "#C5D4FF" }}>
                     <div className="flex items-center gap-2">
                       {active && <span className="w-1.5 h-1.5 rounded-full bg-blue-400 inline-block" />}
                       {row.Index}
                     </div>
                   </td>
-                  <td className="px-4 py-2.5 font-mono font-semibold" style={{ color: "#E2E8F0" }}>
+                  <td className="px-4 py-2.5 font-mono font-semibold" style={{ color: "#EEF2FF" }}>
                     {row["Today (P/E)"]?.toFixed(1)}x
                   </td>
                   <td className="px-4 py-2.5 font-mono" style={{ color: "#94A3B8" }}>
@@ -116,7 +116,7 @@ export default function ValuationTable({ data, onSelectIndex, selectedIndex }: P
                         style={{
                           left: `${lowPct}%`,
                           width: `${highPct - lowPct}%`,
-                          background: "rgba(59,130,246,0.12)",
+                          background: "rgba(43,92,224,0.12)",
                         }}
                       />
                       {/* avg line */}
@@ -129,7 +129,7 @@ export default function ValuationTable({ data, onSelectIndex, selectedIndex }: P
                       />
                     </div>
                     <div className="flex justify-between mt-0.5 text-[10px]"
-                      style={{ color: "#334155" }}
+                      style={{ color: "#2D3E6E" }}
                     >
                       <span>{row["-1 Std"]?.toFixed(0)}</span>
                       <span>{row["+1 Std"]?.toFixed(0)}</span>

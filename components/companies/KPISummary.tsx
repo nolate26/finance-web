@@ -48,15 +48,15 @@ export default function KPISummary({ companies }: Props) {
       icon: Building2,
       label: "Companies Tracked",
       value: totalCount.toLocaleString("en-US"),
-      iconColor: "#3B82F6",
-      iconBg: "rgba(59,130,246,0.12)",
+      iconColor: "#2B5CE0",
+      iconBg: "rgba(43,92,224,0.12)",
     },
     {
       icon: DollarSign,
       label: "Total Market Cap",
       value: Math.round(totalMktCap).toLocaleString("en-US") + " MM CLP",
-      iconColor: "#06B6D4",
-      iconBg: "rgba(6,182,212,0.12)",
+      iconColor: "#5080FF",
+      iconBg: "rgba(80,128,255,0.12)",
     },
     {
       icon: BarChart2,
@@ -120,7 +120,7 @@ export default function KPISummary({ companies }: Props) {
               style={{
                 fontSize: 20,
                 fontWeight: 700,
-                color: valueColor ?? "#E2E8F0",
+                color: valueColor ?? "#EEF2FF",
                 lineHeight: 1.2,
                 whiteSpace: "nowrap",
                 overflow: "hidden",

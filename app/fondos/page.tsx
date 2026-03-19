@@ -78,7 +78,7 @@ export default function FondosPage() {
         <div className="flex flex-col items-center gap-4">
           <div
             className="w-10 h-10 rounded-full border-2 animate-spin"
-            style={{ borderColor: "rgba(59,130,246,0.2)", borderTopColor: "#3B82F6" }}
+            style={{ borderColor: "rgba(43,92,224,0.2)", borderTopColor: "#2B5CE0" }}
           />
           <p className="text-sm font-mono" style={{ color: "#475569" }}>
             Loading funds...
@@ -135,7 +135,7 @@ export default function FondosPage() {
           </p>
         </div>
         {selectedMeta && (
-          <div className="flex items-center gap-2 text-xs font-mono" style={{ color: "#334155" }}>
+          <div className="flex items-center gap-2 text-xs font-mono" style={{ color: "#2D3E6E" }}>
             <RefreshCw size={12} />
             <span>Data as of {fmtDate(selectedMeta.date)}</span>
           </div>
@@ -147,7 +147,7 @@ export default function FondosPage() {
         className="flex items-center gap-1 mb-4 p-1 rounded-lg"
         style={{
           background: "rgba(255,255,255,0.03)",
-          border: "1px solid rgba(59,130,246,0.12)",
+          border: "1px solid rgba(43,92,224,0.12)",
           width: "fit-content",
         }}
       >
@@ -157,9 +157,9 @@ export default function FondosPage() {
             onClick={() => switchRegion(r)}
             className="px-5 py-1.5 rounded-md text-sm font-semibold transition-all"
             style={{
-              background: region === r ? "rgba(59,130,246,0.2)" : "transparent",
-              color: region === r ? "#3B82F6" : "#475569",
-              border: region === r ? "1px solid rgba(59,130,246,0.35)" : "1px solid transparent",
+              background: region === r ? "rgba(43,92,224,0.2)" : "transparent",
+              color: region === r ? "#2B5CE0" : "#475569",
+              border: region === r ? "1px solid rgba(43,92,224,0.35)" : "1px solid transparent",
             }}
           >
             {r}
@@ -169,7 +169,7 @@ export default function FondosPage() {
 
       {/* Fund quick-select buttons */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <span className="text-xs font-medium" style={{ color: "#334155" }}>
+        <span className="text-xs font-medium" style={{ color: "#2D3E6E" }}>
           Fund:
         </span>
         {uniqueNames.map((name) => {
@@ -182,9 +182,9 @@ export default function FondosPage() {
               onClick={() => selectFund(name)}
               className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
               style={{
-                background: isActive ? "rgba(59,130,246,0.18)" : "rgba(255,255,255,0.04)",
-                color: isActive ? "#60A5FA" : "#64748B",
-                border: `1px solid ${isActive ? "rgba(59,130,246,0.4)" : "rgba(255,255,255,0.07)"}`,
+                background: isActive ? "rgba(43,92,224,0.18)" : "rgba(255,255,255,0.04)",
+                color: isActive ? "#6699FF" : "#64748B",
+                border: `1px solid ${isActive ? "rgba(43,92,224,0.4)" : "rgba(255,255,255,0.07)"}`,
               }}
             >
               {displayName}
@@ -196,7 +196,7 @@ export default function FondosPage() {
       {/* Snapshot history pills */}
       {snapshots.length > 1 && (
         <div className="flex items-center gap-2 mb-5 flex-wrap">
-          <span className="flex items-center gap-1 text-xs" style={{ color: "#334155" }}>
+          <span className="flex items-center gap-1 text-xs" style={{ color: "#2D3E6E" }}>
             <Calendar size={11} />
             History:
           </span>
@@ -207,9 +207,9 @@ export default function FondosPage() {
               className="px-2.5 py-1 rounded text-xs font-mono transition-all"
               style={{
                 background:
-                  selectedId === s.id ? "rgba(6,182,212,0.15)" : "rgba(255,255,255,0.03)",
-                color: selectedId === s.id ? "#06B6D4" : "#475569",
-                border: `1px solid ${selectedId === s.id ? "rgba(6,182,212,0.35)" : "rgba(255,255,255,0.06)"}`,
+                  selectedId === s.id ? "rgba(80,128,255,0.15)" : "rgba(255,255,255,0.03)",
+                color: selectedId === s.id ? "#5080FF" : "#475569",
+                border: `1px solid ${selectedId === s.id ? "rgba(80,128,255,0.35)" : "rgba(255,255,255,0.06)"}`,
               }}
             >
               {fmtDate(s.date)}
@@ -237,7 +237,7 @@ export default function FondosPage() {
           <div className="flex flex-col items-center gap-4">
             <div
               className="w-8 h-8 rounded-full border-2 animate-spin"
-              style={{ borderColor: "rgba(59,130,246,0.2)", borderTopColor: "#3B82F6" }}
+              style={{ borderColor: "rgba(43,92,224,0.2)", borderTopColor: "#2B5CE0" }}
             />
             <p className="text-sm font-mono" style={{ color: "#475569" }}>
               Loading {selectedMeta?.displayName}...

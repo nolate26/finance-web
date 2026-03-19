@@ -111,8 +111,8 @@ export default function CompaniesPage() {
           <div
             className="w-10 h-10 rounded-full border-2 animate-spin"
             style={{
-              borderColor: "rgba(59,130,246,0.2)",
-              borderTopColor: "#3B82F6",
+              borderColor: "rgba(43,92,224,0.2)",
+              borderTopColor: "#2B5CE0",
             }}
           />
           <p className="text-sm font-mono" style={{ color: "#475569" }}>
@@ -143,9 +143,9 @@ export default function CompaniesPage() {
             style={{
               padding: "6px 16px",
               borderRadius: 6,
-              background: "rgba(59,130,246,0.1)",
-              border: "1px solid rgba(59,130,246,0.25)",
-              color: "#3B82F6",
+              background: "rgba(43,92,224,0.1)",
+              border: "1px solid rgba(43,92,224,0.25)",
+              color: "#2B5CE0",
               cursor: "pointer",
               fontSize: 13,
             }}
@@ -186,8 +186,8 @@ export default function CompaniesPage() {
             gap: 6,
             padding: "6px 12px",
             borderRadius: 8,
-            background: "rgba(59,130,246,0.08)",
-            border: "1px solid rgba(59,130,246,0.15)",
+            background: "rgba(43,92,224,0.08)",
+            border: "1px solid rgba(43,92,224,0.15)",
             color: "#475569",
             cursor: "pointer",
             fontSize: 12,
@@ -195,11 +195,11 @@ export default function CompaniesPage() {
           }}
           onMouseEnter={(e) => {
             (e.currentTarget as HTMLElement).style.color = "#94A3B8";
-            (e.currentTarget as HTMLElement).style.borderColor = "rgba(59,130,246,0.3)";
+            (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.3)";
           }}
           onMouseLeave={(e) => {
             (e.currentTarget as HTMLElement).style.color = "#475569";
-            (e.currentTarget as HTMLElement).style.borderColor = "rgba(59,130,246,0.15)";
+            (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.15)";
           }}
         >
           <RefreshCw size={12} />
@@ -233,18 +233,18 @@ export default function CompaniesPage() {
               width: "100%",
               padding: "7px 12px",
               borderRadius: 7,
-              background: "rgba(15,32,64,0.8)",
-              border: "1px solid rgba(59,130,246,0.15)",
-              color: "#E2E8F0",
+              background: "rgba(13,24,82,0.8)",
+              border: "1px solid rgba(43,92,224,0.15)",
+              color: "#EEF2FF",
               fontSize: 13,
               outline: "none",
               fontFamily: "Inter, sans-serif",
             }}
             onFocus={(e) => {
-              (e.currentTarget as HTMLElement).style.borderColor = "rgba(59,130,246,0.4)";
+              (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.4)";
             }}
             onBlur={(e) => {
-              (e.currentTarget as HTMLElement).style.borderColor = "rgba(59,130,246,0.15)";
+              (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.15)";
             }}
           />
         </div>
@@ -261,9 +261,9 @@ export default function CompaniesPage() {
           style={{
             padding: "7px 12px",
             borderRadius: 7,
-            background: "rgba(15,32,64,0.8)",
-            border: "1px solid rgba(59,130,246,0.15)",
-            color: selectedSector ? "#E2E8F0" : "#64748B",
+            background: "rgba(13,24,82,0.8)",
+            border: "1px solid rgba(43,92,224,0.15)",
+            color: selectedSector ? "#EEF2FF" : "#64748B",
             fontSize: 13,
             cursor: "pointer",
             outline: "none",
@@ -291,9 +291,9 @@ export default function CompaniesPage() {
           style={{
             padding: "7px 12px",
             borderRadius: 7,
-            background: "rgba(15,32,64,0.8)",
-            border: "1px solid rgba(59,130,246,0.15)",
-            color: "#E2E8F0",
+            background: "rgba(13,24,82,0.8)",
+            border: "1px solid rgba(43,92,224,0.15)",
+            color: "#EEF2FF",
             fontSize: 13,
             cursor: "pointer",
             outline: "none",
@@ -314,8 +314,8 @@ export default function CompaniesPage() {
             gap: 4,
             padding: 3,
             borderRadius: 8,
-            background: "rgba(15,32,64,0.8)",
-            border: "1px solid rgba(59,130,246,0.12)",
+            background: "rgba(13,24,82,0.8)",
+            border: "1px solid rgba(43,92,224,0.12)",
             marginLeft: "auto",
           }}
         >
@@ -335,7 +335,7 @@ export default function CompaniesPage() {
                   fontWeight: 500,
                   cursor: "pointer",
                   border: "none",
-                  background: isActive ? "rgba(59,130,246,0.18)" : "transparent",
+                  background: isActive ? "rgba(43,92,224,0.18)" : "transparent",
                   color: isActive ? "#fff" : "#64748B",
                   transition: "all 0.15s",
                 }}
@@ -368,7 +368,7 @@ export default function CompaniesPage() {
         >
           {filtered.length} result{filtered.length !== 1 ? "s" : ""}
           {selectedSector && (
-            <span style={{ color: "#3B82F6" }}>
+            <span style={{ color: "#2B5CE0" }}>
               {" "}in {SECTOR_MAP[selectedSector] ?? selectedSector}
             </span>
           )}

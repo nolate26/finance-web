@@ -18,7 +18,7 @@ const YEARS = ["2025", "2026", "2027", "2028"] as const;
 
 // Color scale for each metric
 function metricColor(metric: Metric, value: number | null): string {
-  if (value === null) return "#334155";
+  if (value === null) return "#2D3E6E";
   if (metric === "GDP Growth") {
     if (value >= 3) return "#10B981";
     if (value >= 2) return "#34D399";
@@ -32,8 +32,8 @@ function metricColor(metric: Metric, value: number | null): string {
     return "#EF4444";
   }
   // Policy Rate / 10Y Rate — neutral scale
-  if (value <= 4) return "#06B6D4";
-  if (value <= 7) return "#3B82F6";
+  if (value <= 4) return "#5080FF";
+  if (value <= 7) return "#2B5CE0";
   if (value <= 12) return "#8B5CF6";
   return "#EF4444";
 }
@@ -80,7 +80,7 @@ export default function MacroPanel({ annual }: Props) {
     <div>
       {/* Metric selector */}
       <div className="flex items-center gap-2 mb-5 flex-wrap">
-        <span className="text-xs font-medium mr-1" style={{ color: "#334155" }}>
+        <span className="text-xs font-medium mr-1" style={{ color: "#2D3E6E" }}>
           Metric:
         </span>
         {METRICS.map((m) => (
@@ -91,12 +91,12 @@ export default function MacroPanel({ annual }: Props) {
             style={{
               background:
                 selectedMetric === m
-                  ? "rgba(59,130,246,0.18)"
+                  ? "rgba(43,92,224,0.18)"
                   : "rgba(255,255,255,0.04)",
-              color: selectedMetric === m ? "#60A5FA" : "#64748B",
+              color: selectedMetric === m ? "#6699FF" : "#64748B",
               border: `1px solid ${
                 selectedMetric === m
-                  ? "rgba(59,130,246,0.4)"
+                  ? "rgba(43,92,224,0.4)"
                   : "rgba(255,255,255,0.07)"
               }`,
             }}
@@ -154,7 +154,7 @@ export default function MacroPanel({ annual }: Props) {
               </div>
               <div
                 className="font-mono"
-                style={{ fontSize: 16, fontWeight: 700, color: "#E2E8F0", marginBottom: 6 }}
+                style={{ fontSize: 16, fontWeight: 700, color: "#EEF2FF", marginBottom: 6 }}
               >
                 {fmtVal(v2025, selectedMetric)}
               </div>
@@ -181,7 +181,7 @@ export default function MacroPanel({ annual }: Props) {
         <div
           style={{
             padding: "10px 16px",
-            borderBottom: "1px solid rgba(59,130,246,0.12)",
+            borderBottom: "1px solid rgba(43,92,224,0.12)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -192,13 +192,13 @@ export default function MacroPanel({ annual }: Props) {
           >
             {selectedMetric.toUpperCase()} PROJECTIONS
           </span>
-          <span style={{ fontSize: 10, color: "#334155" }}>All figures in %</span>
+          <span style={{ fontSize: 10, color: "#2D3E6E" }}>All figures in %</span>
         </div>
 
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
-              <tr style={{ background: "rgba(15,32,64,0.6)" }}>
+              <tr style={{ background: "rgba(13,24,82,0.6)" }}>
                 <th
                   style={{
                     padding: "8px 16px",
@@ -234,7 +234,7 @@ export default function MacroPanel({ annual }: Props) {
                     textAlign: "right",
                     fontSize: 10,
                     fontWeight: 600,
-                    color: "#334155",
+                    color: "#2D3E6E",
                     letterSpacing: "0.08em",
                   }}
                 >
@@ -256,7 +256,7 @@ export default function MacroPanel({ annual }: Props) {
                         i % 2 === 0
                           ? "transparent"
                           : "rgba(255,255,255,0.015)",
-                      borderBottom: "1px solid rgba(59,130,246,0.06)",
+                      borderBottom: "1px solid rgba(43,92,224,0.06)",
                     }}
                   >
                     <td style={{ padding: "10px 16px" }}>
@@ -266,7 +266,7 @@ export default function MacroPanel({ annual }: Props) {
                           style={{
                             fontSize: 12,
                             fontWeight: 600,
-                            color: "#CBD5E1",
+                            color: "#C5D4FF",
                           }}
                         >
                           {country}
@@ -309,7 +309,7 @@ export default function MacroPanel({ annual }: Props) {
                           {delta.toFixed(1)}pp
                         </span>
                       ) : (
-                        <span style={{ color: "#334155" }}>—</span>
+                        <span style={{ color: "#2D3E6E" }}>—</span>
                       )}
                     </td>
                   </tr>

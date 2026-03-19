@@ -31,7 +31,7 @@ function pctChange(from: number | null, to: number | null): number | null {
 
 function ChangeTag({ pct }: { pct: number | null }) {
   if (pct === null)
-    return <span style={{ color: "#334155", fontSize: 11 }}>—</span>;
+    return <span style={{ color: "#2D3E6E", fontSize: 11 }}>—</span>;
 
   const color = pct > 0 ? "#10B981" : pct < 0 ? "#EF4444" : "#64748B";
   const bg = pct > 0 ? "rgba(16,185,129,0.1)" : pct < 0 ? "rgba(239,68,68,0.1)" : "transparent";
@@ -77,7 +77,7 @@ export default function CommoditiesPanel({ commodities }: Props) {
         <div
           style={{
             padding: "12px 20px",
-            borderBottom: "1px solid rgba(59,130,246,0.12)",
+            borderBottom: "1px solid rgba(43,92,224,0.12)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -99,23 +99,23 @@ export default function CommoditiesPanel({ commodities }: Props) {
                 style={{
                   width: 24,
                   height: 2,
-                  background: "#334155",
+                  background: "#2D3E6E",
                   borderRadius: 1,
                 }}
               />
-              <span style={{ fontSize: 10, color: "#334155" }}>Historical</span>
+              <span style={{ fontSize: 10, color: "#2D3E6E" }}>Historical</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <div
                 style={{
                   width: 24,
                   height: 2,
-                  background: "#06B6D4",
+                  background: "#5080FF",
                   borderRadius: 1,
-                  borderTop: "2px dashed #06B6D4",
+                  borderTop: "2px dashed #5080FF",
                 }}
               />
-              <span style={{ fontSize: 10, color: "#06B6D4" }}>Forecast</span>
+              <span style={{ fontSize: 10, color: "#5080FF" }}>Forecast</span>
             </div>
           </div>
         </div>
@@ -123,7 +123,7 @@ export default function CommoditiesPanel({ commodities }: Props) {
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
-              <tr style={{ background: "rgba(15,32,64,0.6)" }}>
+              <tr style={{ background: "rgba(13,24,82,0.6)" }}>
                 <th
                   style={{
                     padding: "10px 20px",
@@ -134,7 +134,7 @@ export default function CommoditiesPanel({ commodities }: Props) {
                     letterSpacing: "0.08em",
                     position: "sticky",
                     left: 0,
-                    background: "rgba(10,22,40,0.98)",
+                    background: "rgba(9,16,58,0.98)",
                     minWidth: 200,
                   }}
                 >
@@ -146,7 +146,7 @@ export default function CommoditiesPanel({ commodities }: Props) {
                     textAlign: "right",
                     fontSize: 10,
                     fontWeight: 600,
-                    color: "#334155",
+                    color: "#2D3E6E",
                     letterSpacing: "0.06em",
                     minWidth: 80,
                   }}
@@ -174,7 +174,7 @@ export default function CommoditiesPanel({ commodities }: Props) {
                   style={{
                     padding: 0,
                     width: 1,
-                    background: "rgba(6,182,212,0.2)",
+                    background: "rgba(80,128,255,0.2)",
                   }}
                 />
                 {FORE_YEARS.map((y) => (
@@ -185,9 +185,9 @@ export default function CommoditiesPanel({ commodities }: Props) {
                       textAlign: "right",
                       fontSize: 10,
                       fontWeight: 600,
-                      color: "#06B6D4",
+                      color: "#5080FF",
                       letterSpacing: "0.06em",
-                      background: "rgba(6,182,212,0.05)",
+                      background: "rgba(80,128,255,0.05)",
                       minWidth: 72,
                     }}
                   >
@@ -200,7 +200,7 @@ export default function CommoditiesPanel({ commodities }: Props) {
                     textAlign: "right",
                     fontSize: 10,
                     fontWeight: 600,
-                    color: "#334155",
+                    color: "#2D3E6E",
                     letterSpacing: "0.06em",
                     minWidth: 80,
                   }}
@@ -225,7 +225,7 @@ export default function CommoditiesPanel({ commodities }: Props) {
                         i % 2 === 0
                           ? "transparent"
                           : "rgba(255,255,255,0.015)",
-                      borderBottom: "1px solid rgba(59,130,246,0.06)",
+                      borderBottom: "1px solid rgba(43,92,224,0.06)",
                     }}
                   >
                     {/* Name */}
@@ -236,15 +236,15 @@ export default function CommoditiesPanel({ commodities }: Props) {
                         left: 0,
                         background:
                           i % 2 === 0
-                            ? "rgba(5,11,24,0.98)"
-                            : "rgba(10,22,40,0.98)",
+                            ? "rgba(6,10,40,0.98)"
+                            : "rgba(9,16,58,0.98)",
                       }}
                     >
                       <span
                         style={{
                           fontSize: 13,
                           fontWeight: 600,
-                          color: "#CBD5E1",
+                          color: "#C5D4FF",
                         }}
                       >
                         {row.name}
@@ -256,7 +256,7 @@ export default function CommoditiesPanel({ commodities }: Props) {
                         padding: "12px 12px",
                         textAlign: "right",
                         fontSize: 10,
-                        color: "#334155",
+                        color: "#2D3E6E",
                         fontFamily: "monospace",
                       }}
                     >
@@ -272,7 +272,7 @@ export default function CommoditiesPanel({ commodities }: Props) {
                           fontFamily: "monospace",
                           fontSize: 13,
                           fontWeight: y === "2025" ? 700 : 400,
-                          color: y === "2025" ? "#E2E8F0" : "#64748B",
+                          color: y === "2025" ? "#EEF2FF" : "#64748B",
                         }}
                       >
                         {fmtNum(row[y] as number | null, dec)}
@@ -283,7 +283,7 @@ export default function CommoditiesPanel({ commodities }: Props) {
                       style={{
                         padding: 0,
                         width: 1,
-                        background: "rgba(6,182,212,0.2)",
+                        background: "rgba(80,128,255,0.2)",
                       }}
                     />
                     {/* Forecast */}
@@ -296,8 +296,8 @@ export default function CommoditiesPanel({ commodities }: Props) {
                           fontFamily: "monospace",
                           fontSize: 13,
                           fontWeight: 600,
-                          color: "#67E8F9",
-                          background: "rgba(6,182,212,0.05)",
+                          color: "#8AAFFF",
+                          background: "rgba(80,128,255,0.05)",
                         }}
                       >
                         {fmtNum(row[y] as number | null, dec)}
@@ -318,9 +318,9 @@ export default function CommoditiesPanel({ commodities }: Props) {
         <div
           style={{
             padding: "8px 20px",
-            borderTop: "1px solid rgba(59,130,246,0.08)",
+            borderTop: "1px solid rgba(43,92,224,0.08)",
             fontSize: 10,
-            color: "#334155",
+            color: "#2D3E6E",
           }}
         >
           Source: internal projections. &nbsp;e = estimate.

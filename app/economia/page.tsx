@@ -55,7 +55,7 @@ export default function EconomiaPage() {
         <div className="flex flex-col items-center gap-4">
           <div
             className="w-10 h-10 rounded-full border-2 animate-spin"
-            style={{ borderColor: "rgba(59,130,246,0.2)", borderTopColor: "#3B82F6" }}
+            style={{ borderColor: "rgba(43,92,224,0.2)", borderTopColor: "#2B5CE0" }}
           />
           <p className="text-sm font-mono" style={{ color: "#475569" }}>
             Loading market data...
@@ -83,7 +83,7 @@ export default function EconomiaPage() {
             Global valuations, macro projections &amp; commodity prices
           </p>
         </div>
-        <div className="flex items-center gap-2 text-xs font-mono" style={{ color: "#334155" }}>
+        <div className="flex items-center gap-2 text-xs font-mono" style={{ color: "#2D3E6E" }}>
           <RefreshCw size={12} />
           <span>
             {new Date().toLocaleDateString("en-US", {
@@ -100,7 +100,7 @@ export default function EconomiaPage() {
         className="flex items-center gap-1 mb-6 p-1 rounded-lg"
         style={{
           background: "rgba(255,255,255,0.03)",
-          border: "1px solid rgba(59,130,246,0.12)",
+          border: "1px solid rgba(43,92,224,0.12)",
           width: "fit-content",
         }}
       >
@@ -110,11 +110,11 @@ export default function EconomiaPage() {
             onClick={() => setView(key)}
             className="px-5 py-1.5 rounded-md text-sm font-semibold transition-all"
             style={{
-              background: view === key ? "rgba(59,130,246,0.2)" : "transparent",
-              color: view === key ? "#3B82F6" : "#475569",
+              background: view === key ? "rgba(43,92,224,0.2)" : "transparent",
+              color: view === key ? "#2B5CE0" : "#475569",
               border:
                 view === key
-                  ? "1px solid rgba(59,130,246,0.35)"
+                  ? "1px solid rgba(43,92,224,0.35)"
                   : "1px solid transparent",
             }}
           >

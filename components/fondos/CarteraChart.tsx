@@ -32,8 +32,8 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return (
     <div className="rounded-lg px-3 py-2.5 text-xs"
       style={{
-        background: "#0A1628",
-        border: "1px solid rgba(59,130,246,0.3)",
+        background: "#09103A",
+        border: "1px solid rgba(43,92,224,0.3)",
         boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
         minWidth: 200,
       }}
@@ -42,7 +42,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
       <div className="space-y-1">
         <div className="flex justify-between gap-6">
           <span style={{ color: "#475569" }}>Portafolio</span>
-          <span className="font-mono font-semibold" style={{ color: "#3B82F6" }}>
+          <span className="font-mono font-semibold" style={{ color: "#2B5CE0" }}>
             {(row.portfolioPct * 100).toFixed(2)}%
           </span>
         </div>
@@ -52,7 +52,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
             {(row.benchmarkPct * 100).toFixed(2)}%
           </span>
         </div>
-        <div className="flex justify-between gap-6 pt-1 border-t" style={{ borderColor: "rgba(59,130,246,0.15)" }}>
+        <div className="flex justify-between gap-6 pt-1 border-t" style={{ borderColor: "rgba(43,92,224,0.15)" }}>
           <span style={{ color: "#475569" }}>Overweight</span>
           <span className="font-mono font-bold"
             style={{ color: row.overweight >= 0 ? "#10B981" : "#EF4444" }}
@@ -83,7 +83,7 @@ export default function CarteraChart({ cartera, fondoName, benchmark }: Props) {
 
   return (
     <div className="card overflow-hidden flex flex-col">
-      <div className="px-5 py-4 border-b" style={{ borderColor: "rgba(59,130,246,0.12)" }}>
+      <div className="px-5 py-4 border-b" style={{ borderColor: "rgba(43,92,224,0.12)" }}>
         <h2 className="text-sm font-semibold text-white">Overweight / Underweight — {fondoName}</h2>
         <p className="text-xs mt-0.5" style={{ color: "#475569" }}>
           Desviación del portafolio respecto al benchmark {benchmark} (puntos porcentuales)
@@ -98,7 +98,7 @@ export default function CarteraChart({ cartera, fondoName, benchmark }: Props) {
             margin={{ top: 0, right: 20, left: 120, bottom: 0 }}
             barCategoryGap="20%"
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(59,130,246,0.07)" horizontal={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(43,92,224,0.07)" horizontal={false} />
             <XAxis
               type="number"
               domain={[-domainMax, domainMax]}
@@ -115,7 +115,7 @@ export default function CarteraChart({ cartera, fondoName, benchmark }: Props) {
               tickLine={false}
               width={115}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(59,130,246,0.04)" }} />
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(43,92,224,0.04)" }} />
             <ReferenceLine x={0} stroke="rgba(148,163,184,0.3)" strokeWidth={1} />
             <Bar dataKey="overweightPct" radius={[0, 3, 3, 0]}>
               {chartData.map((entry, i) => (

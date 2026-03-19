@@ -49,16 +49,16 @@ const PERIODS = ["1W", "1M", "3M", "YTD", "1Y", "3Y", "5Y"] as const;
 export default function PerformanceTable({ data }: Props) {
   return (
     <div className="card overflow-hidden">
-      <div className="px-5 py-4 border-b" style={{ borderColor: "rgba(59,130,246,0.12)" }}>
+      <div className="px-5 py-4 border-b" style={{ borderColor: "rgba(43,92,224,0.12)" }}>
         <h2 className="text-sm font-semibold text-white">Retornos &amp; Múltiplos</h2>
         <p className="text-xs mt-0.5" style={{ color: "#475569" }}>Rendimiento por período y valuación comparada</p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-xs whitespace-nowrap">
           <thead>
-            <tr style={{ background: "rgba(15,32,64,0.8)" }}>
+            <tr style={{ background: "rgba(13,24,82,0.8)" }}>
               <th className="px-4 py-2.5 text-left font-medium sticky left-0 z-10"
-                style={{ color: "#475569", background: "rgba(15,32,64,0.95)" }}
+                style={{ color: "#475569", background: "rgba(13,24,82,0.95)" }}
               >
                 Índice
               </th>
@@ -80,12 +80,12 @@ export default function PerformanceTable({ data }: Props) {
               <tr
                 key={i}
                 className="border-t transition-colors"
-                style={{ borderColor: "rgba(59,130,246,0.07)" }}
-                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "rgba(59,130,246,0.04)"}
+                style={{ borderColor: "rgba(43,92,224,0.07)" }}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.04)"}
                 onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}
               >
                 <td className="px-4 py-2.5 sticky left-0 z-10"
-                  style={{ background: "rgba(10,22,40,0.98)", color: "#E2E8F0", fontWeight: 500 }}
+                  style={{ background: "rgba(9,16,58,0.98)", color: "#EEF2FF", fontWeight: 500 }}
                 >
                   {row.Index_Name}
                 </td>

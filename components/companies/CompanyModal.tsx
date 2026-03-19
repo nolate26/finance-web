@@ -59,13 +59,13 @@ const SECTION_LABEL: React.CSSProperties = {
   fontSize: 10,
   fontWeight: 600,
   letterSpacing: "0.1em",
-  color: "#3B82F6",
+  color: "#2B5CE0",
   textTransform: "uppercase",
   marginBottom: 10,
 };
 
 const DIVIDER: React.CSSProperties = {
-  borderTop: "1px solid rgba(59,130,246,0.1)",
+  borderTop: "1px solid rgba(43,92,224,0.1)",
   margin: "16px 0",
 };
 
@@ -79,8 +79,8 @@ function ReturnTooltip({ active, payload, label }: { active?: boolean; payload?:
   const color = val >= 0 ? "#10B981" : "#EF4444";
   return (
     <div style={{
-      background: "#0A1628",
-      border: "1px solid rgba(59,130,246,0.2)",
+      background: "#09103A",
+      border: "1px solid rgba(43,92,224,0.2)",
       borderRadius: 6,
       padding: "6px 10px",
       fontSize: 11,
@@ -185,7 +185,7 @@ export default function CompanyModal({ company, onClose }: Props) {
     {
       label: "ND/EBITDA",
       value: fmtX(n(company.leverage_ltm)),
-      color: "#06B6D4",
+      color: "#5080FF",
     },
     {
       label: "Div Yield 2026E",
@@ -206,7 +206,7 @@ export default function CompanyModal({ company, onClose }: Props) {
     fontWeight: 600,
     color: "#475569",
     letterSpacing: "0.05em",
-    borderBottom: "1px solid rgba(59,130,246,0.1)",
+    borderBottom: "1px solid rgba(43,92,224,0.1)",
   };
 
   const tdStyle: React.CSSProperties = {
@@ -214,8 +214,8 @@ export default function CompanyModal({ company, onClose }: Props) {
     textAlign: "right" as const,
     fontSize: 11,
     fontFamily: "JetBrains Mono, monospace",
-    color: "#CBD5E1",
-    borderBottom: "1px solid rgba(59,130,246,0.06)",
+    color: "#C5D4FF",
+    borderBottom: "1px solid rgba(43,92,224,0.06)",
   };
 
   return (
@@ -227,7 +227,7 @@ export default function CompanyModal({ company, onClose }: Props) {
           position: "fixed",
           inset: 0,
           zIndex: 50,
-          background: "rgba(5,11,24,0.7)",
+          background: "rgba(6,10,40,0.7)",
           backdropFilter: "blur(4px)",
         }}
       />
@@ -241,8 +241,8 @@ export default function CompanyModal({ company, onClose }: Props) {
           bottom: 0,
           width: 520,
           zIndex: 51,
-          background: "#0A1628",
-          borderLeft: "1px solid rgba(59,130,246,0.2)",
+          background: "#09103A",
+          borderLeft: "1px solid rgba(43,92,224,0.2)",
           overflowY: "auto",
           display: "flex",
           flexDirection: "column",
@@ -253,8 +253,8 @@ export default function CompanyModal({ company, onClose }: Props) {
         <div
           style={{
             padding: "20px 24px 16px",
-            borderBottom: "1px solid rgba(59,130,246,0.12)",
-            background: "linear-gradient(180deg, #0F2040 0%, #0A1628 100%)",
+            borderBottom: "1px solid rgba(43,92,224,0.12)",
+            background: "linear-gradient(180deg, #0D1852 0%, #09103A 100%)",
             position: "sticky",
             top: 0,
             zIndex: 10,
@@ -282,9 +282,9 @@ export default function CompanyModal({ company, onClose }: Props) {
                     fontSize: 11,
                     padding: "2px 8px",
                     borderRadius: 4,
-                    background: "rgba(6,182,212,0.1)",
-                    color: "#06B6D4",
-                    border: "1px solid rgba(6,182,212,0.2)",
+                    background: "rgba(80,128,255,0.1)",
+                    color: "#5080FF",
+                    border: "1px solid rgba(80,128,255,0.2)",
                     fontWeight: 500,
                   }}
                 >
@@ -312,7 +312,7 @@ export default function CompanyModal({ company, onClose }: Props) {
               onClick={onClose}
               style={{
                 background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(59,130,246,0.15)",
+                border: "1px solid rgba(43,92,224,0.15)",
                 borderRadius: 6,
                 padding: "6px 8px",
                 cursor: "pointer",
@@ -320,7 +320,7 @@ export default function CompanyModal({ company, onClose }: Props) {
                 flexShrink: 0,
               }}
               onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.background = "rgba(59,130,246,0.1)";
+                (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.1)";
                 (e.currentTarget as HTMLElement).style.color = "#fff";
               }}
               onMouseLeave={(e) => {
@@ -341,7 +341,7 @@ export default function CompanyModal({ company, onClose }: Props) {
           <div style={{ display: "flex", gap: 20, alignItems: "flex-end", marginBottom: 16 }}>
             <div>
               <div style={{ fontSize: 10, color: "#475569", marginBottom: 2 }}>Current Price</div>
-              <div className="font-mono" style={{ fontSize: 26, fontWeight: 700, color: "#E2E8F0" }}>
+              <div className="font-mono" style={{ fontSize: 26, fontWeight: 700, color: "#EEF2FF" }}>
                 {fmtPrice(precioActual)}
               </div>
             </div>
@@ -383,7 +383,7 @@ export default function CompanyModal({ company, onClose }: Props) {
                     tickLine={false}
                   />
                   <YAxis hide />
-                  <Tooltip content={<ReturnTooltip />} cursor={{ fill: "rgba(59,130,246,0.05)" }} />
+                  <Tooltip content={<ReturnTooltip />} cursor={{ fill: "rgba(43,92,224,0.05)" }} />
                   <Bar dataKey="value" radius={[3, 3, 0, 0]}>
                     {returnBars.map((entry, index) => (
                       <Cell
@@ -480,7 +480,7 @@ export default function CompanyModal({ company, onClose }: Props) {
               </tbody>
             </table>
           </div>
-          <div style={{ fontSize: 10, color: "#334155", marginBottom: 4 }}>Values in MM CLP</div>
+          <div style={{ fontSize: 10, color: "#2D3E6E", marginBottom: 4 }}>Values in MM CLP</div>
 
           <div style={DIVIDER} />
 
@@ -497,8 +497,8 @@ export default function CompanyModal({ company, onClose }: Props) {
               <div
                 key={label}
                 style={{
-                  background: "rgba(15,32,64,0.6)",
-                  border: "1px solid rgba(59,130,246,0.1)",
+                  background: "rgba(13,24,82,0.6)",
+                  border: "1px solid rgba(43,92,224,0.1)",
                   borderRadius: 8,
                   padding: "12px 14px",
                 }}

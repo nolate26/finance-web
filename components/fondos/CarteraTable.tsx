@@ -22,7 +22,7 @@ export default function CarteraTable({ cartera, benchmark }: Props) {
   return (
     <div className="card overflow-hidden">
       <div className="px-5 py-4 border-b flex items-center justify-between"
-        style={{ borderColor: "rgba(59,130,246,0.12)" }}
+        style={{ borderColor: "rgba(43,92,224,0.12)" }}
       >
         <div>
           <h2 className="text-sm font-semibold text-white">Detalle Cartera</h2>
@@ -31,14 +31,14 @@ export default function CarteraTable({ cartera, benchmark }: Props) {
           </p>
         </div>
         <span className="text-xs font-mono px-2 py-0.5 rounded"
-          style={{ background: "rgba(59,130,246,0.08)", color: "#3B82F6" }}
+          style={{ background: "rgba(43,92,224,0.08)", color: "#2B5CE0" }}
         >
           {cartera.length} posiciones
         </span>
       </div>
       <div className="overflow-auto max-h-[600px]">
         <table className="w-full text-xs whitespace-nowrap">
-          <thead className="sticky top-0 z-10" style={{ background: "rgba(10,22,40,0.98)" }}>
+          <thead className="sticky top-0 z-10" style={{ background: "rgba(9,16,58,0.98)" }}>
             <tr>
               {[
                 { label: "#", w: "w-8" },
@@ -53,7 +53,7 @@ export default function CarteraTable({ cartera, benchmark }: Props) {
               ].map(({ label, w }) => (
                 <th key={label}
                   className={`px-3 py-2.5 text-left font-medium ${w}`}
-                  style={{ color: "#475569", borderBottom: "1px solid rgba(59,130,246,0.12)" }}
+                  style={{ color: "#475569", borderBottom: "1px solid rgba(43,92,224,0.12)" }}
                 >
                   {label}
                 </th>
@@ -70,26 +70,26 @@ export default function CarteraTable({ cartera, benchmark }: Props) {
                 <tr
                   key={i}
                   className="border-t transition-colors"
-                  style={{ borderColor: "rgba(59,130,246,0.07)" }}
-                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "rgba(59,130,246,0.04)"}
+                  style={{ borderColor: "rgba(43,92,224,0.07)" }}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.04)"}
                   onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}
                 >
                   {/* # */}
-                  <td className="px-3 py-2 font-mono" style={{ color: "#334155" }}>{i + 1}</td>
+                  <td className="px-3 py-2 font-mono" style={{ color: "#2D3E6E" }}>{i + 1}</td>
 
                   {/* Empresa */}
-                  <td className="px-3 py-2 font-medium" style={{ color: "#E2E8F0" }}>
+                  <td className="px-3 py-2 font-medium" style={{ color: "#EEF2FF" }}>
                     {row.company}
                   </td>
 
                   {/* % Portfolio */}
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
-                      <div className="w-16 h-1.5 rounded-full" style={{ background: "rgba(59,130,246,0.08)" }}>
+                      <div className="w-16 h-1.5 rounded-full" style={{ background: "rgba(43,92,224,0.08)" }}>
                         <div className="h-full rounded-full"
                           style={{
                             width: `${Math.min(100, row.portfolioPct * 500)}%`,
-                            background: "linear-gradient(90deg, #3B82F6, #06B6D4)",
+                            background: "linear-gradient(90deg, #2B5CE0, #5080FF)",
                           }}
                         />
                       </div>
@@ -117,17 +117,17 @@ export default function CarteraTable({ cartera, benchmark }: Props) {
                   <td className="px-3 py-2">
                     {row.industria ? (
                       <span className="px-2 py-0.5 rounded text-[10px] font-medium"
-                        style={{ background: "rgba(6,182,212,0.1)", color: "#06B6D4", border: "1px solid rgba(6,182,212,0.2)" }}
+                        style={{ background: "rgba(80,128,255,0.1)", color: "#5080FF", border: "1px solid rgba(80,128,255,0.2)" }}
                       >
                         {row.industria}
                       </span>
                     ) : (
-                      <span style={{ color: "#1E3A6E" }}>—</span>
+                      <span style={{ color: "#0F1A5C" }}>—</span>
                     )}
                   </td>
 
                   {/* Analista */}
-                  <td className="px-3 py-2" style={{ color: row.analista ? "#94A3B8" : "#1E3A6E" }}>
+                  <td className="px-3 py-2" style={{ color: row.analista ? "#94A3B8" : "#0F1A5C" }}>
                     {row.analista || "—"}
                   </td>
 
@@ -140,12 +140,12 @@ export default function CarteraTable({ cartera, benchmark }: Props) {
                         ★ TOP
                       </span>
                     ) : (
-                      <span style={{ color: "#1E3A6E" }}>—</span>
+                      <span style={{ color: "#0F1A5C" }}>—</span>
                     )}
                   </td>
 
                   {/* Observación */}
-                  <td className="px-3 py-2 max-w-xs" style={{ color: hasObservacion ? "#94A3B8" : "#1E3A6E" }}>
+                  <td className="px-3 py-2 max-w-xs" style={{ color: hasObservacion ? "#94A3B8" : "#0F1A5C" }}>
                     {hasObservacion ? (
                       <span title={row.observacion} className="block truncate max-w-[220px] cursor-help">
                         {row.observacion}
