@@ -157,9 +157,9 @@ export default function FondosPage() {
             onClick={() => switchRegion(r)}
             className="px-5 py-1.5 rounded-md text-sm font-semibold transition-all"
             style={{
-              background: region === r ? "rgba(43,92,224,0.2)" : "transparent",
-              color: region === r ? "#2B5CE0" : "#475569",
-              border: region === r ? "1px solid rgba(43,92,224,0.35)" : "1px solid transparent",
+              background: region === r ? "rgba(43,92,224,0.22)" : "transparent",
+              color: region === r ? "#FFFFFF" : "#7A8FAD",
+              border: region === r ? "1px solid rgba(80,128,255,0.42)" : "1px solid transparent",
             }}
           >
             {r}

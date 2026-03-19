@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 40" width="220" height="40">
+  <text
+    x="0" y="27"
+    font-family="'Georgia', 'Times New Roman', 'Palatino Linotype', serif"
+    font-size="25"
+    font-weight="700"
+    fill="#FFFFFF"
+    letter-spacing="3.5"
+  >MONEDA</text>
+  <text
+    x="2" y="38"
+    font-family="'Georgia', 'Times New Roman', serif"
+    font-size="9.5"
+    font-weight="400"
+    fill="rgba(138,175,255,0.72)"
+    letter-spacing="1.8"
+  >Patria Investments</text>
+</svg>

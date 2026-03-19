@@ -114,7 +114,7 @@ export default function KPISummary({ companies }: Props) {
             <Icon size={18} style={{ color: iconColor }} />
           </div>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 11, color: "#475569", marginBottom: 4 }}>{label}</div>
+            <div style={{ fontSize: 11, color: "#64748B", marginBottom: 4 }}>{label}</div>
             <div
               className="font-mono"
               style={{
@@ -153,7 +153,7 @@ export default function KPISummary({ companies }: Props) {
           <Target size={18} style={{ color: "#F59E0B" }} />
         </div>
         <div>
-          <div style={{ fontSize: 11, color: "#475569", marginBottom: 6 }}>Recommendations</div>
+          <div style={{ fontSize: 11, color: "#64748B", marginBottom: 6 }}>Recommendations</div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             <span
               className="font-mono"

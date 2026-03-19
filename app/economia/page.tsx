@@ -110,11 +110,11 @@ export default function EconomiaPage() {
             onClick={() => setView(key)}
             className="px-5 py-1.5 rounded-md text-sm font-semibold transition-all"
             style={{
-              background: view === key ? "rgba(43,92,224,0.2)" : "transparent",
-              color: view === key ? "#2B5CE0" : "#475569",
+              background: view === key ? "rgba(43,92,224,0.22)" : "transparent",
+              color: view === key ? "#FFFFFF" : "#7A8FAD",
               border:
                 view === key
-                  ? "1px solid rgba(43,92,224,0.35)"
+                  ? "1px solid rgba(80,128,255,0.42)"
                   : "1px solid transparent",
             }}
           >

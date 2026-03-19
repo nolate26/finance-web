@@ -50,7 +50,7 @@ function recBadge(rec: string | null) {
   if (rec === "Comprar") return { label: "Buy", color: "#10B981", bg: "rgba(16,185,129,0.1)", border: "rgba(16,185,129,0.25)" };
   if (rec === "Mantener") return { label: "Hold", color: "#F59E0B", bg: "rgba(245,158,11,0.1)", border: "rgba(245,158,11,0.25)" };
   if (rec === "Vender") return { label: "Sell", color: "#EF4444", bg: "rgba(239,68,68,0.1)", border: "rgba(239,68,68,0.25)" };
-  return { label: rec, color: "#94A3B8", bg: "transparent", border: "transparent" };
+  return { label: rec, color: "#B0C4E8", bg: "transparent", border: "transparent" };
 }
 
 const columns: { key: string; label: string; align?: "right" }[] = [
@@ -117,7 +117,7 @@ export default function CompanyTable({
                     textAlign: col.align === "right" ? "right" : "left",
                     fontSize: 11,
                     fontWeight: 600,
-                    color: sortBy === col.key ? "#2B5CE0" : "#475569",
+                    color: sortBy === col.key ? "#6699FF" : "#8B9EC8",
                     borderBottom: "1px solid rgba(43,92,224,0.12)",
                     cursor: "pointer",
                     whiteSpace: "nowrap",
@@ -129,7 +129,7 @@ export default function CompanyTable({
                   }}
                   onMouseLeave={(e) => {
                     (e.currentTarget as HTMLElement).style.color =
-                      sortBy === col.key ? "#2B5CE0" : "#475569";
+                      sortBy === col.key ? "#6699FF" : "#8B9EC8";
                   }}
                 >
                   {col.label}
@@ -209,7 +209,7 @@ export default function CompanyTable({
                       padding: "9px 14px",
                       textAlign: "right",
                       fontFamily: "JetBrains Mono, monospace",
-                      color: "#94A3B8",
+                      color: "#B0C4E8",
                     }}
                   >
                     {fmtMM(c.mkt_cap_bn as number | null)}
@@ -239,7 +239,7 @@ export default function CompanyTable({
                       padding: "9px 14px",
                       textAlign: "right",
                       fontFamily: "JetBrains Mono, monospace",
-                      color: "#94A3B8",
+                      color: "#B0C4E8",
                     }}
                   >
                     {fmtX(c.Fv_ebitda_ltm as number | null)}
@@ -251,7 +251,7 @@ export default function CompanyTable({
                       padding: "9px 14px",
                       textAlign: "right",
                       fontFamily: "JetBrains Mono, monospace",
-                      color: "#94A3B8",
+                      color: "#B0C4E8",
                     }}
                   >
                     {fmtX(c.pe_ltm as number | null)}
@@ -263,7 +263,7 @@ export default function CompanyTable({
                       padding: "9px 14px",
                       textAlign: "right",
                       fontFamily: "JetBrains Mono, monospace",
-                      color: "#94A3B8",
+                      color: "#B0C4E8",
                     }}
                   >
                     {fmtPct(c.roe_ltm as number | null)}

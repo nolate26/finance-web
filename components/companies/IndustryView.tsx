@@ -116,18 +116,18 @@ export default function IndustryView({ companies, onSectorClick, activeSector }:
             {/* Stats */}
             <div style={{ display: "flex", gap: 14, marginBottom: 12 }}>
               <div>
-                <div style={{ fontSize: 10, color: "#475569", marginBottom: 2 }}>
+                <div style={{ fontSize: 10, color: "#64748B", marginBottom: 2 }}>
                   Median FV/EBITDA
                 </div>
                 <div
                   className="font-mono"
-                  style={{ fontSize: 15, fontWeight: 700, color: "#94A3B8" }}
+                  style={{ fontSize: 15, fontWeight: 700, color: "#B0C4E8" }}
                 >
                   {medEbitda !== null ? medEbitda.toFixed(1) + "x" : "—"}
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: 10, color: "#475569", marginBottom: 2 }}>
+                <div style={{ fontSize: 10, color: "#64748B", marginBottom: 2 }}>
                   Median 1Y Ret
                 </div>
                 <div

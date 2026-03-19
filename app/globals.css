@@ -81,3 +81,37 @@ body {
 .positive { color: #10B981; }
 .negative { color: #EF4444; }
 .neutral  { color: #94A3B8; }
+
+/* ── Contrast & readability boosts ──────────────────────────────────────── */
+
+/* Page headings — pure white */
+h1, h2, h3 {
+  color: #FFFFFF;
+}
+
+/* Sub-tab active state — brighten across all pages */
+button[data-active="true"] {
+  color: #FFFFFF !important;
+}
+
+/* Table header text — more readable */
+thead th {
+  color: #8B9EC8 !important;
+}
+
+/* Card inner values — slightly brighter */
+.card .font-mono {
+  color: #C8D8FF;
+}
+
+/* Stronger card hover border */
+.card:hover {
+  border-color: rgba(80, 128, 255, 0.38) !important;
+}
+
+/* Active sub-tab pills — white text */
+.subtab-active {
+  color: #FFFFFF !important;
+  background: rgba(43, 92, 224, 0.25) !important;
+  border-color: rgba(80, 128, 255, 0.45) !important;
+}
