@@ -83,9 +83,11 @@ app/
     commodities/route.ts       # Reads commodities CSVs → JSON
     fondos/route.ts            # Lists & parses Fondos CSVs, Returns, and Sectors
     companies/route.ts         # Reads companies.csv
+    projections/route.ts       # Reads latest proyecciones_YYYYMMDD_HHMMSS.csv → JSON
   economia/page.tsx            # Market tab
   fondos/page.tsx              # Funds tab (Chile | LATAM)
   companies/page.tsx           # Companies tab
+  projections/page.tsx         # Analyst Projections tab
 
 components/
   Navbar.tsx                   # Fixed top nav
@@ -98,8 +100,10 @@ components/
     CommoditiesPanel.tsx       # Historical | Projections
   fondos/
     CarteraChart.tsx           # Horizontal BarChart overweight/underweight (Filterable by Sector)
-    CarteraTable.tsx           # Full portfolio table (Filterable by Sector)
-    FundReturnsTable.tsx       # (NEW) Quarterly returns: Net, Gross, Benchmark, OP/UP
+    CarteraTable.tsx           # Full portfolio table (sortable, default by fund)
+    FundReturnsTable.tsx       # Quarterly returns: Net, Gross, Benchmark, OP/UP
+  projections/
+    ProjectionsTable.tsx       # Double-header table: Ingresos | EBITDA | EBIT | Utilidad per year
   companies/
     # ...
 
@@ -111,8 +115,10 @@ data/
     Retornos/
       retornos_limpio.csv        # Historical performance (YTD, 1Y, 3Y, 5Y, Alpha, etc.)
   Companies/
-    companies.csv              
+    companies.csv
     companies_sector.csv         # Mapping: company -> sector
+  Projections/
+    proyecciones_YYYYMMDD_HHMMSS.csv  # Analyst projections; first line is # Generado: <timestamp>
 ```
 
 ---

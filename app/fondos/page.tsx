@@ -356,6 +356,7 @@ export default function FondosPage() {
               <CarteraTable
                 cartera={filteredCartera}
                 benchmark={fondoData.benchmark}
+                fundName={selectedFundName}
               />
             </div>
             <div className="w-full md:w-1/2">

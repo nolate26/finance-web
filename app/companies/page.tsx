@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { RefreshCw, LayoutList, Grid3X3 } from "lucide-react";
-import KPISummary from "@/components/companies/KPISummary";
 import CompanyTable from "@/components/companies/CompanyTable";
 import IndustryView from "@/components/companies/IndustryView";
 import CompanyModal from "@/components/companies/CompanyModal";
@@ -172,7 +171,7 @@ export default function CompaniesPage() {
       >
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 700, color: "#0F172A", letterSpacing: "-0.02em" }}>
-            Companies
+            Companies Stock Selection
           </h1>
           <p style={{ fontSize: 12, marginTop: 4, color: "#64748B" }}>
             Chilean Equity Universe — AGF Coverage
@@ -206,9 +205,6 @@ export default function CompaniesPage() {
           <span>Refresh</span>
         </button>
       </div>
-
-      {/* KPI Summary — always uses allCompanies */}
-      <KPISummary companies={allCompanies} />
 
       {/* Search & Filter Bar */}
       <div
@@ -401,7 +397,7 @@ export default function CompaniesPage() {
         />
       )}
 
-      {/* Company detail modal */}
+      {/* Inline company detail panel — rendered below the table */}
       <CompanyModal
         company={selectedCompany}
         onClose={() => setSelectedCompany(null)}

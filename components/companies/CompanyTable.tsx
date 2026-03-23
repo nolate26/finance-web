@@ -56,14 +56,14 @@ function recBadge(rec: string | null) {
 const columns: { key: string; label: string; align?: "right" }[] = [
   { key: "company", label: "Company" },
   { key: "sector", label: "Sector" },
-  { key: "precio_actual", label: "Price", align: "right" },
+  { key: "price", label: "Price", align: "right" },
   { key: "mkt_cap_bn", label: "Mkt Cap (MM CLP)", align: "right" },
   { key: "ret_1y", label: "1Y Ret", align: "right" },
   { key: "Fv_ebitda_ltm", label: "FV/EBITDA LTM", align: "right" },
   { key: "pe_ltm", label: "P/E LTM", align: "right" },
   { key: "roe_ltm", label: "ROE LTM", align: "right" },
-  { key: "recomendacion", label: "Rec", align: "right" },
-  { key: "precio_objetivo", label: "Target", align: "right" },
+  { key: "recommendation", label: "Rec", align: "right" },
+  { key: "target_price", label: "Target", align: "right" },
 ];
 
 export default function CompanyTable({
@@ -140,7 +140,7 @@ export default function CompanyTable({
           </thead>
           <tbody>
             {pageRows.map((c, i) => {
-              const rec = recBadge(c.recomendacion as string | null);
+              const rec = recBadge(c.recommendation as string | null);
               const ret1y = c.ret_1y as number | null;
               const sectorEn = SECTOR_MAP[c.sector as string] ?? (c.sector as string) ?? "—";
               return (
@@ -200,7 +200,7 @@ export default function CompanyTable({
                       color: "#334155",
                     }}
                   >
-                    {fmtPrice(c.precio_actual as number | null)}
+                    {fmtPrice(c.price as number | null)}
                   </td>
 
                   {/* Mkt Cap */}
@@ -271,7 +271,7 @@ export default function CompanyTable({
 
                   {/* Rec */}
                   <td style={{ padding: "9px 14px", textAlign: "right" }}>
-                    {c.recomendacion ? (
+                    {c.recommendation ? (
                       <span
                         className="font-mono"
                         style={{
@@ -300,7 +300,7 @@ export default function CompanyTable({
                       color: "#64748B",
                     }}
                   >
-                    {fmtPrice(c.precio_objetivo as number | null)}
+                    {fmtPrice(c.target_price as number | null)}
                   </td>
                 </tr>
               );

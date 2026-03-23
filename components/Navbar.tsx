@@ -1,12 +1,14 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart3, TrendingUp, Building2 } from "lucide-react";
+import { BarChart3, TrendingUp, Building2, LineChart, FileText } from "lucide-react";
 
 const tabs = [
   { href: "/economia", label: "Market", icon: TrendingUp },
   { href: "/fondos", label: "Funds", icon: BarChart3 },
   { href: "/companies", label: "Companies", icon: Building2 },
+  { href: "/projections", label: "Projections", icon: LineChart },
+  { href: "/presentations", label: "Presentations", icon: FileText },
 ];
 
 export default function Navbar() {

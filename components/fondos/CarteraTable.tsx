@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 interface CarteraRow {
   company: string;
   portfolioPct: number;
@@ -13,7 +15,11 @@ interface CarteraRow {
 interface Props {
   cartera: CarteraRow[];
   benchmark: string;
+  fundName?: string;
 }
+
+type SortCol = "company" | "portfolioPct" | "benchmarkPct" | "overweight" | "delta1W" | "delta1M";
+type SortDir = "asc" | "desc";
 
 function fmtDelta(v: number | null): { text: string; color: string; bg: string } {
   if (v === null) return { text: "—", color: "#CBD5E1", bg: "transparent" };
@@ -25,11 +31,70 @@ function fmtDelta(v: number | null): { text: string; color: string; bg: string }
   return { text, color, bg };
 }
 
-export default function CarteraTable({ cartera, benchmark }: Props) {
-  const sorted = [...cartera].sort((a, b) => b.overweight - a.overweight);
+function sortRows(rows: CarteraRow[], col: SortCol, dir: SortDir): CarteraRow[] {
+  return [...rows].sort((a, b) => {
+    let cmp = 0;
+    if (col === "company") {
+      cmp = a.company.localeCompare(b.company);
+    } else if (col === "delta1W" || col === "delta1M") {
+      const av = a[col] ?? -Infinity;
+      const bv = b[col] ?? -Infinity;
+      cmp = av - bv;
+    } else {
+      cmp = a[col] - b[col];
+    }
+    return dir === "asc" ? cmp : -cmp;
+  });
+}
 
+function defaultSort(fundName: string | undefined): { col: SortCol; dir: SortDir } {
+  if (fundName?.toLowerCase() === "pionero") {
+    return { col: "portfolioPct", dir: "desc" };
+  }
+  return { col: "overweight", dir: "desc" };
+}
+
+const SORT_ICON = {
+  asc:  "↑",
+  desc: "↓",
+  none: "↕",
+} as const;
+
+export default function CarteraTable({ cartera, benchmark, fundName }: Props) {
+  const def = defaultSort(fundName);
+  const [sortCol, setSortCol] = useState<SortCol>(def.col);
+  const [sortDir, setSortDir] = useState<SortDir>(def.dir);
+
+  function handleSort(col: SortCol) {
+    if (col === sortCol) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortCol(col);
+      setSortDir("desc");
+    }
+  }
+
+  const sorted = sortRows(cartera, sortCol, sortDir);
   const hasDelta1W = cartera.some((r) => r.delta1W !== null);
   const hasDelta1M = cartera.some((r) => r.delta1M !== null);
+
+  function thBtn(col: SortCol, label: string, align: "left" | "right" = "right") {
+    const active = sortCol === col;
+    return (
+      <th
+        className={`px-3 py-2.5 font-medium cursor-pointer select-none ${align === "left" ? "text-left" : "text-right"}`}
+        style={{ color: active ? "#2B5CE0" : "#64748B", borderBottom: "1px solid rgba(15,23,42,0.07)" }}
+        onClick={() => handleSort(col)}
+      >
+        <span className="inline-flex items-center gap-1">
+          {label}
+          <span className="text-[10px] opacity-60">
+            {active ? SORT_ICON[sortDir] : SORT_ICON.none}
+          </span>
+        </span>
+      </th>
+    );
+  }
 
   return (
     <div className="card overflow-hidden flex flex-col h-full">
@@ -39,7 +104,7 @@ export default function CarteraTable({ cartera, benchmark }: Props) {
         <div>
           <h2 className="text-sm font-semibold" style={{ color: "#0F172A" }}>Detalle Cartera</h2>
           <p className="text-xs mt-0.5" style={{ color: "#64748B" }}>
-            Ordenado por overweight vs {benchmark}
+            Click en cabecera para ordenar
           </p>
         </div>
         <span className="text-xs font-mono px-2 py-0.5 rounded"
@@ -54,22 +119,12 @@ export default function CarteraTable({ cartera, benchmark }: Props) {
             <tr>
               <th className="px-3 py-2.5 text-left font-medium w-8"
                 style={{ color: "#64748B", borderBottom: "1px solid rgba(15,23,42,0.07)" }}>#</th>
-              <th className="px-3 py-2.5 text-left font-medium w-44"
-                style={{ color: "#64748B", borderBottom: "1px solid rgba(15,23,42,0.07)" }}>Empresa</th>
-              <th className="px-3 py-2.5 text-right font-medium w-28"
-                style={{ color: "#64748B", borderBottom: "1px solid rgba(15,23,42,0.07)" }}>% Port.</th>
-              <th className="px-3 py-2.5 text-right font-medium w-20"
-                style={{ color: "#64748B", borderBottom: "1px solid rgba(15,23,42,0.07)" }}>% {benchmark}</th>
-              <th className="px-3 py-2.5 text-right font-medium w-24"
-                style={{ color: "#64748B", borderBottom: "1px solid rgba(15,23,42,0.07)" }}>Overweight</th>
-              {hasDelta1W && (
-                <th className="px-3 py-2.5 text-right font-medium w-20"
-                  style={{ color: "#64748B", borderBottom: "1px solid rgba(15,23,42,0.07)" }}>Δ 1W</th>
-              )}
-              {hasDelta1M && (
-                <th className="px-3 py-2.5 text-right font-medium w-20"
-                  style={{ color: "#64748B", borderBottom: "1px solid rgba(15,23,42,0.07)" }}>Δ 1M</th>
-              )}
+              {thBtn("company", "Empresa", "left")}
+              {thBtn("portfolioPct", "% Port.")}
+              {thBtn("benchmarkPct", `% ${benchmark}`)}
+              {thBtn("overweight", "Overweight")}
+              {hasDelta1W && thBtn("delta1W", "Δ 1W")}
+              {hasDelta1M && thBtn("delta1M", "Δ 1M")}
             </tr>
           </thead>
           <tbody>
