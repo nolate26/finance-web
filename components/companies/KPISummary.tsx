@@ -49,21 +49,21 @@ export default function KPISummary({ companies }: Props) {
       label: "Companies Tracked",
       value: totalCount.toLocaleString("en-US"),
       iconColor: "#2B5CE0",
-      iconBg: "rgba(43,92,224,0.12)",
+      iconBg: "rgba(43,92,224,0.08)",
     },
     {
       icon: DollarSign,
       label: "Total Market Cap",
       value: Math.round(totalMktCap).toLocaleString("en-US") + " MM CLP",
-      iconColor: "#5080FF",
-      iconBg: "rgba(80,128,255,0.12)",
+      iconColor: "#3D6FE8",
+      iconBg: "rgba(61,111,232,0.08)",
     },
     {
       icon: BarChart2,
       label: "Median FV/EBITDA LTM",
       value: medianEbitda !== null ? medianEbitda.toFixed(1) + "x" : "—",
-      iconColor: "#8B5CF6",
-      iconBg: "rgba(139,92,246,0.12)",
+      iconColor: "#7C3AED",
+      iconBg: "rgba(124,58,237,0.08)",
     },
     {
       icon: TrendingUp,
@@ -73,14 +73,14 @@ export default function KPISummary({ companies }: Props) {
           ? (avgRet1y >= 0 ? "+" : "") + (avgRet1y * 100).toFixed(1) + "%"
           : "—",
       valueColor:
-        avgRet1y === null ? "#94A3B8" : avgRet1y >= 0 ? "#10B981" : "#EF4444",
-      iconColor: avgRet1y === null ? "#94A3B8" : avgRet1y >= 0 ? "#10B981" : "#EF4444",
+        avgRet1y === null ? "#64748B" : avgRet1y >= 0 ? "#059669" : "#DC2626",
+      iconColor: avgRet1y === null ? "#64748B" : avgRet1y >= 0 ? "#059669" : "#DC2626",
       iconBg:
         avgRet1y === null
-          ? "rgba(148,163,184,0.08)"
+          ? "rgba(100,116,139,0.08)"
           : avgRet1y >= 0
-          ? "rgba(16,185,129,0.12)"
-          : "rgba(239,68,68,0.12)",
+          ? "rgba(5,150,105,0.08)"
+          : "rgba(220,38,38,0.08)",
     },
   ];
 
@@ -120,7 +120,7 @@ export default function KPISummary({ companies }: Props) {
               style={{
                 fontSize: 20,
                 fontWeight: 700,
-                color: valueColor ?? "#EEF2FF",
+                color: valueColor ?? "#0F172A",
                 lineHeight: 1.2,
                 whiteSpace: "nowrap",
                 overflow: "hidden",
@@ -143,14 +143,14 @@ export default function KPISummary({ companies }: Props) {
             width: 36,
             height: 36,
             borderRadius: 8,
-            background: "rgba(245,158,11,0.12)",
+            background: "rgba(217,119,6,0.08)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             flexShrink: 0,
           }}
         >
-          <Target size={18} style={{ color: "#F59E0B" }} />
+          <Target size={18} style={{ color: "#D97706" }} />
         </div>
         <div>
           <div style={{ fontSize: 11, color: "#64748B", marginBottom: 6 }}>Recommendations</div>
@@ -162,9 +162,9 @@ export default function KPISummary({ companies }: Props) {
                 fontWeight: 600,
                 padding: "2px 8px",
                 borderRadius: 20,
-                background: "rgba(16,185,129,0.12)",
-                color: "#10B981",
-                border: "1px solid rgba(16,185,129,0.25)",
+                background: "rgba(5,150,105,0.10)",
+                color: "#059669",
+                border: "1px solid rgba(5,150,105,0.20)",
               }}
             >
               Buy {buyCount}
@@ -176,9 +176,9 @@ export default function KPISummary({ companies }: Props) {
                 fontWeight: 600,
                 padding: "2px 8px",
                 borderRadius: 20,
-                background: "rgba(245,158,11,0.12)",
-                color: "#F59E0B",
-                border: "1px solid rgba(245,158,11,0.25)",
+                background: "rgba(217,119,6,0.10)",
+                color: "#D97706",
+                border: "1px solid rgba(217,119,6,0.20)",
               }}
             >
               Hold {holdCount}
@@ -190,9 +190,9 @@ export default function KPISummary({ companies }: Props) {
                 fontWeight: 600,
                 padding: "2px 8px",
                 borderRadius: 20,
-                background: "rgba(239,68,68,0.12)",
-                color: "#EF4444",
-                border: "1px solid rgba(239,68,68,0.25)",
+                background: "rgba(220,38,38,0.10)",
+                color: "#DC2626",
+                border: "1px solid rgba(220,38,38,0.20)",
               }}
             >
               Sell {sellCount}

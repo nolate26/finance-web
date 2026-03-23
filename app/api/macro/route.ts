@@ -4,6 +4,7 @@ import fs from "fs";
 import Papa from "papaparse";
 
 const MACRO_DIR = path.join(process.cwd(), "data", "Economia", "macro_details");
+const ECON_DIR = path.join(process.cwd(), "data", "Economia", "Economic Data");
 
 const METRIC_LABELS: Record<string, string> = {
   "GDP (Annual, %)": "GDP Growth",
@@ -12,14 +13,29 @@ const METRIC_LABELS: Record<string, string> = {
   "10 YEARS NOMINAL INTEREST RATE (EOP, %)": "10Y Rate",
 };
 
-function readCSV(filename: string) {
-  const content = fs.readFileSync(path.join(MACRO_DIR, filename), "utf-8");
+const HISTORICO_INDICATOR_MAP: Record<string, string> = {
+  "GDP": "GDP Growth",
+  "Inflation": "Inflation",
+  "CBR (Policy Rate)": "Policy Rate",
+  "10Y Note": "10Y Rate",
+};
+
+function readCSV(filename: string, dir = MACRO_DIR) {
+  const content = fs.readFileSync(path.join(dir, filename), "utf-8");
   const { data } = Papa.parse<Record<string, string>>(content, {
     header: true,
     skipEmptyLines: true,
     dynamicTyping: false,
   });
   return data;
+}
+
+function tryReadCSV(filename: string, dir = MACRO_DIR): Record<string, string>[] {
+  try {
+    return readCSV(filename, dir);
+  } catch {
+    return [];
+  }
 }
 
 function toNum(v: string | undefined): number | null {
@@ -31,7 +47,7 @@ function toNum(v: string | undefined): number | null {
 export async function GET() {
   try {
     // ── Annual projections ────────────────────────────────────────────────────
-    const annualRaw = readCSV("all_countries_annual.csv");
+    const annualRaw = tryReadCSV("all_countries_annual.csv");
     const annual = annualRaw.map((row) => ({
       country: row["COUNTRY"],
       metric: METRIC_LABELS[row["METRIC"]] ?? row["METRIC"],
@@ -44,7 +60,7 @@ export async function GET() {
     }));
 
     // ── Quarterly projections ─────────────────────────────────────────────────
-    const quarterlyRaw = readCSV("all_countries_quarterly.csv");
+    const quarterlyRaw = tryReadCSV("all_countries_quarterly.csv");
     const quarterlyKeys = Object.keys(quarterlyRaw[0] ?? {}).filter(
       (k) => k !== "COUNTRY" && k !== "METRIC"
     );
@@ -58,15 +74,12 @@ export async function GET() {
     });
 
     // ── Commodities ───────────────────────────────────────────────────────────
-    const commRaw = readCSV("Commodities_prices.csv");
+    const commRaw = tryReadCSV("Commodities_prices.csv");
     const commodities = commRaw.map((row) => {
-      // Extract unit from commodity name (everything after first space cluster)
       const full = row["COMMODITY"] ?? "";
-      // "Copper US$c/lb" → name="Copper", unit="US$c/lb"
       const parts = full.match(/^([\w\s]+?)\s+(US\$.*|USD.*)$/);
       const name = parts ? parts[1].trim() : full;
       const unit = parts ? parts[2].trim() : "";
-
       return {
         commodity: full,
         name,
@@ -83,7 +96,29 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json({ annual, quarterly, commodities, quarterlyKeys });
+    // ── Forecast revisions ────────────────────────────────────────────────────
+    const historicoRaw = tryReadCSV("macro_forecasts_historico.csv", ECON_DIR);
+    const revisions = historicoRaw.map((row) => ({
+      country: row["Country"],
+      indicator: HISTORICO_INDICATOR_MAP[row["Indicator"]] ?? row["Indicator"],
+      ago2026: toNum(row["2026 (3M Ago)"]),
+      current2026: toNum(row["2026 (Current)"]),
+      current2027: toNum(row["2027 (Current)"]),
+      current2028: toNum(row["2028 (Current)"]),
+    }));
+
+    // ── 10Y Yield + FX history ────────────────────────────────────────────────
+    const tenYearRaw = tryReadCSV("historia_10y_fx_maestro.csv", ECON_DIR);
+    const tenYearHistory = tenYearRaw.map((row) => {
+      const out: Record<string, string | number | null> = { Date: row["Date"] };
+      for (const [key, val] of Object.entries(row)) {
+        if (key === "Date") continue;
+        out[key] = toNum(val as string);
+      }
+      return out;
+    });
+
+    return NextResponse.json({ annual, quarterly, commodities, quarterlyKeys, revisions, tenYearHistory });
   } catch (error) {
     console.error("Macro API error:", error);
     return NextResponse.json({ error: "Failed to load macro data" }, { status: 500 });

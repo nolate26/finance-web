@@ -111,11 +111,11 @@ export default function CompaniesPage() {
           <div
             className="w-10 h-10 rounded-full border-2 animate-spin"
             style={{
-              borderColor: "rgba(43,92,224,0.2)",
+              borderColor: "rgba(43,92,224,0.15)",
               borderTopColor: "#2B5CE0",
             }}
           />
-          <p className="text-sm font-mono" style={{ color: "#475569" }}>
+          <p className="text-sm font-mono" style={{ color: "#64748B" }}>
             Loading companies...
           </p>
         </div>
@@ -128,14 +128,14 @@ export default function CompaniesPage() {
       <div className="flex items-center justify-center h-[80vh]">
         <div
           style={{
-            background: "rgba(239,68,68,0.08)",
-            border: "1px solid rgba(239,68,68,0.2)",
+            background: "rgba(220,38,38,0.06)",
+            border: "1px solid rgba(220,38,38,0.15)",
             borderRadius: 10,
             padding: "24px 32px",
             textAlign: "center",
           }}
         >
-          <p style={{ color: "#EF4444", marginBottom: 12, fontSize: 14 }}>
+          <p style={{ color: "#DC2626", marginBottom: 12, fontSize: 14 }}>
             Failed to load companies data
           </p>
           <button
@@ -143,8 +143,8 @@ export default function CompaniesPage() {
             style={{
               padding: "6px 16px",
               borderRadius: 6,
-              background: "rgba(43,92,224,0.1)",
-              border: "1px solid rgba(43,92,224,0.25)",
+              background: "rgba(43,92,224,0.08)",
+              border: "1px solid rgba(43,92,224,0.20)",
               color: "#2B5CE0",
               cursor: "pointer",
               fontSize: 13,
@@ -171,10 +171,10 @@ export default function CompaniesPage() {
         }}
       >
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, color: "#fff", letterSpacing: "-0.02em" }}>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: "#0F172A", letterSpacing: "-0.02em" }}>
             Companies
           </h1>
-          <p style={{ fontSize: 12, marginTop: 4, color: "#475569" }}>
+          <p style={{ fontSize: 12, marginTop: 4, color: "#64748B" }}>
             Chilean Equity Universe — AGF Coverage
           </p>
         </div>
@@ -186,20 +186,20 @@ export default function CompaniesPage() {
             gap: 6,
             padding: "6px 12px",
             borderRadius: 8,
-            background: "rgba(43,92,224,0.08)",
-            border: "1px solid rgba(43,92,224,0.15)",
-            color: "#475569",
+            background: "rgba(43,92,224,0.06)",
+            border: "1px solid rgba(15,23,42,0.10)",
+            color: "#64748B",
             cursor: "pointer",
             fontSize: 12,
             fontFamily: "JetBrains Mono, monospace",
           }}
           onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.color = "#94A3B8";
-            (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.3)";
+            (e.currentTarget as HTMLElement).style.color = "#334155";
+            (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.25)";
           }}
           onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.color = "#475569";
-            (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.15)";
+            (e.currentTarget as HTMLElement).style.color = "#64748B";
+            (e.currentTarget as HTMLElement).style.borderColor = "rgba(15,23,42,0.10)";
           }}
         >
           <RefreshCw size={12} />
@@ -233,18 +233,18 @@ export default function CompaniesPage() {
               width: "100%",
               padding: "7px 12px",
               borderRadius: 7,
-              background: "rgba(13,24,82,0.8)",
-              border: "1px solid rgba(43,92,224,0.15)",
-              color: "#EEF2FF",
+              background: "#F8FAFF",
+              border: "1px solid rgba(15,23,42,0.10)",
+              color: "#0F172A",
               fontSize: 13,
               outline: "none",
               fontFamily: "Inter, sans-serif",
             }}
             onFocus={(e) => {
-              (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.4)";
+              (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.35)";
             }}
             onBlur={(e) => {
-              (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.15)";
+              (e.currentTarget as HTMLElement).style.borderColor = "rgba(15,23,42,0.10)";
             }}
           />
         </div>
@@ -261,9 +261,9 @@ export default function CompaniesPage() {
           style={{
             padding: "7px 12px",
             borderRadius: 7,
-            background: "rgba(13,24,82,0.8)",
-            border: "1px solid rgba(43,92,224,0.15)",
-            color: selectedSector ? "#EEF2FF" : "#64748B",
+            background: "#F8FAFF",
+            border: "1px solid rgba(15,23,42,0.10)",
+            color: selectedSector ? "#0F172A" : "#64748B",
             fontSize: 13,
             cursor: "pointer",
             outline: "none",
@@ -291,9 +291,9 @@ export default function CompaniesPage() {
           style={{
             padding: "7px 12px",
             borderRadius: 7,
-            background: "rgba(13,24,82,0.8)",
-            border: "1px solid rgba(43,92,224,0.15)",
-            color: "#EEF2FF",
+            background: "#F8FAFF",
+            border: "1px solid rgba(15,23,42,0.10)",
+            color: "#0F172A",
             fontSize: 13,
             cursor: "pointer",
             outline: "none",
@@ -314,8 +314,8 @@ export default function CompaniesPage() {
             gap: 4,
             padding: 3,
             borderRadius: 8,
-            background: "rgba(13,24,82,0.8)",
-            border: "1px solid rgba(43,92,224,0.12)",
+            background: "#F0F4FA",
+            border: "1px solid rgba(15,23,42,0.08)",
             marginLeft: "auto",
           }}
         >
@@ -335,13 +335,13 @@ export default function CompaniesPage() {
                   fontWeight: 500,
                   cursor: "pointer",
                   border: "none",
-                  background: isActive ? "rgba(43,92,224,0.18)" : "transparent",
-                  color: isActive ? "#fff" : "#64748B",
+                  background: isActive ? "rgba(43,92,224,0.10)" : "transparent",
+                  color: isActive ? "#1E3A8A" : "#64748B",
                   transition: "all 0.15s",
                 }}
                 onMouseEnter={(e) => {
                   if (!isActive)
-                    (e.currentTarget as HTMLElement).style.color = "#94A3B8";
+                    (e.currentTarget as HTMLElement).style.color = "#334155";
                 }}
                 onMouseLeave={(e) => {
                   if (!isActive)
@@ -361,7 +361,7 @@ export default function CompaniesPage() {
         <div
           style={{
             fontSize: 12,
-            color: "#475569",
+            color: "#64748B",
             fontFamily: "JetBrains Mono, monospace",
             marginBottom: 10,
           }}
