@@ -47,7 +47,19 @@ export default function CompaniesPage() {
   const [sortBy, setSortBy] = useState("mkt_cap_bn");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [viewMode, setViewMode] = useState<"table" | "industry">("table");
-  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+  const [selectedCompanies, setSelectedCompanies] = useState<Company[]>([]);
+
+  function handleSelectCompany(company: Company) {
+    setSelectedCompanies((prev) => {
+      // If already in list, bring to front (dedup)
+      if (prev.some((c) => c.company === company.company)) return prev;
+      return [company, ...prev];
+    });
+  }
+
+  function handleCloseCompany(company: Company) {
+    setSelectedCompanies((prev) => prev.filter((c) => c.company !== company.company));
+  }
 
   const fetchCompanies = useCallback(() => {
     setLoading(true);
@@ -380,7 +392,7 @@ export default function CompaniesPage() {
       {viewMode === "table" ? (
         <CompanyTable
           companies={filtered}
-          onSelect={setSelectedCompany}
+          onSelect={handleSelectCompany}
           sortBy={sortBy}
           setSortBy={setSortBy}
           sortOrder={sortOrder}
@@ -397,11 +409,14 @@ export default function CompaniesPage() {
         />
       )}
 
-      {/* Inline company detail panel — rendered below the table */}
-      <CompanyModal
-        company={selectedCompany}
-        onClose={() => setSelectedCompany(null)}
-      />
+      {/* Inline comparison panels — one per selected company */}
+      {selectedCompanies.map((company) => (
+        <CompanyModal
+          key={company.company as string}
+          company={company}
+          onClose={() => handleCloseCompany(company)}
+        />
+      ))}
     </div>
   );
 }

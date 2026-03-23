@@ -20,13 +20,9 @@ interface Props {
   rows: ProjectionRow[];
 }
 
-/** Compact number formatter — e.g. 1_234_567 → "1.2M", 626578 → "626.6K" */
+/** Format as thousands-separated integer with no suffix — e.g. 1234567 → "1,234,567" */
 function fmtVal(v: number): string {
-  const abs = Math.abs(v);
-  const sign = v < 0 ? "-" : "";
-  if (abs >= 1_000_000) return sign + (abs / 1_000_000).toFixed(1) + "M";
-  if (abs >= 1_000)     return sign + (abs / 1_000).toFixed(1) + "K";
-  return v.toFixed(0);
+  return Math.round(v).toLocaleString("en-US");
 }
 
 function MetricCell({ block, year }: { block: MetricBlock | null; year: keyof MetricBlock }) {
@@ -117,30 +113,30 @@ export default function ProjectionsTable({ rows }: Props) {
                 <td className="px-3 py-2.5" style={{ color: "#64748B" }}>{row.sector || "—"}</td>
                 <td className="px-3 py-2.5 font-mono" style={{ color: "#94A3B8", borderRight: BORDER_METRIC }}>{row.moneda}</td>
 
-                {/* Ingresos */}
+                {/* Ingresos — no tint */}
                 {YEAR_KEYS.map((k, ki) => (
-                  <td key={`ing-${k}`} className={ki === 2 ? "" : ""} style={{ borderRight: ki === 2 ? BORDER_METRIC : undefined }}>
+                  <td key={`ing-${k}`} style={{ borderLeft: ki === 0 ? "2px solid #E2E8F0" : undefined, borderRight: ki === 2 ? BORDER_METRIC : undefined }}>
                     <MetricCell block={row.ingresos} year={k} />
                   </td>
                 ))}
 
-                {/* EBITDA */}
+                {/* EBITDA — light tint */}
                 {YEAR_KEYS.map((k, ki) => (
-                  <td key={`ebd-${k}`} style={{ borderRight: ki === 2 ? BORDER_METRIC : undefined }}>
+                  <td key={`ebd-${k}`} style={{ borderLeft: ki === 0 ? "2px solid #E2E8F0" : undefined, borderRight: ki === 2 ? BORDER_METRIC : undefined, background: ki >= 0 ? "rgba(248,250,252,0.8)" : undefined }}>
                     <MetricCell block={row.ebitda} year={k} />
                   </td>
                 ))}
 
-                {/* EBIT */}
+                {/* EBIT — no tint */}
                 {YEAR_KEYS.map((k, ki) => (
-                  <td key={`ebt-${k}`} style={{ borderRight: ki === 2 ? BORDER_METRIC : undefined }}>
+                  <td key={`ebt-${k}`} style={{ borderLeft: ki === 0 ? "2px solid #E2E8F0" : undefined, borderRight: ki === 2 ? BORDER_METRIC : undefined }}>
                     <MetricCell block={row.ebit} year={k} />
                   </td>
                 ))}
 
-                {/* Utilidad */}
-                {YEAR_KEYS.map((k) => (
-                  <td key={`utl-${k}`}>
+                {/* Utilidad — light tint */}
+                {YEAR_KEYS.map((k, ki) => (
+                  <td key={`utl-${k}`} style={{ borderLeft: ki === 0 ? "2px solid #E2E8F0" : undefined, background: "rgba(248,250,252,0.8)" }}>
                     <MetricCell block={row.utilidad} year={k} />
                   </td>
                 ))}

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { BarChart3, TrendingUp, Building2, LineChart, FileText } from "lucide-react";
 
@@ -17,7 +18,7 @@ export default function Navbar() {
 
   return (
     <nav
-      className="fixed top-0 left-0 right-0 z-50 h-16 flex items-center px-6"
+      className="fixed top-0 left-0 right-0 z-50 h-16 flex items-center justify-between px-6"
       style={{
         background: "rgba(255,255,255,0.97)",
         borderBottom: "1px solid rgba(15,23,42,0.08)",
@@ -26,36 +27,20 @@ export default function Navbar() {
         boxShadow: "0 1px 3px rgba(15,23,42,0.06)",
       }}
     >
-      {/* Moneda logo */}
-      <div className="flex items-center gap-3 mr-10 flex-shrink-0">
-        <img
-          src="/moneda-logo.svg"
-          alt="Moneda Patria Investments"
-          style={{ height: 34, display: "block" }}
+      {/* LEFT — logo */}
+      <div className="flex items-center flex-shrink-0">
+        <Image
+          src="/img/moneda_patria.png"
+          alt="Moneda Patria"
+          height={32}
+          width={160}
+          style={{ objectFit: "contain", height: 32, width: "auto" }}
+          priority
         />
-        <span
-          style={{
-            fontSize: 9,
-            padding: "2px 7px",
-            borderRadius: 20,
-            fontFamily: "'JetBrains Mono', monospace",
-            fontWeight: 500,
-            letterSpacing: "0.06em",
-            background: "rgba(43,92,224,0.08)",
-            color: "#2B5CE0",
-            border: "1px solid rgba(43,92,224,0.20)",
-            flexShrink: 0,
-          }}
-        >
-          BETA
-        </span>
       </div>
 
-      {/* Navigation tabs */}
-      <div
-        className="flex items-center gap-0.5"
-        style={{ position: "relative", zIndex: 10, flexShrink: 0 }}
-      >
+      {/* CENTER — navigation tabs */}
+      <div className="flex items-center gap-0.5">
         {tabs.map(({ href, label, icon: Icon }) => {
           const active = pathname.startsWith(href);
           return (
@@ -95,19 +80,37 @@ export default function Navbar() {
         })}
       </div>
 
-      {/* Date — pushed to right */}
-      <div
-        className="ml-auto font-mono flex-shrink-0"
-        style={{ fontSize: 11, color: "#94A3B8", letterSpacing: "0.04em" }}
-      >
-        {new Date()
-          .toLocaleDateString("en-US", {
-            weekday: "short",
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-          })
-          .toUpperCase()}
+      {/* RIGHT — date + BETA badge */}
+      <div className="flex items-center gap-3 flex-shrink-0">
+        <span
+          className="font-mono"
+          style={{ fontSize: 11, color: "#94A3B8", letterSpacing: "0.04em" }}
+        >
+          {new Date()
+            .toLocaleDateString("en-US", {
+              weekday: "short",
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+            })
+            .toUpperCase()}
+        </span>
+        <span
+          style={{
+            fontSize: 9,
+            padding: "2px 7px",
+            borderRadius: 20,
+            fontFamily: "'JetBrains Mono', monospace",
+            fontWeight: 500,
+            letterSpacing: "0.06em",
+            background: "rgba(43,92,224,0.08)",
+            color: "#2B5CE0",
+            border: "1px solid rgba(43,92,224,0.20)",
+            flexShrink: 0,
+          }}
+        >
+          BETA
+        </span>
       </div>
     </nav>
   );

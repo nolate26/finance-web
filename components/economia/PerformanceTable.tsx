@@ -55,6 +55,22 @@ function pctCell(val: string) {
   );
 }
 
+/** For columns stored as raw percentage numbers (e.g. 11.9036 → +11.9%) */
+function rawPctCell(val: string) {
+  const n = parseFloat(val);
+  if (isNaN(n)) return <span style={{ color: "#64748B" }}>—</span>;
+  const color = n > 0 ? "#059669" : n < 0 ? "#DC2626" : "#64748B";
+  const display = (n >= 0 ? "+" : "") + n.toFixed(1) + "%";
+  return (
+    <span
+      className="font-mono text-[11px] font-semibold px-1.5 py-0.5 rounded"
+      style={{ color, background: `${color}12` }}
+    >
+      {display}
+    </span>
+  );
+}
+
 function DataRow({ row, isLast }: { row: TablaRow; isLast: boolean }) {
   return (
     <tr
@@ -96,7 +112,7 @@ function DataRow({ row, isLast }: { row: TablaRow; isLast: boolean }) {
         {row["P/U (Fwd 12m)"] != null ? `${row["P/U (Fwd 12m)"]}x` : "—"}
       </td>
       <td className="px-4 py-2.5 text-right">
-        {row["ROE (Trailing)"] ? pctCell(row["ROE (Trailing)"]) : "—"}
+        {row["ROE (Trailing)"] ? rawPctCell(row["ROE (Trailing)"]) : "—"}
       </td>
     </tr>
   );
