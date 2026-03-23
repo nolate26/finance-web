@@ -63,19 +63,19 @@ export default function IndustryView({ companies, onSectorClick, activeSector }:
               padding: "16px 18px",
               cursor: "pointer",
               border: isActive
-                ? "1px solid rgba(43,92,224,0.5)"
-                : "1px solid rgba(43,92,224,0.15)",
-              boxShadow: isActive ? "0 0 0 1px rgba(43,92,224,0.2)" : "none",
+                ? "1px solid rgba(43,92,224,0.35)"
+                : "1px solid rgba(15,23,42,0.08)",
+              boxShadow: isActive ? "0 0 0 1px rgba(43,92,224,0.12)" : "none",
               transition: "border-color 0.15s, box-shadow 0.15s",
             }}
             onMouseEnter={(e) => {
               if (!isActive) {
-                (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.3)";
+                (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.20)";
               }
             }}
             onMouseLeave={(e) => {
               if (!isActive) {
-                (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.15)";
+                (e.currentTarget as HTMLElement).style.borderColor = "rgba(15,23,42,0.08)";
               }
             }}
           >
@@ -92,7 +92,7 @@ export default function IndustryView({ companies, onSectorClick, activeSector }:
                 style={{
                   fontSize: 13,
                   fontWeight: 600,
-                  color: isActive ? "#fff" : "#C5D4FF",
+                  color: isActive ? "#1E3A8A" : "#334155",
                 }}
               >
                 {displayName}
@@ -104,9 +104,9 @@ export default function IndustryView({ companies, onSectorClick, activeSector }:
                   fontWeight: 700,
                   padding: "2px 7px",
                   borderRadius: 10,
-                  background: isActive ? "rgba(43,92,224,0.2)" : "rgba(43,92,224,0.08)",
-                  color: isActive ? "#2B5CE0" : "#475569",
-                  border: `1px solid ${isActive ? "rgba(43,92,224,0.4)" : "rgba(43,92,224,0.15)"}`,
+                  background: isActive ? "rgba(43,92,224,0.12)" : "rgba(43,92,224,0.06)",
+                  color: isActive ? "#2B5CE0" : "#64748B",
+                  border: `1px solid ${isActive ? "rgba(43,92,224,0.25)" : "rgba(43,92,224,0.10)"}`,
                 }}
               >
                 {cos.length}
@@ -121,7 +121,7 @@ export default function IndustryView({ companies, onSectorClick, activeSector }:
                 </div>
                 <div
                   className="font-mono"
-                  style={{ fontSize: 15, fontWeight: 700, color: "#B0C4E8" }}
+                  style={{ fontSize: 15, fontWeight: 700, color: "#334155" }}
                 >
                   {medEbitda !== null ? medEbitda.toFixed(1) + "x" : "—"}
                 </div>
@@ -137,10 +137,10 @@ export default function IndustryView({ companies, onSectorClick, activeSector }:
                     fontWeight: 700,
                     color:
                       medRet1y === null
-                        ? "#475569"
+                        ? "#64748B"
                         : medRet1y >= 0
-                        ? "#10B981"
-                        : "#EF4444",
+                        ? "#059669"
+                        : "#DC2626",
                   }}
                 >
                   {medRet1y !== null
@@ -159,9 +159,9 @@ export default function IndustryView({ companies, onSectorClick, activeSector }:
                     fontSize: 10,
                     padding: "2px 6px",
                     borderRadius: 4,
-                    background: "rgba(80,128,255,0.07)",
-                    color: "#5080FF",
-                    border: "1px solid rgba(80,128,255,0.15)",
+                    background: "rgba(43,92,224,0.06)",
+                    color: "#2B5CE0",
+                    border: "1px solid rgba(43,92,224,0.12)",
                     whiteSpace: "nowrap",
                   }}
                 >
@@ -174,9 +174,9 @@ export default function IndustryView({ companies, onSectorClick, activeSector }:
                     fontSize: 10,
                     padding: "2px 6px",
                     borderRadius: 4,
-                    background: "rgba(71,85,105,0.15)",
+                    background: "rgba(15,23,42,0.05)",
                     color: "#64748B",
-                    border: "1px solid rgba(71,85,105,0.2)",
+                    border: "1px solid rgba(15,23,42,0.10)",
                   }}
                 >
                   +{overflow} more

@@ -48,11 +48,11 @@ function fmtMM(v: unknown): string {
 }
 
 function recBadge(rec: string | null) {
-  if (!rec) return { label: "—", color: "#94A3B8", bg: "rgba(148,163,184,0.1)", border: "rgba(148,163,184,0.2)" };
-  if (rec === "Comprar") return { label: "Buy", color: "#10B981", bg: "rgba(16,185,129,0.12)", border: "rgba(16,185,129,0.3)" };
-  if (rec === "Mantener") return { label: "Hold", color: "#F59E0B", bg: "rgba(245,158,11,0.12)", border: "rgba(245,158,11,0.3)" };
-  if (rec === "Vender") return { label: "Sell", color: "#EF4444", bg: "rgba(239,68,68,0.12)", border: "rgba(239,68,68,0.3)" };
-  return { label: rec, color: "#94A3B8", bg: "rgba(148,163,184,0.1)", border: "rgba(148,163,184,0.2)" };
+  if (!rec) return { label: "—", color: "#64748B", bg: "rgba(100,116,139,0.08)", border: "rgba(100,116,139,0.15)" };
+  if (rec === "Comprar") return { label: "Buy", color: "#059669", bg: "rgba(5,150,105,0.10)", border: "rgba(5,150,105,0.25)" };
+  if (rec === "Mantener") return { label: "Hold", color: "#D97706", bg: "rgba(217,119,6,0.10)", border: "rgba(217,119,6,0.25)" };
+  if (rec === "Vender") return { label: "Sell", color: "#DC2626", bg: "rgba(220,38,38,0.10)", border: "rgba(220,38,38,0.25)" };
+  return { label: rec, color: "#64748B", bg: "rgba(100,116,139,0.08)", border: "rgba(100,116,139,0.15)" };
 }
 
 const SECTION_LABEL: React.CSSProperties = {
@@ -65,7 +65,7 @@ const SECTION_LABEL: React.CSSProperties = {
 };
 
 const DIVIDER: React.CSSProperties = {
-  borderTop: "1px solid rgba(43,92,224,0.1)",
+  borderTop: "1px solid rgba(15,23,42,0.08)",
   margin: "16px 0",
 };
 
@@ -76,17 +76,18 @@ interface TooltipPayload {
 function ReturnTooltip({ active, payload, label }: { active?: boolean; payload?: TooltipPayload[]; label?: string }) {
   if (!active || !payload || !payload.length) return null;
   const val = payload[0].value;
-  const color = val >= 0 ? "#10B981" : "#EF4444";
+  const color = val >= 0 ? "#059669" : "#DC2626";
   return (
     <div style={{
-      background: "#09103A",
-      border: "1px solid rgba(43,92,224,0.2)",
+      background: "#FFFFFF",
+      border: "1px solid rgba(15,23,42,0.10)",
       borderRadius: 6,
       padding: "6px 10px",
       fontSize: 11,
       fontFamily: "JetBrains Mono, monospace",
+      boxShadow: "0 4px 12px rgba(15,23,42,0.10)",
     }}>
-      <div style={{ color: "#94A3B8", marginBottom: 2 }}>{label}</div>
+      <div style={{ color: "#64748B", marginBottom: 2 }}>{label}</div>
       <div style={{ color, fontWeight: 600 }}>{val >= 0 ? "+" : ""}{(val * 100).toFixed(1)}%</div>
     </div>
   );
@@ -180,22 +181,22 @@ export default function CompanyModal({ company, onClose }: Props) {
     {
       label: "ROIC LTM",
       value: roicLtm !== null ? fmtPct(roicLtm) : "—",
-      color: roicLtm !== null && roicLtm >= 0 ? "#10B981" : "#EF4444",
+      color: roicLtm !== null && roicLtm >= 0 ? "#059669" : "#DC2626",
     },
     {
       label: "ND/EBITDA",
       value: fmtX(n(company.leverage_ltm)),
-      color: "#5080FF",
+      color: "#2B5CE0",
     },
     {
       label: "Div Yield 2026E",
       value: fmtPct(n(company.div_yield_2026e)),
-      color: "#F59E0B",
+      color: "#D97706",
     },
     {
       label: "P/CE LTM",
       value: fmtX(n(company.p_ce_ltm)),
-      color: "#8B5CF6",
+      color: "#7C3AED",
     },
   ];
 
@@ -204,9 +205,9 @@ export default function CompanyModal({ company, onClose }: Props) {
     textAlign: "right" as const,
     fontSize: 10,
     fontWeight: 600,
-    color: "#475569",
+    color: "#64748B",
     letterSpacing: "0.05em",
-    borderBottom: "1px solid rgba(43,92,224,0.1)",
+    borderBottom: "1px solid rgba(15,23,42,0.08)",
   };
 
   const tdStyle: React.CSSProperties = {
@@ -214,8 +215,8 @@ export default function CompanyModal({ company, onClose }: Props) {
     textAlign: "right" as const,
     fontSize: 11,
     fontFamily: "JetBrains Mono, monospace",
-    color: "#C5D4FF",
-    borderBottom: "1px solid rgba(43,92,224,0.06)",
+    color: "#334155",
+    borderBottom: "1px solid rgba(15,23,42,0.05)",
   };
 
   return (
@@ -227,7 +228,7 @@ export default function CompanyModal({ company, onClose }: Props) {
           position: "fixed",
           inset: 0,
           zIndex: 50,
-          background: "rgba(6,10,40,0.7)",
+          background: "rgba(15,23,42,0.40)",
           backdropFilter: "blur(4px)",
         }}
       />
@@ -241,20 +242,20 @@ export default function CompanyModal({ company, onClose }: Props) {
           bottom: 0,
           width: 520,
           zIndex: 51,
-          background: "#09103A",
-          borderLeft: "1px solid rgba(43,92,224,0.2)",
+          background: "#FFFFFF",
+          borderLeft: "1px solid rgba(15,23,42,0.10)",
           overflowY: "auto",
           display: "flex",
           flexDirection: "column",
-          boxShadow: "-20px 0 60px rgba(0,0,0,0.6)",
+          boxShadow: "-8px 0 32px rgba(15,23,42,0.12)",
         }}
       >
         {/* Header */}
         <div
           style={{
             padding: "20px 24px 16px",
-            borderBottom: "1px solid rgba(43,92,224,0.12)",
-            background: "linear-gradient(180deg, #0D1852 0%, #09103A 100%)",
+            borderBottom: "1px solid rgba(15,23,42,0.08)",
+            background: "#F8FAFF",
             position: "sticky",
             top: 0,
             zIndex: 10,
@@ -267,7 +268,7 @@ export default function CompanyModal({ company, onClose }: Props) {
                 style={{
                   fontSize: 18,
                   fontWeight: 700,
-                  color: "#fff",
+                  color: "#0F172A",
                   whiteSpace: "nowrap",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
@@ -282,9 +283,9 @@ export default function CompanyModal({ company, onClose }: Props) {
                     fontSize: 11,
                     padding: "2px 8px",
                     borderRadius: 4,
-                    background: "rgba(80,128,255,0.1)",
-                    color: "#5080FF",
-                    border: "1px solid rgba(80,128,255,0.2)",
+                    background: "rgba(43,92,224,0.08)",
+                    color: "#2B5CE0",
+                    border: "1px solid rgba(43,92,224,0.15)",
                     fontWeight: 500,
                   }}
                 >
@@ -311,8 +312,8 @@ export default function CompanyModal({ company, onClose }: Props) {
             <button
               onClick={onClose}
               style={{
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(43,92,224,0.15)",
+                background: "rgba(15,23,42,0.04)",
+                border: "1px solid rgba(15,23,42,0.10)",
                 borderRadius: 6,
                 padding: "6px 8px",
                 cursor: "pointer",
@@ -320,11 +321,11 @@ export default function CompanyModal({ company, onClose }: Props) {
                 flexShrink: 0,
               }}
               onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.1)";
-                (e.currentTarget as HTMLElement).style.color = "#fff";
+                (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.08)";
+                (e.currentTarget as HTMLElement).style.color = "#2B5CE0";
               }}
               onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)";
+                (e.currentTarget as HTMLElement).style.background = "rgba(15,23,42,0.04)";
                 (e.currentTarget as HTMLElement).style.color = "#64748B";
               }}
             >
@@ -340,15 +341,15 @@ export default function CompanyModal({ company, onClose }: Props) {
 
           <div style={{ display: "flex", gap: 20, alignItems: "flex-end", marginBottom: 16 }}>
             <div>
-              <div style={{ fontSize: 10, color: "#475569", marginBottom: 2 }}>Current Price</div>
-              <div className="font-mono" style={{ fontSize: 26, fontWeight: 700, color: "#EEF2FF" }}>
+              <div style={{ fontSize: 10, color: "#64748B", marginBottom: 2 }}>Current Price</div>
+              <div className="font-mono" style={{ fontSize: 26, fontWeight: 700, color: "#0F172A" }}>
                 {fmtPrice(precioActual)}
               </div>
             </div>
             {precioObjetivo !== null && (
               <div>
-                <div style={{ fontSize: 10, color: "#475569", marginBottom: 2 }}>Target Price</div>
-                <div className="font-mono" style={{ fontSize: 18, fontWeight: 600, color: "#94A3B8" }}>
+                <div style={{ fontSize: 10, color: "#64748B", marginBottom: 2 }}>Target Price</div>
+                <div className="font-mono" style={{ fontSize: 18, fontWeight: 600, color: "#475569" }}>
                   {fmtPrice(precioObjetivo)}
                 </div>
               </div>
@@ -361,9 +362,9 @@ export default function CompanyModal({ company, onClose }: Props) {
                   fontWeight: 700,
                   padding: "4px 10px",
                   borderRadius: 6,
-                  background: upside >= 0 ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.12)",
-                  color: upside >= 0 ? "#10B981" : "#EF4444",
-                  border: `1px solid ${upside >= 0 ? "rgba(16,185,129,0.25)" : "rgba(239,68,68,0.25)"}`,
+                  background: upside >= 0 ? "rgba(5,150,105,0.10)" : "rgba(220,38,38,0.10)",
+                  color: upside >= 0 ? "#059669" : "#DC2626",
+                  border: `1px solid ${upside >= 0 ? "rgba(5,150,105,0.20)" : "rgba(220,38,38,0.20)"}`,
                   marginBottom: 4,
                 }}
               >
@@ -378,17 +379,17 @@ export default function CompanyModal({ company, onClose }: Props) {
                 <BarChart data={returnBars} barCategoryGap="30%">
                   <XAxis
                     dataKey="name"
-                    tick={{ fill: "#475569", fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}
+                    tick={{ fill: "#94A3B8", fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}
                     axisLine={false}
                     tickLine={false}
                   />
                   <YAxis hide />
-                  <Tooltip content={<ReturnTooltip />} cursor={{ fill: "rgba(43,92,224,0.05)" }} />
+                  <Tooltip content={<ReturnTooltip />} cursor={{ fill: "rgba(43,92,224,0.04)" }} />
                   <Bar dataKey="value" radius={[3, 3, 0, 0]}>
                     {returnBars.map((entry, index) => (
                       <Cell
                         key={`cell-${index}`}
-                        fill={entry.value >= 0 ? "#10B981" : "#EF4444"}
+                        fill={entry.value >= 0 ? "#059669" : "#DC2626"}
                       />
                     ))}
                   </Bar>
@@ -419,7 +420,7 @@ export default function CompanyModal({ company, onClose }: Props) {
                         ...tdStyle,
                         textAlign: "left",
                         paddingLeft: 0,
-                        color: "#94A3B8",
+                        color: "#64748B",
                         fontWeight: 600,
                         fontFamily: "Inter, sans-serif",
                         fontSize: 11,
@@ -462,7 +463,7 @@ export default function CompanyModal({ company, onClose }: Props) {
                         ...tdStyle,
                         textAlign: "left",
                         paddingLeft: 0,
-                        color: "#94A3B8",
+                        color: "#64748B",
                         fontWeight: 600,
                         fontFamily: "Inter, sans-serif",
                         fontSize: 11,
@@ -480,7 +481,7 @@ export default function CompanyModal({ company, onClose }: Props) {
               </tbody>
             </table>
           </div>
-          <div style={{ fontSize: 10, color: "#2D3E6E", marginBottom: 4 }}>Values in MM CLP</div>
+          <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 4 }}>Values in MM CLP</div>
 
           <div style={DIVIDER} />
 
@@ -497,13 +498,13 @@ export default function CompanyModal({ company, onClose }: Props) {
               <div
                 key={label}
                 style={{
-                  background: "rgba(13,24,82,0.6)",
-                  border: "1px solid rgba(43,92,224,0.1)",
+                  background: "#F8FAFF",
+                  border: "1px solid rgba(15,23,42,0.08)",
                   borderRadius: 8,
                   padding: "12px 14px",
                 }}
               >
-                <div style={{ fontSize: 10, color: "#475569", marginBottom: 4 }}>{label}</div>
+                <div style={{ fontSize: 10, color: "#64748B", marginBottom: 4 }}>{label}</div>
                 <div
                   className="font-mono"
                   style={{ fontSize: 18, fontWeight: 700, color }}

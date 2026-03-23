@@ -1,0 +1,81 @@
+Commodity,Quarter,Spot Current,Fwd Curve,Analyst Forecast
+Iron Ore (USD/t),Q126,108.14,103.67,103.5
+Iron Ore (USD/t),Q226,108.14,107.06,99.0
+Iron Ore (USD/t),Q326,108.14,104.68,95.0
+Iron Ore (USD/t),Q426,108.14,103.1,95.0
+Iron Ore (USD/t),Q127,108.14,102.14,90.0
+Iron Ore (USD/t),Q227,108.14,100.76,90.0
+Iron Ore (USD/t),Q327,108.14,-,-
+Iron Ore (USD/t),Q427,108.14,-,-
+Aluminum (USD/t),Q126,3215.0,3226.89,3087.5
+Aluminum (USD/t),Q226,3215.0,3229.99,3050.0
+Aluminum (USD/t),Q326,3215.0,3180.5,3000.0
+Aluminum (USD/t),Q426,3215.0,3124.65,3062.5
+Aluminum (USD/t),Q127,3215.0,3070.58,3000.0
+Aluminum (USD/t),Q227,3215.0,3031.42,3125.0
+Aluminum (USD/t),Q327,3215.0,-,-
+Aluminum (USD/t),Q427,3215.0,-,-
+Copper (USD/t),Q126,11929.5,12640.9,12500.0
+Copper (USD/t),Q226,11929.5,11917.35,12600.0
+Copper (USD/t),Q326,11929.5,11980.08,12000.0
+Copper (USD/t),Q426,11929.5,12020.46,12000.0
+Copper (USD/t),Q127,11929.5,12050.57,12000.0
+Copper (USD/t),Q227,11929.5,12075.25,12200.0
+Copper (USD/t),Q327,11929.5,-,-
+Copper (USD/t),Q427,11929.5,-,-
+Lithium (USD/t),Q126,19427.27,-,15860.0
+Lithium (USD/t),Q226,19427.27,-,15443.06
+Lithium (USD/t),Q326,19427.27,-,14527.47
+Lithium (USD/t),Q426,19427.27,-,15000.0
+Lithium (USD/t),Q127,19427.27,-,14000.0
+Lithium (USD/t),Q227,19427.27,-,14000.0
+Lithium (USD/t),Q327,19427.27,-,-
+Lithium (USD/t),Q427,19427.27,-,-
+Gold (USD/oz),Q126,4473.54,4980.76,4686.5
+Gold (USD/oz),Q226,4473.54,4482.72,4650.0
+Gold (USD/oz),Q326,4473.54,4579.27,4752.5
+Gold (USD/oz),Q426,4473.54,4603.82,4950.0
+Gold (USD/oz),Q127,4473.54,4690.08,4750.0
+Gold (USD/oz),Q227,4473.54,4769.77,4150.0
+Gold (USD/oz),Q327,4473.54,-,-
+Gold (USD/oz),Q427,4473.54,-,-
+Silver (USD/oz),Q126,70.52,775.04,732.67
+Silver (USD/oz),Q226,70.52,803.21,729.0
+Silver (USD/oz),Q326,70.52,803.21,718.0
+Silver (USD/oz),Q426,70.52,803.21,717.0
+Silver (USD/oz),Q127,70.52,803.21,600.0
+Silver (USD/oz),Q227,70.52,803.21,537.6
+Silver (USD/oz),Q327,70.52,-,-
+Silver (USD/oz),Q427,70.52,-,-
+Brent Crude (USD/bbl),Q126,98.7,86.02,66.0
+Brent Crude (USD/bbl),Q226,98.7,101.28,65.26
+Brent Crude (USD/bbl),Q326,98.7,90.28,65.83
+Brent Crude (USD/bbl),Q426,98.7,85.14,66.5
+Brent Crude (USD/bbl),Q127,98.7,82.3,67.0
+Brent Crude (USD/bbl),Q227,98.7,80.24,65.0
+Brent Crude (USD/bbl),Q327,98.7,-,-
+Brent Crude (USD/bbl),Q427,98.7,-,-
+ICE TTF (EUR/MWh),Q126,54.2,44.6,37.48
+ICE TTF (EUR/MWh),Q226,54.2,59.27,36.5
+ICE TTF (EUR/MWh),Q326,54.2,58.9,34.28
+ICE TTF (EUR/MWh),Q426,54.2,58.48,35.3
+ICE TTF (EUR/MWh),Q127,54.2,52.58,31.71
+ICE TTF (EUR/MWh),Q227,54.2,42.09,29.5
+ICE TTF (EUR/MWh),Q327,54.2,-,-
+ICE TTF (EUR/MWh),Q427,54.2,-,-
+Sugar #11 (USc/lb),Q126,15.54,14.8,14.65
+Sugar #11 (USc/lb),Q226,15.54,15.79,14.95
+Sugar #11 (USc/lb),Q326,15.54,16.15,15.5
+Sugar #11 (USc/lb),Q426,15.54,16.76,17.0
+Sugar #11 (USc/lb),Q127,15.54,16.64,15.9
+Sugar #11 (USc/lb),Q227,15.54,16.35,15.32
+Sugar #11 (USc/lb),Q327,15.54,-,-
+Sugar #11 (USc/lb),Q427,15.54,-,-
+Soybean Oil (USc/lb),Q126,64.7,64.53,59.0
+Soybean Oil (USc/lb),Q226,64.7,65.4,67.53
+Soybean Oil (USc/lb),Q326,64.7,63.96,66.0
+Soybean Oil (USc/lb),Q426,64.7,62.27,64.0
+Soybean Oil (USc/lb),Q127,64.7,61.28,63.0
+Soybean Oil (USc/lb),Q227,64.7,60.32,66.72
+Soybean Oil (USc/lb),Q327,64.7,-,-
+Soybean Oil (USc/lb),Q427,64.7,-,-

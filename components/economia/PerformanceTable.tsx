@@ -3,7 +3,7 @@
 interface TablaRow {
   Ticker: string;
   Index_Name: string;
-  "Price (USD)": number;
+  "Price (Local)": number;
   "1W": string;
   "1M": string;
   "3M": string;
@@ -11,21 +11,34 @@ interface TablaRow {
   "1Y": string;
   "3Y": string;
   "5Y": string;
-  "EV/EBITDA NTM": number | null;
-  "P/U NTM": number | null;
-  ROE: string;
+  "10Y": string;
+  "EV/EBITDA (Fwd 12m)": number | null;
+  "P/U (Fwd 12m)": number | null;
+  "ROE (Trailing)": string;
 }
 
 interface Props {
   data: TablaRow[];
 }
 
+const INDEX_GROUPS = [
+  { label: "LATAM",  indices: ["MSCI EM LatAm", "MSCI EM Small Cap", "IPSA (Chile)", "Bovespa (Brasil)", "Mexbol (Mexico)", "Merval (Argentina)", "Colcap (Colombia)", "BVL (Peru)", "SMLLBV (Brasil)"] },
+  { label: "EEUU",   indices: ["Dow Jones (US)", "S&P 500 (US)", "Nasdaq 100 (US)", "Russell 2000 (US)"] },
+  { label: "EUROPA", indices: ["Stoxx Europe 600", "FTSE 100 (UK)", "DAX (Alemania)", "CAC 40 (Francia)", "Swiss Market (Suiza)"] },
+  { label: "ASIA",   indices: ["Nikkei 225 (Japon)", "Topix Index (Japon)", "Hang Seng (Hong Kong)", "Hang Seng Tech (Hong Kong)", "CSI 300 (China)", "Kospi Index (Corea)"] },
+  { label: "OTROS",  indices: ["S&P/ASX 200 (Australia)", "Nifty 50 (India)"] },
+];
+
+const ALL_GROUPED = new Set(INDEX_GROUPS.flatMap((g) => g.indices));
+
+const PERIODS = ["1W", "1M", "3M", "YTD", "1Y", "3Y", "5Y", "10Y"] as const;
+
 function pctColor(val: string) {
   const n = parseFloat(val);
-  if (isNaN(n)) return "#94A3B8";
-  if (n > 0) return "#10B981";
-  if (n < 0) return "#EF4444";
-  return "#94A3B8";
+  if (isNaN(n)) return "#64748B";
+  if (n > 0) return "#059669";
+  if (n < 0) return "#DC2626";
+  return "#64748B";
 }
 
 function pctCell(val: string) {
@@ -34,82 +47,136 @@ function pctCell(val: string) {
   return (
     <span
       className="font-mono text-[11px] font-semibold px-1.5 py-0.5 rounded"
-      style={{
-        color,
-        background: `${color}14`,
-      }}
+      style={{ color, background: `${color}12` }}
     >
-      {!isNaN(n) && n > 0 ? "+" : ""}{val ?? "—"}
+      {!isNaN(n) && n > 0 ? "+" : ""}
+      {val ?? "—"}
     </span>
   );
 }
 
-const PERIODS = ["1W", "1M", "3M", "YTD", "1Y", "3Y", "5Y"] as const;
+function DataRow({ row, isLast }: { row: TablaRow; isLast: boolean }) {
+  return (
+    <tr
+      className="transition-colors"
+      style={{
+        borderBottom: isLast
+          ? "2px solid rgba(15,23,42,0.10)"
+          : "1px solid rgba(15,23,42,0.05)",
+      }}
+      onMouseEnter={(e) =>
+        ((e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.03)")
+      }
+      onMouseLeave={(e) =>
+        ((e.currentTarget as HTMLElement).style.background = "transparent")
+      }
+    >
+      <td
+        className="px-4 py-2.5 sticky left-0 z-10"
+        style={{ background: "#FFFFFF", color: "#0F172A", fontWeight: 500 }}
+      >
+        {row.Index_Name}
+      </td>
+      <td className="px-4 py-2.5 text-right font-mono" style={{ color: "#475569" }}>
+        {typeof row["Price (Local)"] === "number"
+          ? row["Price (Local)"] > 1000
+            ? row["Price (Local)"].toLocaleString("en-US", { maximumFractionDigits: 0 })
+            : row["Price (Local)"].toFixed(2)
+          : "—"}
+      </td>
+      {PERIODS.map((p) => (
+        <td key={p} className="px-3 py-2.5 text-right">
+          {pctCell(row[p])}
+        </td>
+      ))}
+      <td className="px-4 py-2.5 text-right font-mono" style={{ color: "#475569" }}>
+        {row["EV/EBITDA (Fwd 12m)"] != null ? `${row["EV/EBITDA (Fwd 12m)"]}x` : "—"}
+      </td>
+      <td className="px-4 py-2.5 text-right font-mono" style={{ color: "#475569" }}>
+        {row["P/U (Fwd 12m)"] != null ? `${row["P/U (Fwd 12m)"]}x` : "—"}
+      </td>
+      <td className="px-4 py-2.5 text-right">
+        {row["ROE (Trailing)"] ? pctCell(row["ROE (Trailing)"]) : "—"}
+      </td>
+    </tr>
+  );
+}
+
+// Subtitle row spanning all columns
+const COL_SPAN = 2 + PERIODS.length + 3; // Index + Price + periods + EV/EBITDA + P/U + ROE
+
+function GroupHeader({ label }: { label: string }) {
+  return (
+    <tr>
+      <td
+        colSpan={COL_SPAN}
+        className="px-4 py-1.5 text-[10px] font-bold tracking-widest uppercase sticky left-0"
+        style={{ background: "#EEF2FA", color: "#64748B", borderBottom: "1px solid rgba(15,23,42,0.07)" }}
+      >
+        {label}
+      </td>
+    </tr>
+  );
+}
 
 export default function PerformanceTable({ data }: Props) {
+  const dataMap = new Map(data.map((r) => [r.Index_Name, r]));
+  const ungrouped = data.filter((r) => !ALL_GROUPED.has(r.Index_Name));
+
   return (
     <div className="card overflow-hidden">
-      <div className="px-5 py-4 border-b" style={{ borderColor: "rgba(43,92,224,0.12)" }}>
-        <h2 className="text-sm font-semibold text-white">Retornos &amp; Múltiplos</h2>
-        <p className="text-xs mt-0.5" style={{ color: "#475569" }}>Rendimiento por período y valuación comparada</p>
+      <div className="px-5 py-4 border-b" style={{ borderColor: "rgba(15,23,42,0.07)" }}>
+        <h2 className="text-sm font-semibold" style={{ color: "#0F172A" }}>Retornos &amp; Múltiplos</h2>
+        <p className="text-xs mt-0.5" style={{ color: "#64748B" }}>
+          Rendimiento por período y valuación comparada (en moneda local)
+        </p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-xs whitespace-nowrap">
           <thead>
-            <tr style={{ background: "rgba(13,24,82,0.8)" }}>
-              <th className="px-4 py-2.5 text-left font-medium sticky left-0 z-10"
-                style={{ color: "#475569", background: "rgba(13,24,82,0.95)" }}
+            <tr style={{ background: "#F0F4FA" }}>
+              <th
+                className="px-4 py-2.5 text-left font-medium sticky left-0 z-10"
+                style={{ color: "#64748B", background: "#F0F4FA" }}
               >
                 Índice
               </th>
-              <th className="px-4 py-2.5 text-right font-medium" style={{ color: "#475569" }}>
-                Precio
+              <th className="px-4 py-2.5 text-right font-medium" style={{ color: "#64748B" }}>
+                Price (Local)
               </th>
-              {PERIODS.map(p => (
-                <th key={p} className="px-3 py-2.5 text-right font-medium" style={{ color: "#475569" }}>
+              {PERIODS.map((p) => (
+                <th key={p} className="px-3 py-2.5 text-right font-medium" style={{ color: "#64748B" }}>
                   {p}
                 </th>
               ))}
-              <th className="px-4 py-2.5 text-right font-medium" style={{ color: "#475569" }}>EV/EBITDA</th>
-              <th className="px-4 py-2.5 text-right font-medium" style={{ color: "#475569" }}>P/U</th>
-              <th className="px-4 py-2.5 text-right font-medium" style={{ color: "#475569" }}>ROE</th>
+              <th className="px-4 py-2.5 text-right font-medium" style={{ color: "#64748B" }}>EV/EBITDA (Fwd 12m)</th>
+              <th className="px-4 py-2.5 text-right font-medium" style={{ color: "#64748B" }}>P/U (Fwd 12m)</th>
+              <th className="px-4 py-2.5 text-right font-medium" style={{ color: "#64748B" }}>ROE (Trailing)</th>
             </tr>
           </thead>
           <tbody>
-            {data.map((row, i) => (
-              <tr
-                key={i}
-                className="border-t transition-colors"
-                style={{ borderColor: "rgba(43,92,224,0.07)" }}
-                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.04)"}
-                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}
-              >
-                <td className="px-4 py-2.5 sticky left-0 z-10"
-                  style={{ background: "rgba(9,16,58,0.98)", color: "#EEF2FF", fontWeight: 500 }}
-                >
-                  {row.Index_Name}
-                </td>
-                <td className="px-4 py-2.5 text-right font-mono" style={{ color: "#94A3B8" }}>
-                  {typeof row["Price (USD)"] === "number"
-                    ? row["Price (USD)"] > 1000
-                      ? row["Price (USD)"].toLocaleString("en-US", { maximumFractionDigits: 0 })
-                      : row["Price (USD)"].toFixed(2)
-                    : "—"}
-                </td>
-                {PERIODS.map(p => (
-                  <td key={p} className="px-3 py-2.5 text-right">{pctCell(row[p])}</td>
+            {INDEX_GROUPS.map((group) => {
+              const rows = group.indices
+                .map((name) => dataMap.get(name))
+                .filter((r): r is TablaRow => r !== undefined);
+              if (rows.length === 0) return null;
+              return (
+                <>
+                  <GroupHeader key={`hdr-${group.label}`} label={group.label} />
+                  {rows.map((row, i) => (
+                    <DataRow key={row.Index_Name} row={row} isLast={i === rows.length - 1} />
+                  ))}
+                </>
+              );
+            })}
+            {ungrouped.length > 0 && (
+              <>
+                <GroupHeader key="hdr-ungrouped" label="OTROS" />
+                {ungrouped.map((row, i) => (
+                  <DataRow key={row.Index_Name} row={row} isLast={i === ungrouped.length - 1} />
                 ))}
-                <td className="px-4 py-2.5 text-right font-mono" style={{ color: "#94A3B8" }}>
-                  {row["EV/EBITDA NTM"] != null ? `${row["EV/EBITDA NTM"]}x` : "—"}
-                </td>
-                <td className="px-4 py-2.5 text-right font-mono" style={{ color: "#94A3B8" }}>
-                  {row["P/U NTM"] != null ? `${row["P/U NTM"]}x` : "—"}
-                </td>
-                <td className="px-4 py-2.5 text-right">
-                  {row.ROE ? pctCell(row.ROE) : "—"}
-                </td>
-              </tr>
-            ))}
+              </>
+            )}
           </tbody>
         </table>
       </div>

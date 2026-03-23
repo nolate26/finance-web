@@ -5,10 +5,9 @@ interface CarteraRow {
   portfolioPct: number;
   benchmarkPct: number;
   overweight: number;
-  industria: string;
-  analista: string;
-  top_pick: string;
-  observacion: string;
+  sector: string;
+  delta1W: number | null;
+  delta1M: number | null;
 }
 
 interface Props {
@@ -16,17 +15,30 @@ interface Props {
   benchmark: string;
 }
 
+function fmtDelta(v: number | null): { text: string; color: string; bg: string } {
+  if (v === null) return { text: "—", color: "#CBD5E1", bg: "transparent" };
+  const pct = v * 100;
+  if (Math.abs(pct) < 0.005) return { text: "0.00%", color: "#94A3B8", bg: "transparent" };
+  const text = (pct > 0 ? "+" : "") + pct.toFixed(2) + "%";
+  const color = pct > 0 ? "#10B981" : "#EF4444";
+  const bg = pct > 0 ? "rgba(16,185,129,0.08)" : "rgba(239,68,68,0.08)";
+  return { text, color, bg };
+}
+
 export default function CarteraTable({ cartera, benchmark }: Props) {
   const sorted = [...cartera].sort((a, b) => b.overweight - a.overweight);
 
+  const hasDelta1W = cartera.some((r) => r.delta1W !== null);
+  const hasDelta1M = cartera.some((r) => r.delta1M !== null);
+
   return (
-    <div className="card overflow-hidden">
+    <div className="card overflow-hidden flex flex-col h-full">
       <div className="px-5 py-4 border-b flex items-center justify-between"
-        style={{ borderColor: "rgba(43,92,224,0.12)" }}
+        style={{ borderColor: "rgba(15,23,42,0.07)" }}
       >
         <div>
-          <h2 className="text-sm font-semibold text-white">Detalle Cartera</h2>
-          <p className="text-xs mt-0.5" style={{ color: "#475569" }}>
+          <h2 className="text-sm font-semibold" style={{ color: "#0F172A" }}>Detalle Cartera</h2>
+          <p className="text-xs mt-0.5" style={{ color: "#64748B" }}>
             Ordenado por overweight vs {benchmark}
           </p>
         </div>
@@ -36,122 +48,98 @@ export default function CarteraTable({ cartera, benchmark }: Props) {
           {cartera.length} posiciones
         </span>
       </div>
-      <div className="overflow-auto max-h-[600px]">
+      <div className="overflow-y-auto flex-1 min-h-0 max-h-[500px] md:max-h-none">
         <table className="w-full text-xs whitespace-nowrap">
-          <thead className="sticky top-0 z-10" style={{ background: "rgba(9,16,58,0.98)" }}>
+          <thead className="sticky top-0 z-10" style={{ background: "#F0F4FA" }}>
             <tr>
-              {[
-                { label: "#", w: "w-8" },
-                { label: "Empresa", w: "w-44" },
-                { label: "% Port.", w: "w-28" },
-                { label: `% ${benchmark}`, w: "w-20" },
-                { label: "Overweight", w: "w-24" },
-                { label: "Industria", w: "w-28" },
-                { label: "Analista", w: "w-24" },
-                { label: "Top Pick", w: "w-20" },
-                { label: "Observación", w: "" },
-              ].map(({ label, w }) => (
-                <th key={label}
-                  className={`px-3 py-2.5 text-left font-medium ${w}`}
-                  style={{ color: "#475569", borderBottom: "1px solid rgba(43,92,224,0.12)" }}
-                >
-                  {label}
-                </th>
-              ))}
+              <th className="px-3 py-2.5 text-left font-medium w-8"
+                style={{ color: "#64748B", borderBottom: "1px solid rgba(15,23,42,0.07)" }}>#</th>
+              <th className="px-3 py-2.5 text-left font-medium w-44"
+                style={{ color: "#64748B", borderBottom: "1px solid rgba(15,23,42,0.07)" }}>Empresa</th>
+              <th className="px-3 py-2.5 text-right font-medium w-28"
+                style={{ color: "#64748B", borderBottom: "1px solid rgba(15,23,42,0.07)" }}>% Port.</th>
+              <th className="px-3 py-2.5 text-right font-medium w-20"
+                style={{ color: "#64748B", borderBottom: "1px solid rgba(15,23,42,0.07)" }}>% {benchmark}</th>
+              <th className="px-3 py-2.5 text-right font-medium w-24"
+                style={{ color: "#64748B", borderBottom: "1px solid rgba(15,23,42,0.07)" }}>Overweight</th>
+              {hasDelta1W && (
+                <th className="px-3 py-2.5 text-right font-medium w-20"
+                  style={{ color: "#64748B", borderBottom: "1px solid rgba(15,23,42,0.07)" }}>Δ 1W</th>
+              )}
+              {hasDelta1M && (
+                <th className="px-3 py-2.5 text-right font-medium w-20"
+                  style={{ color: "#64748B", borderBottom: "1px solid rgba(15,23,42,0.07)" }}>Δ 1M</th>
+              )}
             </tr>
           </thead>
           <tbody>
             {sorted.map((row, i) => {
               const over = row.overweight * 100;
-              const overColor = over > 0 ? "#10B981" : over < 0 ? "#EF4444" : "#94A3B8";
-              const hasObservacion = row.observacion?.trim();
+              const overColor = over > 0 ? "#059669" : over < 0 ? "#DC2626" : "#64748B";
+              const d1w = fmtDelta(row.delta1W);
+              const d1m = fmtDelta(row.delta1M);
 
               return (
                 <tr
                   key={i}
                   className="border-t transition-colors"
-                  style={{ borderColor: "rgba(43,92,224,0.07)" }}
-                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.04)"}
+                  style={{ borderColor: "rgba(15,23,42,0.05)" }}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.03)"}
                   onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}
                 >
-                  {/* # */}
-                  <td className="px-3 py-2 font-mono" style={{ color: "#2D3E6E" }}>{i + 1}</td>
+                  <td className="px-3 py-2 font-mono" style={{ color: "#94A3B8" }}>{i + 1}</td>
 
-                  {/* Empresa */}
-                  <td className="px-3 py-2 font-medium" style={{ color: "#EEF2FF" }}>
+                  <td className="px-3 py-2 font-medium" style={{ color: "#0F172A" }}>
                     {row.company}
                   </td>
 
-                  {/* % Portfolio */}
-                  <td className="px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-16 h-1.5 rounded-full" style={{ background: "rgba(43,92,224,0.08)" }}>
+                  <td className="px-3 py-2 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <div className="w-12 h-1.5 rounded-full" style={{ background: "rgba(43,92,224,0.10)" }}>
                         <div className="h-full rounded-full"
                           style={{
                             width: `${Math.min(100, row.portfolioPct * 500)}%`,
-                            background: "linear-gradient(90deg, #2B5CE0, #5080FF)",
+                            background: "linear-gradient(90deg, #2B5CE0, #3D6FE8)",
                           }}
                         />
                       </div>
-                      <span className="font-mono text-white font-semibold">
+                      <span className="font-mono font-semibold" style={{ color: "#0F172A" }}>
                         {(row.portfolioPct * 100).toFixed(2)}%
                       </span>
                     </div>
                   </td>
 
-                  {/* % Benchmark */}
-                  <td className="px-3 py-2 font-mono" style={{ color: "#64748B" }}>
+                  <td className="px-3 py-2 font-mono text-right" style={{ color: "#64748B" }}>
                     {(row.benchmarkPct * 100).toFixed(2)}%
                   </td>
 
-                  {/* Overweight */}
-                  <td className="px-3 py-2">
+                  <td className="px-3 py-2 text-right">
                     <span className="font-mono font-bold text-[11px] px-2 py-0.5 rounded-full"
-                      style={{ color: overColor, background: `${overColor}14`, border: `1px solid ${overColor}30` }}
+                      style={{ color: overColor, background: `${overColor}12`, border: `1px solid ${overColor}28` }}
                     >
                       {over > 0 ? "+" : ""}{over.toFixed(2)}%
                     </span>
                   </td>
 
-                  {/* Industria */}
-                  <td className="px-3 py-2">
-                    {row.industria ? (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-medium"
-                        style={{ background: "rgba(80,128,255,0.1)", color: "#5080FF", border: "1px solid rgba(80,128,255,0.2)" }}
+                  {hasDelta1W && (
+                    <td className="px-3 py-2 text-right">
+                      <span className="font-mono font-semibold text-[11px] px-1.5 py-0.5 rounded"
+                        style={{ color: d1w.color, background: d1w.bg }}
                       >
-                        {row.industria}
+                        {d1w.text}
                       </span>
-                    ) : (
-                      <span style={{ color: "#0F1A5C" }}>—</span>
-                    )}
-                  </td>
+                    </td>
+                  )}
 
-                  {/* Analista */}
-                  <td className="px-3 py-2" style={{ color: row.analista ? "#94A3B8" : "#0F1A5C" }}>
-                    {row.analista || "—"}
-                  </td>
-
-                  {/* Top Pick */}
-                  <td className="px-3 py-2 text-center">
-                    {row.top_pick?.toLowerCase() === "si" || row.top_pick?.toLowerCase() === "sí" || row.top_pick === "1" || row.top_pick?.toLowerCase() === "true" ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
-                        style={{ background: "rgba(245,158,11,0.15)", color: "#F59E0B", border: "1px solid rgba(245,158,11,0.3)" }}
+                  {hasDelta1M && (
+                    <td className="px-3 py-2 text-right">
+                      <span className="font-mono font-semibold text-[11px] px-1.5 py-0.5 rounded"
+                        style={{ color: d1m.color, background: d1m.bg }}
                       >
-                        ★ TOP
+                        {d1m.text}
                       </span>
-                    ) : (
-                      <span style={{ color: "#0F1A5C" }}>—</span>
-                    )}
-                  </td>
-
-                  {/* Observación */}
-                  <td className="px-3 py-2 max-w-xs" style={{ color: hasObservacion ? "#94A3B8" : "#0F1A5C" }}>
-                    {hasObservacion ? (
-                      <span title={row.observacion} className="block truncate max-w-[220px] cursor-help">
-                        {row.observacion}
-                      </span>
-                    ) : "—"}
-                  </td>
+                    </td>
+                  )}
                 </tr>
               );
             })}

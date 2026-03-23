@@ -46,11 +46,11 @@ function fmtMM(v: unknown): string {
 }
 
 function recBadge(rec: string | null) {
-  if (!rec) return { label: "—", color: "#475569", bg: "transparent", border: "transparent" };
-  if (rec === "Comprar") return { label: "Buy", color: "#10B981", bg: "rgba(16,185,129,0.1)", border: "rgba(16,185,129,0.25)" };
-  if (rec === "Mantener") return { label: "Hold", color: "#F59E0B", bg: "rgba(245,158,11,0.1)", border: "rgba(245,158,11,0.25)" };
-  if (rec === "Vender") return { label: "Sell", color: "#EF4444", bg: "rgba(239,68,68,0.1)", border: "rgba(239,68,68,0.25)" };
-  return { label: rec, color: "#B0C4E8", bg: "transparent", border: "transparent" };
+  if (!rec) return { label: "—", color: "#64748B", bg: "transparent", border: "transparent" };
+  if (rec === "Comprar") return { label: "Buy", color: "#059669", bg: "rgba(5,150,105,0.08)", border: "rgba(5,150,105,0.20)" };
+  if (rec === "Mantener") return { label: "Hold", color: "#D97706", bg: "rgba(217,119,6,0.08)", border: "rgba(217,119,6,0.20)" };
+  if (rec === "Vender") return { label: "Sell", color: "#DC2626", bg: "rgba(220,38,38,0.08)", border: "rgba(220,38,38,0.20)" };
+  return { label: rec, color: "#475569", bg: "transparent", border: "transparent" };
 }
 
 const columns: { key: string; label: string; align?: "right" }[] = [
@@ -93,7 +93,7 @@ export default function CompanyTable({
 
   function SortIcon({ col }: { col: string }) {
     if (sortBy !== col) {
-      return <span style={{ color: "#2D3E6E", fontSize: 10, marginLeft: 4 }}>↕</span>;
+      return <span style={{ color: "#CBD5E1", fontSize: 10, marginLeft: 4 }}>↕</span>;
     }
     return sortOrder === "asc" ? (
       <ChevronUp size={12} style={{ color: "#2B5CE0", marginLeft: 4, display: "inline" }} />
@@ -107,7 +107,7 @@ export default function CompanyTable({
       <div style={{ overflowX: "auto", maxHeight: "calc(100vh - 380px)", overflowY: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
           <thead style={{ position: "sticky", top: 0, zIndex: 5 }}>
-            <tr style={{ background: "#09103A" }}>
+            <tr style={{ background: "#F0F4FA" }}>
               {columns.map((col) => (
                 <th
                   key={col.key}
@@ -117,19 +117,19 @@ export default function CompanyTable({
                     textAlign: col.align === "right" ? "right" : "left",
                     fontSize: 11,
                     fontWeight: 600,
-                    color: sortBy === col.key ? "#6699FF" : "#8B9EC8",
-                    borderBottom: "1px solid rgba(43,92,224,0.12)",
+                    color: sortBy === col.key ? "#2B5CE0" : "#64748B",
+                    borderBottom: "1px solid rgba(15,23,42,0.07)",
                     cursor: "pointer",
                     whiteSpace: "nowrap",
                     userSelect: "none",
-                    background: "#09103A",
+                    background: "#F0F4FA",
                   }}
                   onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.color = "#94A3B8";
+                    (e.currentTarget as HTMLElement).style.color = "#334155";
                   }}
                   onMouseLeave={(e) => {
                     (e.currentTarget as HTMLElement).style.color =
-                      sortBy === col.key ? "#6699FF" : "#8B9EC8";
+                      sortBy === col.key ? "#2B5CE0" : "#64748B";
                   }}
                 >
                   {col.label}
@@ -148,12 +148,12 @@ export default function CompanyTable({
                   key={i}
                   onClick={() => onSelect(c)}
                   style={{
-                    borderBottom: "1px solid rgba(43,92,224,0.07)",
+                    borderBottom: "1px solid rgba(15,23,42,0.05)",
                     cursor: "pointer",
                     transition: "background 0.1s",
                   }}
                   onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.05)";
+                    (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.04)";
                   }}
                   onMouseLeave={(e) => {
                     (e.currentTarget as HTMLElement).style.background = "transparent";
@@ -163,7 +163,7 @@ export default function CompanyTable({
                   <td
                     style={{
                       padding: "9px 14px",
-                      color: "#EEF2FF",
+                      color: "#0F172A",
                       fontWeight: 600,
                       maxWidth: 180,
                       overflow: "hidden",
@@ -181,9 +181,9 @@ export default function CompanyTable({
                         fontSize: 10,
                         padding: "2px 6px",
                         borderRadius: 4,
-                        background: "rgba(80,128,255,0.08)",
-                        color: "#5080FF",
-                        border: "1px solid rgba(80,128,255,0.15)",
+                        background: "rgba(43,92,224,0.06)",
+                        color: "#2B5CE0",
+                        border: "1px solid rgba(43,92,224,0.12)",
                         whiteSpace: "nowrap",
                       }}
                     >
@@ -197,7 +197,7 @@ export default function CompanyTable({
                       padding: "9px 14px",
                       textAlign: "right",
                       fontFamily: "JetBrains Mono, monospace",
-                      color: "#C5D4FF",
+                      color: "#334155",
                     }}
                   >
                     {fmtPrice(c.precio_actual as number | null)}
@@ -209,7 +209,7 @@ export default function CompanyTable({
                       padding: "9px 14px",
                       textAlign: "right",
                       fontFamily: "JetBrains Mono, monospace",
-                      color: "#B0C4E8",
+                      color: "#475569",
                     }}
                   >
                     {fmtMM(c.mkt_cap_bn as number | null)}
@@ -224,10 +224,10 @@ export default function CompanyTable({
                       fontWeight: 600,
                       color:
                         ret1y === null
-                          ? "#475569"
+                          ? "#64748B"
                           : ret1y >= 0
-                          ? "#10B981"
-                          : "#EF4444",
+                          ? "#059669"
+                          : "#DC2626",
                     }}
                   >
                     {fmtPct(ret1y)}
@@ -239,7 +239,7 @@ export default function CompanyTable({
                       padding: "9px 14px",
                       textAlign: "right",
                       fontFamily: "JetBrains Mono, monospace",
-                      color: "#B0C4E8",
+                      color: "#475569",
                     }}
                   >
                     {fmtX(c.Fv_ebitda_ltm as number | null)}
@@ -251,7 +251,7 @@ export default function CompanyTable({
                       padding: "9px 14px",
                       textAlign: "right",
                       fontFamily: "JetBrains Mono, monospace",
-                      color: "#B0C4E8",
+                      color: "#475569",
                     }}
                   >
                     {fmtX(c.pe_ltm as number | null)}
@@ -263,7 +263,7 @@ export default function CompanyTable({
                       padding: "9px 14px",
                       textAlign: "right",
                       fontFamily: "JetBrains Mono, monospace",
-                      color: "#B0C4E8",
+                      color: "#475569",
                     }}
                   >
                     {fmtPct(c.roe_ltm as number | null)}
@@ -287,7 +287,7 @@ export default function CompanyTable({
                         {rec.label}
                       </span>
                     ) : (
-                      <span style={{ color: "#2D3E6E" }}>—</span>
+                      <span style={{ color: "#CBD5E1" }}>—</span>
                     )}
                   </td>
 
@@ -316,12 +316,12 @@ export default function CompanyTable({
           alignItems: "center",
           justifyContent: "space-between",
           padding: "10px 16px",
-          borderTop: "1px solid rgba(43,92,224,0.1)",
-          background: "rgba(9,16,58,0.6)",
+          borderTop: "1px solid rgba(15,23,42,0.07)",
+          background: "#F8FAFF",
         }}
       >
         <span
-          style={{ fontSize: 11, color: "#475569", fontFamily: "JetBrains Mono, monospace" }}
+          style={{ fontSize: 11, color: "#64748B", fontFamily: "JetBrains Mono, monospace" }}
         >
           Showing {companies.length === 0 ? 0 : startIdx + 1}–{endIdx} of {companies.length}
         </span>
@@ -333,9 +333,9 @@ export default function CompanyTable({
               padding: "4px 12px",
               borderRadius: 6,
               fontSize: 12,
-              border: "1px solid rgba(43,92,224,0.2)",
-              background: page === 0 ? "transparent" : "rgba(43,92,224,0.08)",
-              color: page === 0 ? "#2D3E6E" : "#94A3B8",
+              border: "1px solid rgba(43,92,224,0.15)",
+              background: page === 0 ? "transparent" : "rgba(43,92,224,0.06)",
+              color: page === 0 ? "#CBD5E1" : "#475569",
               cursor: page === 0 ? "not-allowed" : "pointer",
             }}
           >
@@ -348,9 +348,9 @@ export default function CompanyTable({
               padding: "4px 12px",
               borderRadius: 6,
               fontSize: 12,
-              border: "1px solid rgba(43,92,224,0.2)",
-              background: page >= totalPages - 1 ? "transparent" : "rgba(43,92,224,0.08)",
-              color: page >= totalPages - 1 ? "#2D3E6E" : "#94A3B8",
+              border: "1px solid rgba(43,92,224,0.15)",
+              background: page >= totalPages - 1 ? "transparent" : "rgba(43,92,224,0.06)",
+              color: page >= totalPages - 1 ? "#CBD5E1" : "#475569",
               cursor: page >= totalPages - 1 ? "not-allowed" : "pointer",
             }}
           >

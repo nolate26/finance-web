@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import TenYearChart from "./TenYearChart";
 
 const FLAGS: Record<string, string> = {
   Brazil: "🇧🇷",
@@ -8,79 +9,120 @@ const FLAGS: Record<string, string> = {
   Colombia: "🇨🇴",
   Mexico: "🇲🇽",
   Peru: "🇵🇪",
-  Argentina: "🇦🇷",
+  China: "🇨🇳",
+  "United States": "🇺🇸",
+  "European Union": "🇪🇺",
+  LATAM: "🌎",
+  World: "🌐",
 };
 
-const METRICS = ["GDP Growth", "Inflation", "Policy Rate", "10Y Rate"] as const;
+// Countries available in historia_10y_fx_maestro.csv
+const TENY_COUNTRIES = ["Chile", "Brazil", "Colombia", "Peru", "Mexico", "United States"];
+const TENY_GROUP_LAST = "Mexico"; // separator before United States
+
+// Geographic order for GDP / Inflation tables
+const COUNTRY_GROUPS = [
+  { countries: ["Brazil", "Chile", "Colombia", "Mexico", "Peru"] },
+  { countries: ["United States", "China"] },
+  { countries: ["European Union", "LATAM", "World"] },
+];
+const ORDERED_COUNTRIES = COUNTRY_GROUPS.flatMap((g) => g.countries);
+const GROUP_LAST = new Set(COUNTRY_GROUPS.map((g) => g.countries[g.countries.length - 1]));
+
+// Policy Rate removed
+const METRICS = ["GDP Growth", "Inflation", "10Y Rate"] as const;
 type Metric = (typeof METRICS)[number];
 
-const YEARS = ["2025", "2026", "2027", "2028"] as const;
-
-// Color scale for each metric
 function metricColor(metric: Metric, value: number | null): string {
-  if (value === null) return "#2D3E6E";
+  if (value === null) return "#94A3B8";
   if (metric === "GDP Growth") {
-    if (value >= 3) return "#10B981";
-    if (value >= 2) return "#34D399";
-    if (value >= 1) return "#94A3B8";
-    return "#EF4444";
+    if (value >= 3) return "#059669";
+    if (value >= 2) return "#10B981";
+    if (value >= 1) return "#64748B";
+    return "#DC2626";
   }
   if (metric === "Inflation") {
-    if (value <= 3) return "#10B981";
-    if (value <= 5) return "#F59E0B";
-    if (value <= 15) return "#F97316";
-    return "#EF4444";
+    if (value <= 3) return "#059669";
+    if (value <= 5) return "#D97706";
+    if (value <= 15) return "#EA580C";
+    return "#DC2626";
   }
-  // Policy Rate / 10Y Rate — neutral scale
-  if (value <= 4) return "#5080FF";
-  if (value <= 7) return "#2B5CE0";
-  if (value <= 12) return "#8B5CF6";
-  return "#EF4444";
+  // 10Y Rate — neutral blue scale
+  if (value <= 4) return "#2B5CE0";
+  if (value <= 7) return "#1E4ED8";
+  if (value <= 12) return "#7C3AED";
+  return "#DC2626";
 }
 
-function fmtVal(v: number | null, metric: Metric): string {
+function deltaColor(metric: Metric, delta: number | null): string {
+  if (delta === null || delta === 0) return "#94A3B8";
+  if (metric === "GDP Growth") return delta > 0 ? "#059669" : "#DC2626";
+  // Inflation and 10Y Rate: up = bad
+  return delta > 0 ? "#DC2626" : "#059669";
+}
+
+function fmtVal(v: number | null): string {
   if (v === null) return "—";
   return v.toFixed(1) + "%";
 }
 
-interface AnnualRow {
+interface RevisionRow {
   country: string;
-  metric: string;
-  [year: string]: number | null | string;
+  indicator: string;
+  ago2026: number | null;
+  current2026: number | null;
+  current2027: number | null;
+  current2028: number | null;
+}
+
+interface TenYearRow {
+  Date: string;
+  [key: string]: string | number | null;
 }
 
 interface Props {
-  annual: AnnualRow[];
+  annual?: unknown[];
+  revisions?: RevisionRow[];
+  tenYearHistory?: TenYearRow[];
 }
 
-export default function MacroPanel({ annual }: Props) {
+export default function MacroPanel({ revisions = [], tenYearHistory = [] }: Props) {
   const [selectedMetric, setSelectedMetric] = useState<Metric>("GDP Growth");
+  const [selectedCountry, setSelectedCountry] = useState<string>("Chile");
 
-  const countries = [...new Set(annual.map((r) => r.country))].filter(Boolean);
+  const is10Y = selectedMetric === "10Y Rate";
 
-  // Get value for a country/metric/year
-  function getVal(country: string, metric: string, year: string): number | null {
-    const row = annual.find((r) => r.country === country && r.metric === metric);
-    if (!row) return null;
-    const v = row[year];
-    return typeof v === "number" ? v : null;
-  }
+  // ── Full-width revisions table (GDP / Inflation) ─────────────────────────
+  const metricRows = revisions.filter(
+    (r) =>
+      r.indicator === selectedMetric &&
+      (r.ago2026 !== null ||
+        r.current2026 !== null ||
+        r.current2027 !== null ||
+        r.current2028 !== null)
+  );
 
-  // Country card: show 2025 and 2026 for the selected metric
-  const cardRows = countries.map((c) => ({
-    country: c,
-    v2025: getVal(c, selectedMetric, "2025"),
-    v2026: getVal(c, selectedMetric, "2026"),
-    gdp: getVal(c, "GDP Growth", "2026"),
-    infl: getVal(c, "Inflation", "2026"),
-    rate: getVal(c, "Policy Rate", "2025"),
-  }));
+  const sortedRows = ORDERED_COUNTRIES.map((c) => metricRows.find((r) => r.country === c)).filter(
+    (r): r is RevisionRow => r !== undefined
+  );
+
+  // ── 10Y Rate — simplified table rows ─────────────────────────────────────
+  const tenYRows = TENY_COUNTRIES.map((country) => {
+    const rev = revisions.find(
+      (r) => r.country === country && r.indicator === "10Y Rate"
+    );
+    return {
+      country,
+      ago2026: rev?.ago2026 ?? null,
+      current2026: rev?.current2026 ?? null,
+    };
+  });
 
   return (
     <div>
       {/* Metric selector */}
       <div className="flex items-center gap-2 mb-5 flex-wrap">
-        <span className="text-xs font-medium mr-1" style={{ color: "#2D3E6E" }}>
+        <span className="text-xs font-medium mr-1" style={{ color: "#94A3B8" }}>
           Metric:
         </span>
         {METRICS.map((m) => (
@@ -89,15 +131,10 @@ export default function MacroPanel({ annual }: Props) {
             onClick={() => setSelectedMetric(m)}
             className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
             style={{
-              background:
-                selectedMetric === m
-                  ? "rgba(43,92,224,0.18)"
-                  : "rgba(255,255,255,0.04)",
-              color: selectedMetric === m ? "#6699FF" : "#64748B",
+              background: selectedMetric === m ? "rgba(43,92,224,0.10)" : "rgba(15,23,42,0.04)",
+              color: selectedMetric === m ? "#2B5CE0" : "#64748B",
               border: `1px solid ${
-                selectedMetric === m
-                  ? "rgba(43,92,224,0.4)"
-                  : "rgba(255,255,255,0.07)"
+                selectedMetric === m ? "rgba(43,92,224,0.30)" : "rgba(15,23,42,0.08)"
               }`,
             }}
           >
@@ -106,219 +143,240 @@ export default function MacroPanel({ annual }: Props) {
         ))}
       </div>
 
-      {/* Country cards */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(6, 1fr)",
-          gap: 10,
-          marginBottom: 20,
-        }}
-      >
-        {cardRows.map(({ country, v2025, v2026 }) => {
-          const color26 = metricColor(selectedMetric, v2026);
-          return (
+      {/* ── GDP Growth / Inflation — full-width revisions table ────────────── */}
+      {!is10Y && (
+        <>
+          <div className="card" style={{ overflow: "hidden", padding: 0 }}>
             <div
-              key={country}
-              className="card"
-              style={{ padding: "14px 16px" }}
+              style={{
+                padding: "10px 16px",
+                borderBottom: "1px solid rgba(15,23,42,0.07)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
             >
-              <div
-                style={{
-                  fontSize: 18,
-                  marginBottom: 6,
-                  lineHeight: 1,
-                }}
+              <span
+                style={{ fontSize: 11, fontWeight: 600, color: "#64748B", letterSpacing: "0.08em" }}
               >
-                {FLAGS[country] ?? "🌎"}
-              </div>
-              <div
-                style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: "#94A3B8",
-                  marginBottom: 8,
-                  letterSpacing: "0.05em",
-                }}
-              >
-                {country.toUpperCase()}
-              </div>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: "#475569",
-                  marginBottom: 2,
-                }}
-              >
-                2025
-              </div>
-              <div
-                className="font-mono"
-                style={{ fontSize: 16, fontWeight: 700, color: "#EEF2FF", marginBottom: 6 }}
-              >
-                {fmtVal(v2025, selectedMetric)}
-              </div>
-              <div style={{ fontSize: 11, color: "#475569", marginBottom: 2 }}>
-                2026e
-              </div>
-              <div
-                className="font-mono"
-                style={{ fontSize: 16, fontWeight: 700, color: color26 }}
-              >
-                {fmtVal(v2026, selectedMetric)}
-              </div>
+                {selectedMetric.toUpperCase()} — FORECAST REVISIONS
+              </span>
+              <span style={{ fontSize: 10, color: "#94A3B8" }}>
+                Current vs 3 months ago · All figures in %
+              </span>
             </div>
-          );
-        })}
-      </div>
 
-      {/* Projection table */}
-      <div
-        className="card"
-        style={{ overflow: "hidden", padding: 0 }}
-      >
-        {/* Table header */}
-        <div
-          style={{
-            padding: "10px 16px",
-            borderBottom: "1px solid rgba(43,92,224,0.12)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <span
-            style={{ fontSize: 11, fontWeight: 600, color: "#64748B", letterSpacing: "0.08em" }}
-          >
-            {selectedMetric.toUpperCase()} PROJECTIONS
-          </span>
-          <span style={{ fontSize: 10, color: "#2D3E6E" }}>All figures in %</span>
-        </div>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "#F0F4FA" }}>
+                    <th style={{ padding: "8px 16px", textAlign: "left", fontSize: 10, fontWeight: 600, color: "#64748B", letterSpacing: "0.08em", width: 190 }}>
+                      COUNTRY / REGION
+                    </th>
+                    <th style={{ padding: "8px 16px", textAlign: "right", fontSize: 10, fontWeight: 600, color: "#94A3B8", letterSpacing: "0.08em" }}>
+                      3M AGO (2026)
+                    </th>
+                    <th style={{ padding: "8px 16px", textAlign: "right", fontSize: 10, fontWeight: 600, color: "#475569", letterSpacing: "0.08em" }}>
+                      CURRENT (2026)
+                    </th>
+                    <th style={{ padding: "8px 16px", textAlign: "right", fontSize: 10, fontWeight: 600, color: "#2B5CE0", letterSpacing: "0.08em" }}>
+                      REVISION Δ
+                    </th>
+                    <th style={{ padding: "8px 16px", textAlign: "right", fontSize: 10, fontWeight: 600, color: "#64748B", letterSpacing: "0.08em" }}>
+                      2027e
+                    </th>
+                    <th style={{ padding: "8px 16px", textAlign: "right", fontSize: 10, fontWeight: 600, color: "#64748B", letterSpacing: "0.08em" }}>
+                      2028e
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedRows.map((row, i) => {
+                    const delta =
+                      row.ago2026 !== null && row.current2026 !== null
+                        ? row.current2026 - row.ago2026
+                        : null;
+                    const dColor = deltaColor(selectedMetric, delta);
+                    const isGroupLast = GROUP_LAST.has(row.country);
+                    const isLastRow = i === sortedRows.length - 1;
 
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ background: "rgba(13,24,82,0.6)" }}>
-                <th
-                  style={{
-                    padding: "8px 16px",
-                    textAlign: "left",
-                    fontSize: 10,
-                    fontWeight: 600,
-                    color: "#475569",
-                    letterSpacing: "0.08em",
-                    width: 160,
-                  }}
-                >
-                  COUNTRY
-                </th>
-                {YEARS.map((y) => (
-                  <th
-                    key={y}
-                    style={{
-                      padding: "8px 16px",
-                      textAlign: "right",
-                      fontSize: 10,
-                      fontWeight: 600,
-                      color: y === "2025" ? "#94A3B8" : "#475569",
-                      letterSpacing: "0.08em",
-                    }}
-                  >
-                    {y === "2025" ? y : y + "e"}
-                  </th>
-                ))}
-                {/* change col */}
-                <th
-                  style={{
-                    padding: "8px 16px",
-                    textAlign: "right",
-                    fontSize: 10,
-                    fontWeight: 600,
-                    color: "#2D3E6E",
-                    letterSpacing: "0.08em",
-                  }}
-                >
-                  Δ 25→26
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {countries.map((country, i) => {
-                const vals = YEARS.map((y) => getVal(country, selectedMetric, y));
-                const delta =
-                  vals[0] !== null && vals[1] !== null ? vals[1] - vals[0] : null;
-
-                return (
-                  <tr
-                    key={country}
-                    style={{
-                      background:
-                        i % 2 === 0
-                          ? "transparent"
-                          : "rgba(255,255,255,0.015)",
-                      borderBottom: "1px solid rgba(43,92,224,0.06)",
-                    }}
-                  >
-                    <td style={{ padding: "10px 16px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontSize: 16 }}>{FLAGS[country] ?? "🌎"}</span>
-                        <span
-                          style={{
-                            fontSize: 12,
-                            fontWeight: 600,
-                            color: "#C5D4FF",
-                          }}
-                        >
-                          {country}
-                        </span>
-                      </div>
-                    </td>
-                    {vals.map((v, vi) => (
-                      <td
-                        key={YEARS[vi]}
+                    return (
+                      <tr
+                        key={row.country}
                         style={{
-                          padding: "10px 16px",
-                          textAlign: "right",
-                          fontFamily: "monospace",
-                          fontSize: 13,
-                          fontWeight: 600,
-                          color: metricColor(selectedMetric, v),
+                          background: i % 2 === 0 ? "transparent" : "rgba(15,23,42,0.02)",
+                          borderBottom:
+                            isGroupLast && !isLastRow
+                              ? "2px solid rgba(15,23,42,0.12)"
+                              : "1px solid rgba(15,23,42,0.05)",
                         }}
                       >
-                        {fmtVal(v, selectedMetric)}
+                        <td style={{ padding: "10px 16px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: 16 }}>{FLAGS[row.country] ?? "🌎"}</span>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: "#334155" }}>
+                              {row.country}
+                            </span>
+                          </div>
+                        </td>
+                        <td style={{ padding: "10px 16px", textAlign: "right", fontFamily: "monospace", fontSize: 13, color: "#94A3B8" }}>
+                          {fmtVal(row.ago2026)}
+                        </td>
+                        <td style={{ padding: "10px 16px", textAlign: "right", fontFamily: "monospace", fontSize: 13, fontWeight: 600, color: metricColor(selectedMetric, row.current2026) }}>
+                          {fmtVal(row.current2026)}
+                        </td>
+                        <td style={{ padding: "10px 16px", textAlign: "right" }}>
+                          {delta !== null ? (
+                            <span
+                              className="font-mono"
+                              style={{
+                                fontSize: 12,
+                                fontWeight: 700,
+                                color: dColor,
+                                padding: "2px 6px",
+                                borderRadius: 4,
+                                background:
+                                  dColor === "#059669"
+                                    ? "rgba(5,150,105,0.08)"
+                                    : dColor === "#DC2626"
+                                    ? "rgba(220,38,38,0.08)"
+                                    : "rgba(148,163,184,0.08)",
+                              }}
+                            >
+                              {delta > 0 ? "+" : ""}{delta.toFixed(2)}pp
+                            </span>
+                          ) : (
+                            <span style={{ color: "#CBD5E1" }}>—</span>
+                          )}
+                        </td>
+                        <td style={{ padding: "10px 16px", textAlign: "right", fontFamily: "monospace", fontSize: 13, color: metricColor(selectedMetric, row.current2027) }}>
+                          {fmtVal(row.current2027)}
+                        </td>
+                        <td style={{ padding: "10px 16px", textAlign: "right", fontFamily: "monospace", fontSize: 13, color: metricColor(selectedMetric, row.current2028) }}>
+                          {fmtVal(row.current2028)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {sortedRows.length === 0 && (
+                    <tr>
+                      <td colSpan={6} style={{ padding: "24px 16px", textAlign: "center", fontSize: 12, color: "#94A3B8" }}>
+                        No data available for {selectedMetric}
                       </td>
-                    ))}
-                    <td style={{ padding: "10px 16px", textAlign: "right" }}>
-                      {delta !== null ? (
-                        <span
-                          className="font-mono"
-                          style={{
-                            fontSize: 12,
-                            fontWeight: 600,
-                            color:
-                              selectedMetric === "Inflation" || selectedMetric === "Policy Rate"
-                                ? delta < 0
-                                  ? "#10B981"
-                                  : "#EF4444"
-                                : delta > 0
-                                ? "#10B981"
-                                : "#EF4444",
-                          }}
-                        >
-                          {delta > 0 ? "+" : ""}
-                          {delta.toFixed(1)}pp
-                        </span>
-                      ) : (
-                        <span style={{ color: "#2D3E6E" }}>—</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="flex justify-end mt-2">
+            <span className="text-xs" style={{ color: "#CBD5E1" }}>Fuente: Bloomberg</span>
+          </div>
+        </>
+      )}
+
+      {/* ── 10Y Rate — split layout: simplified table + twin-axis chart ─────── */}
+      {is10Y && (
+        <div className="grid gap-5" style={{ gridTemplateColumns: "1fr 2fr" }}>
+          {/* Left: simplified table */}
+          <div className="card" style={{ overflow: "hidden", padding: 0, alignSelf: "start" }}>
+            <div
+              style={{
+                padding: "10px 16px",
+                borderBottom: "1px solid rgba(15,23,42,0.07)",
+              }}
+            >
+              <span style={{ fontSize: 11, fontWeight: 600, color: "#64748B", letterSpacing: "0.08em" }}>
+                10Y RATE — REVISIONS
+              </span>
+            </div>
+
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ background: "#F0F4FA" }}>
+                  <th style={{ padding: "8px 16px", textAlign: "left", fontSize: 10, fontWeight: 600, color: "#64748B", letterSpacing: "0.08em" }}>
+                    COUNTRY
+                  </th>
+                  <th style={{ padding: "8px 16px", textAlign: "right", fontSize: 10, fontWeight: 600, color: "#94A3B8", letterSpacing: "0.08em" }}>
+                    3M AGO
+                  </th>
+                  <th style={{ padding: "8px 16px", textAlign: "right", fontSize: 10, fontWeight: 600, color: "#475569", letterSpacing: "0.08em" }}>
+                    CURRENT
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {tenYRows.map((row, i) => {
+                  const isActive = selectedCountry === row.country;
+                  const isGroupSep = row.country === TENY_GROUP_LAST;
+                  const isLast = i === tenYRows.length - 1;
+
+                  return (
+                    <tr
+                      key={row.country}
+                      onClick={() => setSelectedCountry(row.country)}
+                      style={{
+                        cursor: "pointer",
+                        background: isActive ? "rgba(43,92,224,0.06)" : "transparent",
+                        borderBottom:
+                          isGroupSep && !isLast
+                            ? "2px solid rgba(15,23,42,0.12)"
+                            : "1px solid rgba(15,23,42,0.05)",
+                        transition: "background 0.12s",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isActive)
+                          (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.03)";
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isActive)
+                          (e.currentTarget as HTMLElement).style.background = "transparent";
+                      }}
+                    >
+                      <td style={{ padding: "10px 16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          {isActive && (
+                            <span
+                              style={{
+                                width: 6, height: 6, borderRadius: "50%",
+                                background: "#2B5CE0", flexShrink: 0,
+                              }}
+                            />
+                          )}
+                          <span style={{ fontSize: 16 }}>{FLAGS[row.country] ?? "🌎"}</span>
+                          <span
+                            style={{
+                              fontSize: 12,
+                              fontWeight: 600,
+                              color: isActive ? "#1E3A8A" : "#334155",
+                            }}
+                          >
+                            {row.country}
+                          </span>
+                        </div>
+                      </td>
+                      <td style={{ padding: "10px 16px", textAlign: "right", fontFamily: "monospace", fontSize: 13, color: "#94A3B8" }}>
+                        {fmtVal(row.ago2026)}
+                      </td>
+                      <td style={{ padding: "10px 16px", textAlign: "right", fontFamily: "monospace", fontSize: 13, fontWeight: 600, color: metricColor("10Y Rate", row.current2026) }}>
+                        {fmtVal(row.current2026)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            <div className="flex justify-end px-4 py-2">
+              <span className="text-xs" style={{ color: "#CBD5E1" }}>Fuente: Bloomberg</span>
+            </div>
+          </div>
+
+          {/* Right: twin-axis chart */}
+          <TenYearChart history={tenYearHistory} country={selectedCountry} />
         </div>
-      </div>
+      )}
     </div>
   );
 }
