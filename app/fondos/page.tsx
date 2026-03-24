@@ -12,6 +12,7 @@ interface CarteraRow {
   benchmarkPct: number;
   overweight: number;
   sector: string;
+  macroSector: string;
   delta1W: number | null;
   delta1M: number | null;
 }
@@ -109,16 +110,16 @@ export default function FondosPage() {
     .filter((f) => f.name === selectedFundName)
     .sort((a, b) => b.date.localeCompare(a.date));
 
-  // Unique sectors in this portfolio
+  // Unique macro-sectors in this portfolio
   const allSectors = fondoData
-    ? ["All", ...Array.from(new Set(fondoData.cartera.map((r) => r.sector).filter(Boolean))).sort()]
+    ? ["All", ...Array.from(new Set(fondoData.cartera.map((r) => r.macroSector).filter(Boolean))).sort()]
     : ["All"];
 
   // Filtered cartera
   const filteredCartera = fondoData
     ? sectorFilter === "All"
       ? fondoData.cartera
-      : fondoData.cartera.filter((r) => r.sector === sectorFilter)
+      : fondoData.cartera.filter((r) => r.macroSector === sectorFilter)
     : [];
 
   // snapshots is newest-first; idx 0 = most recent
@@ -328,26 +329,28 @@ export default function FondosPage() {
             </div>
           )}
 
-          {/* Sector filter */}
-          <div className="flex items-center gap-2 mb-4 flex-wrap">
-            <span className="text-xs font-medium" style={{ color: "#94A3B8" }}>Sector:</span>
-            {allSectors.map((s) => {
-              const isActive = sectorFilter === s;
-              return (
-                <button
-                  key={s}
-                  onClick={() => setSectorFilter(s)}
-                  className="px-3 py-1 rounded-lg text-xs font-semibold transition-all"
-                  style={{
-                    background: isActive ? "rgba(43,92,224,0.10)" : "rgba(15,23,42,0.04)",
-                    color: isActive ? "#2B5CE0" : "#64748B",
-                    border: `1px solid ${isActive ? "rgba(43,92,224,0.25)" : "rgba(15,23,42,0.08)"}`,
-                  }}
-                >
-                  {s}
-                </button>
-              );
-            })}
+          {/* Macro Sector filter */}
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-xs font-medium" style={{ color: "#94A3B8" }}>Macro Sector:</span>
+            <select
+              value={sectorFilter}
+              onChange={(e) => setSectorFilter(e.target.value)}
+              style={{
+                padding: "5px 10px",
+                borderRadius: 7,
+                border: "1px solid rgba(15,23,42,0.10)",
+                background: "#F8FAFF",
+                color: sectorFilter === "All" ? "#64748B" : "#0F172A",
+                fontSize: 13,
+                cursor: "pointer",
+                outline: "none",
+                minWidth: 160,
+              }}
+            >
+              {allSectors.map((s) => (
+                <option key={s} value={s}>{s === "All" ? "All Sectors" : s}</option>
+              ))}
+            </select>
           </div>
 
           {/* Table + Chart side-by-side on desktop */}

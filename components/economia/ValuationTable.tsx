@@ -6,6 +6,7 @@ interface ResumenRow {
   median: number | null;
   max: number | null;
   min: number | null;
+  stdDev: number | null;
   discount: number | null;
 }
 
@@ -33,15 +34,34 @@ function discountColor(d: number | null): string {
   return "#D97706";
 }
 
-function peBar(today: number | null, median: number | null, min: number | null, max: number | null) {
-  if (today == null || median == null || min == null || max == null || max === min) {
-    return { todayPct: 50, medianPct: 50 };
+function pct(v: number, min: number, range: number) {
+  return Math.max(0, Math.min(100, ((v - min) / range) * 100));
+}
+
+function peBar(
+  today: number | null,
+  median: number | null,
+  min: number | null,
+  max: number | null,
+  stdDev: number | null,
+) {
+  if (median == null || min == null || max == null || max === min) {
+    return { todayPct: null, medianPct: 50, sigmaLeftPct: null, sigmaWidthPct: null };
   }
   const range = max - min;
-  return {
-    todayPct:  Math.max(0, Math.min(100, ((today  - min) / range) * 100)),
-    medianPct: Math.max(0, Math.min(100, ((median - min) / range) * 100)),
-  };
+  const medianPct = pct(median, min, range);
+  const todayPct  = today != null ? pct(today, min, range) : null;
+
+  let sigmaLeftPct: number | null = null;
+  let sigmaWidthPct: number | null = null;
+  if (stdDev != null && stdDev > 0) {
+    const lo = Math.max(min, median - stdDev);
+    const hi = Math.min(max, median + stdDev);
+    sigmaLeftPct  = pct(lo, min, range);
+    sigmaWidthPct = pct(hi, min, range) - sigmaLeftPct;
+  }
+
+  return { todayPct, medianPct, sigmaLeftPct, sigmaWidthPct };
 }
 
 function IndexRow({ row, slot, slotColor, isLast, onSelectIndex }: {
@@ -53,7 +73,7 @@ function IndexRow({ row, slot, slotColor, isLast, onSelectIndex }: {
 }) {
   const isActive = slot !== -1;
   const discColor = discountColor(row.discount);
-  const { todayPct, medianPct } = peBar(row["Today (P/E)"], row.median, row.min, row.max);
+  const { todayPct, medianPct, sigmaLeftPct, sigmaWidthPct } = peBar(row["Today (P/E)"], row.median, row.min, row.max, row.stdDev);
 
   return (
     <tr
@@ -111,18 +131,30 @@ function IndexRow({ row, slot, slotColor, isLast, onSelectIndex }: {
         )}
       </td>
 
-      {/* Rango Max / Min bar */}
-      <td className="px-4 py-2.5 w-40">
+      {/* Range ±1σ bar */}
+      <td className="px-4 py-2.5 w-44">
         <div
           className="relative h-4 rounded-sm overflow-hidden"
           style={{ background: "rgba(15,23,42,0.06)" }}
         >
-          <div className="absolute inset-0 rounded-sm" style={{ background: "rgba(43,92,224,0.08)" }} />
+          {/* ±1σ band */}
+          {sigmaLeftPct != null && sigmaWidthPct != null && (
+            <div
+              className="absolute top-0 bottom-0 rounded-sm"
+              style={{
+                left: `${sigmaLeftPct}%`,
+                width: `${sigmaWidthPct}%`,
+                background: "rgba(100,116,139,0.22)",
+              }}
+            />
+          )}
+          {/* Median tick */}
           <div
             className="absolute top-0 bottom-0 w-px"
-            style={{ left: `${medianPct}%`, background: "rgba(100,116,139,0.5)" }}
+            style={{ left: `${medianPct}%`, background: "rgba(100,116,139,0.55)" }}
           />
-          {row["Today (P/E)"] != null && (
+          {/* Today dot */}
+          {todayPct != null && (
             <div
               className="absolute top-1 bottom-1 w-1.5 rounded-sm"
               style={{ left: `${todayPct}%`, background: discColor }}
@@ -165,7 +197,7 @@ export default function ValuationTable({ data, onSelectIndex, selectedIndices }:
         <table className="w-full text-xs">
           <thead>
             <tr style={{ background: "#F0F4FA" }}>
-              {["Índice", "P/E Hoy", "Mediana 10Y", "Descuento", "Rango Max/Min"].map((h) => (
+              {["Índice", "P/E Hoy", "Mediana 10Y", "Descuento", "Range ±1σ"].map((h) => (
                 <th
                   key={h}
                   className="px-4 py-2.5 text-left font-medium tracking-wide"

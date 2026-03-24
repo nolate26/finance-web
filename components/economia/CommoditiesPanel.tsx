@@ -18,6 +18,7 @@ import {
 
 interface HistMeta {
   name: string;
+  group?: string;
   spot: number | null;
   avg2026: number | null;
   avg2025: number | null;
@@ -166,46 +167,68 @@ function HistoricalPanel({
           <tbody>
             {meta.map((row, i) => {
               const isActive = row.name === selected;
+              const showGroupHeader = i === 0 || row.group !== meta[i - 1].group;
               return (
-                <tr
-                  key={row.name}
-                  onClick={() => setSelected(row.name)}
-                  style={{
-                    cursor: "pointer",
-                    background: isActive ? "rgba(43,92,224,0.06)" : i % 2 === 0 ? "transparent" : "rgba(15,23,42,0.02)",
-                    borderBottom: "1px solid rgba(15,23,42,0.05)",
-                    transition: "background 0.1s",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.03)";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) (e.currentTarget as HTMLElement).style.background = i % 2 === 0 ? "transparent" : "rgba(15,23,42,0.02)";
-                  }}
-                >
-                  <td style={{ padding: "9px 14px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      {isActive && (
-                        <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#2B5CE0", flexShrink: 0 }} />
-                      )}
-                      <span style={{ fontSize: 12, fontWeight: 600, color: isActive ? "#1E3A8A" : "#334155" }}>
-                        {row.name}
-                      </span>
-                    </div>
-                  </td>
-                  <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: "#0F172A" }}>
-                    {fmtNum(row.spot, smartDec(row.spot))}
-                  </td>
-                  <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 600, color: "#2B5CE0" }}>
-                    {fmtNum(row.avg2026, smartDec(row.avg2026))}
-                  </td>
-                  <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: "monospace", fontSize: 11, color: "#475569" }}>
-                    {fmtNum(row.avg2025, smartDec(row.avg2025))}
-                  </td>
-                  <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: "monospace", fontSize: 11, color: "#94A3B8" }}>
-                    {fmtNum(row.avg2024, smartDec(row.avg2024))}
-                  </td>
-                </tr>
+                <>
+                  {showGroupHeader && row.group && (
+                    <tr key={`grp-${row.group}`}>
+                      <td
+                        colSpan={5}
+                        style={{
+                          padding: "5px 14px",
+                          fontSize: 9,
+                          fontWeight: 700,
+                          letterSpacing: "0.08em",
+                          textTransform: "uppercase",
+                          color: "#2B5CE0",
+                          background: "#EEF2FA",
+                          borderBottom: "1px solid rgba(43,92,224,0.10)",
+                        }}
+                      >
+                        {row.group}
+                      </td>
+                    </tr>
+                  )}
+                  <tr
+                    key={row.name}
+                    onClick={() => setSelected(row.name)}
+                    style={{
+                      cursor: "pointer",
+                      background: isActive ? "rgba(43,92,224,0.06)" : i % 2 === 0 ? "transparent" : "rgba(15,23,42,0.02)",
+                      borderBottom: "1px solid rgba(15,23,42,0.05)",
+                      transition: "background 0.1s",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isActive) (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.03)";
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isActive) (e.currentTarget as HTMLElement).style.background = i % 2 === 0 ? "transparent" : "rgba(15,23,42,0.02)";
+                    }}
+                  >
+                    <td style={{ padding: "9px 14px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        {isActive && (
+                          <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#2B5CE0", flexShrink: 0 }} />
+                        )}
+                        <span style={{ fontSize: 12, fontWeight: 600, color: isActive ? "#1E3A8A" : "#334155" }}>
+                          {row.name}
+                        </span>
+                      </div>
+                    </td>
+                    <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: "#0F172A" }}>
+                      {fmtNum(row.spot, smartDec(row.spot))}
+                    </td>
+                    <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 600, color: "#2B5CE0" }}>
+                      {fmtNum(row.avg2026, smartDec(row.avg2026))}
+                    </td>
+                    <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: "monospace", fontSize: 11, color: "#475569" }}>
+                      {fmtNum(row.avg2025, smartDec(row.avg2025))}
+                    </td>
+                    <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: "monospace", fontSize: 11, color: "#94A3B8" }}>
+                      {fmtNum(row.avg2024, smartDec(row.avg2024))}
+                    </td>
+                  </tr>
+                </>
               );
             })}
           </tbody>

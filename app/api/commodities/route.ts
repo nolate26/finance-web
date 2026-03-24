@@ -5,7 +5,78 @@ import Papa from "papaparse";
 
 const ECON_DIR = path.join(process.cwd(), "data", "Economia", "Economic Data");
 
-// No hardcoded commodity list — columns are read dynamically from the CSV.
+// ── Commodity groups ─────────────────────────────────────────────────────────
+const GROUP_ORDER = ["Energy", "Base Metals", "Precious Metals", "Agriculture & Food", "Indices, Freight & Crypto"] as const;
+type CommodityGroup = (typeof GROUP_ORDER)[number];
+
+const COMMODITY_GROUP_MAP: Record<string, CommodityGroup> = {
+  // Energy
+  "US Gasoline (USD/gal)": "Energy",
+  "CIF ARA Coal (USD/t)": "Energy",
+  "Bunker Fuel (USD/t)": "Energy",
+  "WTI Crude 12M Fwd (USD/bbl)": "Energy",
+  "WTI Crude 24M Fwd (USD/bbl)": "Energy",
+  "Brent Crude Oil (USD/bbl)": "Energy",
+  "Brent Crude 24M Fwd (USD/bbl)": "Energy",
+  "Indonesia Thermic Coal (USD/t)": "Energy",
+  "Jet Fuel (USD/gal)": "Energy",
+  "LNG Spot JKM (USD/MMBtu)": "Energy",
+  "Propane Mont Belvieu (USc/gal)": "Energy",
+  "US Diesel (USD/gal)": "Energy",
+  "North Sea Nat Gas (GBp/th)": "Energy",
+  "Henry Hub Nat Gas (USD/MMBtu)": "Energy",
+  "TTF Neth Gas (EUR/MWh)": "Energy",
+  "WTI Crude Oil (USD/bbl)": "Energy",
+  "Richards Bay Coal (USD/t)": "Energy",
+  "Newcastle Coal (USD/t)": "Energy",
+  // Base Metals
+  "Copper NYMEX Inventory": "Base Metals",
+  "Copper HG1 (USD/lb)": "Base Metals",
+  "Steel USA HRC (USD/t)": "Base Metals",
+  "Aluminum LME (USD/t)": "Base Metals",
+  "Copper 3M Fwd (USD/t)": "Base Metals",
+  "Zinc LME (USD/t)": "Base Metals",
+  "Nickel LME (USD/t)": "Base Metals",
+  "Copper Spot LME (USD/t)": "Base Metals",
+  "Copper 12M Fwd (USD/t)": "Base Metals",
+  "Copper 24M Fwd (USD/t)": "Base Metals",
+  "Copper LME Inventory": "Base Metals",
+  "Copper Shanghai Inventory": "Base Metals",
+  "Iron Ore 62% CFR (USD/t)": "Base Metals",
+  // Precious Metals
+  "Silver Spot (USD/oz)": "Precious Metals",
+  "Gold Spot (USD/oz)": "Precious Metals",
+  // Agriculture & Food
+  "Corn (USc/bu)": "Agriculture & Food",
+  "Cocoa (USD/t)": "Agriculture & Food",
+  "CRB Food": "Agriculture & Food",
+  "Cotton N°2 (USc/lb)": "Agriculture & Food",
+  "FAO Cereals": "Agriculture & Food",
+  "FAO Dairy": "Agriculture & Food",
+  "FAO Meat": "Agriculture & Food",
+  "FAO Veg Oils": "Agriculture & Food",
+  "FAO Global": "Agriculture & Food",
+  "FAO Sugar": "Agriculture & Food",
+  "Coffee Arabica (USc/lb)": "Agriculture & Food",
+  "Salmon Norway (NOK/kg)": "Agriculture & Food",
+  "Fish Meal (USD/t)": "Agriculture & Food",
+  "Refined Sugar (USD/t)": "Agriculture & Food",
+  "Soybean Meal (USD/t)": "Agriculture & Food",
+  "Soybean (USc/bu)": "Agriculture & Food",
+  "Raw Sugar (USc/lb)": "Agriculture & Food",
+  "Rice (USD/cwt)": "Agriculture & Food",
+  "Wheat (USc/bu)": "Agriculture & Food",
+  // Indices, Freight & Crypto
+  "Baltic Dry Index": "Indices, Freight & Crypto",
+  "CRB Metals": "Indices, Freight & Crypto",
+  "CRB Commodity Index": "Indices, Freight & Crypto",
+  "US Crude Inventories (kbbl)": "Indices, Freight & Crypto",
+  "Shanghai Freight Index": "Indices, Freight & Crypto",
+  "Chinese Port Inventories (Mt)": "Indices, Freight & Crypto",
+  "S&P GSCI Index": "Indices, Freight & Crypto",
+  "Bitcoin (USD)": "Indices, Freight & Crypto",
+  "Ethereum (USD)": "Indices, Freight & Crypto",
+};
 
 function toNum(v: string | undefined): number | null {
   if (!v || v.trim() === "" || v.trim() === "-" || v.trim() === "N/A") return null;
@@ -84,7 +155,16 @@ export async function GET() {
 
       const avg2026 = avg(vals2026);
 
-      return { name, spot, avg2026, avg2025, avg2024 };
+      const group: CommodityGroup = COMMODITY_GROUP_MAP[name] ?? "Indices, Freight & Crypto";
+      return { name, group, spot, avg2026, avg2025, avg2024 };
+    });
+
+    // Sort meta by group order, then alphabetically within group
+    histMeta.sort((a, b) => {
+      const gi = GROUP_ORDER.indexOf(a.group as CommodityGroup);
+      const gj = GROUP_ORDER.indexOf(b.group as CommodityGroup);
+      if (gi !== gj) return gi - gj;
+      return a.name.localeCompare(b.name);
     });
 
     // Build downsampled series for charting (~400 rows max)

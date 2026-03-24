@@ -23,13 +23,20 @@ function computeMedian(values: number[]): number {
     : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
+function computeStdDev(values: number[]): number | null {
+  if (values.length < 2) return null;
+  const mean = values.reduce((s, v) => s + v, 0) / values.length;
+  const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / (values.length - 1);
+  return Math.sqrt(variance);
+}
+
 export async function GET() {
   try {
     const tablaMaestra = readCSV("tabla_maestra_comps.csv");
     const historiaPE = readCSV("historia_pe_10Y.csv") as Record<string, number | null>[];
 
     // ── Compute per-index stats from full 10Y history ──────────────────────
-    const statsMap: Record<string, { median: number; max: number; min: number }> = {};
+    const statsMap: Record<string, { median: number; max: number; min: number; stdDev: number | null }> = {};
 
     if (historiaPE.length > 0) {
       const cols = Object.keys(historiaPE[0]).filter((c) => c !== "date");
@@ -43,6 +50,7 @@ export async function GET() {
             median: computeMedian(values),
             max: Math.max(...values),
             min: Math.min(...values),
+            stdDev: computeStdDev(values),
           };
         }
       }
@@ -71,6 +79,7 @@ export async function GET() {
         median: stats.median,
         max: stats.max,
         min: stats.min,
+        stdDev: stats.stdDev,
         discount,
       };
     });

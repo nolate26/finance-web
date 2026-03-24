@@ -29,12 +29,34 @@ const FUND_RETORNOS_MAP: Record<string, string> = {
 
 const CHILE_FUNDS = new Set(["Pionero", "Moneda_Renta_Variable", "Orange"]);
 
+const MACRO_SECTOR_MAP: Record<string, string> = {
+  "Acero":          "Materials",
+  "Explosivos":     "Materials",
+  "Forestal":       "Materials",
+  "Min. Metal":     "Materials",
+  "Min. No-Metal":  "Materials",
+  "Alimentos":      "Consumer",
+  "Bebidas":        "Consumer",
+  "Salmones y Pesca": "Consumer",
+  "Retail":         "Consumer",
+  "Bancos":         "Financials",
+  "Grup. Financ.":  "Financials",
+  "Seguros y Salud":"Financials",
+  "Construcción":   "Industrials",
+  "Transp y puerto":"Industrials",
+  "Conglomerados":  "Industrials",
+  "Electrico":      "Utilities & Tech",
+  "Telecom":        "Utilities & Tech",
+  "Tecnología":     "Utilities & Tech",
+};
+
 export interface CarteraRow {
   company: string;
   portfolioPct: number;
   benchmarkPct: number;
   overweight: number;
   sector: string;
+  macroSector: string;
   delta1W: number | null;
   delta1M: number | null;
 }
@@ -250,6 +272,7 @@ function parseCSV(
         benchmarkPct: parseFloat(r[benchmarkCol]) || 0,
         overweight: parseFloat(r[overweightCol]) || 0,
         sector,
+        macroSector: MACRO_SECTOR_MAP[sector] ?? "Other",
         delta1W,
         delta1M,
       };
