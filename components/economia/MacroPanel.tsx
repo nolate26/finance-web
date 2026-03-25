@@ -4,10 +4,15 @@ import { useState } from "react";
 import TenYearChart from "./TenYearChart";
 
 const FLAGS: Record<string, string> = {
+  Argentina: "🇦🇷",
+  Bolivia: "🇧🇴",
   Brazil: "🇧🇷",
   Chile: "🇨🇱",
   Colombia: "🇨🇴",
+  Ecuador: "🇪🇨",
   Mexico: "🇲🇽",
+  Panama: "🇵🇦",
+  Paraguay: "🇵🇾",
   Peru: "🇵🇪",
   China: "🇨🇳",
   "United States": "🇺🇸",
@@ -17,12 +22,12 @@ const FLAGS: Record<string, string> = {
 };
 
 // Countries available in historia_10y_fx_maestro.csv
-const TENY_COUNTRIES = ["Chile", "Brazil", "Colombia", "Peru", "Mexico", "United States"];
-const TENY_GROUP_LAST = "Mexico"; // separator before United States
+const TENY_COUNTRIES = ["Chile", "Brazil", "Colombia", "Peru", "Mexico", "United States", "China", "European Union"];
+const TENY_GROUP_LAST = "United States"; // separator before China / EU
 
 // Geographic order for GDP / Inflation tables
 const COUNTRY_GROUPS = [
-  { countries: ["Brazil", "Chile", "Colombia", "Mexico", "Peru"] },
+  { countries: ["Argentina", "Bolivia", "Brazil", "Chile", "Colombia", "Ecuador", "Mexico", "Panama", "Paraguay", "Peru"] },
   { countries: ["United States", "China"] },
   { countries: ["European Union", "LATAM", "World"] },
 ];
@@ -173,19 +178,19 @@ export default function MacroPanel({ revisions = [], tenYearHistory = [] }: Prop
                     <th style={{ padding: "8px 16px", textAlign: "left", fontSize: 10, fontWeight: 600, color: "#64748B", letterSpacing: "0.08em", width: 190 }}>
                       COUNTRY / REGION
                     </th>
-                    <th style={{ padding: "8px 16px", textAlign: "right", fontSize: 10, fontWeight: 600, color: "#94A3B8", letterSpacing: "0.08em" }}>
+                    <th style={{ padding: "8px 16px", textAlign: "center", fontSize: 10, fontWeight: 600, color: "#94A3B8", letterSpacing: "0.08em" }}>
                       3M AGO (2026)
                     </th>
-                    <th style={{ padding: "8px 16px", textAlign: "right", fontSize: 10, fontWeight: 600, color: "#475569", letterSpacing: "0.08em" }}>
+                    <th style={{ padding: "8px 16px", textAlign: "center", fontSize: 10, fontWeight: 600, color: "#475569", letterSpacing: "0.08em" }}>
                       CURRENT (2026)
                     </th>
-                    <th style={{ padding: "8px 16px", textAlign: "right", fontSize: 10, fontWeight: 600, color: "#2B5CE0", letterSpacing: "0.08em" }}>
+                    <th style={{ padding: "8px 16px", textAlign: "center", fontSize: 10, fontWeight: 600, color: "#2B5CE0", letterSpacing: "0.08em" }}>
                       REVISION Δ
                     </th>
-                    <th style={{ padding: "8px 16px", textAlign: "right", fontSize: 10, fontWeight: 600, color: "#64748B", letterSpacing: "0.08em" }}>
+                    <th style={{ padding: "8px 16px", textAlign: "center", fontSize: 10, fontWeight: 600, color: "#64748B", letterSpacing: "0.08em" }}>
                       2027e
                     </th>
-                    <th style={{ padding: "8px 16px", textAlign: "right", fontSize: 10, fontWeight: 600, color: "#64748B", letterSpacing: "0.08em" }}>
+                    <th style={{ padding: "8px 16px", textAlign: "center", fontSize: 10, fontWeight: 600, color: "#64748B", letterSpacing: "0.08em" }}>
                       2028e
                     </th>
                   </tr>
@@ -219,13 +224,13 @@ export default function MacroPanel({ revisions = [], tenYearHistory = [] }: Prop
                             </span>
                           </div>
                         </td>
-                        <td style={{ padding: "10px 16px", textAlign: "right", fontFamily: "monospace", fontSize: 13, color: "#94A3B8" }}>
+                        <td style={{ padding: "10px 16px", textAlign: "center", fontFamily: "monospace", fontSize: 13, color: "#94A3B8" }}>
                           {fmtVal(row.ago2026)}
                         </td>
-                        <td style={{ padding: "10px 16px", textAlign: "right", fontFamily: "monospace", fontSize: 13, fontWeight: 600, color: metricColor(selectedMetric, row.current2026) }}>
+                        <td style={{ padding: "10px 16px", textAlign: "center", fontFamily: "monospace", fontSize: 13, fontWeight: 600, color: metricColor(selectedMetric, row.current2026) }}>
                           {fmtVal(row.current2026)}
                         </td>
-                        <td style={{ padding: "10px 16px", textAlign: "right" }}>
+                        <td style={{ padding: "10px 16px", textAlign: "center" }}>
                           {delta !== null ? (
                             <span
                               className="font-mono"
@@ -249,10 +254,10 @@ export default function MacroPanel({ revisions = [], tenYearHistory = [] }: Prop
                             <span style={{ color: "#CBD5E1" }}>—</span>
                           )}
                         </td>
-                        <td style={{ padding: "10px 16px", textAlign: "right", fontFamily: "monospace", fontSize: 13, color: metricColor(selectedMetric, row.current2027) }}>
+                        <td style={{ padding: "10px 16px", textAlign: "center", fontFamily: "monospace", fontSize: 13, color: metricColor(selectedMetric, row.current2027) }}>
                           {fmtVal(row.current2027)}
                         </td>
-                        <td style={{ padding: "10px 16px", textAlign: "right", fontFamily: "monospace", fontSize: 13, color: metricColor(selectedMetric, row.current2028) }}>
+                        <td style={{ padding: "10px 16px", textAlign: "center", fontFamily: "monospace", fontSize: 13, color: metricColor(selectedMetric, row.current2028) }}>
                           {fmtVal(row.current2028)}
                         </td>
                       </tr>
@@ -298,10 +303,10 @@ export default function MacroPanel({ revisions = [], tenYearHistory = [] }: Prop
                   <th style={{ padding: "8px 16px", textAlign: "left", fontSize: 10, fontWeight: 600, color: "#64748B", letterSpacing: "0.08em" }}>
                     COUNTRY
                   </th>
-                  <th style={{ padding: "8px 16px", textAlign: "right", fontSize: 10, fontWeight: 600, color: "#94A3B8", letterSpacing: "0.08em" }}>
+                  <th style={{ padding: "8px 16px", textAlign: "center", fontSize: 10, fontWeight: 600, color: "#94A3B8", letterSpacing: "0.08em" }}>
                     3M AGO
                   </th>
-                  <th style={{ padding: "8px 16px", textAlign: "right", fontSize: 10, fontWeight: 600, color: "#475569", letterSpacing: "0.08em" }}>
+                  <th style={{ padding: "8px 16px", textAlign: "center", fontSize: 10, fontWeight: 600, color: "#475569", letterSpacing: "0.08em" }}>
                     CURRENT
                   </th>
                 </tr>
@@ -356,10 +361,10 @@ export default function MacroPanel({ revisions = [], tenYearHistory = [] }: Prop
                           </span>
                         </div>
                       </td>
-                      <td style={{ padding: "10px 16px", textAlign: "right", fontFamily: "monospace", fontSize: 13, color: "#94A3B8" }}>
+                      <td style={{ padding: "10px 16px", textAlign: "center", fontFamily: "monospace", fontSize: 13, color: "#94A3B8" }}>
                         {fmtVal(row.ago2026)}
                       </td>
-                      <td style={{ padding: "10px 16px", textAlign: "right", fontFamily: "monospace", fontSize: 13, fontWeight: 600, color: metricColor("10Y Rate", row.current2026) }}>
+                      <td style={{ padding: "10px 16px", textAlign: "center", fontFamily: "monospace", fontSize: 13, fontWeight: 600, color: metricColor("10Y Rate", row.current2026) }}>
                         {fmtVal(row.current2026)}
                       </td>
                     </tr>

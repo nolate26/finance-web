@@ -48,9 +48,12 @@ function computeStdDev(values: number[]): number | null {
   return Math.sqrt(variance);
 }
 
-function fmtDateMMYY(d: string): string {
+const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+function fmtDateLabel(d: string): string {
   const parts = d.slice(0, 10).split("-");
-  return `${parts[1]}/${parts[0].slice(2)}`;
+  const m = parseInt(parts[1], 10) - 1;
+  return `${MONTHS_SHORT[m]} ${parts[0]}`;
 }
 
 function forwardFill(rows: HistoryRow[], key: string): (number | null)[] {
@@ -98,7 +101,7 @@ export default function PEHistoryChart({
   const filled = forwardFill(slice, selectedIndex);
   const chartData = slice
     .map((row, i) => ({
-      date: fmtDateMMYY(row.date as string),
+      date: fmtDateLabel(row.date as string),
       value: filled[i],
     }))
     .filter((d): d is { date: string; value: number } => d.value !== null);
@@ -111,9 +114,22 @@ export default function PEHistoryChart({
   const visibleValues = chartData.map((d) => d.value).filter((v) => v > 0);
   const median = computeMedian(visibleValues);
   const stdDev = computeStdDev(visibleValues);
-  const plus1sigma = median !== null && stdDev !== null ? median + stdDev : null;
-  const minus1sigma = median !== null && stdDev !== null ? median - stdDev : null;
+  const plus2sigma  = median !== null && stdDev !== null ? median + 2 * stdDev : null;
+  const minus2sigma = median !== null && stdDev !== null ? median - 2 * stdDev : null;
   const currentPE = chartData.length > 0 ? chartData[chartData.length - 1].value : null;
+
+  // Dynamic Y-axis: domain = exact ±2σ so reference lines land at the chart borders;
+  // ticks use 2-unit steps snapped *inside* that range.
+  let yDomain: [number, number] | ["auto", "auto"] = ["auto", "auto"];
+  let yTicks: number[] | undefined = undefined;
+  if (minus2sigma !== null && plus2sigma !== null) {
+    yDomain = [minus2sigma, plus2sigma];
+    const tickLo = Math.ceil(minus2sigma / 2) * 2;
+    const tickHi = Math.floor(plus2sigma / 2) * 2;
+    const ticks: number[] = [];
+    for (let t = tickLo; t <= tickHi; t += 2) ticks.push(Math.round(t * 100) / 100);
+    yTicks = ticks;
+  }
 
   const hasDropdown = !!(availableIndices && onIndexChange);
 
@@ -201,45 +217,46 @@ export default function PEHistoryChart({
               <XAxis
                 dataKey="date"
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                tick={{ fill: "#64748B", fontSize: 11, fontFamily: "monospace", dy: 10 } as any}
+                tick={{ fill: "#64748B", fontSize: 10, dy: 8 } as any}
                 axisLine={false}
                 tickLine={false}
                 interval="preserveStartEnd"
-                minTickGap={40}
+                minTickGap={70}
                 tickFormatter={(v: unknown) => (typeof v === "string" && v.length > 0 ? v : "")}
               />
               <YAxis
-                domain={["auto", "auto"]}
-                tick={{ fill: "#94A3B8", fontSize: 9, fontFamily: "monospace" }}
+                domain={yDomain}
+                ticks={yTicks}
+                tick={{ fill: "#475569", fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
-                tickFormatter={(v) => `${v}x`}
-                width={36}
+                tickFormatter={(v) => `${(v as number).toFixed(0)}x`}
+                width={38}
               />
               <Tooltip content={<CustomTooltip />} />
 
               {median !== null && (
                 <ReferenceLine
                   y={median}
-                  stroke={accentColor}
-                  strokeOpacity={0.5}
-                  strokeDasharray="4 4"
+                  stroke="#64748B"
+                  strokeOpacity={0.7}
+                  strokeDasharray="5 3"
                   label={{ value: `Md ${median.toFixed(1)}x`, position: "insideTopRight", fontSize: 9, fill: "#94A3B8" }}
                 />
               )}
-              {plus1sigma !== null && (
+              {plus2sigma !== null && (
                 <ReferenceLine
-                  y={plus1sigma}
+                  y={plus2sigma}
                   stroke={accentColor}
-                  strokeOpacity={0.25}
+                  strokeOpacity={0.30}
                   strokeDasharray="3 3"
                 />
               )}
-              {minus1sigma !== null && (
+              {minus2sigma !== null && (
                 <ReferenceLine
-                  y={minus1sigma}
+                  y={minus2sigma}
                   stroke={accentColor}
-                  strokeOpacity={0.25}
+                  strokeOpacity={0.30}
                   strokeDasharray="3 3"
                 />
               )}
@@ -265,7 +282,7 @@ export default function PEHistoryChart({
         </span>
         <span className="flex items-center gap-1">
           <span className="inline-block w-3" style={{ borderTop: "1px dashed rgba(100,116,139,0.35)" }} />
-          ±1σ
+          ±2σ
         </span>
         <span className="ml-auto" style={{ color: "#CBD5E1" }}>Fuente: Bloomberg</span>
       </div>

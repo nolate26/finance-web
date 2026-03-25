@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 interface ResumenRow {
   Index: string;
   "Today (P/E)": number | null;
@@ -17,25 +19,24 @@ interface Props {
 }
 
 const INDEX_GROUPS = [
+  { label: "MUNDO",  indices: ["MSCI World ACWI"] },
   { label: "LATAM",  indices: ["MSCI EM LatAm", "MSCI EM Small Cap", "IPSA (Chile)", "Bovespa (Brasil)", "Mexbol (Mexico)", "Merval (Argentina)", "Colcap (Colombia)", "BVL (Peru)", "SMLLBV (Brasil)"] },
   { label: "EEUU",   indices: ["Dow Jones (US)", "S&P 500 (US)", "Nasdaq 100 (US)", "Russell 2000 (US)"] },
   { label: "EUROPA", indices: ["Stoxx Europe 600", "FTSE 100 (UK)", "DAX (Alemania)", "CAC 40 (Francia)", "Swiss Market (Suiza)"] },
-  { label: "ASIA",   indices: ["Nikkei 225 (Japon)", "Topix Index (Japon)", "Hang Seng (Hong Kong)", "Hang Seng Tech (Hong Kong)", "CSI 300 (China)", "Kospi Index (Corea)"] },
-  { label: "OTROS",  indices: ["S&P/ASX 200 (Australia)", "Nifty 50 (India)"] },
+  { label: "ASIA",   indices: ["Nikkei 225 (Japon)", "Topix Index (Japon)", "Hang Seng (Hong Kong)", "Hang Seng Tech (Hong Kong)", "CSI 300 (China)", "Kospi Index (Corea)", "S&P/ASX 200 (Australia)", "Nifty 50 (India)"] },
 ];
 
 const ALL_GROUPED = new Set(INDEX_GROUPS.flatMap((g) => g.indices));
 const SLOT_COLORS = ["#2B5CE0", "#D97706", "#059669"];
+
+type SortKey = "Today (P/E)" | "median" | "discount";
+interface SortConfig { key: SortKey; dir: "asc" | "desc" }
 
 function discountColor(d: number | null): string {
   if (d == null) return "#64748B";
   if (d > 10) return "#059669";
   if (d < -10) return "#DC2626";
   return "#D97706";
-}
-
-function pct(v: number, min: number, range: number) {
-  return Math.max(0, Math.min(100, ((v - min) / range) * 100));
 }
 
 function peBar(
@@ -45,23 +46,64 @@ function peBar(
   max: number | null,
   stdDev: number | null,
 ) {
-  if (median == null || min == null || max == null || max === min) {
-    return { todayPct: null, medianPct: 50, sigmaLeftPct: null, sigmaWidthPct: null };
-  }
-  const range = max - min;
-  const medianPct = pct(median, min, range);
-  const todayPct  = today != null ? pct(today, min, range) : null;
+  if (median == null) return { todayPct: null, medianPct: 50, sigmaLeftPct: null, sigmaWidthPct: null, lo: null, hi: null };
 
-  let sigmaLeftPct: number | null = null;
-  let sigmaWidthPct: number | null = null;
+  // Outer bar range: ±2σ when available, fallback to min/max
+  let lo: number, hi: number;
   if (stdDev != null && stdDev > 0) {
-    const lo = Math.max(min, median - stdDev);
-    const hi = Math.min(max, median + stdDev);
-    sigmaLeftPct  = pct(lo, min, range);
-    sigmaWidthPct = pct(hi, min, range) - sigmaLeftPct;
+    lo = median - 2 * stdDev;
+    hi = median + 2 * stdDev;
+  } else if (min != null && max != null && max > min) {
+    lo = min;
+    hi = max;
+  } else {
+    return { todayPct: null, medianPct: 50, sigmaLeftPct: null, sigmaWidthPct: null, lo: null, hi: null };
   }
 
-  return { todayPct, medianPct, sigmaLeftPct, sigmaWidthPct };
+  const range = hi - lo;
+  const medianPct = Math.max(0, Math.min(100, ((median - lo) / range) * 100));
+  const todayPct  = today != null ? Math.max(0, Math.min(100, ((today - lo) / range) * 100)) : null;
+
+  // ±1σ band is always 25%–75% inside a ±2σ outer range
+  const sigmaLeftPct  = stdDev != null ? 25 : null;
+  const sigmaWidthPct = stdDev != null ? 50 : null;
+
+  return { todayPct, medianPct, sigmaLeftPct, sigmaWidthPct, lo, hi };
+}
+
+function sortRows(rows: ResumenRow[], cfg: SortConfig | null): ResumenRow[] {
+  if (!cfg) return rows;
+  return [...rows].sort((a, b) => {
+    const av = a[cfg.key] ?? null;
+    const bv = b[cfg.key] ?? null;
+    if (av === null && bv === null) return 0;
+    if (av === null) return 1;
+    if (bv === null) return -1;
+    return cfg.dir === "asc" ? (av as number) - (bv as number) : (bv as number) - (av as number);
+  });
+}
+
+function SortBtn({
+  label, sortKey, cfg, onSort, center,
+}: {
+  label: string;
+  sortKey: SortKey;
+  cfg: SortConfig | null;
+  onSort: (k: SortKey) => void;
+  center?: boolean;
+}) {
+  const active = cfg?.key === sortKey;
+  const indicator = active ? (cfg!.dir === "asc" ? " ▲" : " ▼") : " ↕";
+  return (
+    <button
+      onClick={() => onSort(sortKey)}
+      className={`flex items-center gap-0.5 w-full font-medium text-[11px] tracking-wide ${center ? "justify-center" : "justify-end"}`}
+      style={{ color: active ? "#1E3A8A" : "#64748B", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+    >
+      {label}
+      <span style={{ fontSize: 9, opacity: active ? 1 : 0.5 }}>{indicator}</span>
+    </button>
+  );
 }
 
 function IndexRow({ row, slot, slotColor, isLast, onSelectIndex }: {
@@ -73,7 +115,7 @@ function IndexRow({ row, slot, slotColor, isLast, onSelectIndex }: {
 }) {
   const isActive = slot !== -1;
   const discColor = discountColor(row.discount);
-  const { todayPct, medianPct, sigmaLeftPct, sigmaWidthPct } = peBar(row["Today (P/E)"], row.median, row.min, row.max, row.stdDev);
+  const { todayPct, medianPct, sigmaLeftPct, sigmaWidthPct, lo, hi } = peBar(row["Today (P/E)"], row.median, row.min, row.max, row.stdDev);
 
   return (
     <tr
@@ -108,17 +150,17 @@ function IndexRow({ row, slot, slotColor, isLast, onSelectIndex }: {
       </td>
 
       {/* P/E Hoy */}
-      <td className="px-4 py-2.5 font-mono font-semibold" style={{ color: "#0F172A" }}>
+      <td className="px-4 py-2.5 text-center font-mono font-semibold" style={{ color: "#0F172A" }}>
         {row["Today (P/E)"] != null ? `${row["Today (P/E)"]!.toFixed(1)}x` : "—"}
       </td>
 
       {/* Mediana 10Y */}
-      <td className="px-4 py-2.5 font-mono" style={{ color: "#475569" }}>
+      <td className="px-4 py-2.5 text-center font-mono" style={{ color: "#475569" }}>
         {row.median != null ? `${row.median.toFixed(1)}x` : "—"}
       </td>
 
       {/* Descuento */}
-      <td className="px-4 py-2.5">
+      <td className="px-4 py-2.5 text-center">
         {row.discount != null ? (
           <span
             className="font-mono font-semibold text-[11px] px-2 py-0.5 rounded-full"
@@ -162,8 +204,8 @@ function IndexRow({ row, slot, slotColor, isLast, onSelectIndex }: {
           )}
         </div>
         <div className="flex justify-between mt-0.5 text-[10px]" style={{ color: "#94A3B8" }}>
-          <span>{row.min != null ? row.min.toFixed(0) : ""}</span>
-          <span>{row.max != null ? row.max.toFixed(0) : ""}</span>
+          <span>{lo != null ? lo.toFixed(1) : ""}</span>
+          <span>{hi != null ? hi.toFixed(1) : ""}</span>
         </div>
       </td>
     </tr>
@@ -171,6 +213,16 @@ function IndexRow({ row, slot, slotColor, isLast, onSelectIndex }: {
 }
 
 export default function ValuationTable({ data, onSelectIndex, selectedIndices }: Props) {
+  const [sortCfg, setSortCfg] = useState<SortConfig | null>(null);
+
+  function handleSort(key: SortKey) {
+    setSortCfg((prev) =>
+      prev?.key === key
+        ? { key, dir: prev.dir === "desc" ? "asc" : "desc" }
+        : { key, dir: "desc" }
+    );
+  }
+
   const dataMap = new Map(data.map((r) => [r.Index, r]));
   const ungrouped = data.filter((r) => !ALL_GROUPED.has(r.Index));
 
@@ -186,33 +238,35 @@ export default function ValuationTable({ data, onSelectIndex, selectedIndices }:
             Precio/Utilidad actual vs histórico (en moneda local) — click para graficar
           </p>
         </div>
-        <span className="text-xs font-mono px-2 py-1 rounded"
-          style={{ background: "rgba(43,92,224,0.08)", color: "#2B5CE0" }}
-        >
-          {data.length} índices
-        </span>
       </div>
 
       <div className="overflow-auto">
         <table className="w-full text-xs">
           <thead>
             <tr style={{ background: "#F0F4FA" }}>
-              {["Índice", "P/E Hoy", "Mediana 10Y", "Descuento", "Range ±1σ"].map((h) => (
-                <th
-                  key={h}
-                  className="px-4 py-2.5 text-left font-medium tracking-wide"
-                  style={{ color: "#64748B" }}
-                >
-                  {h}
-                </th>
-              ))}
+              <th className="px-4 py-2.5 text-left font-medium tracking-wide" style={{ color: "#64748B" }}>
+                Índice
+              </th>
+              <th className="px-4 py-2.5 text-center">
+                <SortBtn label="P/E Hoy" sortKey="Today (P/E)" cfg={sortCfg} onSort={handleSort} center />
+              </th>
+              <th className="px-4 py-2.5 text-center">
+                <SortBtn label="Mediana 10Y" sortKey="median" cfg={sortCfg} onSort={handleSort} center />
+              </th>
+              <th className="px-4 py-2.5 text-center">
+                <SortBtn label="Descuento" sortKey="discount" cfg={sortCfg} onSort={handleSort} center />
+              </th>
+              <th className="px-4 py-2.5 text-left font-medium tracking-wide" style={{ color: "#64748B" }}>
+                Range ±2σ
+              </th>
             </tr>
           </thead>
           <tbody>
             {INDEX_GROUPS.map((group) => {
-              const rows = group.indices
-                .map((idx) => dataMap.get(idx))
-                .filter((r): r is ResumenRow => r !== undefined);
+              const rows = sortRows(
+                group.indices.map((idx) => dataMap.get(idx)).filter((r): r is ResumenRow => r !== undefined),
+                sortCfg,
+              );
               if (rows.length === 0) return null;
               return (
                 <>
@@ -253,7 +307,7 @@ export default function ValuationTable({ data, onSelectIndex, selectedIndices }:
                     OTROS
                   </td>
                 </tr>
-                {ungrouped.map((row, i) => {
+                {sortRows(ungrouped, sortCfg).map((row, i) => {
                   const slot = selectedIndices.indexOf(row.Index);
                   return (
                     <IndexRow

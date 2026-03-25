@@ -97,15 +97,15 @@ export default function CompanyModal({ company, onClose }: Props) {
   ].filter((d): d is { name: string; value: number } => d.value !== null);
 
   const valuationRows = [
-    { label: "FV/EBITDA", cols: [n(company.Fv_ebitda_2024), n(company.Fv_ebitda_ltm), n(company.Fv_ebitda_2025e), n(company.Fv_ebitda_2026e), n(company.Fv_ebitda_2027e)] },
-    { label: "P/E",       cols: [n(company.pe_2024),        n(company.pe_ltm),         n(company.pe_2025e),        n(company.pe_2026e),        n(company.pe_2027e)] },
-    { label: "P/BV",      cols: [null,                      n(company.p_bv_ltm),       null,                       null,                       null] },
-    { label: "ROE",       cols: [null,                      n(company.roe_ltm),        null,                       n(company.roe_2026e),       null] },
+    { label: "FV/EBITDA", cols: [n(company.Fv_ebitda_ltm), n(company.Fv_ebitda_2026e), n(company.Fv_ebitda_2027e)] },
+    { label: "P/E",       cols: [n(company.pe_ltm),        n(company.pe_2026e),        n(company.pe_2027e)] },
+    { label: "P/BV",      cols: [n(company.p_bv_ltm),      null,                       null] },
+    { label: "ROE",       cols: [n(company.roe_ltm),       n(company.roe_2026e),       null] },
   ];
 
   const estimateRows = [
-    { label: "EBITDA",     cols: [n(company.ebitda_prev), n(company.ebitda_ltm), n(company.ebitda_2025e), n(company.ebitda_2026e), n(company.ebitda_2027e)] },
-    { label: "Net Income", cols: [n(company.net_income_prev), n(company.net_income_ltm), n(company.ni_2025e), n(company.ni_2026e), n(company.ni_2027e)] },
+    { label: "EBITDA",     cols: [n(company.ebitda_ltm), n(company.ebitda_2026e), n(company.ebitda_2027e)] },
+    { label: "Net Income", cols: [n(company.net_income_ltm), n(company.ni_2026e), n(company.ni_2027e)] },
   ];
 
   const roicLtm = n(company.roic_ltm);
@@ -116,7 +116,7 @@ export default function CompanyModal({ company, onClose }: Props) {
     { label: "P/CE LTM",       value: fmtX(n(company.p_ce_ltm)),                 color: "#7C3AED" },
   ];
 
-  const colHeaders = ["2024A", "LTM", "2025E", "2026E", "2027E"];
+  const colHeaders = ["LTM", "2026E", "2027E"];
 
   return (
     // Inline panel — no overlay, no fixed positioning
@@ -228,7 +228,7 @@ export default function CompanyModal({ company, onClose }: Props) {
               <thead>
                 <tr>
                   <th style={{ ...thStyle, textAlign: "left", paddingLeft: 0 }}>Item</th>
-                  {["Prev", "LTM", "2025E", "2026E", "2027E"].map((h) => <th key={h} style={thStyle}>{h}</th>)}
+                  {["LTM", "2026E", "2027E"].map((h) => <th key={h} style={thStyle}>{h}</th>)}
                 </tr>
               </thead>
               <tbody>

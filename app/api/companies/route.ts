@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
   const sector = searchParams.get("sector");
   const search = searchParams.get("search");
 
-  const filePath = path.join(process.cwd(), "data", "Companies", "companies.csv");
+  const filePath = path.join(process.cwd(), "data", "Stock_selection_Chile", "companies.csv");
 
   try {
     const content = fs.readFileSync(filePath, "utf-8");

@@ -78,6 +78,15 @@ const COMMODITY_GROUP_MAP: Record<string, CommodityGroup> = {
   "Ethereum (USD)": "Indices, Freight & Crypto",
 };
 
+// ── Name / ticker parser ──────────────────────────────────────────────────────
+// Handles: "Iron Ore (USD/t) [CN62SPOT KLSH Index]" → { name: "Iron Ore (USD/t)", ticker: "CN62SPOT KLSH Index" }
+// Falls back gracefully when no brackets present.
+function parseName(raw: string): { name: string; ticker: string | null } {
+  const m = raw.match(/^(.+?)\s*\[(.+?)\]$/);
+  if (m) return { name: m[1].trim(), ticker: m[2].trim() };
+  return { name: raw.trim(), ticker: null };
+}
+
 function toNum(v: string | undefined): number | null {
   if (!v || v.trim() === "" || v.trim() === "-" || v.trim() === "N/A") return null;
   const n = parseFloat(v.replace(/,/g, ""));
@@ -110,16 +119,21 @@ export async function GET() {
       dynamicTyping: false,
     });
 
-    // Dynamically derive all commodity columns (every column except 'Date')
-    const commNames = histRaw.length > 0
+    // Derive all commodity columns, parsing out Bloomberg tickers from headers
+    const commOriginals = histRaw.length > 0
       ? Object.keys(histRaw[0]).filter((c) => c !== "Date")
       : [];
+    const colMeta = commOriginals.map((orig) => ({ orig, ...parseName(orig) }));
+    const commNames = colMeta.map((c) => c.name); // clean display names
+    const tickerMap: Record<string, string | null> = Object.fromEntries(
+      colMeta.map((c) => [c.name, c.ticker])
+    );
     const totalRows = histRaw.length;
 
-    // Raw numeric values per commodity
+    // Raw numeric values per commodity (keyed by clean name, read via original header)
     const rawValues: Record<string, (number | null)[]> = {};
-    for (const name of commNames) {
-      rawValues[name] = histRaw.map((r) => toNum(r[name]));
+    for (const { orig, name } of colMeta) {
+      rawValues[name] = histRaw.map((r) => toNum(r[orig]));
     }
 
     // Forward-filled values
@@ -155,8 +169,28 @@ export async function GET() {
 
       const avg2026 = avg(vals2026);
 
+      // YTD 2026: (spot - ytdBase) / ytdBase * 100
+      // Base = last non-null Dec-2025 price, fallback to first non-null 2026 price
+      let ytdBase: number | null = null;
+      for (let i = histRaw.length - 1; i >= 0; i--) {
+        if (histRaw[i].Date?.startsWith("2025-12") && series[i] !== null) {
+          ytdBase = series[i]; break;
+        }
+      }
+      if (ytdBase === null) {
+        for (let i = 0; i < histRaw.length; i++) {
+          if (histRaw[i].Date?.startsWith("2026") && series[i] !== null) {
+            ytdBase = series[i]; break;
+          }
+        }
+      }
+      const ytdPct = ytdBase !== null && spot !== null && ytdBase > 0
+        ? ((spot - ytdBase) / ytdBase) * 100
+        : null;
+
       const group: CommodityGroup = COMMODITY_GROUP_MAP[name] ?? "Indices, Freight & Crypto";
-      return { name, group, spot, avg2026, avg2025, avg2024 };
+      const ticker = tickerMap[name] ?? null;
+      return { name, ticker, group, spot, ytdPct, avg2026, avg2025, avg2024 };
     });
 
     // Sort meta by group order, then alphabetically within group
@@ -198,16 +232,18 @@ export async function GET() {
     const projMap = new Map<
       string,
       {
+        ticker: string | null;
         spotCurrent: number | null;
         quarters: { quarter: string; fwd: number | null; analyst: number | null }[];
       }
     >();
 
     for (const row of projRaw) {
-      const name = row["Commodity"]?.trim();
+      const { name, ticker } = parseName(row["Commodity"]?.trim() ?? "");
       if (!name) continue;
       if (!projMap.has(name)) {
         projMap.set(name, {
+          ticker,
           spotCurrent: toNum(row["Spot Current"]),
           quarters: [],
         });

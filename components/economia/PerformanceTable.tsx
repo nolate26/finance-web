@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 interface TablaRow {
   Ticker: string;
   Index_Name: string;
@@ -22,16 +24,21 @@ interface Props {
 }
 
 const INDEX_GROUPS = [
+  { label: "MUNDO",  indices: ["MSCI World ACWI"] },
   { label: "LATAM",  indices: ["MSCI EM LatAm", "MSCI EM Small Cap", "IPSA (Chile)", "Bovespa (Brasil)", "Mexbol (Mexico)", "Merval (Argentina)", "Colcap (Colombia)", "BVL (Peru)", "SMLLBV (Brasil)"] },
   { label: "EEUU",   indices: ["Dow Jones (US)", "S&P 500 (US)", "Nasdaq 100 (US)", "Russell 2000 (US)"] },
   { label: "EUROPA", indices: ["Stoxx Europe 600", "FTSE 100 (UK)", "DAX (Alemania)", "CAC 40 (Francia)", "Swiss Market (Suiza)"] },
-  { label: "ASIA",   indices: ["Nikkei 225 (Japon)", "Topix Index (Japon)", "Hang Seng (Hong Kong)", "Hang Seng Tech (Hong Kong)", "CSI 300 (China)", "Kospi Index (Corea)"] },
-  { label: "OTROS",  indices: ["S&P/ASX 200 (Australia)", "Nifty 50 (India)"] },
+  { label: "ASIA",   indices: ["Nikkei 225 (Japon)", "Topix Index (Japon)", "Hang Seng (Hong Kong)", "Hang Seng Tech (Hong Kong)", "CSI 300 (China)", "Kospi Index (Corea)", "S&P/ASX 200 (Australia)", "Nifty 50 (India)"] },
 ];
 
 const ALL_GROUPED = new Set(INDEX_GROUPS.flatMap((g) => g.indices));
-
 const PERIODS = ["1W", "1M", "3M", "YTD", "1Y", "3Y", "5Y", "10Y"] as const;
+type Period = (typeof PERIODS)[number];
+type SortKey = "Price (Local)" | Period | "EV/EBITDA (Fwd 12m)" | "P/U (Fwd 12m)" | "ROE (Trailing)";
+interface SortConfig { key: SortKey; dir: "asc" | "desc" }
+
+// Column span: Index + Price + periods + EV/EBITDA + P/U + ROE
+const COL_SPAN = 2 + PERIODS.length + 3;
 
 function pctColor(val: string) {
   const n = parseFloat(val);
@@ -55,7 +62,6 @@ function pctCell(val: string) {
   );
 }
 
-/** For columns stored as raw percentage numbers (e.g. 11.9036 → +11.9%) */
 function rawPctCell(val: string) {
   const n = parseFloat(val);
   if (isNaN(n)) return <span style={{ color: "#64748B" }}>—</span>;
@@ -68,6 +74,64 @@ function rawPctCell(val: string) {
     >
       {display}
     </span>
+  );
+}
+
+function numVal(row: TablaRow, key: SortKey): number {
+  if (key === "Price (Local)") return row["Price (Local)"] ?? -Infinity;
+  if (key === "EV/EBITDA (Fwd 12m)") return row["EV/EBITDA (Fwd 12m)"] ?? -Infinity;
+  if (key === "P/U (Fwd 12m)") return row["P/U (Fwd 12m)"] ?? -Infinity;
+  if (key === "ROE (Trailing)") return parseFloat(row["ROE (Trailing)"]) ?? -Infinity;
+  // Period strings like "-2.7%"
+  const v = parseFloat(row[key as Period]);
+  return isNaN(v) ? -Infinity : v;
+}
+
+function sortRows(rows: TablaRow[], cfg: SortConfig | null): TablaRow[] {
+  if (!cfg) return rows;
+  return [...rows].sort((a, b) => {
+    const av = numVal(a, cfg.key);
+    const bv = numVal(b, cfg.key);
+    if (av === -Infinity && bv === -Infinity) return 0;
+    if (av === -Infinity) return 1;
+    if (bv === -Infinity) return -1;
+    return cfg.dir === "asc" ? av - bv : bv - av;
+  });
+}
+
+function SortBtn({
+  label, sortKey, cfg, onSort,
+}: {
+  label: string;
+  sortKey: SortKey;
+  cfg: SortConfig | null;
+  onSort: (k: SortKey) => void;
+}) {
+  const active = cfg?.key === sortKey;
+  const indicator = active ? (cfg!.dir === "asc" ? " ▲" : " ▼") : " ↕";
+  return (
+    <button
+      onClick={() => onSort(sortKey)}
+      className="flex items-center justify-center gap-0.5 w-full font-medium text-[11px] tracking-wide"
+      style={{ color: active ? "#1E3A8A" : "#64748B", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+    >
+      {label}
+      <span style={{ fontSize: 9, opacity: active ? 1 : 0.5 }}>{indicator}</span>
+    </button>
+  );
+}
+
+function GroupHeader({ label }: { label: string }) {
+  return (
+    <tr>
+      <td
+        colSpan={COL_SPAN}
+        className="px-4 py-1.5 text-[10px] font-bold tracking-widest uppercase sticky left-0"
+        style={{ background: "#EEF2FA", color: "#64748B", borderBottom: "1px solid rgba(15,23,42,0.07)" }}
+      >
+        {label}
+      </td>
+    </tr>
   );
 }
 
@@ -93,7 +157,7 @@ function DataRow({ row, isLast }: { row: TablaRow; isLast: boolean }) {
       >
         {row.Index_Name}
       </td>
-      <td className="px-4 py-2.5 text-right font-mono" style={{ color: "#475569" }}>
+      <td className="px-4 py-2.5 text-center font-mono" style={{ color: "#475569" }}>
         {typeof row["Price (Local)"] === "number"
           ? row["Price (Local)"] > 1000
             ? row["Price (Local)"].toLocaleString("en-US", { maximumFractionDigits: 0 })
@@ -101,41 +165,34 @@ function DataRow({ row, isLast }: { row: TablaRow; isLast: boolean }) {
           : "—"}
       </td>
       {PERIODS.map((p) => (
-        <td key={p} className="px-3 py-2.5 text-right">
+        <td key={p} className="px-3 py-2.5 text-center">
           {pctCell(row[p])}
         </td>
       ))}
-      <td className="px-4 py-2.5 text-right font-mono" style={{ color: "#475569" }}>
+      <td className="px-4 py-2.5 text-center font-mono" style={{ color: "#475569" }}>
         {row["EV/EBITDA (Fwd 12m)"] != null ? `${row["EV/EBITDA (Fwd 12m)"]}x` : "—"}
       </td>
-      <td className="px-4 py-2.5 text-right font-mono" style={{ color: "#475569" }}>
+      <td className="px-4 py-2.5 text-center font-mono" style={{ color: "#475569" }}>
         {row["P/U (Fwd 12m)"] != null ? `${row["P/U (Fwd 12m)"]}x` : "—"}
       </td>
-      <td className="px-4 py-2.5 text-right">
+      <td className="px-4 py-2.5 text-center">
         {row["ROE (Trailing)"] ? rawPctCell(row["ROE (Trailing)"]) : "—"}
       </td>
     </tr>
   );
 }
 
-// Subtitle row spanning all columns
-const COL_SPAN = 2 + PERIODS.length + 3; // Index + Price + periods + EV/EBITDA + P/U + ROE
-
-function GroupHeader({ label }: { label: string }) {
-  return (
-    <tr>
-      <td
-        colSpan={COL_SPAN}
-        className="px-4 py-1.5 text-[10px] font-bold tracking-widest uppercase sticky left-0"
-        style={{ background: "#EEF2FA", color: "#64748B", borderBottom: "1px solid rgba(15,23,42,0.07)" }}
-      >
-        {label}
-      </td>
-    </tr>
-  );
-}
-
 export default function PerformanceTable({ data }: Props) {
+  const [sortCfg, setSortCfg] = useState<SortConfig | null>(null);
+
+  function handleSort(key: SortKey) {
+    setSortCfg((prev) =>
+      prev?.key === key
+        ? { key, dir: prev.dir === "desc" ? "asc" : "desc" }
+        : { key, dir: "desc" }
+    );
+  }
+
   const dataMap = new Map(data.map((r) => [r.Index_Name, r]));
   const ungrouped = data.filter((r) => !ALL_GROUPED.has(r.Index_Name));
 
@@ -157,24 +214,31 @@ export default function PerformanceTable({ data }: Props) {
               >
                 Índice
               </th>
-              <th className="px-4 py-2.5 text-right font-medium" style={{ color: "#64748B" }}>
-                Price (Local)
+              <th className="px-4 py-2.5 text-center">
+                <SortBtn label="Price" sortKey="Price (Local)" cfg={sortCfg} onSort={handleSort} />
               </th>
               {PERIODS.map((p) => (
-                <th key={p} className="px-3 py-2.5 text-right font-medium" style={{ color: "#64748B" }}>
-                  {p}
+                <th key={p} className="px-3 py-2.5 text-center">
+                  <SortBtn label={p} sortKey={p} cfg={sortCfg} onSort={handleSort} />
                 </th>
               ))}
-              <th className="px-4 py-2.5 text-right font-medium" style={{ color: "#64748B" }}>EV/EBITDA (Fwd 12m)</th>
-              <th className="px-4 py-2.5 text-right font-medium" style={{ color: "#64748B" }}>P/U (Fwd 12m)</th>
-              <th className="px-4 py-2.5 text-right font-medium" style={{ color: "#64748B" }}>ROE (Trailing)</th>
+              <th className="px-4 py-2.5 text-center">
+                <SortBtn label="EV/EBITDA" sortKey="EV/EBITDA (Fwd 12m)" cfg={sortCfg} onSort={handleSort} />
+              </th>
+              <th className="px-4 py-2.5 text-center">
+                <SortBtn label="P/U" sortKey="P/U (Fwd 12m)" cfg={sortCfg} onSort={handleSort} />
+              </th>
+              <th className="px-4 py-2.5 text-center">
+                <SortBtn label="ROE" sortKey="ROE (Trailing)" cfg={sortCfg} onSort={handleSort} />
+              </th>
             </tr>
           </thead>
           <tbody>
             {INDEX_GROUPS.map((group) => {
-              const rows = group.indices
-                .map((name) => dataMap.get(name))
-                .filter((r): r is TablaRow => r !== undefined);
+              const rows = sortRows(
+                group.indices.map((name) => dataMap.get(name)).filter((r): r is TablaRow => r !== undefined),
+                sortCfg,
+              );
               if (rows.length === 0) return null;
               return (
                 <>
@@ -188,7 +252,7 @@ export default function PerformanceTable({ data }: Props) {
             {ungrouped.length > 0 && (
               <>
                 <GroupHeader key="hdr-ungrouped" label="OTROS" />
-                {ungrouped.map((row, i) => (
+                {sortRows(ungrouped, sortCfg).map((row, i) => (
                   <DataRow key={row.Index_Name} row={row} isLast={i === ungrouped.length - 1} />
                 ))}
               </>

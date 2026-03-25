@@ -29,6 +29,13 @@ function getColumns(country: string): { yieldCol: string; fxCol: string; fxLabel
       fxLabel: "DXY Index",
     };
   }
+  if (country === "European Union") {
+    return {
+      yieldCol: "European Union - 10Y Yield (%)",
+      fxCol: "European Union - EURUSD",
+      fxLabel: "EURUSD",
+    };
+  }
   return {
     yieldCol: `${country} - 10Y Yield (%)`,
     fxCol: `${country} - FX Spot`,

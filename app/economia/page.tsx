@@ -114,7 +114,9 @@ export default function EconomiaPage() {
             Global valuations, macro projections &amp; commodity prices
           </p>
         </div>
-        <div className="flex flex-col items-end gap-0.5">
+        <div
+          className="flex flex-col items-end gap-0.5 bg-white/80 backdrop-blur-sm p-2 rounded-md border border-slate-200"
+        >
           {data.updateDate && (
             <div className="flex items-center gap-1.5 text-xs font-mono" style={{ color: "#94A3B8" }}>
               <Calendar size={11} />

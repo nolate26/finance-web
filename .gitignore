@@ -14,5 +14,8 @@ next-env.d.ts
 .env.local
 .env.*.local
 
+# user uploads — generated at runtime, not committed
+public/uploads/
+
 # misc
 .DS_Store

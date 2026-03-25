@@ -1,10 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import CarteraChart from "@/components/fondos/CarteraChart";
 import CarteraTable from "@/components/fondos/CarteraTable";
 import FundReturnsTable from "@/components/fondos/FundReturnsTable";
 import { RefreshCw, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
+
+// ── Business-ordered fund names per region ────────────────────────────────────
+const FUND_ORDER: Record<"Chile" | "LATAM", string[]> = {
+  Chile: ["Pionero", "Moneda_Renta_Variable", "Orange"],
+  LATAM: ["Moneda_Latin_America_Equities_(LX)", "Moneda_Latin_America_Small_Cap_(LX)", "Glory", "Mercer"],
+};
 
 interface CarteraRow {
   company: string;
@@ -66,8 +71,13 @@ export default function FondosPage() {
       .then((r) => r.json())
       .then((d: { fondos: FondoMeta[] }) => {
         setFondosList(d.fondos);
-        const chileFunds = d.fondos.filter((f) => f.region === "Chile");
-        const latest = chileFunds.at(-1);
+        // Select most recent snapshot of the first business-ordered Chile fund
+        const firstChileName = FUND_ORDER.Chile.find((n) =>
+          d.fondos.some((f) => f.region === "Chile" && f.name === n)
+        );
+        const latest = firstChileName
+          ? d.fondos.filter((f) => f.name === firstChileName).sort((a, b) => b.date.localeCompare(a.date))[0]
+          : d.fondos.filter((f) => f.region === "Chile").at(-1);
         if (latest) setSelectedId(latest.id);
         setLoading(false);
       })
@@ -104,7 +114,9 @@ export default function FondosPage() {
 
   const selectedMeta = fondosList.find((f) => f.id === selectedId);
   const regionFunds = fondosList.filter((f) => f.region === region);
-  const uniqueNames = [...new Set(regionFunds.map((f) => f.name))];
+  // Business-ordered fund names: only include funds that actually exist in the API response
+  const availableNames = new Set(regionFunds.map((f) => f.name));
+  const uniqueNames = FUND_ORDER[region].filter((n) => availableNames.has(n));
   const selectedFundName = selectedMeta?.name ?? "";
   const snapshots = fondosList
     .filter((f) => f.name === selectedFundName)
@@ -146,8 +158,13 @@ export default function FondosPage() {
 
   function switchRegion(r: "Chile" | "LATAM") {
     setRegion(r);
-    const regionList = fondosList.filter((f) => f.region === r);
-    const latest = regionList.at(-1);
+    // Select most recent snapshot of the first business-ordered fund in the new region
+    const firstName = FUND_ORDER[r].find((n) =>
+      fondosList.some((f) => f.region === r && f.name === n)
+    );
+    const latest = firstName
+      ? fondosList.filter((f) => f.name === firstName).sort((a, b) => b.date.localeCompare(a.date))[0]
+      : fondosList.filter((f) => f.region === r).at(-1);
     if (latest) setSelectedId(latest.id);
   }
 
@@ -353,23 +370,12 @@ export default function FondosPage() {
             </select>
           </div>
 
-          {/* Table + Chart side-by-side on desktop */}
-          <div className="flex flex-col md:flex-row items-stretch gap-4 md:gap-6">
-            <div className="w-full md:w-1/2 md:h-full overflow-x-auto">
-              <CarteraTable
-                cartera={filteredCartera}
-                benchmark={fondoData.benchmark}
-                fundName={selectedFundName}
-              />
-            </div>
-            <div className="w-full md:w-1/2">
-              <CarteraChart
-                cartera={filteredCartera}
-                fondoName={`${fondoData.displayName} · ${fmtDate(fondoData.date)}`}
-                benchmark={fondoData.benchmark}
-              />
-            </div>
-          </div>
+          {/* Portfolio table — full width */}
+          <CarteraTable
+            cartera={filteredCartera}
+            benchmark={fondoData.benchmark}
+            fundName={selectedFundName}
+          />
         </>
       )}
 

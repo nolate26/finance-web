@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -18,8 +18,10 @@ import {
 
 interface HistMeta {
   name: string;
+  ticker?: string | null;
   group?: string;
   spot: number | null;
+  ytdPct: number | null;
   avg2026: number | null;
   avg2025: number | null;
   avg2024: number | null;
@@ -38,6 +40,7 @@ interface Quarter {
 
 interface ProjEntry {
   name: string;
+  ticker?: string | null;
   spotCurrent: number | null;
   quarters: Quarter[];
 }
@@ -50,6 +53,16 @@ interface Props {
 type Tab = "historical" | "projections";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+function fmtDateTick(v: unknown): string {
+  if (typeof v !== "string" || v.length < 7) return "";
+  const parts = v.split("-");
+  const month = parseInt(parts[1], 10) - 1;
+  if (isNaN(month) || month < 0 || month > 11) return "";
+  return `${MONTHS_SHORT[month]} ${parts[0]}`;
+}
 
 function fmtNum(v: number | null, dec = 0): string {
   if (v === null) return "—";
@@ -120,6 +133,16 @@ const ProjTooltip = ({ active, payload, label }: any) => {
 
 // ── Historical sub-panel ──────────────────────────────────────────────────────
 
+function fmtYtd(v: number | null): React.ReactNode {
+  if (v === null) return <span style={{ color: "#CBD5E1" }}>—</span>;
+  const color = v > 0 ? "#059669" : v < 0 ? "#DC2626" : "#64748B";
+  return (
+    <span style={{ fontFamily: "monospace", fontSize: 11, fontWeight: 700, color }}>
+      {v > 0 ? "+" : ""}{v.toFixed(1)}%
+    </span>
+  );
+}
+
 function HistoricalPanel({
   meta,
   series,
@@ -128,6 +151,7 @@ function HistoricalPanel({
   series: SeriesRow[];
 }) {
   const [selected, setSelected] = useState<string>(meta[0]?.name ?? "");
+  const [query, setQuery] = useState<string>("");
 
   const chartData = series.map((row) => ({
     date: row.date as string,
@@ -137,100 +161,145 @@ function HistoricalPanel({
   const selectedMeta = meta.find((m) => m.name === selected);
   const dec = smartDec(selectedMeta?.spot ?? null);
 
+  // Search filter
+  const q = query.toLowerCase().trim();
+  const filteredMeta = q ? meta.filter((r) => r.name.toLowerCase().includes(q)) : meta;
+
   return (
     <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 2fr" }}>
       {/* Left — table */}
       <div className="card" style={{ overflow: "hidden", padding: 0, alignSelf: "start" }}>
-        <div
-          style={{
-            padding: "8px 14px",
-            borderBottom: "1px solid rgba(15,23,42,0.07)",
-            fontSize: 10,
-            fontWeight: 600,
-            color: "#64748B",
-            letterSpacing: "0.08em",
-          }}
-        >
-          COMMODITY — SELECT TO CHART
+        {/* Search bar */}
+        <div style={{ padding: "8px 14px", borderBottom: "1px solid rgba(15,23,42,0.07)" }}>
+          <input
+            type="text"
+            placeholder="Search commodities…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            style={{
+              width: "100%",
+              fontSize: 11,
+              padding: "5px 10px",
+              borderRadius: 6,
+              border: "1px solid rgba(15,23,42,0.12)",
+              background: "#F8FAFC",
+              color: "#334155",
+              outline: "none",
+            }}
+          />
         </div>
         <div style={{ maxHeight: 600, overflowY: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ background: "#F0F4FA", position: "sticky", top: 0, zIndex: 1 }}>
               <th style={{ padding: "7px 14px", textAlign: "left",  fontSize: 9, fontWeight: 600, color: "#64748B", letterSpacing: "0.08em" }}>COMMODITY</th>
-              <th style={{ padding: "7px 10px", textAlign: "right", fontSize: 9, fontWeight: 600, color: "#0F172A", letterSpacing: "0.08em" }}>SPOT</th>
-              <th style={{ padding: "7px 10px", textAlign: "right", fontSize: 9, fontWeight: 600, color: "#2B5CE0", letterSpacing: "0.08em" }}>AVG 26</th>
-              <th style={{ padding: "7px 10px", textAlign: "right", fontSize: 9, fontWeight: 600, color: "#475569", letterSpacing: "0.08em" }}>AVG 25</th>
-              <th style={{ padding: "7px 10px", textAlign: "right", fontSize: 9, fontWeight: 600, color: "#94A3B8", letterSpacing: "0.08em" }}>AVG 24</th>
+              <th style={{ padding: "7px 10px", textAlign: "center", fontSize: 9, fontWeight: 600, color: "#0F172A", letterSpacing: "0.08em" }}>SPOT</th>
+              <th style={{ padding: "7px 10px", textAlign: "center", fontSize: 9, fontWeight: 600, color: "#475569", letterSpacing: "0.08em" }}>YTD</th>
+              <th style={{ padding: "7px 10px", textAlign: "center", fontSize: 9, fontWeight: 600, color: "#2B5CE0", letterSpacing: "0.08em" }}>AVG 26</th>
+              <th style={{ padding: "7px 10px", textAlign: "center", fontSize: 9, fontWeight: 600, color: "#475569", letterSpacing: "0.08em" }}>AVG 25</th>
+              <th style={{ padding: "7px 10px", textAlign: "center", fontSize: 9, fontWeight: 600, color: "#94A3B8", letterSpacing: "0.08em" }}>AVG 24</th>
             </tr>
           </thead>
           <tbody>
-            {meta.map((row, i) => {
-              const isActive = row.name === selected;
-              const showGroupHeader = i === 0 || row.group !== meta[i - 1].group;
-              return (
-                <>
-                  {showGroupHeader && row.group && (
-                    <tr key={`grp-${row.group}`}>
-                      <td
-                        colSpan={5}
-                        style={{
-                          padding: "5px 14px",
-                          fontSize: 9,
-                          fontWeight: 700,
-                          letterSpacing: "0.08em",
-                          textTransform: "uppercase",
-                          color: "#2B5CE0",
-                          background: "#EEF2FA",
-                          borderBottom: "1px solid rgba(43,92,224,0.10)",
-                        }}
-                      >
-                        {row.group}
-                      </td>
-                    </tr>
-                  )}
-                  <tr
-                    key={row.name}
-                    onClick={() => setSelected(row.name)}
-                    style={{
-                      cursor: "pointer",
-                      background: isActive ? "rgba(43,92,224,0.06)" : i % 2 === 0 ? "transparent" : "rgba(15,23,42,0.02)",
-                      borderBottom: "1px solid rgba(15,23,42,0.05)",
-                      transition: "background 0.1s",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isActive) (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.03)";
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isActive) (e.currentTarget as HTMLElement).style.background = i % 2 === 0 ? "transparent" : "rgba(15,23,42,0.02)";
-                    }}
-                  >
-                    <td style={{ padding: "9px 14px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        {isActive && (
-                          <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#2B5CE0", flexShrink: 0 }} />
-                        )}
-                        <span style={{ fontSize: 12, fontWeight: 600, color: isActive ? "#1E3A8A" : "#334155" }}>
-                          {row.name}
-                        </span>
-                      </div>
-                    </td>
-                    <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: "#0F172A" }}>
-                      {fmtNum(row.spot, smartDec(row.spot))}
-                    </td>
-                    <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 600, color: "#2B5CE0" }}>
-                      {fmtNum(row.avg2026, smartDec(row.avg2026))}
-                    </td>
-                    <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: "monospace", fontSize: 11, color: "#475569" }}>
-                      {fmtNum(row.avg2025, smartDec(row.avg2025))}
-                    </td>
-                    <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: "monospace", fontSize: 11, color: "#94A3B8" }}>
-                      {fmtNum(row.avg2024, smartDec(row.avg2024))}
+            {(() => {
+              // Group-aware rendering with search: only show group header if group has matches
+              const groups = Array.from(new Set(filteredMeta.map((r) => r.group ?? "Other")));
+              if (q && filteredMeta.length === 0) {
+                return (
+                  <tr>
+                    <td colSpan={6} style={{ padding: "20px 14px", textAlign: "center", fontSize: 12, color: "#94A3B8" }}>
+                      No commodities match &quot;{query}&quot;
                     </td>
                   </tr>
-                </>
-              );
-            })}
+                );
+              }
+              return groups.map((grp) => {
+                const groupRows = filteredMeta.filter((r) => (r.group ?? "Other") === grp);
+                return (
+                  <React.Fragment key={grp}>
+                    <tr>
+                      <td
+                        colSpan={6}
+                        style={{
+                          padding: "6px 14px",
+                          fontSize: 10,
+                          fontWeight: 800,
+                          letterSpacing: "0.10em",
+                          textTransform: "uppercase",
+                          color: "#1E293B",
+                          background: "#E2E8F0",
+                          borderBottom: "1px solid rgba(15,23,42,0.12)",
+                        }}
+                      >
+                        {grp}
+                      </td>
+                    </tr>
+                    {groupRows.map((row, i) => {
+                      const isActive = row.name === selected;
+                      return (
+                        <tr
+                          key={row.name}
+                          onClick={() => setSelected(row.name)}
+                          style={{
+                            cursor: "pointer",
+                            background: isActive ? "rgba(43,92,224,0.06)" : i % 2 === 0 ? "transparent" : "rgba(15,23,42,0.02)",
+                            borderBottom: "1px solid rgba(15,23,42,0.05)",
+                            transition: "background 0.1s",
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!isActive) (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.03)";
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!isActive) (e.currentTarget as HTMLElement).style.background = i % 2 === 0 ? "transparent" : "rgba(15,23,42,0.02)";
+                          }}
+                        >
+                          <td style={{ padding: "8px 14px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                              {isActive && (
+                                <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#2B5CE0", flexShrink: 0 }} />
+                              )}
+                              <span style={{ fontSize: 12, fontWeight: 600, color: isActive ? "#1E3A8A" : "#334155" }}>
+                                {row.name}
+                              </span>
+                              {row.ticker && (
+                                <span style={{
+                                  fontSize: 9,
+                                  fontFamily: "monospace",
+                                  color: "#94A3B8",
+                                  background: "#F1F5F9",
+                                  border: "1px solid #E2E8F0",
+                                  borderRadius: 4,
+                                  padding: "1px 5px",
+                                  letterSpacing: "0.04em",
+                                  flexShrink: 0,
+                                }}>
+                                  {row.ticker}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td style={{ padding: "8px 10px", textAlign: "center", fontFamily: "monospace", fontSize: 13, fontWeight: 800, color: "#0F172A" }}>
+                            {fmtNum(row.spot, smartDec(row.spot))}
+                          </td>
+                          <td style={{ padding: "8px 10px", textAlign: "center" }}>
+                            {fmtYtd(row.ytdPct)}
+                          </td>
+                          <td style={{ padding: "8px 10px", textAlign: "center", fontFamily: "monospace", fontSize: 11, fontWeight: 600, color: "#2B5CE0" }}>
+                            {fmtNum(row.avg2026, smartDec(row.avg2026))}
+                          </td>
+                          <td style={{ padding: "8px 10px", textAlign: "center", fontFamily: "monospace", fontSize: 11, color: "#475569" }}>
+                            {fmtNum(row.avg2025, smartDec(row.avg2025))}
+                          </td>
+                          <td style={{ padding: "8px 10px", textAlign: "center", fontFamily: "monospace", fontSize: 11, color: "#94A3B8" }}>
+                            {fmtNum(row.avg2024, smartDec(row.avg2024))}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              });
+            })()}
           </tbody>
         </table>
         </div>
@@ -246,7 +315,23 @@ function HistoricalPanel({
           style={{ borderColor: "rgba(15,23,42,0.07)" }}
         >
           <div>
-            <h3 className="text-sm font-semibold" style={{ color: "#0F172A" }}>{selected}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold" style={{ color: "#0F172A" }}>{selected}</h3>
+              {selectedMeta?.ticker && (
+                <span style={{
+                  fontSize: 10,
+                  fontFamily: "monospace",
+                  color: "#94A3B8",
+                  background: "#F1F5F9",
+                  border: "1px solid #E2E8F0",
+                  borderRadius: 4,
+                  padding: "1px 6px",
+                  letterSpacing: "0.04em",
+                }}>
+                  {selectedMeta.ticker}
+                </span>
+              )}
+            </div>
             <p className="text-xs mt-0.5" style={{ color: "#64748B" }}>
               5-year daily history · Spot: <span className="font-mono font-semibold" style={{ color: "#2B5CE0" }}>{fmtNum(selectedMeta?.spot ?? null, dec)}</span>
             </p>
@@ -259,17 +344,19 @@ function HistoricalPanel({
             </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+              <LineChart data={chartData} margin={{ top: 8, right: 0, left: 0, bottom: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.06)" />
                 <XAxis
                   dataKey="date"
+                  scale="point"
+                  padding={{ left: 0, right: 0 }}
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   tick={{ fill: "#64748B", fontSize: 11, fontFamily: "monospace", dy: 10 } as any}
                   axisLine={false}
                   tickLine={false}
                   interval="preserveStartEnd"
-                  minTickGap={40}
-                  tickFormatter={(v: unknown) => (typeof v === "string" && v.length > 0 ? v : "")}
+                  minTickGap={60}
+                  tickFormatter={fmtDateTick}
                 />
                 <YAxis
                   domain={["auto", "auto"]}
@@ -363,13 +450,28 @@ function ProjectionsPanel({ projections }: { projections: ProjEntry[] }) {
                   }}
                 >
                   <td style={{ padding: "9px 14px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                       {isActive && (
                         <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#2B5CE0", flexShrink: 0 }} />
                       )}
                       <span style={{ fontSize: 12, fontWeight: 600, color: isActive ? "#1E3A8A" : "#334155" }}>
                         {row.name}
                       </span>
+                      {row.ticker && (
+                        <span style={{
+                          fontSize: 9,
+                          fontFamily: "monospace",
+                          color: "#94A3B8",
+                          background: "#F1F5F9",
+                          border: "1px solid #E2E8F0",
+                          borderRadius: 4,
+                          padding: "1px 5px",
+                          letterSpacing: "0.04em",
+                          flexShrink: 0,
+                        }}>
+                          {row.ticker}
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: "#0F172A" }}>
@@ -392,7 +494,23 @@ function ProjectionsPanel({ projections }: { projections: ProjEntry[] }) {
           style={{ borderColor: "rgba(15,23,42,0.07)" }}
         >
           <div>
-            <h3 className="text-sm font-semibold" style={{ color: "#0F172A" }}>{selected}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold" style={{ color: "#0F172A" }}>{selected}</h3>
+              {entry?.ticker && (
+                <span style={{
+                  fontSize: 10,
+                  fontFamily: "monospace",
+                  color: "#94A3B8",
+                  background: "#F1F5F9",
+                  border: "1px solid #E2E8F0",
+                  borderRadius: 4,
+                  padding: "1px 6px",
+                  letterSpacing: "0.04em",
+                }}>
+                  {entry.ticker}
+                </span>
+              )}
+            </div>
             <p className="text-xs mt-0.5" style={{ color: "#64748B" }}>
               Quarterly projections · Spot: <span className="font-mono font-semibold" style={{ color: "#2B5CE0" }}>{fmtNum(spotVal, spotDec)}</span>
             </p>
