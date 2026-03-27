@@ -2,8 +2,31 @@
 
 import { useEffect, useState } from "react";
 import CarteraTable from "@/components/fondos/CarteraTable";
-import FundReturnsTable from "@/components/fondos/FundReturnsTable";
+import ReturnsDashboard from "@/components/fondos/ReturnsDashboard";
+import PerformanceAttribution from "@/components/fondos/PerformanceAttribution";
 import { RefreshCw, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
+
+// ── Fund → rentabilidades page_num mapping ───────────────────────────────────
+const FUND_PAGE_MAP: Record<string, string> = {
+  Pionero: "1",
+  Moneda_Renta_Variable: "2",
+  Orange: "2",
+  "Moneda_Latin_America_Small_Cap_(LX)": "3",
+  "Moneda_Latin_America_Equities_(LX)": "4",
+  Glory: "4",
+  Mercer: "4",
+};
+
+// ── Fund → Performance Attribution fund identifier (matches FUND column in CSV)
+const FUND_ATTR_MAP: Record<string, string> = {
+  Pionero: "PIONERO",
+  Moneda_Renta_Variable: "MRV",
+  Orange: "ORANGE",
+  "Moneda_Latin_America_Small_Cap_(LX)": "MSC - Moneda Small Cap Latinoamérica",
+  "Moneda_Latin_America_Equities_(LX)": "MLE",
+  Glory: "GLORY",
+  Mercer: "MERCER",
+};
 
 // ── Business-ordered fund names per region ────────────────────────────────────
 const FUND_ORDER: Record<"Chile" | "LATAM", string[]> = {
@@ -22,19 +45,6 @@ interface CarteraRow {
   delta1M: number | null;
 }
 
-interface ReturnRow {
-  clase: string;
-  ytd: number | null;
-  oneYear: number | null;
-  threeYears: number | null;
-  fiveYears: number | null;
-  tenYears: number | null;
-  sinceInception: number | null;
-  moic: number | null;
-  alpha: number | null;
-  stdDev3Y: number | null;
-}
-
 interface FondoMeta {
   id: string;
   name: string;
@@ -46,8 +56,6 @@ interface FondoMeta {
 interface FondoData extends FondoMeta {
   benchmark: string;
   cartera: CarteraRow[];
-  returns: ReturnRow[];
-  reportDate: string | null;
   error?: string;
 }
 
@@ -65,6 +73,7 @@ export default function FondosPage() {
   const [loadingData, setLoadingData] = useState(false);
   const [region, setRegion] = useState<"Chile" | "LATAM">("Chile");
   const [sectorFilter, setSectorFilter] = useState<string>("All");
+  const [activeTab, setActiveTab] = useState<"cartera" | "returns" | "attribution">("returns");
 
   useEffect(() => {
     fetch("/api/fondos")
@@ -230,160 +239,197 @@ export default function FondosPage() {
         })}
       </div>
 
-      {/* Error state */}
-      {fondoData?.error && (
-        <div
-          className="flex items-center gap-3 px-4 py-3 rounded-lg mb-5"
-          style={{ background: "rgba(220,38,38,0.06)", border: "1px solid rgba(220,38,38,0.15)" }}
-        >
-          <AlertCircle size={16} style={{ color: "#DC2626" }} />
-          <p className="text-sm" style={{ color: "#DC2626" }}>
-            Could not load fund {fondoData.displayName}: {fondoData.error}
-          </p>
-        </div>
+      {/* Internal tab navigation */}
+      <div
+        className="flex items-center gap-1 mb-5 p-1 rounded-lg"
+        style={{ background: "rgba(15,23,42,0.04)", border: "1px solid rgba(15,23,42,0.08)", width: "fit-content" }}
+      >
+        {([
+          { key: "returns", label: "Returns" },
+          { key: "cartera", label: "Cartera" },
+          { key: "attribution", label: "Performance Attribution" },
+        ] as const).map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setActiveTab(key)}
+            className="px-5 py-1.5 rounded-md text-sm font-semibold transition-all"
+            style={{
+              background: activeTab === key ? "rgba(43,92,224,0.10)" : "transparent",
+              color: activeTab === key ? "#1E3A8A" : "#64748B",
+              border: activeTab === key ? "1px solid rgba(43,92,224,0.25)" : "1px solid transparent",
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Returns tab ───────────────────────────────────────────────────────── */}
+      {activeTab === "returns" && (
+        <ReturnsDashboard
+          pageNum={FUND_PAGE_MAP[selectedFundName] ?? "1"}
+          fundDisplayName={selectedMeta?.displayName ?? selectedFundName}
+        />
       )}
 
-      {/* Loading */}
-      {loadingData && (
-        <div className="flex items-center justify-center h-64">
-          <div className="flex flex-col items-center gap-4">
-            <div
-              className="w-8 h-8 rounded-full border-2 animate-spin"
-              style={{ borderColor: "rgba(43,92,224,0.15)", borderTopColor: "#2B5CE0" }}
-            />
-            <p className="text-sm font-mono" style={{ color: "#64748B" }}>
-              Loading {selectedMeta?.displayName}...
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Content */}
-      {fondoData && !loadingData && fondoData.cartera.length > 0 && (
+      {/* ── Cartera tab ───────────────────────────────────────────────────────── */}
+      {activeTab === "cartera" && (
         <>
-          {/* Returns table — top */}
-          <FundReturnsTable
-            returns={fondoData.returns}
-            fundName={fondoData.displayName}
-            reportDate={fondoData.reportDate}
-          />
-
-          {/* Portfolio date stepper */}
-          {snapshots.length > 1 && (
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-xs font-medium mr-1" style={{ color: "#94A3B8" }}>Portfolio snapshot:</span>
-              <div
-                className="flex items-center rounded-md overflow-hidden"
-                style={{ border: "1px solid #E2E8F0", background: "#F8FAFC" }}
-              >
-                <button
-                  onClick={handlePrevDate}
-                  disabled={currentSnapshotIdx >= snapshots.length - 1}
-                  title="Previous (older)"
-                  className="flex items-center justify-center transition-colors"
-                  style={{
-                    width: 32, height: 32,
-                    borderRight: "1px solid #E2E8F0",
-                    color: currentSnapshotIdx >= snapshots.length - 1 ? "#CBD5E1" : "#475569",
-                    cursor: currentSnapshotIdx >= snapshots.length - 1 ? "not-allowed" : "pointer",
-                    background: "transparent",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (currentSnapshotIdx < snapshots.length - 1)
-                      (e.currentTarget as HTMLButtonElement).style.color = "#1E3A8A";
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLButtonElement).style.color =
-                      currentSnapshotIdx >= snapshots.length - 1 ? "#CBD5E1" : "#475569";
-                  }}
-                >
-                  <ChevronLeft size={15} />
-                </button>
-
-                <select
-                  value={selectedId}
-                  onChange={(e) => setSelectedId(e.target.value)}
-                  style={{
-                    border: "none", outline: "none", background: "transparent",
-                    fontSize: 13, fontWeight: 500, color: "#334155",
-                    padding: "0 10px", height: 32, cursor: "pointer",
-                    appearance: "none", WebkitAppearance: "none",
-                    minWidth: 140, textAlign: "center",
-                  }}
-                >
-                  {snapshots.map((s) => (
-                    <option key={s.id} value={s.id}>{fmtDate(s.date)}</option>
-                  ))}
-                </select>
-
-                <button
-                  onClick={handleNextDate}
-                  disabled={currentSnapshotIdx <= 0}
-                  title="Next (newer)"
-                  className="flex items-center justify-center transition-colors"
-                  style={{
-                    width: 32, height: 32,
-                    borderLeft: "1px solid #E2E8F0",
-                    color: currentSnapshotIdx <= 0 ? "#CBD5E1" : "#475569",
-                    cursor: currentSnapshotIdx <= 0 ? "not-allowed" : "pointer",
-                    background: "transparent",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (currentSnapshotIdx > 0)
-                      (e.currentTarget as HTMLButtonElement).style.color = "#1E3A8A";
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLButtonElement).style.color =
-                      currentSnapshotIdx <= 0 ? "#CBD5E1" : "#475569";
-                  }}
-                >
-                  <ChevronRight size={15} />
-                </button>
-              </div>
-              <span className="text-xs font-mono" style={{ color: "#94A3B8" }}>
-                {currentSnapshotIdx + 1} / {snapshots.length}
-              </span>
+          {/* Error state */}
+          {fondoData?.error && (
+            <div
+              className="flex items-center gap-3 px-4 py-3 rounded-lg mb-5"
+              style={{ background: "rgba(220,38,38,0.06)", border: "1px solid rgba(220,38,38,0.15)" }}
+            >
+              <AlertCircle size={16} style={{ color: "#DC2626" }} />
+              <p className="text-sm" style={{ color: "#DC2626" }}>
+                Could not load fund {fondoData.displayName}: {fondoData.error}
+              </p>
             </div>
           )}
 
-          {/* Macro Sector filter */}
-          <div className="flex items-center gap-2 mb-4">
-            <span className="text-xs font-medium" style={{ color: "#94A3B8" }}>Macro Sector:</span>
-            <select
-              value={sectorFilter}
-              onChange={(e) => setSectorFilter(e.target.value)}
-              style={{
-                padding: "5px 10px",
-                borderRadius: 7,
-                border: "1px solid rgba(15,23,42,0.10)",
-                background: "#F8FAFF",
-                color: sectorFilter === "All" ? "#64748B" : "#0F172A",
-                fontSize: 13,
-                cursor: "pointer",
-                outline: "none",
-                minWidth: 160,
-              }}
-            >
-              {allSectors.map((s) => (
-                <option key={s} value={s}>{s === "All" ? "All Sectors" : s}</option>
-              ))}
-            </select>
-          </div>
+          {/* Loading */}
+          {loadingData && (
+            <div className="flex items-center justify-center h-64">
+              <div className="flex flex-col items-center gap-4">
+                <div
+                  className="w-8 h-8 rounded-full border-2 animate-spin"
+                  style={{ borderColor: "rgba(43,92,224,0.15)", borderTopColor: "#2B5CE0" }}
+                />
+                <p className="text-sm font-mono" style={{ color: "#64748B" }}>
+                  Loading {selectedMeta?.displayName}...
+                </p>
+              </div>
+            </div>
+          )}
 
-          {/* Portfolio table — full width */}
-          <CarteraTable
-            cartera={filteredCartera}
-            benchmark={fondoData.benchmark}
-            fundName={selectedFundName}
-          />
+          {fondoData && !loadingData && fondoData.cartera.length > 0 && (
+            <>
+              {/* Portfolio date stepper */}
+              {snapshots.length > 1 && (
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-xs font-medium mr-1" style={{ color: "#94A3B8" }}>Portfolio snapshot:</span>
+                  <div
+                    className="flex items-center rounded-md overflow-hidden"
+                    style={{ border: "1px solid #E2E8F0", background: "#F8FAFC" }}
+                  >
+                    <button
+                      onClick={handlePrevDate}
+                      disabled={currentSnapshotIdx >= snapshots.length - 1}
+                      title="Previous (older)"
+                      className="flex items-center justify-center transition-colors"
+                      style={{
+                        width: 32, height: 32,
+                        borderRight: "1px solid #E2E8F0",
+                        color: currentSnapshotIdx >= snapshots.length - 1 ? "#CBD5E1" : "#475569",
+                        cursor: currentSnapshotIdx >= snapshots.length - 1 ? "not-allowed" : "pointer",
+                        background: "transparent",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (currentSnapshotIdx < snapshots.length - 1)
+                          (e.currentTarget as HTMLButtonElement).style.color = "#1E3A8A";
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.color =
+                          currentSnapshotIdx >= snapshots.length - 1 ? "#CBD5E1" : "#475569";
+                      }}
+                    >
+                      <ChevronLeft size={15} />
+                    </button>
+
+                    <select
+                      value={selectedId}
+                      onChange={(e) => setSelectedId(e.target.value)}
+                      style={{
+                        border: "none", outline: "none", background: "transparent",
+                        fontSize: 13, fontWeight: 500, color: "#334155",
+                        padding: "0 10px", height: 32, cursor: "pointer",
+                        appearance: "none", WebkitAppearance: "none",
+                        minWidth: 140, textAlign: "center",
+                      }}
+                    >
+                      {snapshots.map((s) => (
+                        <option key={s.id} value={s.id}>{fmtDate(s.date)}</option>
+                      ))}
+                    </select>
+
+                    <button
+                      onClick={handleNextDate}
+                      disabled={currentSnapshotIdx <= 0}
+                      title="Next (newer)"
+                      className="flex items-center justify-center transition-colors"
+                      style={{
+                        width: 32, height: 32,
+                        borderLeft: "1px solid #E2E8F0",
+                        color: currentSnapshotIdx <= 0 ? "#CBD5E1" : "#475569",
+                        cursor: currentSnapshotIdx <= 0 ? "not-allowed" : "pointer",
+                        background: "transparent",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (currentSnapshotIdx > 0)
+                          (e.currentTarget as HTMLButtonElement).style.color = "#1E3A8A";
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.color =
+                          currentSnapshotIdx <= 0 ? "#CBD5E1" : "#475569";
+                      }}
+                    >
+                      <ChevronRight size={15} />
+                    </button>
+                  </div>
+                  <span className="text-xs font-mono" style={{ color: "#94A3B8" }}>
+                    {currentSnapshotIdx + 1} / {snapshots.length}
+                  </span>
+                </div>
+              )}
+
+              {/* Macro Sector filter */}
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-xs font-medium" style={{ color: "#94A3B8" }}>Macro Sector:</span>
+                <select
+                  value={sectorFilter}
+                  onChange={(e) => setSectorFilter(e.target.value)}
+                  style={{
+                    padding: "5px 10px",
+                    borderRadius: 7,
+                    border: "1px solid rgba(15,23,42,0.10)",
+                    background: "#F8FAFF",
+                    color: sectorFilter === "All" ? "#64748B" : "#0F172A",
+                    fontSize: 13,
+                    cursor: "pointer",
+                    outline: "none",
+                    minWidth: 160,
+                  }}
+                >
+                  {allSectors.map((s) => (
+                    <option key={s} value={s}>{s === "All" ? "All Sectors" : s}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Portfolio table */}
+              <CarteraTable
+                cartera={filteredCartera}
+                benchmark={fondoData.benchmark}
+                fundName={selectedFundName}
+              />
+            </>
+          )}
+
+          {fondoData && !loadingData && fondoData.cartera.length === 0 && !fondoData.error && (
+            <div className="flex items-center justify-center h-64 card">
+              <p style={{ color: "#64748B" }}>No portfolio data found for this fund</p>
+            </div>
+          )}
         </>
       )}
 
-      {/* Empty state */}
-      {fondoData && !loadingData && fondoData.cartera.length === 0 && !fondoData.error && (
-        <div className="flex items-center justify-center h-64 card">
-          <p style={{ color: "#64748B" }}>No data found for this fund</p>
-        </div>
+      {/* ── Attribution tab ───────────────────────────────────────────────────── */}
+      {activeTab === "attribution" && (
+        <PerformanceAttribution
+          fundId={FUND_ATTR_MAP[selectedFundName]}
+          displayName={selectedMeta?.displayName ?? selectedFundName}
+        />
       )}
     </div>
   );

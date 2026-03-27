@@ -4,8 +4,18 @@ import fs from "fs";
 import Papa from "papaparse";
 
 const FONDOS_DIR = path.join(process.cwd(), "data", "Fondos", "Fondos_record");
-const RETORNOS_FILE = path.join(process.cwd(), "data", "Fondos", "Retornos", "retornos_limpio.csv");
 const SECTORS_FILE = path.join(process.cwd(), "data", "Companies", "companies_sectors.csv");
+const RENTABILIDADES_DIR = path.join(process.cwd(), "data", "Fondos", "Rentabilidades");
+
+const FUND_PAGE_MAP: Record<string, string> = {
+  Pionero: "1",
+  Moneda_Renta_Variable: "2",
+  Orange: "2",
+  "Moneda_Latin_America_Small_Cap_(LX)": "3",
+  "Moneda_Latin_America_Equities_(LX)": "4",
+  Glory: "4",
+  Mercer: "4",
+};
 
 const DISPLAY_NAMES: Record<string, string> = {
   Moneda_Renta_Variable: "MRV",
@@ -15,16 +25,6 @@ const DISPLAY_NAMES: Record<string, string> = {
   Orange: "Orange",
   Glory: "Glory",
   Mercer: "Mercer",
-};
-
-const FUND_RETORNOS_MAP: Record<string, string> = {
-  Pionero: "Pionero (CLP)",
-  Moneda_Renta_Variable: "MRV (CLP)",
-  Orange: "ORANGE",
-  Glory: "GLORY (USD)",
-  Mercer: "MERCER (EUR)",
-  "Moneda_Latin_America_Equities_(LX)": "MLE",
-  "Moneda_Latin_America_Small_Cap_(LX)": "MSC",
 };
 
 const CHILE_FUNDS = new Set(["Pionero", "Moneda_Renta_Variable", "Orange"]);
@@ -61,19 +61,6 @@ export interface CarteraRow {
   delta1M: number | null;
 }
 
-export interface ReturnRow {
-  clase: string;
-  ytd: number | null;
-  oneYear: number | null;
-  threeYears: number | null;
-  fiveYears: number | null;
-  tenYears: number | null;
-  sinceInception: number | null;
-  moic: number | null;
-  alpha: number | null;
-  stdDev3Y: number | null;
-}
-
 export interface FondoMeta {
   id: string;
   name: string;
@@ -85,15 +72,153 @@ export interface FondoMeta {
 export interface FondoData extends FondoMeta {
   benchmark: string;
   cartera: CarteraRow[];
-  returns: ReturnRow[];
-  reportDate: string | null;
   error?: string;
+  timeseries?: Record<string, string | number | null>[];
+  fundMeta?: Record<string, { group: string; isMoneda: boolean }>;
 }
 
-function toNum(v: string | undefined): number | null {
-  if (!v || v.trim() === "" || v.trim() === "-") return null;
-  const n = parseFloat(v);
-  return isNaN(n) ? null : n;
+function parsePercentAggressive(v: string | undefined): number | null {
+  if (!v || v.trim() === "" || v.trim() === "—") return null;
+  const clean = v
+    .trim()
+    .replace(/â/g, "-")
+    .replace(/[\u2212\u2013\u2014\uFE63\uFF0D]/g, "-")
+    .replace(/%/g, "")
+    .replace(/,/g, "")
+    .trim();
+  if (!clean || /^-+$/.test(clean)) return null;
+  const n = parseFloat(clean);
+  return Number.isNaN(n) ? null : n / 100;
+}
+
+function getLatestRentabilidadesFile(): { file: string; date: string } | null {
+  try {
+    const parsed = fs
+      .readdirSync(RENTABILIDADES_DIR)
+      .filter((f) => f.endsWith(".csv"))
+      .map((f) => {
+        const m = f.match(/informe_rentabilidades[-_](\d{4}-\d{2}-\d{2})\.csv/i);
+        return m ? { file: path.join(RENTABILIDADES_DIR, f), date: m[1] } : null;
+      })
+      .filter(Boolean) as { file: string; date: string }[];
+    if (parsed.length === 0) return null;
+    return parsed.sort((a, b) => b.date.localeCompare(a.date))[0];
+  } catch {
+    return null;
+  }
+}
+
+function getRentabilidadesFilesForYear(year: string): { file: string; date: string }[] {
+  try {
+    const matched: { file: string; date: string }[] = [];
+    const filenames = fs.readdirSync(RENTABILIDADES_DIR);
+
+    for (const filename of filenames) {
+      const match = filename.match(/informe_rentabilidades_(\d{4}-\d{2}-\d{2})\.csv/);
+      if (!match) continue;
+      const extractedDate = match[1];
+      if (!extractedDate.startsWith(year)) continue;
+      matched.push({
+        file: path.join(RENTABILIDADES_DIR, filename),
+        date: extractedDate,
+      });
+    }
+
+    return matched.sort((a, b) => a.date.localeCompare(b.date));
+  } catch {
+    return [];
+  }
+}
+
+function selectChartFunds(rows: Record<string, string>[]): { fund: string; group: string; isMoneda: boolean }[] {
+  const selected: { fund: string; group: string; isMoneda: boolean }[] = [];
+  const seen = new Set<string>();
+
+  for (const row of rows) {
+    const fund = row["FUND"]?.trim() ?? "";
+    const group = row["group"]?.trim() ?? "";
+    const isMoneda =
+      group === "Moneda" ||
+      (group === "Other Moneda Funds Returns" && (fund === "Glory" || fund === "Mercer"));
+    if (isMoneda && fund && !seen.has(fund)) {
+      selected.push({ fund, group: "Moneda", isMoneda: true });
+      seen.add(fund);
+    }
+  }
+
+  let peerCount = 0;
+  for (const row of rows) {
+    const fund = row["FUND"]?.trim() ?? "";
+    const group = row["group"]?.trim() ?? "";
+    if (group.startsWith("Peer") && fund && !seen.has(fund) && peerCount < 4) {
+      selected.push({ fund, group: "Peer Group", isMoneda: false });
+      seen.add(fund);
+      peerCount++;
+    }
+  }
+
+  let indexCount = 0;
+  for (const row of rows) {
+    const fund = row["FUND"]?.trim() ?? "";
+    const group = row["group"]?.trim() ?? "";
+    if (group === "Indices" && fund && !seen.has(fund) && indexCount < 3) {
+      selected.push({ fund, group: "Indices", isMoneda: false });
+      seen.add(fund);
+      indexCount++;
+    }
+  }
+
+  return selected;
+}
+
+function buildRentabilidadesTimeseries(
+  pageNum: string
+): {
+  timeseries: Record<string, string | number | null>[];
+  fundMeta: Record<string, { group: string; isMoneda: boolean }>;
+} {
+  const latest = getLatestRentabilidadesFile();
+  if (!latest) return { timeseries: [], fundMeta: {} };
+
+  const latestContent = fs.readFileSync(latest.file, "utf-8");
+  const latestRows = Papa.parse<Record<string, string>>(latestContent, {
+    header: true,
+    skipEmptyLines: true,
+  }).data.filter((row) => row["page_num"]?.trim() === pageNum);
+
+  const chartFunds = selectChartFunds(latestRows);
+  const fundSet = new Set(chartFunds.map((f) => f.fund));
+
+  const fundMeta: Record<string, { group: string; isMoneda: boolean }> = {};
+  for (const f of chartFunds) {
+    fundMeta[f.fund] = { group: f.group, isMoneda: f.isMoneda };
+  }
+
+  const year = latest.date.substring(0, 4);
+  const yearFiles = getRentabilidadesFilesForYear(year);
+
+  const timeseries = yearFiles.map(({ file, date }) => {
+    const content = fs.readFileSync(file, "utf-8");
+    const rows = Papa.parse<Record<string, string>>(content, {
+      header: true,
+      skipEmptyLines: true,
+    }).data;
+
+    const point: Record<string, string | number | null> = { date };
+    for (const fund of fundSet) point[fund] = null;
+
+    for (const row of rows) {
+      if (row["page_num"]?.trim() !== pageNum) continue;
+      const fund = row["FUND"]?.trim() ?? "";
+      if (fundSet.has(fund)) {
+        point[fund] = parsePercentAggressive(row["YTD"]);
+      }
+    }
+
+    return point;
+  });
+
+  return { timeseries, fundMeta };
 }
 
 // Build company (lowercase) → portfolioPct lookup from a snapshot file
@@ -135,7 +260,6 @@ function findClosestSnapshot(
   );
   if (candidates.length === 0) return null;
 
-  // Pick the one whose date is closest to target
   let best: (FondoMeta & { file: string }) | null = null;
   let bestDiff = Infinity;
   for (const s of candidates) {
@@ -165,36 +289,6 @@ function loadSectors(): Record<string, string> {
     return map;
   } catch {
     return {};
-  }
-}
-
-// Load retornos for a given fund name
-function loadReturns(fundName: string): { rows: ReturnRow[]; reportDate: string | null } {
-  const retornosKey = FUND_RETORNOS_MAP[fundName];
-  if (!retornosKey) return { rows: [], reportDate: null };
-  try {
-    const content = fs.readFileSync(RETORNOS_FILE, "utf-8");
-    const { data } = Papa.parse<Record<string, string>>(content, {
-      header: true,
-      skipEmptyLines: true,
-    });
-    const filtered = data.filter((r) => r["Fondo"]?.trim() === retornosKey);
-    const reportDate = filtered[0]?.["Fecha_Reporte"]?.trim() ?? null;
-    const rows = filtered.map((r) => ({
-      clase: r["Clase"]?.trim() ?? "",
-      ytd: toNum(r["YTD"]),
-      oneYear: toNum(r["1_Year"]),
-      threeYears: toNum(r["3_Years"]),
-      fiveYears: toNum(r["5_Years"]),
-      tenYears: toNum(r["10_Years"]),
-      sinceInception: toNum(r["Since_Inception"]),
-      moic: toNum(r["MOIC_x"]),
-      alpha: toNum(r["Alpha"]),
-      stdDev3Y: toNum(r["DesvEstandar_3Y"]),
-    }));
-    return { rows, reportDate };
-  } catch {
-    return { rows: [], reportDate: null };
   }
 }
 
@@ -243,7 +337,6 @@ function parseCSV(
 
   const sectorMap = loadSectors();
 
-  // Build historical weight maps (null-safe: returns {} if no snapshot found)
   const file1W = findClosestSnapshot(meta.name, meta.date, 7, allSnapshots);
   const file1M = findClosestSnapshot(meta.name, meta.date, 30, allSnapshots);
   const weights1W = file1W ? buildWeightMap(file1W) : {};
@@ -259,12 +352,8 @@ function parseCSV(
       const sector = sectorMap[key] ?? "Other";
       const currentPct = parseFloat(r[portfolioCol]) || 0;
 
-      const delta1W = has1W
-        ? currentPct - (weights1W[key] ?? 0)
-        : null;
-      const delta1M = has1M
-        ? currentPct - (weights1M[key] ?? 0)
-        : null;
+      const delta1W = has1W ? currentPct - (weights1W[key] ?? 0) : null;
+      const delta1M = has1M ? currentPct - (weights1M[key] ?? 0) : null;
 
       return {
         company,
@@ -278,9 +367,7 @@ function parseCSV(
       };
     });
 
-  const { rows: returns, reportDate } = loadReturns(meta.name);
-
-  return { ...meta, benchmark: benchmarkName, cartera, returns, reportDate };
+  return { ...meta, benchmark: benchmarkName, cartera };
 }
 
 export async function GET(request: Request) {
@@ -304,11 +391,16 @@ export async function GET(request: Request) {
     try {
       const { file, ...meta } = match;
       const data = parseCSV(file, meta, available);
-      return NextResponse.json(data);
+      const pageNum = FUND_PAGE_MAP[meta.name];
+      const { timeseries, fundMeta } = pageNum
+        ? buildRentabilidadesTimeseries(pageNum)
+        : { timeseries: [], fundMeta: {} };
+
+      return NextResponse.json({ ...data, timeseries, fundMeta });
     } catch (err) {
       const { file: _f, ...meta } = match;
       return NextResponse.json({
-        ...meta, benchmark: "", cartera: [], returns: [], reportDate: null, error: String(err),
+        ...meta, benchmark: "", cartera: [], error: String(err),
       });
     }
   } catch (error) {
