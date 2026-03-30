@@ -4,7 +4,8 @@ import fs from "fs";
 import Papa from "papaparse";
 
 const FONDOS_DIR = path.join(process.cwd(), "data", "Fondos", "Fondos_record");
-const SECTORS_FILE = path.join(process.cwd(), "data", "Companies", "companies_sectors.csv");
+const CHILE_INDUSTRIES_FILE = path.join(process.cwd(), "data", "Fondos", "industry", "companies_sectors.csv");
+const LATAM_INDUSTRIES_FILE = path.join(process.cwd(), "data", "Fondos", "industry", "latam_universe_with_gics.csv");
 const RENTABILIDADES_DIR = path.join(process.cwd(), "data", "Fondos", "Rentabilidades");
 
 const FUND_PAGE_MAP: Record<string, string> = {
@@ -30,25 +31,34 @@ const DISPLAY_NAMES: Record<string, string> = {
 const CHILE_FUNDS = new Set(["Pionero", "Moneda_Renta_Variable", "Orange"]);
 
 const MACRO_SECTOR_MAP: Record<string, string> = {
-  "Acero":          "Materials",
-  "Explosivos":     "Materials",
-  "Forestal":       "Materials",
-  "Min. Metal":     "Materials",
-  "Min. No-Metal":  "Materials",
-  "Alimentos":      "Consumer",
-  "Bebidas":        "Consumer",
-  "Salmones y Pesca": "Consumer",
-  "Retail":         "Consumer",
-  "Bancos":         "Financials",
-  "Grup. Financ.":  "Financials",
-  "Seguros y Salud":"Financials",
-  "Construcción":   "Industrials",
-  "Transp y puerto":"Industrials",
-  "Conglomerados":  "Industrials",
-  "Electrico":      "Utilities & Tech",
-  "Telecom":        "Utilities & Tech",
-  "Tecnología":     "Utilities & Tech",
+  "Acero":              "Materials",
+  "Explosivos":         "Materials",
+  "Forestal":           "Materials",
+  "Min. Metal":         "Materials",
+  "Min. No-Metal":      "Materials",
+  "Alimentos":          "Consumer",
+  "Bebidas":            "Consumer",
+  "Salmones y Pesca":   "Consumer",
+  "Retail":             "Consumer",
+  "Bancos":             "Financials",
+  "Grup. Financ.":      "Financials",
+  "AFP":                "Financials",
+  "Seguros y Salud":    "Financials",
+  "Construcción":       "Industrials",
+  "Transp y puerto":    "Industrials",
+  "Conglomerados":      "Industrials",
+  "Electrico":          "Utilities & Tech",
+  "Telecom":            "Utilities & Tech",
+  "Tecnología":         "Utilities & Tech",
 };
+
+export interface SectorSummary {
+  sector: string;
+  fundWeight: number;
+  benchWeight: number;
+  activeWeight: number;
+  count: number;
+}
 
 export interface CarteraRow {
   company: string;
@@ -72,6 +82,7 @@ export interface FondoMeta {
 export interface FondoData extends FondoMeta {
   benchmark: string;
   cartera: CarteraRow[];
+  sectorSummary: SectorSummary[];
   error?: string;
   timeseries?: Record<string, string | number | null>[];
   fundMeta?: Record<string, { group: string; isMoneda: boolean }>;
@@ -81,7 +92,7 @@ function parsePercentAggressive(v: string | undefined): number | null {
   if (!v || v.trim() === "" || v.trim() === "—") return null;
   const clean = v
     .trim()
-    .replace(/â/g, "-")
+    .replace(/â/g, "-")
     .replace(/[\u2212\u2013\u2014\uFE63\uFF0D]/g, "-")
     .replace(/%/g, "")
     .replace(/,/g, "")
@@ -272,10 +283,10 @@ function findClosestSnapshot(
   return best?.file ?? null;
 }
 
-// Build company → sector lookup
-function loadSectors(): Record<string, string> {
+// Load Chile sector dictionary: company (lowercase) → micro-sector
+function loadChileIndustries(): Record<string, string> {
   try {
-    const content = fs.readFileSync(SECTORS_FILE, "utf-8");
+    const content = fs.readFileSync(CHILE_INDUSTRIES_FILE, "utf-8");
     const { data } = Papa.parse<Record<string, string>>(content, {
       header: true,
       skipEmptyLines: true,
@@ -290,6 +301,45 @@ function loadSectors(): Record<string, string> {
   } catch {
     return {};
   }
+}
+
+// Load LATAM GICS dictionary: company (uppercase) → GICS industry
+function loadLatamIndustries(): Record<string, string> {
+  try {
+    const content = fs.readFileSync(LATAM_INDUSTRIES_FILE, "utf-8");
+    const { data } = Papa.parse<Record<string, string>>(content, {
+      header: true,
+      skipEmptyLines: true,
+    });
+    const map: Record<string, string> = {};
+    for (const row of data) {
+      const company = row["Company"]?.trim();
+      const industry = row["Industry"]?.trim();
+      if (company && industry) map[company.toUpperCase()] = industry;
+    }
+    return map;
+  } catch {
+    return {};
+  }
+}
+
+// Aggregate cartera rows into sector summaries
+function buildSectorSummary(cartera: CarteraRow[]): SectorSummary[] {
+  const groups: Record<string, { fundWeight: number; benchWeight: number; count: number }> = {};
+  for (const row of cartera) {
+    const s = row.macroSector || "Unclassified";
+    if (!groups[s]) groups[s] = { fundWeight: 0, benchWeight: 0, count: 0 };
+    groups[s].fundWeight += row.portfolioPct;
+    groups[s].benchWeight += row.benchmarkPct;
+    groups[s].count += 1;
+  }
+  return Object.entries(groups).map(([sector, g]) => ({
+    sector,
+    fundWeight: g.fundWeight,
+    benchWeight: g.benchWeight,
+    activeWeight: g.fundWeight - g.benchWeight,
+    count: g.count,
+  }));
 }
 
 function getAvailableFondos(): (FondoMeta & { file: string })[] {
@@ -335,7 +385,8 @@ function parseCSV(
 
   const benchmarkName = benchmarkCol.replace(/^%\s*/i, "").trim() || "Benchmark";
 
-  const sectorMap = loadSectors();
+  const isChile = CHILE_FUNDS.has(meta.name);
+  const industryMap = isChile ? loadChileIndustries() : loadLatamIndustries();
 
   const file1W = findClosestSnapshot(meta.name, meta.date, 7, allSnapshots);
   const file1M = findClosestSnapshot(meta.name, meta.date, 30, allSnapshots);
@@ -348,26 +399,33 @@ function parseCSV(
     .filter((r) => r[companyCol]?.trim())
     .map((r) => {
       const company = r[companyCol].trim();
-      const key = company.toLowerCase();
-      const sector = sectorMap[key] ?? "Other";
-      const currentPct = parseFloat(r[portfolioCol]) || 0;
+      // Chile uses lowercase keys; LATAM uses uppercase keys
+      const lookupKey = isChile ? company.toLowerCase() : company.toUpperCase();
+      const rawSector = industryMap[lookupKey] ?? "Unclassified";
+      // Chile: map micro-sector → macro-sector; LATAM: GICS industry is already the right level
+      const macroSector = isChile
+        ? (MACRO_SECTOR_MAP[rawSector] ?? "Other")
+        : rawSector;
 
-      const delta1W = has1W ? currentPct - (weights1W[key] ?? 0) : null;
-      const delta1M = has1M ? currentPct - (weights1M[key] ?? 0) : null;
+      const currentPct = parseFloat(r[portfolioCol]) || 0;
+      const delta1W = has1W ? currentPct - (weights1W[company.toLowerCase()] ?? 0) : null;
+      const delta1M = has1M ? currentPct - (weights1M[company.toLowerCase()] ?? 0) : null;
 
       return {
         company,
         portfolioPct: currentPct,
         benchmarkPct: parseFloat(r[benchmarkCol]) || 0,
         overweight: parseFloat(r[overweightCol]) || 0,
-        sector,
-        macroSector: MACRO_SECTOR_MAP[sector] ?? "Other",
+        sector: rawSector,
+        macroSector,
         delta1W,
         delta1M,
       };
     });
 
-  return { ...meta, benchmark: benchmarkName, cartera };
+  const sectorSummary = buildSectorSummary(cartera);
+
+  return { ...meta, benchmark: benchmarkName, cartera, sectorSummary };
 }
 
 export async function GET(request: Request) {
@@ -400,7 +458,7 @@ export async function GET(request: Request) {
     } catch (err) {
       const { file: _f, ...meta } = match;
       return NextResponse.json({
-        ...meta, benchmark: "", cartera: [], error: String(err),
+        ...meta, benchmark: "", cartera: [], sectorSummary: [], error: String(err),
       });
     }
   } catch (error) {

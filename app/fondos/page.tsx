@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import CarteraTable from "@/components/fondos/CarteraTable";
+import CarteraView from "@/components/fondos/CarteraView";
 import ReturnsDashboard from "@/components/fondos/ReturnsDashboard";
 import PerformanceAttribution from "@/components/fondos/PerformanceAttribution";
 import { RefreshCw, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
@@ -53,9 +53,18 @@ interface FondoMeta {
   region: "Chile" | "LATAM";
 }
 
+interface SectorSummary {
+  sector: string;
+  fundWeight: number;
+  benchWeight: number;
+  activeWeight: number;
+  count: number;
+}
+
 interface FondoData extends FondoMeta {
   benchmark: string;
   cartera: CarteraRow[];
+  sectorSummary: SectorSummary[];
   error?: string;
 }
 
@@ -72,7 +81,6 @@ export default function FondosPage() {
   const [loading, setLoading] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
   const [region, setRegion] = useState<"Chile" | "LATAM">("Chile");
-  const [sectorFilter, setSectorFilter] = useState<string>("All");
   const [activeTab, setActiveTab] = useState<"cartera" | "returns" | "attribution">("returns");
 
   useEffect(() => {
@@ -97,7 +105,6 @@ export default function FondosPage() {
     if (!selectedId) return;
     setLoadingData(true);
     setFondoData(null);
-    setSectorFilter("All");
     fetch(`/api/fondos?fondo=${encodeURIComponent(selectedId)}`)
       .then((r) => r.json())
       .then((d: FondoData) => {
@@ -130,18 +137,6 @@ export default function FondosPage() {
   const snapshots = fondosList
     .filter((f) => f.name === selectedFundName)
     .sort((a, b) => b.date.localeCompare(a.date));
-
-  // Unique macro-sectors in this portfolio
-  const allSectors = fondoData
-    ? ["All", ...Array.from(new Set(fondoData.cartera.map((r) => r.macroSector).filter(Boolean))).sort()]
-    : ["All"];
-
-  // Filtered cartera
-  const filteredCartera = fondoData
-    ? sectorFilter === "All"
-      ? fondoData.cartera
-      : fondoData.cartera.filter((r) => r.macroSector === sectorFilter)
-    : [];
 
   // snapshots is newest-first; idx 0 = most recent
   const currentSnapshotIdx = snapshots.findIndex((s) => s.id === selectedId);
@@ -383,33 +378,10 @@ export default function FondosPage() {
                 </div>
               )}
 
-              {/* Macro Sector filter */}
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-xs font-medium" style={{ color: "#94A3B8" }}>Macro Sector:</span>
-                <select
-                  value={sectorFilter}
-                  onChange={(e) => setSectorFilter(e.target.value)}
-                  style={{
-                    padding: "5px 10px",
-                    borderRadius: 7,
-                    border: "1px solid rgba(15,23,42,0.10)",
-                    background: "#F8FAFF",
-                    color: sectorFilter === "All" ? "#64748B" : "#0F172A",
-                    fontSize: 13,
-                    cursor: "pointer",
-                    outline: "none",
-                    minWidth: 160,
-                  }}
-                >
-                  {allSectors.map((s) => (
-                    <option key={s} value={s}>{s === "All" ? "All Sectors" : s}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Portfolio table */}
-              <CarteraTable
-                cartera={filteredCartera}
+              {/* Sector allocation + drill-down */}
+              <CarteraView
+                sectorSummary={fondoData.sectorSummary ?? []}
+                cartera={fondoData.cartera}
                 benchmark={fondoData.benchmark}
                 fundName={selectedFundName}
               />

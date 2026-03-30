@@ -124,6 +124,15 @@ function StoryChart({ data }: { data: HistoryPoint[] }) {
             }}
           />
           <Legend wrapperStyle={{ fontSize: 10, paddingTop: 4 }} />
+          {/* Bar must come before Line in JSX so SVG paints the line on top of the bars */}
+          <Bar yAxisId="right" dataKey="totalEffect" name="Total Effect" isAnimationActive={false}>
+            {data.map((entry, i) => (
+              <Cell
+                key={`cell-${i}`}
+                fill={(entry.totalEffect ?? 0) >= 0 ? "#10B981" : "#EF4444"}
+              />
+            ))}
+          </Bar>
           <Line
             yAxisId="left"
             type="monotone"
@@ -135,14 +144,6 @@ function StoryChart({ data }: { data: HistoryPoint[] }) {
             connectNulls
             isAnimationActive={false}
           />
-          <Bar yAxisId="right" dataKey="totalEffect" name="Total Effect" isAnimationActive={false}>
-            {data.map((entry, i) => (
-              <Cell
-                key={`cell-${i}`}
-                fill={(entry.totalEffect ?? 0) >= 0 ? "#10B981" : "#EF4444"}
-              />
-            ))}
-          </Bar>
         </ComposedChart>
       </ResponsiveContainer>
     </div>
@@ -204,18 +205,48 @@ function ConvictionMatrix({ rows }: { rows: AttributionRow[] }) {
   const yMin = Math.min(...yVals) - PAD;
   const yMax = Math.max(...yVals) + PAD;
 
-  // Quadrant labels: corners of the plot area
-  const quadrants = [
-    { x: xMax, y: yMax, label: "HIGH CONVICTION · POSITIVE α", anchor: "end",   fill: "#10B981" },
-    { x: xMin, y: yMax, label: "LOW CONVICTION · POSITIVE α",  anchor: "start", fill: "#10B981" },
-    { x: xMax, y: yMin, label: "HIGH CONVICTION · NEGATIVE α", anchor: "end",   fill: "#EF4444" },
-    { x: xMin, y: yMin, label: "LOW CONVICTION · NEGATIVE α",  anchor: "start", fill: "#EF4444" },
+  // CSS pixel offsets for the 4 watermarks, accounting for:
+  //   container padding: 12px top, 16px left, 8px bottom
+  //   chart SVG margin:  top 20, right 30, bottom 50, left 70
+  const CHART_T = 12 + 20 + 8;  // ~40px from container top  → inside top edge
+  const CHART_B = 8  + 50 + 8;  // ~66px from container bottom → inside bottom edge
+  const CHART_L = 16 + 70 + 6;  // ~92px from container left  → past the Y-axis
+  const CHART_R = 16 + 30 + 4;  // ~50px from container right → inside right edge
+
+  const quadrantWatermarks = [
+    { top: CHART_T, right: CHART_R, text: "OW · POSITIVE α",  color: "#86EFAC", align: "right" as const },
+    { top: CHART_T, left: CHART_L,  text: "UW · POSITIVE α",  color: "#86EFAC", align: "left"  as const },
+    { bottom: CHART_B, right: CHART_R, text: "OW · NEGATIVE α", color: "#FCA5A5", align: "right" as const },
+    { bottom: CHART_B, left: CHART_L,  text: "UW · NEGATIVE α", color: "#FCA5A5", align: "left"  as const },
   ];
 
   return (
-    <div style={{ height: 560, padding: "12px 16px 8px" }}>
+    <div style={{ height: 560, padding: "12px 16px 8px", position: "relative" }}>
+      {/* Quadrant watermarks — absolute over the chart, pointer-events:none */}
+      {quadrantWatermarks.map(({ text, color, align, ...pos }) => (
+        <div
+          key={text}
+          style={{
+            position: "absolute",
+            pointerEvents: "none",
+            textAlign: align,
+            ...pos,
+          }}
+        >
+          <span style={{
+            fontSize: 8,
+            fontWeight: 700,
+            letterSpacing: "0.12em",
+            color,
+            opacity: 0.6,
+          }}>
+            {text}
+          </span>
+        </div>
+      ))}
+
       <ResponsiveContainer width="100%" height="100%">
-        <ScatterChart margin={{ top: 24, right: 40, bottom: 32, left: 16 }}>
+        <ScatterChart margin={{ top: 20, right: 30, bottom: 50, left: 70 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
           <XAxis
             type="number"
@@ -229,7 +260,7 @@ function ConvictionMatrix({ rows }: { rows: AttributionRow[] }) {
             label={{
               value: "Active Weight →",
               position: "insideBottomRight",
-              offset: -4,
+              offset: -8,
               style: { fontSize: 10, fill: "#94A3B8" },
             }}
           />
@@ -242,11 +273,12 @@ function ConvictionMatrix({ rows }: { rows: AttributionRow[] }) {
             axisLine={{ stroke: "#E2E8F0" }}
             tickLine={false}
             domain={[yMin, yMax]}
+            width={64}
             label={{
               value: "Alpha (Total Effect) →",
               angle: -90,
-              position: "insideTopLeft",
-              offset: 16,
+              position: "insideLeft",
+              offset: 14,
               style: { fontSize: 10, fill: "#94A3B8" },
             }}
           />
@@ -255,20 +287,6 @@ function ConvictionMatrix({ rows }: { rows: AttributionRow[] }) {
           {/* Quadrant dividers */}
           <ReferenceLine x={0} stroke="#64748B" strokeDasharray="4 3" strokeWidth={1.5} />
           <ReferenceLine y={0} stroke="#64748B" strokeDasharray="4 3" strokeWidth={1.5} />
-
-          {/* Quadrant corner labels via reference lines with labels */}
-          {quadrants.map(({ x, y, label, anchor, fill }) => (
-            <ReferenceLine
-              key={label}
-              x={x}
-              stroke="none"
-              label={{
-                value: label,
-                position: x === xMax ? "insideTopRight" : "insideTopLeft",
-                style: { fontSize: 8, fill, fontWeight: 600, letterSpacing: "0.06em" },
-              }}
-            />
-          ))}
 
           <Scatter data={valid} isAnimationActive={false}>
             {valid.map((entry, i) => (

@@ -138,10 +138,19 @@ export async function GET(request: Request) {
     };
   });
 
+  // Filter history to the current year only so the StoryChart shows a true YTD view
+  // without the prior-year December entry creating an artificial drop at chart start.
+  const currentYear = current.date.substring(0, 4);
+  const filteredHistory: Record<string, HistoryPoint[]> = {};
+  for (const [security, points] of Object.entries(history)) {
+    const yearPoints = points.filter((p) => p.date.startsWith(currentYear));
+    if (yearPoints.length > 0) filteredHistory[security] = yearPoints;
+  }
+
   return NextResponse.json({
     fund,
     currentDate: current.date,
     currentPeriod,
-    history,
+    history: filteredHistory,
   });
 }
