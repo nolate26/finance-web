@@ -113,7 +113,7 @@ export default function CompanyTable({
 
   return (
     <div className="card" style={{ overflow: "hidden" }}>
-      <div className="overflow-x-auto overflow-y-auto relative h-[calc(100vh-200px)] w-full">
+      <div className="overflow-x-auto w-full">
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
           <thead className="sticky top-0 z-10">
             <tr style={{ background: "#F0F4FA" }}>

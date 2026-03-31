@@ -127,19 +127,15 @@ function selectChartFunds(rows: RentabilidadRow[]): (FundMeta & { fund: string }
     if (r.isMoneda) result.push({ fund: r.fund, group: r.group, isMoneda: true });
   }
 
-  let peerCount = 0;
   for (const r of rows) {
-    if (!r.isMoneda && r.group.startsWith("Peer") && peerCount < 4) {
+    if (!r.isMoneda && r.group.startsWith("Peer")) {
       result.push({ fund: r.fund, group: r.group, isMoneda: false });
-      peerCount++;
     }
   }
 
-  let idxCount = 0;
   for (const r of rows) {
-    if (r.group === "Indices" && idxCount < 3) {
+    if (r.group === "Indices") {
       result.push({ fund: r.fund, group: r.group, isMoneda: false });
-      idxCount++;
     }
   }
 

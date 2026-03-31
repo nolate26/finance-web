@@ -11,6 +11,7 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
+  LabelList,
   ResponsiveContainer,
   ScatterChart,
   Scatter,
@@ -80,14 +81,39 @@ const COLS = [
 ];
 const NCOLS = COLS.length;
 
+// ── Bar value label — rendered inside the bar, hidden when too small ──────────
+function BarValueLabel({
+  x, y, width, height, value,
+}: {
+  x?: number; y?: number; width?: number; height?: number; value?: number | null;
+}) {
+  if (!value || value === 0 || Math.abs(height ?? 0) < 16) return null;
+  const xPos = (x ?? 0) + (width ?? 0) / 2;
+  const yPos = (y ?? 0) + (height ?? 0) / 2;
+  return (
+    <text
+      x={xPos}
+      y={yPos}
+      fill="#FFFFFF"
+      textAnchor="middle"
+      dominantBaseline="central"
+      fontSize={10}
+      fontWeight={700}
+      style={{ textShadow: "0px 1px 2px rgba(0,0,0,0.8)" }}
+    >
+      {fmtPct(value, 2)}
+    </text>
+  );
+}
+
 // ── Drill-down chart ──────────────────────────────────────────────────────────
 
 function StoryChart({ data }: { data: HistoryPoint[] }) {
   if (data.length === 0) return null;
   return (
-    <div style={{ height: 220, padding: "8px 16px 0" }}>
+    <div style={{ height: 230, padding: "8px 16px 0" }}>
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data} margin={{ top: 8, right: 40, bottom: 4, left: 0 }}>
+        <ComposedChart data={data} margin={{ top: 12, right: 40, bottom: 8, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
           <XAxis
             dataKey="date"
@@ -112,6 +138,7 @@ function StoryChart({ data }: { data: HistoryPoint[] }) {
             axisLine={false}
             tickLine={false}
             width={60}
+            domain={["auto", "auto"]}
           />
           <Tooltip
             formatter={(value: number, name: string) => [fmtPct(value, 2), name]}
@@ -132,6 +159,7 @@ function StoryChart({ data }: { data: HistoryPoint[] }) {
                 fill={(entry.totalEffect ?? 0) >= 0 ? "#10B981" : "#EF4444"}
               />
             ))}
+            <LabelList dataKey="totalEffect" content={<BarValueLabel />} />
           </Bar>
           <Line
             yAxisId="left"
@@ -213,32 +241,61 @@ function ConvictionMatrix({ rows }: { rows: AttributionRow[] }) {
   const CHART_L = 16 + 70 + 6;  // ~92px from container left  → past the Y-axis
   const CHART_R = 16 + 30 + 4;  // ~50px from container right → inside right edge
 
-  const quadrantWatermarks = [
-    { top: CHART_T, right: CHART_R, text: "OW · POSITIVE α",  color: "#86EFAC", align: "right" as const },
-    { top: CHART_T, left: CHART_L,  text: "UW · POSITIVE α",  color: "#86EFAC", align: "left"  as const },
-    { bottom: CHART_B, right: CHART_R, text: "OW · NEGATIVE α", color: "#FCA5A5", align: "right" as const },
-    { bottom: CHART_B, left: CHART_L,  text: "UW · NEGATIVE α", color: "#FCA5A5", align: "left"  as const },
+  const quadrantLabels = [
+    {
+      style: { top: CHART_T, right: CHART_R },
+      text: "OVERWEIGHT / POSITIVE α",
+      bgColor: "rgba(16,185,129,0.10)",
+      textColor: "#059669",
+      borderColor: "rgba(16,185,129,0.25)",
+    },
+    {
+      style: { top: CHART_T, left: CHART_L },
+      text: "UNDERWEIGHT / POSITIVE α",
+      bgColor: "rgba(16,185,129,0.10)",
+      textColor: "#059669",
+      borderColor: "rgba(16,185,129,0.25)",
+    },
+    {
+      style: { bottom: CHART_B, right: CHART_R },
+      text: "OVERWEIGHT / NEGATIVE α",
+      bgColor: "rgba(239,68,68,0.08)",
+      textColor: "#DC2626",
+      borderColor: "rgba(239,68,68,0.20)",
+    },
+    {
+      style: { bottom: CHART_B, left: CHART_L },
+      text: "UNDERWEIGHT / NEGATIVE α",
+      bgColor: "rgba(239,68,68,0.08)",
+      textColor: "#DC2626",
+      borderColor: "rgba(239,68,68,0.20)",
+    },
   ];
 
   return (
     <div style={{ height: 560, padding: "12px 16px 8px", position: "relative" }}>
-      {/* Quadrant watermarks — absolute over the chart, pointer-events:none */}
-      {quadrantWatermarks.map(({ text, color, align, ...pos }) => (
+      {/* Quadrant labels — absolute over the chart, pointer-events:none */}
+      {quadrantLabels.map(({ text, bgColor, textColor, borderColor, style: pos }) => (
         <div
           key={text}
           style={{
             position: "absolute",
             pointerEvents: "none",
-            textAlign: align,
+            zIndex: 10,
             ...pos,
           }}
         >
           <span style={{
+            display: "inline-block",
             fontSize: 8,
-            fontWeight: 700,
-            letterSpacing: "0.12em",
-            color,
-            opacity: 0.6,
+            fontWeight: 800,
+            letterSpacing: "0.10em",
+            color: textColor,
+            background: bgColor,
+            border: `1px solid ${borderColor}`,
+            borderRadius: 4,
+            padding: "2px 6px",
+            whiteSpace: "nowrap",
           }}>
             {text}
           </span>
@@ -387,9 +444,14 @@ export default function PerformanceAttribution({ fundId, displayName }: Props) {
         </span>
 
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <span style={{ fontSize: 10, color: "#CBD5E1" }}>
-            as of {fmtFullDate(data.currentDate)} · MoM Δ vs prev period
-          </span>
+          <div
+            className="inline-flex items-center gap-1.5 bg-slate-100 border border-slate-200 text-slate-700 font-semibold tracking-wide rounded-md"
+            style={{ fontSize: 11, padding: "3px 10px" }}
+          >
+            as of {fmtFullDate(data.currentDate)}
+            <span style={{ color: "#94A3B8", fontWeight: 400 }}>·</span>
+            <span style={{ color: "#64748B", fontWeight: 500 }}>MoM Δ vs prev period</span>
+          </div>
 
           {/* Segmented control toggle */}
           <div
@@ -569,9 +631,14 @@ export default function PerformanceAttribution({ fundId, displayName }: Props) {
                 <span style={{ fontSize: 10, color: "#64748B" }}>{label}</span>
               </div>
             ))}
-            <span style={{ fontSize: 10, color: "#CBD5E1", marginLeft: "auto" }}>
-              X axis = Active Weight (Fund − Bench) · Y axis = Alpha Generated
-            </span>
+            <div className="flex flex-wrap items-center gap-2 ml-auto">
+              <span className="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded text-[10px] font-bold tracking-wide">
+                X: Active Weight (Fund − Bench)
+              </span>
+              <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold tracking-wide">
+                Y: Alpha Generated
+              </span>
+            </div>
           </div>
           <ConvictionMatrix rows={sorted} />
         </>

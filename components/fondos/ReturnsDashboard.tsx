@@ -53,7 +53,15 @@ interface TimeseriesPoint {
 interface Props {
   pageNum: string;
   fundDisplayName: string;
+  fundKey?: string;
 }
+
+// Lines to show in the chart per fund (others hidden to reduce noise)
+const CHART_LINES: Record<string, string[]> = {
+  Pionero: ["Pionero A", "IGPA Small Cap","Compass SC Chile - I","Siglo XXI","LarrainVial SC Chile", "Toesca SC Chile" ],
+  Moneda_Renta_Variable: ["MRV A", "IPSA", "FM LarrainVial Enfoque", "Falcom Tactical Chilean Equities" ],
+  Orange: ["FTSE Chile All Cap TR Gross Orange", "FTSE Chile All Cap TR", "Orange"],
+};
 
 type SortableKey =
   | "fund"
@@ -271,7 +279,7 @@ function compareRows(a: NRow, b: NRow, cfg: SortConfig): number {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function ReturnsDashboard({ pageNum, fundDisplayName }: Props) {
+export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: Props) {
   const [rows, setRows] = useState<RentabilidadRow[]>([]);
   const [timeseries, setTimeseries] = useState<TimeseriesPoint[]>([]);
   const [fundMeta, setFundMeta] = useState<Record<string, FundMeta>>({});
@@ -403,7 +411,10 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName }: Props) {
   const visibleGroups = orderedGroups.filter((g) => (processedGrouped.get(g)?.length ?? 0) > 0);
 
   // ── Chart series ──────────────────────────────────────────────────────────────
-  const lineFundNames = Object.keys(fundMeta);
+  const allowedChartLines = fundKey ? CHART_LINES[fundKey] : undefined;
+  const lineFundNames = Object.keys(fundMeta).filter((f) =>
+    allowedChartLines ? allowedChartLines.includes(f) : true
+  );
   const orderedLineFunds = lineFundNames.sort((a, b) => {
     const ma = fundMeta[a];
     const mb = fundMeta[b];
@@ -469,7 +480,7 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName }: Props) {
             </span>
           )}
           {reportDate && (
-            <span style={{ fontSize: 10, color: "#CBD5E1" }}>as of {reportDate}</span>
+            <span style={{ fontSize: 10, color: "#475569", fontWeight: 500, letterSpacing: "0.04em" }}>as of {reportDate}</span>
           )}
         </div>
       </div>

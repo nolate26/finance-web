@@ -295,66 +295,118 @@ function CurrentView({
         </div>
       )}
 
-      {/* Vertical list */}
+      {/* Industry-grouped full-width rows */}
       {allPicks.length === 0 ? (
         <p className="text-sm text-slate-400 italic py-5">No picks in this period.</p>
       ) : (
         <div>
-          {allPicks.map(({ sector, pick }, i) => {
-            const isNew = pick.status === "new";
-            const isLast = i === allPicks.length - 1;
+          {ALL_SECTORS.map((sector) => {
+            const sectorPicks = allPicks.filter((p) => p.sector === sector);
+            if (sectorPicks.length === 0) return null;
             return (
-              <div
-                key={`${sector}-${pick.company}-${i}`}
-                className={`grid grid-cols-12 gap-4 items-center py-4${isLast ? "" : " border-b border-slate-100"}`}
-              >
-                {/* Cols 1–3: Identity */}
-                <div className="col-span-3">
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <span className="font-bold text-slate-900 text-sm leading-tight">
-                      {pick.company}
-                    </span>
-                    {isNew && (
-                      <span className="text-[10px] border border-slate-300 text-slate-500 px-1 rounded leading-tight">
-                        new
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-slate-400">{sector}</div>
-                </div>
+              <div key={sector}>
+                <h3
+                  className="text-sm font-bold border-b-2 border-slate-200 pb-2 mt-8 mb-3"
+                  style={{ color: "#1E293B", letterSpacing: "0.01em" }}
+                >
+                  {sector}
+                  <span
+                    className="ml-2 font-mono font-normal"
+                    style={{ fontSize: 10, color: "#94A3B8" }}
+                  >
+                    {sectorPicks.length} pick{sectorPicks.length !== 1 ? "s" : ""}
+                  </span>
+                </h3>
+                <div className="flex flex-col gap-3">
+                  {sectorPicks.map(({ pick }, i) => {
+                    const isNew = pick.status === "new";
+                    const isOut = pick.status === "out";
+                    return (
+                      <div
+                        key={`${sector}-${pick.company}-${i}`}
+                        className="flex flex-col md:flex-row bg-white border border-slate-200 shadow-sm rounded-lg"
+                        style={{ overflow: "hidden" }}
+                      >
+                        {/* Left — identity + target price */}
+                        <div
+                          className="flex flex-col justify-center gap-1 px-5 py-4 md:w-48 flex-shrink-0"
+                          style={{ borderRight: "1px solid #F1F5F9", background: "#FAFBFC" }}
+                        >
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-sm" style={{ color: "#0F172A" }}>
+                              {pick.company}
+                            </span>
+                            {isNew && (
+                              <span
+                                className="text-[9px] font-semibold px-1 py-0.5 rounded"
+                                style={{ background: "rgba(16,185,129,0.10)", color: "#059669", border: "1px solid rgba(16,185,129,0.22)" }}
+                              >
+                                NEW
+                              </span>
+                            )}
+                            {isOut && (
+                              <span
+                                className="text-[9px] font-semibold px-1 py-0.5 rounded"
+                                style={{ background: "rgba(220,38,38,0.07)", color: "#DC2626", border: "1px solid rgba(220,38,38,0.18)" }}
+                              >
+                                OUT
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex flex-col gap-0.5 mt-1">
+                            <span
+                              className="text-[9px] font-semibold tracking-widest uppercase"
+                              style={{ color: "#94A3B8" }}
+                            >
+                              Target Price
+                            </span>
+                            {pick.tp ? (
+                              <span
+                                className="font-bold"
+                                style={{ fontSize: 20, color: "#1D4ED8", letterSpacing: "-0.03em" }}
+                              >
+                                {pick.tp}
+                              </span>
+                            ) : (
+                              <span style={{ fontSize: 16, color: "#CBD5E1" }}>—</span>
+                            )}
+                          </div>
+                          <span
+                            className="font-mono mt-2"
+                            style={{ fontSize: 9, color: "#CBD5E1" }}
+                          >
+                            Added: {period.date}
+                          </span>
+                        </div>
 
-                {/* Cols 4–5: TP */}
-                <div className="col-span-2">
-                  {pick.tp ? (
-                    <span className="text-sm font-semibold text-slate-700">
-                      TP: {pick.tp}
-                    </span>
-                  ) : (
-                    <span className="text-sm text-slate-300">—</span>
-                  )}
-                </div>
+                        {/* Center — rationale */}
+                        <div className="flex-1 px-5 py-4">
+                          <p
+                            className="text-sm leading-relaxed m-0"
+                            style={{
+                              color: pick.rationale ? "#334155" : "#CBD5E1",
+                              fontStyle: pick.rationale ? "normal" : "italic",
+                            }}
+                          >
+                            {pick.rationale || "No investment thesis recorded."}
+                          </p>
+                        </div>
 
-                {/* Cols 6–10: Rationale */}
-                <div className="col-span-5">
-                  {pick.rationale ? (
-                    <p className="text-sm text-slate-600 leading-relaxed m-0">
-                      {pick.rationale}
-                    </p>
-                  ) : (
-                    <p className="text-sm text-slate-300 italic m-0">
-                      No investment thesis recorded.
-                    </p>
-                  )}
-                </div>
-
-                {/* Cols 11–12: Attachment */}
-                <div className="col-span-2 flex justify-end">
-                  <AttachCell
-                    pick={pick}
-                    sector={sector}
-                    periodId={period.id}
-                    onRefresh={onRefresh}
-                  />
+                        {/* Right — attachment */}
+                        <div
+                          className="flex items-center justify-center px-4 py-4 flex-shrink-0"
+                          style={{ borderLeft: "1px solid #F1F5F9", minWidth: 100 }}
+                        >
+                          <AttachCell
+                            pick={pick}
+                            sector={sector}
+                            periodId={period.id}
+                            onRefresh={onRefresh}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -583,22 +635,37 @@ function HistoricalView({ periods }: { periods: Period[] }) {
                                   borderBottom: pi < picks.length - 1 ? "1px solid #F1F5F9" : "none",
                                 }}
                               >
-                                <span
-                                  style={{
-                                    fontFamily: "JetBrains Mono, monospace",
-                                    fontWeight: 600,
-                                    fontSize: 11,
-                                    color: "#1E293B",
-                                    whiteSpace: "nowrap",
-                                  }}
-                                >
-                                  {pick.company}
-                                </span>
+                                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                  <span
+                                    style={{
+                                      fontFamily: "JetBrains Mono, monospace",
+                                      fontWeight: 600,
+                                      fontSize: 11,
+                                      color: "#1E293B",
+                                      whiteSpace: "nowrap",
+                                    }}
+                                  >
+                                    {pick.company}
+                                  </span>
+                                  {(pick.status === "new" || pick.status === "out") && (
+                                    <span
+                                      style={{
+                                        fontSize: 9,
+                                        color: "#94A3B8",
+                                        fontFamily: "JetBrains Mono, monospace",
+                                        whiteSpace: "nowrap",
+                                      }}
+                                    >
+                                      [{pick.status.toUpperCase()}]
+                                    </span>
+                                  )}
+                                </div>
                                 <span
                                   style={{
                                     fontSize: 10,
                                     fontFamily: "JetBrains Mono, monospace",
-                                    color: "#94A3B8",
+                                    fontWeight: 600,
+                                    color: "#1D4ED8",
                                     whiteSpace: "nowrap",
                                   }}
                                 >

@@ -264,6 +264,7 @@ export default function FondosPage() {
         <ReturnsDashboard
           pageNum={FUND_PAGE_MAP[selectedFundName] ?? "1"}
           fundDisplayName={selectedMeta?.displayName ?? selectedFundName}
+          fundKey={selectedFundName}
         />
       )}
 

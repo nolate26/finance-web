@@ -1,7 +1,16 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Treemap, ResponsiveContainer } from "recharts";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Cell,
+  Tooltip,
+  ReferenceLine,
+  ResponsiveContainer,
+} from "recharts";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface SectorSummary {
@@ -30,7 +39,7 @@ interface Props {
   fundName?: string;
 }
 
-type SortCol = "company" | "sector" | "portfolioPct" | "benchmarkPct" | "overweight";
+type SortCol = "company" | "sector" | "portfolioPct" | "benchmarkPct" | "overweight" | "sectorWeight" | "delta1W" | "delta1M";
 type SortDir = "asc" | "desc";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -60,100 +69,47 @@ function fmtDelta(v: number | null): { text: string; color: string; bg: string }
 
 const SORT_ICON = { asc: "↑", desc: "↓", none: "↕" } as const;
 
-// ── Treemap tile ──────────────────────────────────────────────────────────────
-// Recharts clones this element for each node, injecting x/y/width/height/name/depth + custom data fields.
-interface TileProps {
-  x?: number;
-  y?: number;
-  width?: number;
-  height?: number;
-  name?: string;
-  depth?: number;
-  activeWeight?: number;
-  // Passed as initial props (preserved by React.cloneElement):
-  selected?: string | null;
-  onSelect?: (s: string) => void;
-}
-
-function TreemapTile({
-  x = 0, y = 0, width = 0, height = 0,
-  name = "", depth = 0,
-  activeWeight = 0,
-  selected,
-  onSelect,
-}: TileProps) {
-  // Skip root node (depth 0) and degenerate tiles
-  if (depth !== 1 || !name || width < 3 || height < 3) return <g />;
-
-  const isSelected = selected === name;
-  const fill = activeWeight >= 0 ? "#059669" : "#DC2626";
-  const cx = x + width / 2;
-  const cy = y + height / 2;
-
-  // Adaptive font size: fit sector name inside the block horizontally
-  const showName = width > 48 && height > 24;
-  const showValue = width > 68 && height > 44;
-  const fs = showName
-    ? Math.min(13, Math.max(8, ((width - 12) / Math.max(name.length, 5)) * 1.65))
-    : 0;
-  // Truncate to avoid overflow
-  const maxChars = fs > 0 ? Math.floor((width - 14) / (fs * 0.58)) : 0;
-  const label =
-    name.length > maxChars ? name.slice(0, Math.max(3, maxChars - 1)) + "…" : name;
-
-  const nameY = showValue ? cy - 9 : cy + 4;
-
+// ── BarChart tooltip ──────────────────────────────────────────────────────────
+function SectorTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload?: SectorSummary }>;
+}) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  if (!d) return null;
   return (
-    <g
-      style={{ cursor: "pointer" }}
-      onClick={() => name && onSelect?.(name)}
+    <div
+      style={{
+        background: "#fff",
+        border: "1px solid #E2E8F0",
+        borderRadius: 8,
+        padding: "8px 12px",
+        fontSize: 12,
+        boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+        minWidth: 180,
+      }}
     >
-      <rect
-        x={x + 1}
-        y={y + 1}
-        width={width - 2}
-        height={height - 2}
-        fill={fill}
-        stroke={isSelected ? "#FFFFFF" : "rgba(255,255,255,0.35)"}
-        strokeWidth={isSelected ? 3 : 1}
-        rx={3}
-      />
-      {showName && (
-        <text
-          x={cx}
-          y={nameY}
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fill="#FFFFFF"
-          fontWeight="700"
-          fontSize={fs}
-          style={{
-            textShadow: "1px 1px 3px rgba(0,0,0,0.9)",
-            pointerEvents: "none",
-            userSelect: "none",
-          }}
-        >
-          {label}
-        </text>
-      )}
-      {showValue && (
-        <text
-          x={cx}
-          y={cy + 11}
-          textAnchor="middle"
-          fill="rgba(255,255,255,0.92)"
-          fontSize={11}
-          fontWeight="600"
-          style={{
-            textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
-            pointerEvents: "none",
-            userSelect: "none",
-          }}
-        >
-          {fmtPct(activeWeight, true)}
-        </text>
-      )}
-    </g>
+      <div style={{ fontWeight: 700, color: "#0F172A", marginBottom: 6 }}>{d.sector}</div>
+      <div style={{ display: "grid", gap: 3 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
+          <span style={{ color: "#64748B" }}>Fund</span>
+          <span style={{ fontWeight: 600, color: "#0F172A" }}>{fmtPct(d.fundWeight)}</span>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
+          <span style={{ color: "#64748B" }}>Benchmark</span>
+          <span style={{ fontWeight: 600, color: "#64748B" }}>{fmtPct(d.benchWeight)}</span>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
+          <span style={{ color: "#64748B" }}>Active</span>
+          <span style={{ fontWeight: 700, color: activeColor(d.activeWeight) }}>
+            {fmtPct(d.activeWeight, true)}
+          </span>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -186,14 +142,32 @@ function HoldingsTable({
   const sorted = useMemo(
     () =>
       [...holdings].sort((a, b) => {
-        let cmp = 0;
-        if (sortCol === "company") cmp = a.company.localeCompare(b.company);
-        else if (sortCol === "sector")
-          cmp = (a.macroSector || "").localeCompare(b.macroSector || "");
-        else cmp = (a[sortCol] as number) - (b[sortCol] as number);
-        return sortDir === "asc" ? cmp : -cmp;
+        if (sortCol === "company") {
+          const cmp = a.company.localeCompare(b.company);
+          return sortDir === "asc" ? cmp : -cmp;
+        }
+        if (sortCol === "sector") {
+          const cmp = (a.macroSector || "").localeCompare(b.macroSector || "");
+          return sortDir === "asc" ? cmp : -cmp;
+        }
+        // Numeric columns — nulls always last
+        let av: number | null = null;
+        let bv: number | null = null;
+        if (sortCol === "portfolioPct") { av = a.portfolioPct; bv = b.portfolioPct; }
+        else if (sortCol === "benchmarkPct") { av = a.benchmarkPct; bv = b.benchmarkPct; }
+        else if (sortCol === "overweight") { av = a.overweight; bv = b.overweight; }
+        else if (sortCol === "sectorWeight") {
+          av = totalSectorFundWeight > 0 ? a.portfolioPct / totalSectorFundWeight : a.portfolioPct;
+          bv = totalSectorFundWeight > 0 ? b.portfolioPct / totalSectorFundWeight : b.portfolioPct;
+        }
+        else if (sortCol === "delta1W") { av = a.delta1W; bv = b.delta1W; }
+        else if (sortCol === "delta1M") { av = a.delta1M; bv = b.delta1M; }
+        if (av === null && bv === null) return 0;
+        if (av === null) return 1;
+        if (bv === null) return -1;
+        return sortDir === "asc" ? av - bv : bv - av;
       }),
-    [holdings, sortCol, sortDir]
+    [holdings, sortCol, sortDir, totalSectorFundWeight]
   );
 
   const hasSectorWeight = selectedSector !== null;
@@ -285,11 +259,8 @@ function HoldingsTable({
         </span>
       </div>
 
-      {/* Scrollable table */}
-      <div
-        className="overflow-y-auto"
-        style={{ maxHeight: "calc(100vh - 600px)", minHeight: 200 }}
-      >
+      {/* Holdings table */}
+      <div className="overflow-x-auto">
         <table className="w-full text-xs whitespace-nowrap">
           <thead className="sticky top-0 z-10" style={{ background: "#F0F4FA" }}>
             <tr>
@@ -306,26 +277,24 @@ function HoldingsTable({
               {thBtn("overweight", "Active Weight")}
               {hasSectorWeight && (
                 <th
-                  className="px-3 py-2.5 text-right font-medium"
+                  className="px-3 py-2.5 text-right font-medium cursor-pointer select-none"
                   style={{
                     ...thStyle,
-                    color: "#2B5CE0",
+                    color: sortCol === "sectorWeight" ? "#2B5CE0" : "#2B5CE0",
                     background: "rgba(43,92,224,0.04)",
                   }}
+                  onClick={() => handleSort("sectorWeight")}
                 >
-                  Sector Wt.
+                  <span className="inline-flex items-center gap-1 justify-end">
+                    Sector Wt.
+                    <span className="text-[10px] opacity-60">
+                      {sortCol === "sectorWeight" ? SORT_ICON[sortDir] : SORT_ICON.none}
+                    </span>
+                  </span>
                 </th>
               )}
-              {hasDelta1W && (
-                <th className="px-3 py-2.5 text-right font-medium" style={thStyle}>
-                  Δ 1W
-                </th>
-              )}
-              {hasDelta1M && (
-                <th className="px-3 py-2.5 text-right font-medium" style={thStyle}>
-                  Δ 1M
-                </th>
-              )}
+              {hasDelta1W && thBtn("delta1W", "Δ 1W")}
+              {hasDelta1M && thBtn("delta1M", "Δ 1M")}
             </tr>
           </thead>
           <tbody>
@@ -515,17 +484,9 @@ export default function CarteraView({
     [tableHoldings]
   );
 
-  // Treemap data: block size proportional to fund weight
-  const treemapData = useMemo(
-    () =>
-      sectorSummary.map((s) => ({
-        name: s.sector,
-        size: Math.max(1, Math.round(s.fundWeight * 10000)),
-        activeWeight: s.activeWeight,
-        fundWeight: s.fundWeight,
-        benchWeight: s.benchWeight,
-        count: s.count,
-      })),
+  // BarChart data: sorted by activeWeight descending
+  const barData = useMemo(
+    () => [...sectorSummary].sort((a, b) => b.activeWeight - a.activeWeight),
     [sectorSummary]
   );
 
@@ -537,26 +498,20 @@ export default function CarteraView({
     );
   }
 
-  // Tile element: Recharts clones this for each node, injecting positioning + data props.
-  // Our custom `selected` / `onSelect` props are preserved because they don't clash with
-  // the Recharts-injected keys (x, y, width, height, name, depth, value).
-  const tileElement = (
-    <TreemapTile selected={selectedSector} onSelect={handleSelect} />
-  );
+  const chartHeight = Math.max(220, barData.length * 38);
 
   return (
     <div className="space-y-5">
-      {/* ── Sector treemap ── */}
+      {/* ── Sector Active Weight BarChart ── */}
       <div className="card p-4">
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <div>
             <p className="text-sm font-semibold" style={{ color: "#0F172A" }}>
-              Sector Allocation
+              Sector Allocation — Active Weight
             </p>
             <p className="text-xs mt-0.5" style={{ color: "#64748B" }}>
-              Block size = fund weight &nbsp;·&nbsp;{" "}
               <span style={{ color: "#059669", fontWeight: 600 }}>Green</span> = overweight &nbsp;·&nbsp;{" "}
-              <span style={{ color: "#DC2626", fontWeight: 600 }}>Red</span> = underweight
+              <span style={{ color: "#DC2626", fontWeight: 600 }}>Red</span> = underweight &nbsp;·&nbsp; Click to filter
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -582,14 +537,55 @@ export default function CarteraView({
           </div>
         </div>
 
-        <ResponsiveContainer width="100%" height={280}>
-          <Treemap
-            data={treemapData}
-            dataKey="size"
-            stroke="rgba(255,255,255,0.25)"
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            content={tileElement as any}
-          />
+        <ResponsiveContainer width="100%" height={chartHeight}>
+          <BarChart
+            layout="vertical"
+            data={barData}
+            margin={{ top: 4, right: 60, bottom: 4, left: 8 }}
+            onClick={(e) => {
+              if (e?.activePayload?.[0]?.payload?.sector) {
+                handleSelect(e.activePayload[0].payload.sector as string);
+              }
+            }}
+            style={{ cursor: "pointer" }}
+          >
+            <XAxis
+              type="number"
+              dataKey="activeWeight"
+              tickFormatter={(v) => fmtPct(v as number, true)}
+              tick={{ fontSize: 10, fill: "#94A3B8" }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              type="category"
+              dataKey="sector"
+              width={160}
+              tick={{ fontSize: 11, fill: "#334155" }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <Tooltip content={<SectorTooltip />} cursor={{ fill: "rgba(15,23,42,0.04)" }} />
+            <ReferenceLine x={0} stroke="#CBD5E1" strokeWidth={1} />
+            <Bar dataKey="activeWeight" radius={[0, 3, 3, 0]} isAnimationActive={false}>
+              {barData.map((entry, index) => (
+                <Cell
+                  key={`cell-${index}`}
+                  fill={
+                    selectedSector === entry.sector
+                      ? entry.activeWeight >= 0
+                        ? "#059669"
+                        : "#DC2626"
+                      : entry.activeWeight >= 0
+                      ? "rgba(5,150,105,0.75)"
+                      : "rgba(220,38,38,0.75)"
+                  }
+                  stroke={selectedSector === entry.sector ? (entry.activeWeight >= 0 ? "#059669" : "#DC2626") : "none"}
+                  strokeWidth={selectedSector === entry.sector ? 2 : 0}
+                />
+              ))}
+            </Bar>
+          </BarChart>
         </ResponsiveContainer>
       </div>
 
