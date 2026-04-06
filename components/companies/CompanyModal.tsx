@@ -10,7 +10,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { Company, SECTOR_MAP } from "@/lib/companies";
+import { Company } from "@/lib/companies";
 
 interface Props {
   company: Company | null;
@@ -83,7 +83,7 @@ export default function CompanyModal({ company, onClose }: Props) {
   if (!company) return null;
 
   const rec = recBadge(company.recommendation as string | null);
-  const sectorEn = SECTOR_MAP[company.sector as string] ?? (company.sector as string) ?? "—";
+  const sectorEn = (company.sector as string) ?? "—";
 
   const price = n(company.price);
   const targetPrice = n(company.target_price);

@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronUp, ChevronDown } from "lucide-react";
-import { Company, SECTOR_MAP } from "@/lib/companies";
+import { Company } from "@/lib/companies";
 
 interface Props {
   companies: Company[];
@@ -144,7 +144,7 @@ export default function CompanyTable({
 
           <tbody>
             {companies.map((c, i) => {
-              const sectorEn = SECTOR_MAP[c.sector as string] ?? (c.sector as string) ?? "—";
+              const sectorEn = (c.sector as string) ?? "—";
               const badge    = recBadge(c.recommendation);
               const ytd      = fmtPct(c.ret_ytd);
 

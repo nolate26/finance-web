@@ -7,13 +7,10 @@ import IndustryView from "@/components/companies/IndustryView";
 import CompanyModal from "@/components/companies/CompanyModal";
 import IndicesTable from "@/components/chile/IndicesTable";
 import TopPicks from "@/components/chile/TopPicks";
-import { Company, SECTOR_MAP } from "@/lib/companies";
+import { Company } from "@/lib/companies";
+import ProjectionsPage from "@/app/projections/page";
 
-type ActiveTab = "stock-selection" | "top-picks";
-
-const REVERSE_SECTOR_MAP: Record<string, string> = Object.fromEntries(
-  Object.entries(SECTOR_MAP).map(([k, v]) => [v, k])
-);
+type ActiveTab = "stock-selection" | "projections" | "top-picks";
 
 const SORT_OPTIONS = [
   { value: "mkt_cap_bn_desc",      label: "Mkt Cap ↓",       key: "mkt_cap_bn",      order: "desc" as const },
@@ -102,15 +99,8 @@ export default function ChilePage() {
     return sortCompanies(list, sortBy, sortOrder);
   })();
 
-  const uniqueSectorEnglish = Array.from(
-    new Set(
-      allCompanies
-        .map((c) => {
-          const sp = c.sector as string;
-          return sp ? SECTOR_MAP[sp] ?? sp : null;
-        })
-        .filter(Boolean) as string[]
-    )
+  const uniqueSectors = Array.from(
+    new Set(allCompanies.map((c) => c.sector as string).filter(Boolean))
   ).sort();
 
   const activeSortOption =
@@ -223,7 +213,7 @@ export default function ChilePage() {
           width: "fit-content",
         }}
       >
-        {(["stock-selection", "top-picks"] as ActiveTab[]).map((tab) => (
+        {(["stock-selection", "projections", "top-picks"] as ActiveTab[]).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -234,7 +224,7 @@ export default function ChilePage() {
               border: activeTab === tab ? "1px solid rgba(43,92,224,0.25)" : "1px solid transparent",
             }}
           >
-            {tab === "stock-selection" ? "Stock Selection" : "Top Picks"}
+            {tab === "stock-selection" ? "Stock Selection" : tab === "projections" ? "Projections" : "Top Picks"}
           </button>
         ))}
       </div>
@@ -293,13 +283,8 @@ export default function ChilePage() {
             </div>
 
             <select
-              value={selectedSector ? (SECTOR_MAP[selectedSector] ?? selectedSector) : ""}
-              onChange={(e) => {
-                const englishName = e.target.value;
-                setSelectedSector(
-                  englishName ? (REVERSE_SECTOR_MAP[englishName] ?? englishName) : null
-                );
-              }}
+              value={selectedSector ?? ""}
+              onChange={(e) => setSelectedSector(e.target.value || null)}
               style={{
                 padding: "7px 12px",
                 borderRadius: 7,
@@ -313,8 +298,8 @@ export default function ChilePage() {
               }}
             >
               <option value="">All Sectors</option>
-              {uniqueSectorEnglish.map((en) => (
-                <option key={en} value={en}>{en}</option>
+              {uniqueSectors.map((s) => (
+                <option key={s} value={s}>{s}</option>
               ))}
             </select>
 
@@ -402,7 +387,7 @@ export default function ChilePage() {
               {filtered.length} result{filtered.length !== 1 ? "s" : ""}
               {selectedSector && (
                 <span style={{ color: "#2B5CE0" }}>
-                  {" "}in {SECTOR_MAP[selectedSector] ?? selectedSector}
+                  {" "}in {selectedSector}
                 </span>
               )}
               {search && <span>{" "}matching &ldquo;{search}&rdquo;</span>}
@@ -438,6 +423,9 @@ export default function ChilePage() {
           ))}
         </>
       )}
+
+      {/* ── Projections ─────────────────────────────────────────────────────── */}
+      {activeTab === "projections" && <ProjectionsPage />}
 
       {/* ── Top Picks ───────────────────────────────────────────────────────── */}
       {activeTab === "top-picks" && <TopPicks />}

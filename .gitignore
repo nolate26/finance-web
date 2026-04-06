@@ -19,3 +19,5 @@ public/uploads/
 
 # misc
 .DS_Store
+
+/lib/generated/prisma

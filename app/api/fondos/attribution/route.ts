@@ -1,41 +1,5 @@
 import { NextResponse } from "next/server";
-import path from "path";
-import fs from "fs";
-import Papa from "papaparse";
-
-const PA_DIR = path.join(process.cwd(), "data", "Fondos", "Performance_Attribution");
-const PA_FILE_REGEX = /^pa_(\d{4}-\d{2}-\d{2})\.csv$/i;
-
-function parseFlt(v: string | undefined): number | null {
-  if (!v || v.trim() === "" || v.trim() === "—") return null;
-  const n = parseFloat(v.trim());
-  return isNaN(n) ? null : n;
-}
-
-function getAllFiles(): { file: string; date: string }[] {
-  try {
-    const all = fs.readdirSync(PA_DIR).filter((f) => f.endsWith(".csv"));
-    const matched = all
-      .map((f) => {
-        const m = f.match(PA_FILE_REGEX);
-        return m ? { file: path.join(PA_DIR, f), date: m[1] } : null;
-      })
-      .filter(Boolean) as { file: string; date: string }[];
-    // ISO dates sort alphabetically = chronologically
-    return matched.sort((a, b) => a.date.localeCompare(b.date));
-  } catch {
-    return [];
-  }
-}
-
-function parseFile(filePath: string): Record<string, string>[] {
-  const content = fs.readFileSync(filePath, "utf-8");
-  const { data } = Papa.parse<Record<string, string>>(content, {
-    header: true,
-    skipEmptyLines: true,
-  });
-  return data;
-}
+import { prisma } from "@/lib/prisma";
 
 export interface AttributionRow {
   security: string;
@@ -55,6 +19,10 @@ export interface HistoryPoint {
   totalEffect: number | null;
 }
 
+function toISO(d: Date): string {
+  return d.toISOString().split("T")[0];
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const fund = searchParams.get("fund");
@@ -62,59 +30,54 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "fund parameter required" }, { status: 400 });
   }
 
-  const files = getAllFiles();
-  if (files.length === 0) {
-    return NextResponse.json({ error: "No attribution files found" }, { status: 404 });
+  // ── Get all distinct dates for this fund, ordered chronologically ──────────
+  const dateRecords = await prisma.performanceAttribution.findMany({
+    where: { fund, rowType: "company" },
+    select: { reportDate: true },
+    distinct: ["reportDate"],
+    orderBy: { reportDate: "asc" },
+  });
+
+  if (dateRecords.length === 0) {
+    return NextResponse.json({ error: `No attribution data for fund "${fund}"` }, { status: 404 });
   }
 
-  // Collect per-snapshot rows for the requested fund
-  const snapshots: { date: string; rows: Record<string, string>[] }[] = [];
-  const history: Record<string, HistoryPoint[]> = {};
+  const dates = dateRecords.map((r) => toISO(r.reportDate));
+  const latestDateStr = dates[dates.length - 1];
+  const prevDateStr = dates.length >= 2 ? dates[dates.length - 2] : null;
 
-  for (const { file, date } of files) {
-    const rows = parseFile(file).filter(
-      (r) => r["FUND"]?.trim() === fund && r["ROW_TYPE"]?.trim() === "company"
-    );
-    snapshots.push({ date, rows });
+  // ── Fetch current and previous period rows in parallel ────────────────────
+  const latestDate = new Date(latestDateStr + "T00:00:00");
+  const [currentRows, prevRows] = await Promise.all([
+    prisma.performanceAttribution.findMany({
+      where: { fund, reportDate: latestDate, rowType: "company" },
+    }),
+    prevDateStr
+      ? prisma.performanceAttribution.findMany({
+          where: {
+            fund,
+            reportDate: new Date(prevDateStr + "T00:00:00"),
+            rowType: "company",
+          },
+        })
+      : Promise.resolve([]),
+  ]);
 
-    for (const r of rows) {
-      const security = r["SECURITY"]?.trim() ?? "";
-      if (!security) continue;
-      if (!history[security]) history[security] = [];
-      history[security].push({
-        date,
-        weight: parseFlt(r["FUND_AVG_WEIGHT"]),
-        totalEffect: parseFlt(r["TOTAL EFFECT"]),
-      });
-    }
-  }
+  // Index prev by security
+  const prevMap = new Map(prevRows.map((r) => [r.security, r]));
 
-  // Build current period from the latest snapshot
-  const current = snapshots[snapshots.length - 1];
-  const prev = snapshots.length >= 2 ? snapshots[snapshots.length - 2] : null;
-
-  // Index prev period by security for O(1) lookup
-  const prevMap = new Map<string, Record<string, string>>();
-  if (prev) {
-    for (const r of prev.rows) {
-      const sec = r["SECURITY"]?.trim() ?? "";
-      if (sec) prevMap.set(sec, r);
-    }
-  }
-
-  const currentPeriod: AttributionRow[] = current.rows.map((r) => {
-    const security = r["SECURITY"]?.trim() ?? "";
-    const fundWeight = parseFlt(r["FUND_AVG_WEIGHT"]);
-    const benchWeight = parseFlt(r["BENCH_AVG_WEIGHT"]);
-    const totalEffect = parseFlt(r["TOTAL EFFECT"]);
+  // ── Build currentPeriod ───────────────────────────────────────────────────
+  const currentPeriod: AttributionRow[] = currentRows.map((r) => {
+    const fundWeight = r.fundAvgWeight ?? null;
+    const benchWeight = r.benchAvgWeight ?? null;
+    const totalEffect = r.totalEffect ?? null;
     const activeWeight =
       fundWeight !== null && benchWeight !== null ? fundWeight - benchWeight : null;
 
-    const prevRow = prevMap.get(security) ?? null;
-    const prevFundWeight = prevRow ? parseFlt(prevRow["FUND_AVG_WEIGHT"]) : null;
-    const prevTotalEffect = prevRow ? parseFlt(prevRow["TOTAL EFFECT"]) : null;
+    const prev = prevMap.get(r.security) ?? null;
+    const prevFundWeight = prev?.fundAvgWeight ?? null;
+    const prevTotalEffect = prev?.totalEffect ?? null;
 
-    // For new positions (no prev), delta = full current value
     const deltaWeight =
       fundWeight !== null && prevFundWeight !== null
         ? fundWeight - prevFundWeight
@@ -126,31 +89,48 @@ export async function GET(request: Request) {
         : totalEffect;
 
     return {
-      security,
+      security: r.security,
       fundWeight,
       benchWeight,
       activeWeight,
-      allocEffect: parseFlt(r["ALLOC. EFFECT"]),
-      selectEffect: parseFlt(r["SELECT. EFFECT"]),
+      allocEffect: r.allocEffect ?? null,
+      selectEffect: r.selectEffect ?? null,
       totalEffect,
       deltaWeight,
       deltaTotalEffect,
     };
   });
 
-  // Filter history to the current year only so the StoryChart shows a true YTD view
-  // without the prior-year December entry creating an artificial drop at chart start.
-  const currentYear = current.date.substring(0, 4);
-  const filteredHistory: Record<string, HistoryPoint[]> = {};
-  for (const [security, points] of Object.entries(history)) {
-    const yearPoints = points.filter((p) => p.date.startsWith(currentYear));
-    if (yearPoints.length > 0) filteredHistory[security] = yearPoints;
+  // ── Build history timeseries (current year only) ──────────────────────────
+  const currentYear = latestDateStr.substring(0, 4);
+
+  const historyRows = await prisma.performanceAttribution.findMany({
+    where: {
+      fund,
+      rowType: "company",
+      reportDate: {
+        gte: new Date(`${currentYear}-01-01`),
+      },
+    },
+    select: { reportDate: true, security: true, fundAvgWeight: true, totalEffect: true },
+    orderBy: { reportDate: "asc" },
+  });
+
+  const history: Record<string, HistoryPoint[]> = {};
+  for (const row of historyRows) {
+    const date = toISO(row.reportDate);
+    if (!history[row.security]) history[row.security] = [];
+    history[row.security].push({
+      date,
+      weight: row.fundAvgWeight ?? null,
+      totalEffect: row.totalEffect ?? null,
+    });
   }
 
   return NextResponse.json({
     fund,
-    currentDate: current.date,
+    currentDate: latestDateStr,
     currentPeriod,
-    history: filteredHistory,
+    history,
   });
 }

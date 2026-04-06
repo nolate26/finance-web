@@ -1,75 +1,62 @@
 import { NextResponse } from "next/server";
-import path from "path";
-import fs from "fs";
-import Papa from "papaparse";
+import { prisma } from "@/lib/prisma";
 
-const PROJ_DIR = path.join(process.cwd(), "data", "Projections");
-
-function toNum(v: string | undefined): number | null {
-  if (!v || v.trim() === "" || v.trim() === "-") return null;
-  const n = parseFloat(v.replace(/,/g, ""));
-  return isFinite(n) ? n : null;
-}
-
-/** Returns { y2025, y2026, y2027 } only if all 3 values exist and sum ≠ 0; else null. */
+/** Returns { y2025, y2026, y2027 } only when all 3 values are non-null and sum ≠ 0; else null. */
 function blockOrNull(
-  v1: string,
-  v2: string,
-  v3: string,
+  v1: number | null | undefined,
+  v2: number | null | undefined,
+  v3: number | null | undefined,
 ): { y2025: number; y2026: number; y2027: number } | null {
-  const n1 = toNum(v1);
-  const n2 = toNum(v2);
-  const n3 = toNum(v3);
-  if (n1 === null || n2 === null || n3 === null) return null;
-  if (n1 + n2 + n3 === 0) return null;
-  return { y2025: n1, y2026: n2, y2027: n3 };
+  if (v1 == null || v2 == null || v3 == null) return null;
+  if (v1 + v2 + v3 === 0) return null;
+  return { y2025: v1, y2026: v2, y2027: v3 };
 }
 
 export async function GET() {
   try {
-    // ── Pick the most recent file by filename (timestamps sort lexicographically) ──
-    const files = fs
-      .readdirSync(PROJ_DIR)
-      .filter((f) => f.startsWith("proyecciones_") && f.endsWith(".csv"))
-      .sort()
-      .reverse();
+    const [proyecciones, allIndustries] = await Promise.all([
+      prisma.proyecciones_financieras.findMany({
+        orderBy: [{ generated_at: "desc" }, { empresa: "asc" }],
+      }),
+      prisma.empresasIndustrias.findMany(),
+    ]);
 
-    if (files.length === 0) {
-      return NextResponse.json({ error: "No projection files found" }, { status: 404 });
+    if (proyecciones.length === 0) {
+      return NextResponse.json({ generatedAt: null, rows: [] });
     }
 
-    const filePath = path.join(PROJ_DIR, files[0]);
-    let content = fs.readFileSync(filePath, "utf-8");
-
-    // Strip UTF-8 BOM if present
-    content = content.replace(/^\uFEFF/, "");
-
-    // Extract and remove the # header comment line
-    let generatedAt: string | null = null;
-    const lines = content.split("\n");
-    if (lines[0].trimStart().startsWith("#")) {
-      const match = lines[0].match(/# Generado:\s*(.+)/);
-      if (match) generatedAt = match[1].trim();
-      content = lines.slice(1).join("\n");
+    // Build industry lookup (Chile ecosystem — always use industria_chile)
+    const industryMap = new Map<string, string>();
+    for (const ind of allIndustries) {
+      if (ind.industriaChile) {
+        if (ind.nombreChile) industryMap.set(ind.nombreChile.toLowerCase().trim(), ind.industriaChile);
+        industryMap.set(ind.nombreLatam.toLowerCase().trim(), ind.industriaChile);
+      }
     }
 
-    const { data: raw } = Papa.parse<Record<string, string>>(content, {
-      header: true,
-      skipEmptyLines: true,
-      dynamicTyping: false,
-    });
+    // Use the most recent generated_at as the snapshot date
+    const latestGeneratedAt = proyecciones[0].generated_at;
+    const latestRows = proyecciones.filter(
+      (p) => p.generated_at.getTime() === latestGeneratedAt.getTime()
+    );
 
-    const rows = raw.map((r) => {
+    const rows = latestRows.map((proj) => {
+      const key = proj.empresa?.toLowerCase().trim() ?? "";
+      const sector = industryMap.get(key) ?? "Unclassified";
       return {
-        empresa: r["Empresa"]?.trim() ?? "",
-        moneda: r["Moneda"]?.trim() ?? "",
-        sector: r["Div"]?.trim() ?? "",
-        ingresos: blockOrNull(r["Ingresos_2025"], r["Ingresos_2026"], r["Ingresos_2027"]),
-        ebitda: blockOrNull(r["EBITDA_2025"], r["EBITDA_2026"], r["EBITDA_2027"]),
-        ebit: blockOrNull(r["EBIT_2025"], r["EBIT_2026"], r["EBIT_2027"]),
-        utilidad: blockOrNull(r["Utilidad_2025"], r["Utilidad_2026"], r["Utilidad_2027"]),
+        empresa: proj.empresa,
+        moneda: proj.moneda ?? "",
+        sector,
+        ingresos: blockOrNull(proj.ingresos_2025, proj.ingresos_2026, proj.ingresos_2027),
+        ebitda:   blockOrNull(proj.ebitda_2025,   proj.ebitda_2026,   proj.ebitda_2027),
+        ebit:     blockOrNull(proj.ebit_2025,     proj.ebit_2026,     proj.ebit_2027),
+        utilidad: blockOrNull(proj.utilidad_2025, proj.utilidad_2026, proj.utilidad_2027),
       };
     });
+
+    // Format generatedAt as "YYYY-MM-DD HH:MM:SS" for the frontend formatter
+    const d = latestGeneratedAt;
+    const generatedAt = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
 
     return NextResponse.json({ generatedAt, rows });
   } catch (error) {

@@ -1,0 +1,174 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model FundPortfolioWeight {
+  fundName        String   @map("fund_name") @db.VarChar(100)
+  reportDate      DateTime @map("report_date") @db.Date
+  company         String   @db.VarChar(200)
+  portfolioWeight Float?   @map("portfolio_weight")
+  benchmarkName   String?  @map("benchmark_name") @db.VarChar(100)
+  benchmarkWeight Float?   @map("benchmark_weight")
+  overweight      Float?
+
+  @@id([fundName, reportDate, company])
+  @@map("fund_portfolio_weights")
+}
+
+model PerformanceAttribution {
+  reportDate     DateTime @map("report_date") @db.Date
+  fund           String   @db.VarChar(200)
+  security       String   @db.VarChar(200)
+  sourceFile     String?  @map("source_file") @db.VarChar(255)
+  benchmark      String?  @db.VarChar(200)
+  fundAvgWeight  Float?   @map("fund_avg_weight")
+  fundContrib    Float?   @map("fund_contrib")
+  benchAvgWeight Float?   @map("bench_avg_weight")
+  benchContrib   Float?   @map("bench_contrib")
+  selectEffect   Float?   @map("select_effect")
+  allocEffect    Float?   @map("alloc_effect")
+  totalEffect    Float?   @map("total_effect")
+  rowType        String?  @map("row_type") @db.VarChar(50)
+
+  @@id([reportDate, fund, security])
+  @@map("performance_attribution")
+}
+
+model EmpresasIndustrias {
+  nombreLatam    String  @id @map("nombre_latam") @db.VarChar(200)
+  nombreChile    String? @map("nombre_chile") @db.VarChar(200)
+  industriaGics  String? @map("industria_gics") @db.VarChar(200)
+  industriaChile String? @map("industria_chile") @db.VarChar(200)
+
+  @@map("empresas_industrias")
+}
+
+model SsUniverse {
+  cierreCartera  DateTime @map("cierre_cartera") @db.Date
+  recordType     String   @map("record_type") @db.VarChar(10)
+  company        String   @db.VarChar(200)
+  sourceFile     String?  @map("source_file") @db.VarChar(255)
+  precios        String?  @db.VarChar(30)
+  resultados     String?  @db.VarChar(30)
+  pioVsIgpaMcSc  String?  @map("pio_vs_igpa_mc_sc") @db.VarChar(50)
+  mrvVsIpsa      String?  @map("mrv_vs_ipsa") @db.VarChar(50)
+  recommendation String?  @db.VarChar(50)
+  recDate        String?  @map("rec_date") @db.VarChar(30)
+  divPolicy      String?  @map("div_policy") @db.VarChar(100)
+  sector         String?  @db.VarChar(100)
+  price          Float?
+  targetPrice    Float?   @map("target_price")
+  ret1m          Float?   @map("ret_1m")
+  retYtd         Float?   @map("ret_ytd")
+  ret1y          Float?   @map("ret_1y")
+  ret5y          Float?   @map("ret_5y")
+  mktCapBn       Float?   @map("mkt_cap_bn")
+  netDebt        Float?   @map("net_debt")
+  fv             Float?
+  ebitdaPrev     Float?   @map("ebitda_prev")
+  ebitdaLtm      Float?   @map("ebitda_ltm")
+  ebitdaLtmB     Float?   @map("ebitda_ltm_b")
+  ebitdaLtm2     Float?   @map("ebitda_ltm2")
+  ebitdaChg      Float?   @map("ebitda_chg")
+  ebitda2025e    Float?   @map("ebitda_2025e")
+  ebitda2026e    Float?   @map("ebitda_2026e")
+  ebitda2027e    Float?   @map("ebitda_2027e")
+  netIncomePrev  Float?   @map("net_income_prev")
+  netIncomeLtm   Float?   @map("net_income_ltm")
+  netIncomeChg   Float?   @map("net_income_chg")
+  fvEbitda2024   Float?   @map("fv_ebitda_2024")
+  fvEbitdaLtm    Float?   @map("fv_ebitda_ltm")
+  fvEbitda2025e  Float?   @map("fv_ebitda_2025e")
+  fvEbitda2026e  Float?   @map("fv_ebitda_2026e")
+  fvEbitda2027e  Float?   @map("fv_ebitda_2027e")
+  ni2024         Float?   @map("ni_2024")
+  niLtm          Float?   @map("ni_ltm")
+  ni2025e        Float?   @map("ni_2025e")
+  ni2026e        Float?   @map("ni_2026e")
+  ni2027e        Float?   @map("ni_2027e")
+  pe2024         Float?   @map("pe_2024")
+  peLtm          Float?   @map("pe_ltm")
+  pe2025e        Float?   @map("pe_2025e")
+  pe2026e        Float?   @map("pe_2026e")
+  pe2027e        Float?   @map("pe_2027e")
+  peg2026e       Float?   @map("peg_2026e")
+  pCeLtm         Float?   @map("p_ce_ltm")
+  pBvLtm         Float?   @map("p_bv_ltm")
+  roeLtm         Float?   @map("roe_ltm")
+  roe2025e       Float?   @map("roe_2025e")
+  roe2026e       Float?   @map("roe_2026e")
+  fvSLtm         Float?   @map("fv_s_ltm")
+  fvIcLtm        Float?   @map("fv_ic_ltm")
+  leverageLtm    Float?   @map("leverage_ltm")
+  roicLtm        Float?   @map("roic_ltm")
+  divYield2026e  Float?   @map("div_yield_2026e")
+  divYield2026eB Float?   @map("div_yield_2026e_b")
+  divYieldLtm    Float?   @map("div_yield_ltm")
+  divYieldLagged Float?   @map("div_yield_lagged")
+  divYield2022   Float?   @map("div_yield_2022")
+
+  @@id([cierreCartera, recordType, company])
+  @@map("ss_universe")
+}
+
+model MonedaFundReturn {
+  reportDate    String  @map("report_date") @db.VarChar(30)
+  currency      String  @db.VarChar(10)
+  fund          String  @db.VarChar(255)
+  sourceFile    String? @map("source_file") @db.VarChar(255)
+  pageNum       Int?    @map("page_num") @db.SmallInt
+  fundGroup     String? @map("fund_group") @db.VarChar(100)
+  inceptionDate String? @map("inception_date") @db.VarChar(30)
+  manager       String? @db.VarChar(100)
+  mgmtFee       String? @map("mgmt_fee") @db.VarChar(100)
+  nav           Float?
+  aumUsdMm      Float?  @map("aum_usd_mm")
+  incep         Float?
+  mtd           Float?
+  ytd           Float?
+  ret1y         Float?  @map("ret_1y")
+  ret3y         Float?  @map("ret_3y")
+  ret5y         Float?  @map("ret_5y")
+  ret10y        Float?  @map("ret_10y")
+  dyn1Label     String? @map("dyn_1_label") @db.VarChar(80)
+  dyn1          Float?  @map("dyn_1")
+  dyn2Label     String? @map("dyn_2_label") @db.VarChar(80)
+  dyn2          Float?  @map("dyn_2")
+  dyn3Label     String? @map("dyn_3_label") @db.VarChar(80)
+  dyn3          Float?  @map("dyn_3")
+  sigma         Float?
+  sharpe        Float?
+  alpha         Float?
+  beta          Float?
+
+  @@id([reportDate, currency, fund])
+  @@map("moneda_fund_returns")
+}
+
+model proyecciones_financieras {
+  generated_at  DateTime @db.Timestamp(6)
+  empresa       String   @db.VarChar(200)
+  source_file   String?  @db.VarChar(255)
+  moneda        String?  @db.VarChar(20)
+  analyst       String?  @db.VarChar(100)
+  div           String?  @db.VarChar(100)
+  ingresos_2025 Float?
+  ingresos_2026 Float?
+  ingresos_2027 Float?
+  ebitda_2025   Float?
+  ebitda_2026   Float?
+  ebitda_2027   Float?
+  utilidad_2025 Float?
+  utilidad_2026 Float?
+  utilidad_2027 Float?
+  ebit_2025     Float?
+  ebit_2026     Float?
+  ebit_2027     Float?
+
+  @@id([generated_at, empresa])
+}

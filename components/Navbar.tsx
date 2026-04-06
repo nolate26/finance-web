@@ -2,14 +2,13 @@
 
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart3, TrendingUp, Building2, Globe2, LineChart, FileText, Activity, BookOpen } from "lucide-react";
+import { BarChart3, TrendingUp, Building2, Globe2, FileText, Activity, BookOpen } from "lucide-react";
 
 const tabs = [
   { href: "/economia", label: "Market", icon: TrendingUp },
   { href: "/fondos", label: "Funds", icon: BarChart3 },
   { href: "/chile", label: "Chile", icon: Building2 },
   { href: "/latam", label: "LatAm", icon: Globe2 },
-  { href: "/projections", label: "Projections", icon: LineChart },
   { href: "/quant", label: "Quant & Signals", icon: Activity },
   { href: "/companies", label: "Company Profiles", icon: BookOpen },
   { href: "/presentations", label: "Presentations", icon: FileText },

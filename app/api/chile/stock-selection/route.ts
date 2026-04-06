@@ -1,118 +1,160 @@
-import { NextResponse } from "next/server";
-import { NextRequest } from "next/server";
-import path from "path";
-import fs from "fs";
-import Papa from "papaparse";
+import { NextResponse, NextRequest } from "next/server";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-const DATA_DIR = path.join(process.cwd(), "data", "Stock_selection_Chile");
+// ── Type for Prisma row ───────────────────────────────────────────────────────
+// ssUniverse returns camelCase fields; we need to re-key to the exact strings
+// the frontend expects (matching original CSV column headers).
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+type PrismaRow = Awaited<
+  ReturnType<typeof prisma.ssUniverse.findMany>
+>[number];
 
-/** Rename duplicate column headers by appending _2, _3, etc. */
-function deduplicateHeaders(headerLine: string): string {
-  const cols = headerLine.split(",");
-  const seen = new Map<string, number>();
-  return cols
-    .map((col) => {
-      const h = col.trim();
-      const count = seen.get(h) ?? 0;
-      seen.set(h, count + 1);
-      return count === 0 ? h : `${h}_${count + 1}`;
-    })
-    .join(",");
-}
+/**
+ * Re-maps a Prisma SsUniverse row back to the legacy CSV-keyed shape.
+ *
+ * Critical differences:
+ *   fv            → "FV"             (CSV header was uppercase)
+ *   fvEbitda*     → "Fv_ebitda_*"   (CSV header used mixed case)
+ *   camelCase #s  → snake_case keys  (every other numeric field)
+ */
+function toFrontendRow(r: PrismaRow): Record<string, unknown> {
+  return {
+    company:           r.company,
+    sector:            r.sector,
+    recommendation:    r.recommendation,
+    rec_date:          r.recDate,
+    div_policy:        r.divPolicy,
+    target_price:      r.targetPrice,
+    price:             r.price,
+    pio_vs_igpa_mc_sc: r.pioVsIgpaMcSc,
+    mrv_vs_ipsa:       r.mrvVsIpsa,
 
-/** Parse a CSV that starts with 3 metadata lines + 1 blank line before the real headers. */
-function parseFileWithMetadata(content: string): {
-  metadata: { cierre_cartera: string; precios: string; resultados: string };
-  rows: Record<string, string>[];
-} {
-  // Normalize line endings (handles \r\n Windows + \n Unix)
-  const lines = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+    // Returns
+    ret_1m:   r.ret1m,
+    ret_ytd:  r.retYtd,
+    ret_1y:   r.ret1y,
+    ret_5y:   r.ret5y,
 
-  const metaVal = (line: string) => (line ?? "").split(",")[1]?.trim() ?? "";
-  const metadata = {
-    cierre_cartera: metaVal(lines[0]),
-    precios: metaVal(lines[1]),
-    resultados: metaVal(lines[2]),
+    // Balance sheet
+    mkt_cap_bn: r.mktCapBn,
+    net_debt:   r.netDebt,
+    FV:         r.fv,          // ← uppercase — CompanyTable uses c.FV
+
+    // EBITDA
+    ebitda_prev:  r.ebitdaPrev,
+    ebitda_ltm:   r.ebitdaLtm,
+    ebitda_ltm_b: r.ebitdaLtmB,
+    ebitda_ltm2:  r.ebitdaLtm2,
+    ebitda_chg:   r.ebitdaChg,
+    ebitda_2025e: r.ebitda2025e,
+    ebitda_2026e: r.ebitda2026e,
+    ebitda_2027e: r.ebitda2027e,
+
+    // Net income
+    net_income_prev: r.netIncomePrev,
+    net_income_ltm:  r.netIncomeLtm,
+    net_income_chg:  r.netIncomeChg,
+
+    // FV/EBITDA multiples — capital "F" matches original CSV & IndicesTable/CompanyTable keys
+    Fv_ebitda_2024:  r.fvEbitda2024,
+    Fv_ebitda_ltm:   r.fvEbitdaLtm,
+    Fv_ebitda_2025e: r.fvEbitda2025e,
+    Fv_ebitda_2026e: r.fvEbitda2026e,
+    Fv_ebitda_2027e: r.fvEbitda2027e,
+
+    // NI
+    ni_2024: r.ni2024,
+    ni_ltm:  r.niLtm,
+    ni_2025e: r.ni2025e,
+    ni_2026e: r.ni2026e,
+    ni_2027e: r.ni2027e,
+
+    // P/E
+    pe_2024:  r.pe2024,
+    pe_ltm:   r.peLtm,
+    pe_2025e: r.pe2025e,
+    pe_2026e: r.pe2026e,
+    pe_2027e: r.pe2027e,
+    peg_2026e: r.peg2026e,
+
+    // Other valuation ratios
+    p_ce_ltm:     r.pCeLtm,
+    p_bv_ltm:     r.pBvLtm,
+    roe_ltm:      r.roeLtm,
+    roe_2025e:    r.roe2025e,
+    roe_2026e:    r.roe2026e,
+    fv_s_ltm:     r.fvSLtm,
+    fv_ic_ltm:    r.fvIcLtm,
+    leverage_ltm: r.leverageLtm,
+    roic_ltm:     r.roicLtm,
+
+    // Dividend yields
+    div_yield_2026e:   r.divYield2026e,
+    div_yield_2026e_b: r.divYield2026eB,
+    div_yield_ltm:     r.divYieldLtm,
+    div_yield_lagged:  r.divYieldLagged,
+    div_yield_2022:    r.divYield2022,
   };
-
-  // lines[3] is blank; data starts at lines[4]
-  const dataLines = lines.slice(4).filter((_, i, arr) => {
-    // keep header (i=0) always; keep data lines that are not completely empty
-    return i === 0 || arr[i].replace(/,/g, "").trim() !== "";
-  });
-
-  if (dataLines.length === 0) return { metadata, rows: [] };
-
-  // Deduplicate column headers
-  dataLines[0] = deduplicateHeaders(dataLines[0]);
-
-  const { data } = Papa.parse<Record<string, string>>(dataLines.join("\n"), {
-    header: true,
-    skipEmptyLines: true,
-    dynamicTyping: false,
-  });
-
-  return { metadata, rows: data };
-}
-
-/** Parse a plain CSV (no metadata lines) with dedup applied to headers. */
-function parsePlainFile(content: string): Record<string, string>[] {
-  const normalized = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  const lines = normalized.split("\n");
-  if (lines.length === 0) return [];
-  lines[0] = deduplicateHeaders(lines[0]);
-  const { data } = Papa.parse<Record<string, string>>(lines.join("\n"), {
-    header: true,
-    skipEmptyLines: true,
-    dynamicTyping: false,
-  });
-  return data;
-}
-
-function parseRow(row: Record<string, string>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(row)) {
-    if (value === "NM" || value === "" || value === null || value === undefined) {
-      out[key] = null;
-    } else {
-      const num = Number(value);
-      out[key] = isNaN(num) ? value : num;
-    }
-  }
-  return out;
 }
 
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const sector = searchParams.get("sector");
-  const search = searchParams.get("search");
+  const sectorFilter = searchParams.get("sector");
+  const searchFilter = searchParams.get("search");
 
   try {
-    // ── indices.csv (has 3-line metadata header) ──────────────────────────────
-    const indicesContent = fs.readFileSync(path.join(DATA_DIR, "indices.csv"), "utf-8");
-    const { metadata, rows: indicesRaw } = parseFileWithMetadata(indicesContent);
-    const indices = indicesRaw.map(parseRow);
+    // ── Find the most recent cierre_cartera ───────────────────────────────────
+    const latest = await prisma.ssUniverse.findFirst({
+      orderBy: { cierreCartera: "desc" },
+      select: { cierreCartera: true, precios: true, resultados: true },
+    });
 
-    // ── companies.csv (same 3-line metadata header as indices.csv) ───────────
-    const companiesContent = fs.readFileSync(path.join(DATA_DIR, "companies.csv"), "utf-8");
-    const { rows: companiesRaw } = parseFileWithMetadata(companiesContent);
-    let companies = companiesRaw.map(parseRow);
-
-    if (sector) {
-      companies = companies.filter((c) => c.sector === sector);
-    }
-    if (search) {
-      const q = search.toLowerCase();
-      companies = companies.filter((c) =>
-        String(c.company || "").toLowerCase().includes(q)
+    if (!latest) {
+      return NextResponse.json(
+        { error: "No stock selection data found" },
+        { status: 404 }
       );
     }
+
+    const latestDate = latest.cierreCartera;
+
+    // ── Query indices and companies for the latest snapshot ───────────────────
+    const [indicesRaw, companiesRaw] = await Promise.all([
+      prisma.ssUniverse.findMany({
+        where: { cierreCartera: latestDate, recordType: "index" },
+        orderBy: { company: "asc" },
+      }),
+      prisma.ssUniverse.findMany({
+        where: { cierreCartera: latestDate, recordType: "company" },
+        orderBy: { mktCapBn: "desc" },
+      }),
+    ]);
+
+    // ── Map to legacy CSV-keyed shape ─────────────────────────────────────────
+    const indices = indicesRaw.map(toFrontendRow);
+    let companies = companiesRaw.map(toFrontendRow);
+
+    // ── Optional server-side filters (kept for API backward-compatibility) ────
+    if (sectorFilter) {
+      companies = companies.filter((c) => c.sector === sectorFilter);
+    }
+    if (searchFilter) {
+      const q = searchFilter.toLowerCase();
+      companies = companies.filter((c) =>
+        String(c.company ?? "").toLowerCase().includes(q)
+      );
+    }
+
+    // ── Build metadata object (same shape as before) ──────────────────────────
+    const metadata = {
+      cierre_cartera: latestDate.toISOString().split("T")[0],
+      precios:        latest.precios ?? "",
+      resultados:     latest.resultados ?? "",
+    };
 
     return NextResponse.json({ metadata, indices, companies });
   } catch (err) {

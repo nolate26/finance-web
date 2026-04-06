@@ -58,9 +58,13 @@ interface Props {
 
 // Lines to show in the chart per fund (others hidden to reduce noise)
 const CHART_LINES: Record<string, string[]> = {
-  Pionero: ["Pionero A", "IGPA Small Cap","Compass SC Chile - I","Siglo XXI","LarrainVial SC Chile", "Toesca SC Chile" ],
+  Pionero: ["Pionero A", "MSCI EM Latam SC Net","Compass SC Chile - I","Siglo XXI","LarrainVial SC Chile", "Toesca SC Chile" ],
   Moneda_Renta_Variable: ["MRV A", "IPSA", "FM LarrainVial Enfoque", "Falcom Tactical Chilean Equities" ],
-  Orange: ["FTSE Chile All Cap TR Gross Orange", "FTSE Chile All Cap TR", "Orange"],
+  Orange: ["FTSE Chile All Cap TR Gross Orange", "Orange"],
+  "Moneda_Latin_America_Equities_(LX)": ["MLE A (LX)", "MLE I (LX)", "iShares Latam 40 ETF", "DWS Invest Latam Equities", "BCI SICAV Latam Equity Fund","MSCI Latam 10/40 Net" ],
+  "Moneda_Latin_America_Small_Cap_(LX)": ["MSC I (LX)", "LarrainVial Small & Mid Cap (LX)", "Zurich AM SICAV SC Latam I", "MSCI EM Latam SC Net"],
+  Glory: ["Glory", "MSCI Latam TR Net"],
+  Mercer: ["Mercer", "Moneda All Caps A", "MSCI EM Latam IMI"],
 };
 
 type SortableKey =
@@ -202,15 +206,10 @@ function fmtShortDate(iso: string): string {
 
 function seriesStyle(meta?: FundMeta): { stroke: string; width: number; dash?: string } {
   if (!meta) return { stroke: "#CBD5E1", width: 1.5 };
-  if (meta.group === "Moneda") {
-    return { stroke: "#1D4ED8", width: 3 };
-  }
-  if (meta.group === "Indices") {
-    return { stroke: "#64748B", width: 1.5 };
-  }
-  if (meta.group.startsWith("Peer")) {
-    return { stroke: "#CBD5E1", width: 1.5, dash: "5 5" };
-  }
+  if (meta.group === "Moneda") return { stroke: "#1D4ED8", width: 3 };
+  if (meta.group === "Indices") return { stroke: "#64748B", width: 1.5 };
+  if (meta.group === "Other Moneda") return { stroke: "#94A3B8", width: 1.5, dash: "4 4" };
+  if (meta.group.startsWith("Peer")) return { stroke: "#CBD5E1", width: 1.5, dash: "5 5" };
   return { stroke: "#CBD5E1", width: 1.5 };
 }
 

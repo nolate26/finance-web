@@ -82,7 +82,7 @@ export default function ProjectionsPage() {
           )}
           <div className="flex items-center gap-3 text-xs font-mono" style={{ color: "#CBD5E1" }}>
             <span>{filteredRows.length} / {data.rows.length} companies</span>
-            <span>Fuente: Bloomberg</span>
+            <span>Fuente: Proyecciones Chile.xlsx </span>
           </div>
         </div>
       </div>

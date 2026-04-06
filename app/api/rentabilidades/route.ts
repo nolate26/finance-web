@@ -1,9 +1,5 @@
 import { NextResponse } from "next/server";
-import path from "path";
-import fs from "fs";
-import Papa from "papaparse";
-
-const RENTABILIDADES_DIR = path.join(process.cwd(), "data", "Fondos", "Rentabilidades");
+import { prisma } from "@/lib/prisma";
 
 export interface RentabilidadRow {
   fund: string;
@@ -28,223 +24,168 @@ export interface FundMeta {
   isMoneda: boolean;
 }
 
-/** Converts Excel-style percentage strings to decimals.
- *  Handles Unicode minus signs (U+2212, en-dash, em-dash) from Excel exports. */
-function parsePercent(v: string | undefined): number | null {
-  if (!v || v.trim() === "" || v.trim() === "—") return null;
-  const s = v
-    .trim()
-    .replace(/â/g, "-")
-    .replace(/[\u2212\u2013\u2014\uFE63\uFF0D]/g, "-")
-    .replace(/%/g, "")
-    .replace(/,/g, "")
-    .trim();
-  if (s === "" || s === "-") return null;
+// ── Date parsing ───────────────────────────────────────────────────────────────
+// DB stores report_date as VARCHAR in "D/MMM/YYYY" format (e.g. "9/Jan/2026")
+// Frontend expects ISO "YYYY-MM-DD" for date rendering and sorting.
+
+const MONTH_MAP: Record<string, string> = {
+  Jan: "01", Feb: "02", Mar: "03", Apr: "04", May: "05", Jun: "06",
+  Jul: "07", Aug: "08", Sep: "09", Oct: "10", Nov: "11", Dec: "12",
+};
+
+/** "9/Jan/2026" → "2026-01-09". Passthrough if already ISO or unrecognised. */
+function parseDateToISO(raw: string): string {
+  const match = raw.match(/^(\d{1,2})\/([A-Za-z]{3})\/(\d{4})$/);
+  if (match) {
+    const [, day, mon, year] = match;
+    const mm = MONTH_MAP[mon] ?? "01";
+    return `${year}-${mm}-${day.padStart(2, "0")}`;
+  }
+  return raw;
+}
+
+// ── Numeric helpers ────────────────────────────────────────────────────────────
+// Return fields are stored as percentages (e.g. 3.5 = 3.5%).
+// The frontend multiplies by 100 to display, so we divide here to give decimals.
+
+/** Percentage stored in DB → decimal for frontend (3.5 → 0.035). */
+function toDec(v: number | null | undefined): number | null {
+  if (v == null) return null;
+  return v / 100;
+}
+
+// mgmt_fee is stored as a varchar like "1.25%" in the DB — parse to decimal
+function parseMgmtFee(v: string | null | undefined): number | null {
+  if (!v) return null;
+  const s = v.replace(/%/g, "").trim();
   const n = parseFloat(s);
   return isNaN(n) ? null : n / 100;
 }
 
-function parseNum(v: string | undefined): number | null {
-  if (!v || v.trim() === "" || v.trim() === "—") return null;
-  const s = v
-    .trim()
-    .replace(/â/g, "-")
-    .replace(/[\u2212\u2013\u2014]/g, "-")
-    .replace(/,/g, "")
-    .trim();
-  const n = parseFloat(s);
-  return isNaN(n) ? null : n;
-}
-
-/** Returns the LAST non-empty "ANNUALIZED S. INCEP." value in the row.
- *  Last-wins ensures the fund's own inception column takes precedence
- *  over earlier cross-reference columns (e.g. ANNUALIZED S. INCEP. ORANGE). */
-function findAnnSinceIncep(row: Record<string, string>): number | null {
-  let result: number | null = null;
-  for (const key of Object.keys(row)) {
-    if (key.trim().startsWith("ANNUALIZED S. INCEP.") && row[key]?.trim()) {
-      const v = parsePercent(row[key]);
-      if (v !== null) result = v;
-    }
-  }
-  return result;
-}
-
-/** Lists and parses all CSV files in the Rentabilidades directory,
- *  returning those whose date matches the given year prefix, sorted oldest→newest. */
-/** Parse a date string YYYY-MM-DD → epoch ms for reliable chronological sorting */
-function dateMs(iso: string): number {
-  return new Date(iso).getTime();
-}
-
-/** Strict regex: anchored, handles both `-` and `_` separators before the date */
-const FILE_REGEX = /^informe_rentabilidades[-_](\d{4}-\d{2}-\d{2})\.csv$/i;
-
-function getFilesForYear(year: string): { file: string; date: string }[] {
-  try {
-    const all = fs.readdirSync(RENTABILIDADES_DIR).filter((f) => f.endsWith(".csv"));
-    const matched = all
-      .map((f) => {
-        const m = f.match(FILE_REGEX);
-        return m && m[1].startsWith(year)
-          ? { file: path.join(RENTABILIDADES_DIR, f), date: m[1] }
-          : null;
-      })
-      .filter(Boolean) as { file: string; date: string }[];
-    // ISO date strings (YYYY-MM-DD) sort perfectly with localeCompare → oldest first
-    return matched.sort((a, b) => a.date.localeCompare(b.date));
-  } catch {
-    return [];
-  }
-}
-
-function getMostRecentFile(): { file: string; date: string } | null {
-  try {
-    const all = fs.readdirSync(RENTABILIDADES_DIR).filter((f) => f.endsWith(".csv"));
-    const matched = all
-      .map((f) => {
-        const m = f.match(FILE_REGEX);
-        return m ? { file: path.join(RENTABILIDADES_DIR, f), date: m[1] } : null;
-      })
-      .filter(Boolean) as { file: string; date: string }[];
-    if (matched.length === 0) return null;
-    // Sort ascending, take the last element = most recent date
-    const sorted = matched.sort((a, b) => a.date.localeCompare(b.date));
-    return sorted[sorted.length - 1];
-  } catch {
-    return null;
-  }
-}
-
-/** From the latest snapshot rows for a page, select the funds to chart:
- *  – All Moneda funds (isMoneda)
- *  – Up to 4 Peer Group rows (first in order)
- *  – Up to 3 Indices rows (first in order) */
-function selectChartFunds(rows: RentabilidadRow[]): (FundMeta & { fund: string })[] {
-  const result: (FundMeta & { fund: string })[] = [];
-
-  for (const r of rows) {
-    if (r.isMoneda) result.push({ fund: r.fund, group: r.group, isMoneda: true });
-  }
-
-  for (const r of rows) {
-    if (!r.isMoneda && r.group.startsWith("Peer")) {
-      result.push({ fund: r.fund, group: r.group, isMoneda: false });
-    }
-  }
-
-  for (const r of rows) {
-    if (r.group === "Indices") {
-      result.push({ fund: r.fund, group: r.group, isMoneda: false });
-    }
-  }
-
-  return result;
-}
-
-/** Reads every year-file chronologically and extracts YTD for the selected funds,
- *  building a Recharts-ready timeseries:
- *  [{ date: '2026-01-02', 'Pionero A': 0.006, 'IPSA': null, ... }, ...] */
-function buildTimeseries(
-  pageFilter: string,
-  chartFunds: (FundMeta & { fund: string })[],
-  yearFiles: { file: string; date: string }[]
-): Record<string, string | number | null>[] {
-  const fundNames = new Set(chartFunds.map((f) => f.fund));
-
-  return yearFiles.map(({ file, date }) => {
-    const content = fs.readFileSync(file, "utf-8");
-    const { data } = Papa.parse<Record<string, string>>(content, {
-      header: true,
-      skipEmptyLines: true,
-    });
-
-    // Initialize every fund to null so Recharts shows a gap if missing
-    const point: Record<string, string | number | null> = { date };
-    for (const fund of fundNames) point[fund] = null;
-
-    for (const row of data) {
-      if (row["page_num"]?.trim() !== pageFilter) continue;
-      const fund = row["FUND"]?.trim() ?? "";
-      if (fundNames.has(fund)) {
-        point[fund] = parsePercent(row["YTD"]);
-      }
-    }
-
-    return point;
-  });
+function isMonedaFund(fundGroup: string | null): boolean {
+  if (!fundGroup) return false;
+  return fundGroup === "Moneda" || fundGroup === "Other Moneda Funds Returns";
 }
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const pageFilter = searchParams.get("page");
 
-  const latest = getMostRecentFile();
-  if (!latest) {
-    return NextResponse.json({ error: "No rentabilidades files found" }, { status: 404 });
-  }
-
-  const content = fs.readFileSync(latest.file, "utf-8");
-  const { data } = Papa.parse<Record<string, string>>(content, {
-    header: true,
-    skipEmptyLines: true,
+  // ── Find the most recent report_date ──────────────────────────────────────
+  // Can't rely on DB ORDER BY because "D/MMM/YYYY" strings sort lexicographically,
+  // not chronologically. Fetch all distinct dates, parse to ISO, then sort in JS.
+  const allDateRecords = await prisma.monedaFundReturn.findMany({
+    where: pageFilter ? { pageNum: parseInt(pageFilter, 10) } : {},
+    select: { reportDate: true },
+    distinct: ["reportDate"],
   });
 
-  const reportDate = data[0]?.["report_date"] ?? "";
-  const file = path.basename(latest.file);
+  if (allDateRecords.length === 0) {
+    return NextResponse.json({ error: "No returns data found" }, { status: 404 });
+  }
 
-  const pages: Record<string, RentabilidadRow[]> = {};
+  const sortedDates = allDateRecords
+    .map((r) => ({ raw: r.reportDate, iso: parseDateToISO(r.reportDate) }))
+    .sort((a, b) => a.iso.localeCompare(b.iso));
 
-  for (const row of data) {
-    const pageNum = row["page_num"]?.trim();
-    if (!pageNum) continue;
-    if (pageFilter && pageNum !== pageFilter) continue;
+  const latestEntry = sortedDates[sortedDates.length - 1];
+  const latestDateRaw = latestEntry.raw; // "9/Jan/2026" — used for DB WHERE clause
+  const latestDateISO = latestEntry.iso; // "2026-01-09" — sent to frontend
+  const reportDate = latestDateISO;
 
-    if (!pages[pageNum]) pages[pageNum] = [];
+  // ── Query latest snapshot rows ────────────────────────────────────────────
+  const where: { reportDate: string; pageNum?: number } = { reportDate: latestDateRaw };
+  if (pageFilter) where.pageNum = parseInt(pageFilter, 10);
 
-    const group = row["group"]?.trim() ?? "";
-    const fund = row["FUND"]?.trim() ?? "";
-    const isMoneda =
-      group === "Moneda" ||
-      (group === "Other Moneda Funds Returns" &&
-        (fund === "Glory" || fund === "Mercer"));
+  const dbRows = await prisma.monedaFundReturn.findMany({ where });
 
-    pages[pageNum].push({
+  if (!pageFilter) {
+    return NextResponse.json({ reportDate, pages: {} });
+  }
+
+  // ── Map DB rows → RentabilidadRow ─────────────────────────────────────────
+  const rows: RentabilidadRow[] = dbRows.map((r) => {
+    const group = r.fundGroup ?? "";
+    const fund = r.fund ?? "";
+    return {
       fund,
-      manager: row["Manager"]?.trim() ?? "",
+      manager: r.manager ?? "",
       group,
-      currency: row["currency"]?.trim() ?? "",
-      mtd: parsePercent(row["MTD"]),
-      ytd: parsePercent(row["YTD"]),
-      oneYear: parsePercent(row["1_year"]),
-      threeYears: parsePercent(row["3_years"]),
-      fiveYears: parsePercent(row["5_years"]),
-      tenYears: parsePercent(row["10_years"]),
-      aum: parseNum(row["AUM_USD_mm"]),
-      sharpe: parseNum(row["Sharpe"]),
-      mgmtFee: parsePercent(row["Mgmt_Fee"]),
-      annSinceIncep: findAnnSinceIncep(row),
-      isMoneda,
-    });
+      currency: r.currency ?? "",
+      mtd: toDec(r.mtd),
+      ytd: toDec(r.ytd),
+      oneYear: toDec(r.ret1y),
+      threeYears: toDec(r.ret3y),
+      fiveYears: toDec(r.ret5y),
+      tenYears: toDec(r.ret10y),
+      aum: r.aumUsdMm ?? null,
+      sharpe: r.sharpe ?? null,
+      mgmtFee: parseMgmtFee(r.mgmtFee),
+      annSinceIncep: toDec(r.incep),
+      isMoneda: isMonedaFund(group),
+    };
+  });
+
+  // ── Determine chart funds ─────────────────────────────────────────────────
+  const monedaFunds = rows
+    .filter((r) => r.isMoneda)
+    .map((r) => ({ fund: r.fund, group: r.group, isMoneda: true }));
+
+  const peerFunds = rows
+    .filter((r) => !r.isMoneda && r.group.startsWith("Peer"))
+    .map((r) => ({ fund: r.fund, group: r.group, isMoneda: false }));
+
+  const indexFunds = rows
+    .filter((r) => r.group === "Indices")
+    .map((r) => ({ fund: r.fund, group: r.group, isMoneda: false }));
+
+  const chartFunds = [...monedaFunds, ...peerFunds, ...indexFunds];
+  const fundSet = new Set(chartFunds.map((f) => f.fund));
+
+  const fundMeta: Record<string, FundMeta> = {};
+  for (const f of chartFunds) {
+    const normalizedGroup =
+      f.group === "Moneda" ? "Moneda" :
+      f.group === "Other Moneda Funds Returns" && (f.fund === "Glory" || f.fund === "Mercer") ? "Moneda" :
+      f.group === "Other Moneda Funds Returns" ? "Other Moneda" :
+      f.group.startsWith("Peer") ? "Peer Group" :
+      f.group;
+    fundMeta[f.fund] = { group: normalizedGroup, isMoneda: f.isMoneda };
   }
 
-  if (pageFilter) {
-    const rows = pages[pageFilter] ?? [];
+  // ── Build YTD timeseries for current year ─────────────────────────────────
+  // Year extracted from the ISO date ("2026-01-09" → "2026").
+  // Dates in DB end with "/<year>" (e.g. "9/Jan/2026"), so use endsWith filter.
+  const year = latestDateISO.substring(0, 4);
 
-    // Build timeseries: use the year from the latest file's date
-    const year = latest.date.substring(0, 4);
-    const yearFiles = getFilesForYear(year);
-    const chartFunds = selectChartFunds(rows);
-    const timeseries = buildTimeseries(pageFilter, chartFunds, yearFiles);
+  const yearRows = await prisma.monedaFundReturn.findMany({
+    where: {
+      reportDate: { endsWith: `/${year}` },
+      pageNum: parseInt(pageFilter, 10),
+    },
+    select: { reportDate: true, fund: true, ytd: true },
+  });
 
-    // Build fundMeta map for frontend line coloring
-    const fundMeta: Record<string, FundMeta> = {};
-    for (const cf of chartFunds) {
-      fundMeta[cf.fund] = { group: cf.group, isMoneda: cf.isMoneda };
+  // Sort chronologically using parsed ISO dates
+  yearRows.sort((a, b) =>
+    parseDateToISO(a.reportDate).localeCompare(parseDateToISO(b.reportDate))
+  );
+
+  // Group by ISO date → one chart point per date
+  const dateMap = new Map<string, Record<string, string | number | null>>();
+  for (const row of yearRows) {
+    const d = parseDateToISO(row.reportDate);
+    if (!dateMap.has(d)) {
+      const point: Record<string, string | number | null> = { date: d };
+      for (const fund of fundSet) point[fund] = null;
+      dateMap.set(d, point);
     }
-
-    return NextResponse.json({ reportDate, file, rows, timeseries, fundMeta });
+    if (fundSet.has(row.fund)) {
+      dateMap.get(d)![row.fund] = toDec(row.ytd);
+    }
   }
 
-  return NextResponse.json({ reportDate, file, pages });
+  const timeseries = Array.from(dateMap.values());
+
+  return NextResponse.json({ reportDate, file: latestDateRaw, rows, timeseries, fundMeta });
 }
