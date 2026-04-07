@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
-import path from "path";
-import fs from "fs";
-import Papa from "papaparse";
+import { prisma } from "@/lib/prisma";
 
-const ECON_DIR = path.join(process.cwd(), "data", "Economia", "Economic Data");
+// ── Commodity group taxonomy (unchanged from original) ────────────────────────
 
-// ── Commodity groups ─────────────────────────────────────────────────────────
-const GROUP_ORDER = ["Energy", "Base Metals", "Precious Metals", "Agriculture & Food", "Indices, Freight & Crypto"] as const;
+const GROUP_ORDER = [
+  "Energy",
+  "Base Metals",
+  "Precious Metals",
+  "Agriculture & Food",
+  "Indices, Freight & Crypto",
+] as const;
 type CommodityGroup = (typeof GROUP_ORDER)[number];
 
 const COMMODITY_GROUP_MAP: Record<string, CommodityGroup> = {
@@ -78,16 +81,20 @@ const COMMODITY_GROUP_MAP: Record<string, CommodityGroup> = {
   "Ethereum (USD)": "Indices, Freight & Crypto",
 };
 
-// ── Name / ticker parser ──────────────────────────────────────────────────────
-// Handles: "Iron Ore (USD/t) [CN62SPOT KLSH Index]" → { name: "Iron Ore (USD/t)", ticker: "CN62SPOT KLSH Index" }
-// Falls back gracefully when no brackets present.
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Parses optional Bloomberg ticker from commodity name.
+ * Handles: "Name [TICKER Bloomberg]" → { name, ticker }
+ * Falls back to { name: raw, ticker: null } when no brackets.
+ */
 function parseName(raw: string): { name: string; ticker: string | null } {
   const m = raw.match(/^(.+?)\s*\[(.+?)\]$/);
   if (m) return { name: m[1].trim(), ticker: m[2].trim() };
   return { name: raw.trim(), ticker: null };
 }
 
-function toNum(v: string | undefined): number | null {
+function toNum(v: string | null | undefined): number | null {
   if (!v || v.trim() === "" || v.trim() === "-" || v.trim() === "N/A") return null;
   const n = parseFloat(v.replace(/,/g, ""));
   return isNaN(n) ? null : n;
@@ -106,94 +113,122 @@ function forwardFill(arr: (number | null)[]): (number | null)[] {
   });
 }
 
+// ── GET /api/commodities ──────────────────────────────────────────────────────
+
 export async function GET() {
   try {
-    // ── Historical (wide format) ──────────────────────────────────────────────
-    const histContent = fs.readFileSync(
-      path.join(ECON_DIR, "historico_commodities_5Y.csv"),
-      "utf-8"
-    );
-    const { data: histRaw } = Papa.parse<Record<string, string>>(histContent, {
-      header: true,
-      skipEmptyLines: true,
-      dynamicTyping: false,
-    });
+    // ── Round 1: fetch all independent data in parallel ───────────────────
+    const [histRows, latestForecast] = await Promise.all([
+      prisma.commodityHistorico.findMany({ orderBy: { date: "asc" } }),
+      prisma.commodityForecasts.findFirst({
+        orderBy: { snapshotDate: "desc" },
+        select: { snapshotDate: true },
+      }),
+    ]);
 
-    // Derive all commodity columns, parsing out Bloomberg tickers from headers
-    const commOriginals = histRaw.length > 0
-      ? Object.keys(histRaw[0]).filter((c) => c !== "Date")
+    // ── Round 2: fetch forecast rows for the latest snapshot ──────────────
+    const forecastRows = latestForecast
+      ? await prisma.commodityForecasts.findMany({
+          where: { snapshotDate: latestForecast.snapshotDate },
+          orderBy: { id: "asc" },
+        })
       : [];
-    const colMeta = commOriginals.map((orig) => ({ orig, ...parseName(orig) }));
-    const commNames = colMeta.map((c) => c.name); // clean display names
-    const tickerMap: Record<string, string | null> = Object.fromEntries(
-      colMeta.map((c) => [c.name, c.ticker])
-    );
-    const totalRows = histRaw.length;
 
-    // Raw numeric values per commodity (keyed by clean name, read via original header)
-    const rawValues: Record<string, (number | null)[]> = {};
-    for (const { orig, name } of colMeta) {
-      rawValues[name] = histRaw.map((r) => toNum(r[orig]));
+    // =========================================================================
+    // HISTORICAL — Long → Wide transformation + meta computation
+    // =========================================================================
+
+    // Collect unique commodity names and dates (order preserved from DB sort)
+    const commSet = new Set<string>();
+    for (const r of histRows) commSet.add(r.commodity);
+    const commNames = Array.from(commSet);
+
+    // Build indexed date list (already sorted ASC)
+    const dateList: string[] = [];
+    const seenDates = new Set<string>();
+    for (const r of histRows) {
+      const d = r.date.toISOString().slice(0, 10);
+      if (!seenDates.has(d)) { seenDates.add(d); dateList.push(d); }
     }
 
-    // Forward-filled values
+    // Price lookup: dateStr → commodity → precio
+    const priceMap = new Map<string, Map<string, number | null>>();
+    for (const r of histRows) {
+      const d = r.date.toISOString().slice(0, 10);
+      if (!priceMap.has(d)) priceMap.set(d, new Map());
+      priceMap.get(d)!.set(r.commodity, r.precio);
+    }
+
+    // Raw values per commodity (aligned with dateList)
+    const rawValues: Record<string, (number | null)[]> = {};
+    for (const name of commNames) {
+      rawValues[name] = dateList.map((d) => priceMap.get(d)?.get(name) ?? null);
+    }
+
+    // Forward-filled values (used for spot, averages, and series output)
     const filled: Record<string, (number | null)[]> = {};
     for (const name of commNames) {
       filled[name] = forwardFill(rawValues[name]);
     }
 
-    // Per-commodity metadata
+    const totalRows = dateList.length;
+
+    // ── Compute per-commodity meta ─────────────────────────────────────────
     const histMeta = commNames.map((name) => {
       const series = filled[name];
 
-      // Spot = last non-null value
+      // Spot = last non-null value in the filled series
       let spot: number | null = null;
       for (let i = series.length - 1; i >= 0; i--) {
         if (series[i] !== null) { spot = series[i]; break; }
       }
 
-      // Yearly averages
-      const vals2024 = histRaw
-        .map((r, i) => (r.Date?.startsWith("2024") ? series[i] : null))
+      // Yearly averages using filled series filtered by year prefix
+      const vals2024 = dateList
+        .map((d, i) => (d.startsWith("2024") ? series[i] : null))
         .filter((v): v is number => v !== null);
-      const vals2025 = histRaw
-        .map((r, i) => (r.Date?.startsWith("2025") ? series[i] : null))
+      const vals2025 = dateList
+        .map((d, i) => (d.startsWith("2025") ? series[i] : null))
+        .filter((v): v is number => v !== null);
+      const vals2026 = dateList
+        .map((d, i) => (d.startsWith("2026") ? series[i] : null))
         .filter((v): v is number => v !== null);
 
       const avg2024 = avg(vals2024);
       const avg2025 = avg(vals2025);
-
-      const vals2026 = histRaw
-        .map((r, i) => (r.Date?.startsWith("2026") ? series[i] : null))
-        .filter((v): v is number => v !== null);
-
       const avg2026 = avg(vals2026);
 
-      // YTD 2026: (spot - ytdBase) / ytdBase * 100
-      // Base = last non-null Dec-2025 price, fallback to first non-null 2026 price
+      // YTD 2026: last non-null Dec-2025 price → fallback to first 2026 price
       let ytdBase: number | null = null;
-      for (let i = histRaw.length - 1; i >= 0; i--) {
-        if (histRaw[i].Date?.startsWith("2025-12") && series[i] !== null) {
+      for (let i = dateList.length - 1; i >= 0; i--) {
+        if (dateList[i].startsWith("2025-12") && series[i] !== null) {
           ytdBase = series[i]; break;
         }
       }
       if (ytdBase === null) {
-        for (let i = 0; i < histRaw.length; i++) {
-          if (histRaw[i].Date?.startsWith("2026") && series[i] !== null) {
+        for (let i = 0; i < dateList.length; i++) {
+          if (dateList[i].startsWith("2026") && series[i] !== null) {
             ytdBase = series[i]; break;
           }
         }
       }
-      const ytdPct = ytdBase !== null && spot !== null && ytdBase > 0
-        ? ((spot - ytdBase) / ytdBase) * 100
-        : null;
+      const ytdPct =
+        ytdBase !== null && spot !== null && ytdBase > 0
+          ? ((spot - ytdBase) / ytdBase) * 100
+          : null;
 
-      const group: CommodityGroup = COMMODITY_GROUP_MAP[name] ?? "Indices, Freight & Crypto";
-      const ticker = tickerMap[name] ?? null;
-      return { name, ticker, group, spot, ytdPct, avg2026, avg2025, avg2024 };
+      // Commodity name may contain a ticker bracket if Python preserved it
+      const { name: cleanName, ticker } = parseName(name);
+
+      const group: CommodityGroup =
+        COMMODITY_GROUP_MAP[cleanName] ??
+        COMMODITY_GROUP_MAP[name] ??
+        "Indices, Freight & Crypto";
+
+      return { name: cleanName, ticker, group, spot, ytdPct, avg2026, avg2025, avg2024 };
     });
 
-    // Sort meta by group order, then alphabetically within group
+    // Sort by group order, then alphabetically within group
     histMeta.sort((a, b) => {
       const gi = GROUP_ORDER.indexOf(a.group as CommodityGroup);
       const gj = GROUP_ORDER.indexOf(b.group as CommodityGroup);
@@ -201,34 +236,30 @@ export async function GET() {
       return a.name.localeCompare(b.name);
     });
 
-    // Build downsampled series for charting (~400 rows max)
+    // ── Build downsampled series (~400 rows max) ───────────────────────────
+    // Uses forward-filled values so charts render without gaps.
     const step = Math.max(1, Math.floor(totalRows / 400));
     const idxList: number[] = [];
     for (let i = 0; i < totalRows; i += step) idxList.push(i);
-    if (idxList[idxList.length - 1] !== totalRows - 1) idxList.push(totalRows - 1);
+    if (totalRows > 0 && idxList[idxList.length - 1] !== totalRows - 1) {
+      idxList.push(totalRows - 1);
+    }
 
     const series = idxList.map((i) => {
-      const out: Record<string, string | number | null> = {
-        date: histRaw[i]?.Date ?? "",
-      };
+      const row: Record<string, string | number | null> = { date: dateList[i] };
       for (const name of commNames) {
-        out[name] = filled[name][i] ?? null;
+        // Use the clean name as key (same as histMeta.name) so the chart can match
+        const { name: cleanName } = parseName(name);
+        row[cleanName] = filled[name][i] ?? null;
       }
-      return out;
+      return row;
     });
 
-    // ── Projections (long format) ─────────────────────────────────────────────
-    const projContent = fs.readFileSync(
-      path.join(ECON_DIR, "proyecciones_commodities_Q.csv"),
-      "utf-8"
-    );
-    const { data: projRaw } = Papa.parse<Record<string, string>>(projContent, {
-      header: true,
-      skipEmptyLines: true,
-      dynamicTyping: false,
-    });
+    // =========================================================================
+    // PROJECTIONS — latest CommodityForecasts snapshot → ProjEntry[]
+    // =========================================================================
 
-    // Group by commodity (preserving insertion order)
+    // Group by commodity, preserving insertion order
     const projMap = new Map<
       string,
       {
@@ -238,20 +269,16 @@ export async function GET() {
       }
     >();
 
-    for (const row of projRaw) {
-      const { name, ticker } = parseName(row["Commodity"]?.trim() ?? "");
+    for (const row of forecastRows) {
+      const { name, ticker } = parseName(row.commodity);
       if (!name) continue;
       if (!projMap.has(name)) {
-        projMap.set(name, {
-          ticker,
-          spotCurrent: toNum(row["Spot Current"]),
-          quarters: [],
-        });
+        projMap.set(name, { ticker, spotCurrent: row.spotCurrent, quarters: [] });
       }
       projMap.get(name)!.quarters.push({
-        quarter: row["Quarter"]?.trim() ?? "",
-        fwd: toNum(row["Fwd Curve"]),
-        analyst: toNum(row["Analyst Forecast"]),
+        quarter: row.quarter,
+        fwd: toNum(row.fwdCurve),
+        analyst: toNum(row.analystForecast),
       });
     }
 
