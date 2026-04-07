@@ -172,3 +172,98 @@ model proyecciones_financieras {
 
   @@id([generated_at, empresa])
 }
+
+// ==========================================
+// SECCIÓN ECONOMÍA: HISTÓRICOS (Series de Tiempo)
+// ==========================================
+
+model MacroHistorico {
+  date      DateTime
+  pais      String
+  indicador String
+  valor     Float?
+
+  @@id([date, pais, indicador])
+  @@index([pais, indicador])
+}
+
+model PeHistorico {
+  date    DateTime
+  indice  String
+  peValue Float?
+
+  @@id([date, indice])
+}
+
+model CommodityHistorico {
+  date      DateTime
+  commodity String
+  precio    Float?
+
+  @@id([date, commodity])
+}
+
+// ==========================================
+// SECCIÓN ECONOMÍA: SNAPSHOTS (Las Fotos)
+// ==========================================
+
+model MacroForecasts {
+  id           Int      @id @default(autoincrement())
+  snapshotDate DateTime @default(now())
+  country      String
+  indicator    String
+  prev_3mAgo   String?
+  current_Y0   String?
+  current_Y1   String?
+  current_Y2   String?
+
+  @@index([snapshotDate])
+}
+
+model CommodityForecasts {
+  id              Int      @id @default(autoincrement())
+  snapshotDate    DateTime @default(now())
+  commodity       String
+  quarter         String
+  spotCurrent     Float?
+  fwdCurve        String?
+  analystForecast String?
+
+  @@index([snapshotDate])
+}
+
+model PeSummarySnapshot {
+  id           Int      @id @default(autoincrement())
+  snapshotDate DateTime @default(now())
+  index        String
+  todayPE      Float?
+  histAvg      Float?
+  plus1Std     Float?
+  minus1Std    Float?
+  discount     String?
+
+  @@index([snapshotDate])
+}
+
+model EquityCompsSnapshot {
+  id            Int      @id @default(autoincrement())
+  snapshotDate  DateTime @default(now())
+  ticker        String
+  indexName     String
+  priceLocal    Float?
+  ret1W         String?
+  ret1M         String?
+  ret3M         String?
+  retYTD        String?
+  ret1Y         String?
+  ret3Y         String?
+  ret5Y         String?
+  ret10Y        String?
+  evEbitdaFwd   Float?
+  peFwd         Float?
+  evEbitdaTrail Float?
+  roeTrail      Float?
+  peTrail       Float?
+
+  @@index([snapshotDate])
+}
