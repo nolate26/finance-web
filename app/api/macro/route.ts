@@ -1,124 +1,109 @@
 import { NextResponse } from "next/server";
-import path from "path";
-import fs from "fs";
-import Papa from "papaparse";
+import { prisma } from "@/lib/prisma";
 
-const MACRO_DIR = path.join(process.cwd(), "data", "Economia", "macro_details");
-const ECON_DIR = path.join(process.cwd(), "data", "Economia", "Economic Data");
-
-const METRIC_LABELS: Record<string, string> = {
-  "GDP (Annual, %)": "GDP Growth",
-  "INFLATION RATE (EOP, %)": "Inflation",
-  "MONETARY POLICY RATE (EOP, %)": "Policy Rate",
-  "10 YEARS NOMINAL INTEREST RATE (EOP, %)": "10Y Rate",
-};
-
-const HISTORICO_INDICATOR_MAP: Record<string, string> = {
+// ── Indicator label mapping ───────────────────────────────────────────────────
+// Maps the raw `indicator` value stored by Python → display name that
+// MacroPanel filters on (selectedMetric === "GDP Growth" | "Inflation" | "10Y Rate")
+const INDICATOR_MAP: Record<string, string> = {
   "GDP": "GDP Growth",
   "Inflation": "Inflation",
   "CBR (Policy Rate)": "Policy Rate",
   "10Y Note": "10Y Rate",
 };
 
-function readCSV(filename: string, dir = MACRO_DIR) {
-  const content = fs.readFileSync(path.join(dir, filename), "utf-8");
-  const { data } = Papa.parse<Record<string, string>>(content, {
-    header: true,
-    skipEmptyLines: true,
-    dynamicTyping: false,
-  });
-  return data;
-}
-
-function tryReadCSV(filename: string, dir = MACRO_DIR): Record<string, string>[] {
-  try {
-    return readCSV(filename, dir);
-  } catch {
-    return [];
-  }
-}
-
-function toNum(v: string | undefined): number | null {
+function toNum(v: string | null | undefined): number | null {
   if (!v || v === "-" || v === "" || v === "N/A") return null;
   const n = parseFloat(v);
   return isNaN(n) ? null : n;
 }
 
+// ── Long → Wide pivot for tenYearHistory ─────────────────────────────────────
+// MacroHistorico stores one row per (date, pais, indicador).
+// TenYearChart expects: { Date: "YYYY-MM-DD", "Chile - 10Y Yield (%)": x, ... }
+// The column key "${pais} - ${indicador}" matches TenYearChart.getColumns() exactly.
+function pivotMacroHistorico(
+  records: { date: Date; pais: string; indicador: string; valor: number | null }[]
+): Record<string, string | number | null>[] {
+  // Collect all unique column keys preserving insertion order (already date-sorted)
+  const colSet = new Set<string>();
+  for (const r of records) colSet.add(`${r.pais} - ${r.indicador}`);
+  const cols = Array.from(colSet);
+
+  const rowMap = new Map<string, Record<string, string | number | null>>();
+  for (const r of records) {
+    const dateStr = r.date.toISOString().slice(0, 10); // YYYY-MM-DD
+    if (!rowMap.has(dateStr)) {
+      // "Date" key (capital) is what TenYearChart reads via row.Date
+      const base: Record<string, string | number | null> = { Date: dateStr };
+      for (const c of cols) base[c] = null;
+      rowMap.set(dateStr, base);
+    }
+    rowMap.get(dateStr)![`${r.pais} - ${r.indicador}`] = r.valor;
+  }
+
+  return Array.from(rowMap.values());
+}
+
+// ── GET /api/macro ────────────────────────────────────────────────────────────
+// Returns: { annual, quarterly, commodities, quarterlyKeys, revisions, tenYearHistory }
+// Only `revisions` and `tenYearHistory` are consumed by MacroPanel / TenYearChart.
+// `annual`, `quarterly`, `commodities` are kept as empty arrays for forward-compat.
+
 export async function GET() {
   try {
-    // ── Annual projections ────────────────────────────────────────────────────
-    const annualRaw = tryReadCSV("all_countries_annual.csv");
-    const annual = annualRaw.map((row) => ({
-      country: row["COUNTRY"],
-      metric: METRIC_LABELS[row["METRIC"]] ?? row["METRIC"],
-      "2025": toNum(row["2025"]),
-      "2026": toNum(row["2026"]),
-      "2027": toNum(row["2027"]),
-      "2028": toNum(row["2028"]),
-      "2029": toNum(row["2029"]),
-      "2030": toNum(row["2030"]),
+    // ── Round 1: fetch in parallel ────────────────────────────────────────────
+    const [latestForecast, tenYearRaw] = await Promise.all([
+      prisma.macroForecasts.findFirst({
+        orderBy: { snapshotDate: "desc" },
+        select: { snapshotDate: true },
+      }),
+      prisma.macroHistorico.findMany({ orderBy: { date: "asc" } }),
+    ]);
+
+    // ── Round 2: fetch forecast rows for the latest snapshot ─────────────────
+    const forecastRows = latestForecast
+      ? await prisma.macroForecasts.findMany({
+          where: { snapshotDate: latestForecast.snapshotDate },
+          orderBy: { id: "asc" },
+        })
+      : [];
+
+    // ── revisions — shape expected by MacroPanel ──────────────────────────────
+    // MacroPanel.RevisionRow: { country, indicator, ago2026, current2026, current2027, current2028 }
+    //
+    // DB field mapping:
+    //   prev_3mAgo  → ago2026   (3-month-old estimate for the forecasted year)
+    //   current_Y0  → current2026  (current estimate for Y+0)
+    //   current_Y1  → current2027  (current estimate for Y+1)
+    //   current_Y2  → current2028  (current estimate for Y+2)
+    const revisions = forecastRows.map((row) => ({
+      country: row.country,
+      indicator: INDICATOR_MAP[row.indicator] ?? row.indicator,
+      ago2026: toNum(row.prev_3mAgo),
+      current2026: toNum(row.current_Y0),
+      current2027: toNum(row.current_Y1),
+      current2028: toNum(row.current_Y2),
     }));
 
-    // ── Quarterly projections ─────────────────────────────────────────────────
-    const quarterlyRaw = tryReadCSV("all_countries_quarterly.csv");
-    const quarterlyKeys = Object.keys(quarterlyRaw[0] ?? {}).filter(
-      (k) => k !== "COUNTRY" && k !== "METRIC"
-    );
-    const quarterly = quarterlyRaw.map((row) => {
-      const out: Record<string, string | number | null> = {
-        country: row["COUNTRY"],
-        metric: METRIC_LABELS[row["METRIC"]] ?? row["METRIC"],
-      };
-      for (const k of quarterlyKeys) out[k] = toNum(row[k]);
-      return out;
+    // ── tenYearHistory — Long → Wide pivot from MacroHistorico ───────────────
+    // Column names become "${pais} - ${indicador}", which matches the
+    // TenYearChart.getColumns() patterns:
+    //   "Chile - 10Y Yield (%)", "Chile - FX Spot"
+    //   "United States - 10Y Yield (%)", "US - DXY Index"
+    //   "European Union - 10Y Yield (%)", "European Union - EURUSD"
+    const tenYearHistory = pivotMacroHistorico(tenYearRaw);
+
+    return NextResponse.json({
+      // These sections came from CSVs that no longer exist.
+      // MacroPanel's <Props> marks them as `annual?: unknown[]` and never renders them.
+      annual: [],
+      quarterly: [],
+      commodities: [],
+      quarterlyKeys: [],
+      // Active sections — now served from Prisma
+      revisions,
+      tenYearHistory,
     });
-
-    // ── Commodities ───────────────────────────────────────────────────────────
-    const commRaw = tryReadCSV("Commodities_prices.csv");
-    const commodities = commRaw.map((row) => {
-      const full = row["COMMODITY"] ?? "";
-      const parts = full.match(/^([\w\s]+?)\s+(US\$.*|USD.*)$/);
-      const name = parts ? parts[1].trim() : full;
-      const unit = parts ? parts[2].trim() : "";
-      return {
-        commodity: full,
-        name,
-        unit,
-        "2020": toNum(row["2020.0"]),
-        "2021": toNum(row["2021.0"]),
-        "2022": toNum(row["2022.0"]),
-        "2023": toNum(row["2023.0"]),
-        "2024": toNum(row["2024.0"]),
-        "2025": toNum(row["2025.0"]),
-        "2026e": toNum(row["2026e"]),
-        "2027e": toNum(row["2027e"]),
-        "2028e": toNum(row["2028e"]),
-      };
-    });
-
-    // ── Forecast revisions ────────────────────────────────────────────────────
-    const historicoRaw = tryReadCSV("macro_forecasts_historico.csv", ECON_DIR);
-    const revisions = historicoRaw.map((row) => ({
-      country: row["Country"],
-      indicator: HISTORICO_INDICATOR_MAP[row["Indicator"]] ?? row["Indicator"],
-      ago2026: toNum(row["2026 (3M Ago)"]),
-      current2026: toNum(row["2026 (Current)"]),
-      current2027: toNum(row["2027 (Current)"]),
-      current2028: toNum(row["2028 (Current)"]),
-    }));
-
-    // ── 10Y Yield + FX history ────────────────────────────────────────────────
-    const tenYearRaw = tryReadCSV("historia_10y_fx_maestro.csv", ECON_DIR);
-    const tenYearHistory = tenYearRaw.map((row) => {
-      const out: Record<string, string | number | null> = { Date: row["Date"] };
-      for (const [key, val] of Object.entries(row)) {
-        if (key === "Date") continue;
-        out[key] = toNum(val as string);
-      }
-      return out;
-    });
-
-    return NextResponse.json({ annual, quarterly, commodities, quarterlyKeys, revisions, tenYearHistory });
   } catch (error) {
     console.error("Macro API error:", error);
     return NextResponse.json({ error: "Failed to load macro data" }, { status: 500 });
