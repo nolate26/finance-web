@@ -1,120 +1,143 @@
-import { NextResponse } from "next/server";
-import path from "path";
-import fs from "fs";
-import Papa from "papaparse";
+import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 
-const DATA_DIR = path.join(process.cwd(), "data", "Economia", "Economic Data");
+// ---------------------------------------------------------------------------
+// Pivot helper: Long → Wide
+// Shared logic with /api/export — converts DB long-format rows to the wide
+// array of { date, col1, col2, ... } objects that the charts expect.
+// ---------------------------------------------------------------------------
 
-function readCSV(filename: string) {
-  const filePath = path.join(DATA_DIR, filename);
-  const content = fs.readFileSync(filePath, "utf-8");
-  const result = Papa.parse(content, { header: true, dynamicTyping: true, skipEmptyLines: true });
-  return result.data;
+function pivotLongToWide(
+  records: { date: Date; colKey: string; value: number | null }[]
+): Record<string, unknown>[] {
+  const colSet = new Set<string>();
+  for (const r of records) colSet.add(r.colKey);
+  const cols = Array.from(colSet);
+
+  const rowMap = new Map<string, Record<string, unknown>>();
+  for (const r of records) {
+    const dateStr = r.date.toISOString().slice(0, 10); // YYYY-MM-DD
+    if (!rowMap.has(dateStr)) {
+      const base: Record<string, unknown> = { date: dateStr };
+      for (const c of cols) base[c] = null;
+      rowMap.set(dateStr, base);
+    }
+    rowMap.get(dateStr)![r.colKey] = r.value;
+  }
+
+  return Array.from(rowMap.values());
 }
 
-// Column name overrides (currently none needed — CSV headers are clean)
-const COL_DISPLAY_MAP: Record<string, string> = {};
-
-function computeMedian(values: number[]): number {
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 !== 0
-    ? sorted[mid]
-    : (sorted[mid - 1] + sorted[mid]) / 2;
-}
-
-function computeStdDev(values: number[]): number | null {
-  if (values.length < 2) return null;
-  const mean = values.reduce((s, v) => s + v, 0) / values.length;
-  const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / (values.length - 1);
-  return Math.sqrt(variance);
-}
+// ---------------------------------------------------------------------------
+// GET /api/economia
+// Returns:  { resumenPE, tablaMaestra, allHistoriaPE, updateDate }
+// ---------------------------------------------------------------------------
 
 export async function GET() {
   try {
-    const tablaMaestra = readCSV("tabla_maestra_comps.csv");
-    const historiaPE = readCSV("historia_pe_10Y.csv") as Record<string, number | null>[];
+    // ── Round 1: fetch all independent data in parallel ────────────────────
+    // (PE history full scan + latest snapshotDate for each snapshot table)
+    const [
+      peHistoricoRaw,
+      latestPeSnapshot,
+      latestCompsSnapshot,
+    ] = await Promise.all([
+      prisma.peHistorico.findMany({ orderBy: { date: 'asc' } }),
+      prisma.peSummarySnapshot.findFirst({
+        orderBy: { snapshotDate: 'desc' },
+        select: { snapshotDate: true },
+      }),
+      prisma.equityCompsSnapshot.findFirst({
+        orderBy: { snapshotDate: 'desc' },
+        select: { snapshotDate: true },
+      }),
+    ]);
 
-    // ── Compute per-index stats from full 10Y history ──────────────────────
-    const statsMap: Record<string, { median: number; max: number; min: number; stdDev: number | null }> = {};
+    // ── Round 2: fetch snapshot rows for the latest date ──────────────────
+    const [peSummaryRows, compsRows] = await Promise.all([
+      latestPeSnapshot
+        ? prisma.peSummarySnapshot.findMany({
+            where: { snapshotDate: latestPeSnapshot.snapshotDate },
+            orderBy: { id: 'asc' },
+          })
+        : Promise.resolve([]),
+      latestCompsSnapshot
+        ? prisma.equityCompsSnapshot.findMany({
+            where: { snapshotDate: latestCompsSnapshot.snapshotDate },
+            orderBy: { id: 'asc' },
+          })
+        : Promise.resolve([]),
+    ]);
 
-    if (historiaPE.length > 0) {
-      const cols = Object.keys(historiaPE[0]).filter((c) => c !== "date");
-      for (const col of cols) {
-        const displayName = COL_DISPLAY_MAP[col] ?? col;
-        const values = historiaPE
-          .map((r) => r[col])
-          .filter((v): v is number => typeof v === "number" && v > 0 && !isNaN(v));
-        if (values.length > 0) {
-          statsMap[displayName] = {
-            median: computeMedian(values),
-            max: Math.max(...values),
-            min: Math.min(...values),
-            stdDev: computeStdDev(values),
-          };
-        }
-      }
-    }
+    // ── allHistoriaPE — Long → Wide pivot ─────────────────────────────────
+    // Shape: [{ date: "YYYY-MM-DD", "MSCI EM LatAm": 14.2, "IPSA (Chile)": 11.0, ... }]
+    // PEHistoryChart slices this client-side by selected period (1Y/3Y/5Y/10Y).
+    const allHistoriaPE = pivotLongToWide(
+      peHistoricoRaw.map((r) => ({ date: r.date, colKey: r.indice, value: r.peValue }))
+    );
 
-    // ── Read today's P/E from resumen_pe.csv ───────────────────────────────
-    const resumenRaw = readCSV("resumen_pe.csv") as Record<string, string | number>[];
-    const todayMap: Record<string, number> = {};
-    for (const row of resumenRaw) {
-      const idx = String(row["Index"] ?? "").trim();
-      const pe = typeof row["Today (P/E)"] === "number" ? row["Today (P/E)"] : parseFloat(String(row["Today (P/E)"]));
-      if (idx && !isNaN(pe)) todayMap[idx] = pe;
-    }
-
-    // ── Build unified resumenPE array ──────────────────────────────────────
-    // Use statsMap as the authoritative index list (from historia)
-    const resumenPE = Object.entries(statsMap).map(([indexName, stats]) => {
-      const todayPE = todayMap[indexName] ?? null;
+    // ── resumenPE — shape expected by ValuationTable ───────────────────────
+    // ValuationTable expects: Index, "Today (P/E)", median, max, min, stdDev, discount
+    // PeSummarySnapshot stores: index, todayPE, histAvg (≈ median), plus1Std, minus1Std, discount
+    //
+    // stdDev is not stored directly → derive from (plus1Std − histAvg).
+    // max/min are not stored → pass null; ValuationTable falls back to ±2σ bar using stdDev.
+    // discount is stored as String? → recompute as number for type safety.
+    const resumenPE = peSummaryRows.map((r) => {
+      const median = r.histAvg;
+      const stdDev =
+        r.plus1Std != null && median != null ? r.plus1Std - median : null;
       const discount =
-        todayPE != null && stats.median > 0
-          ? ((todayPE / stats.median) - 1) * 100
+        r.todayPE != null && median != null && median > 0
+          ? ((r.todayPE / median) - 1) * 100
           : null;
+
       return {
-        Index: indexName,
-        "Today (P/E)": todayPE,
-        median: stats.median,
-        max: stats.max,
-        min: stats.min,
-        stdDev: stats.stdDev,
+        Index: r.index,
+        'Today (P/E)': r.todayPE,
+        median,
+        max: null as number | null,   // ValuationTable uses ±2σ when stdDev is present
+        min: null as number | null,
+        stdDev,
         discount,
       };
     });
 
-    // Slice history for initial (1Y) load; keep allHistoriaPE for charts
-    const historySlice = historiaPE.slice(-252);
+    // ── tablaMaestra — shape expected by PerformanceTable ─────────────────
+    // PerformanceTable expects string keys with Spanish-style column names.
+    // EquityCompsSnapshot stores camelCase equivalents.
+    // roeTrail is Float? in DB — component expects a string it can parseFloat().
+    const tablaMaestra = compsRows.map((r) => ({
+      Ticker: r.ticker,
+      Index_Name: r.indexName,
+      'Price (Local)': r.priceLocal,
+      '1W': r.ret1W ?? '',
+      '1M': r.ret1M ?? '',
+      '3M': r.ret3M ?? '',
+      YTD: r.retYTD ?? '',
+      '1Y': r.ret1Y ?? '',
+      '3Y': r.ret3Y ?? '',
+      '5Y': r.ret5Y ?? '',
+      '10Y': r.ret10Y ?? '',
+      'EV/EBITDA (Fwd 12m)': r.evEbitdaFwd,
+      'P/U (Fwd 12m)': r.peFwd,
+      'ROE (Trailing)': r.roeTrail != null ? String(r.roeTrail) : '',
+    }));
 
-    // Remap historia column names for chart use
-    const remapRow = (row: Record<string, number | null>) => {
-      const out: Record<string, number | null | string> = { date: row["date"] as unknown as string };
-      for (const [k, v] of Object.entries(row)) {
-        if (k === "date") continue;
-        out[COL_DISPLAY_MAP[k] ?? k] = v;
-      }
-      return out;
-    };
-    const historiaPERemapped = historiaPE.map(remapRow);
-    const historySliceRemapped = historySlice.map(remapRow);
-
-    // ── Update date ────────────────────────────────────────────────────────
-    let updateDate: string | null = null;
-    try {
-      const dateRaw = readCSV("date.csv") as Record<string, string>[];
-      updateDate = dateRaw[0]?.["Ultima_Actualizacion"] ?? null;
-    } catch { /* file optional */ }
+    // ── updateDate — formatted as "YYYY-MM-DD HH:MM:SS" ───────────────────
+    // Frontend's formatUpdateDate() splits on space → needs that exact format.
+    const updateDate = latestPeSnapshot
+      ? latestPeSnapshot.snapshotDate.toISOString().replace('T', ' ').slice(0, 19)
+      : null;
 
     return NextResponse.json({
       resumenPE,
       tablaMaestra,
-      historiaPE: historySliceRemapped,
-      allHistoriaPE: historiaPERemapped,
+      allHistoriaPE,
       updateDate,
     });
   } catch (error) {
-    console.error("Economía API error:", error);
-    return NextResponse.json({ error: "Error loading economic data" }, { status: 500 });
+    console.error('Economía API error:', error);
+    return NextResponse.json({ error: 'Error loading economic data' }, { status: 500 });
   }
 }
