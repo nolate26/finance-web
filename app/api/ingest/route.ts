@@ -36,15 +36,18 @@ export async function POST(request: Request) {
         await prisma.equityCompsSnapshot.createMany({ data: rows });
         break;
 
-      // --- NUEVAS TABLAS DE FONDOS Y UNIVERSO ---
+     // --- NUEVAS TABLAS DE FONDOS Y UNIVERSO ---
       case 'FundPortfolioWeights':
-        await prisma.fundPortfolioWeights.createMany({ data: rows, skipDuplicates: true });
+        // Prisma le quitó la 's' al final
+        await prisma.fundPortfolioWeight.createMany({ data: rows, skipDuplicates: true }); 
         break;
       case 'ProyeccionesFinancieras':
-        await prisma.proyeccionesFinancieras.createMany({ data: rows, skipDuplicates: true });
+        // Prisma probablemente lo dejó como 'proyeccionesFinanciera' (sin la s)
+        await prisma.proyecciones_financieras.createMany({ data: rows, skipDuplicates: true }); 
         break;
       case 'MonedaFundReturns':
-        await prisma.monedaFundReturns.createMany({ data: rows, skipDuplicates: true });
+        // Prisma le quitó la 's' a Returns
+        await prisma.monedaFundReturn.createMany({ data: rows, skipDuplicates: true }); 
         break;
       case 'SsUniverse':
         await prisma.ssUniverse.createMany({ data: rows, skipDuplicates: true });
