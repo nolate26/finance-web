@@ -11,8 +11,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Payload inválido' }, { status: 400 });
     }
 
-    // Usamos skipDuplicates como red de seguridad (por si corres el script 2 veces el mismo día)
+    // Usamos skipDuplicates para proteger la base de datos de cargas repetidas
     switch (table) {
+      // --- TABLAS DE MARKET (Las que ya funcionan) ---
       case 'PeHistorico':
         await prisma.peHistorico.createMany({ data: rows, skipDuplicates: true });
         break;
@@ -34,13 +35,32 @@ export async function POST(request: Request) {
       case 'EquityCompsSnapshot':
         await prisma.equityCompsSnapshot.createMany({ data: rows });
         break;
+
+      // --- NUEVAS TABLAS DE FONDOS Y UNIVERSO ---
+      case 'FundPortfolioWeights':
+        await prisma.fundPortfolioWeights.createMany({ data: rows, skipDuplicates: true });
+        break;
+      case 'ProyeccionesFinancieras':
+        await prisma.proyeccionesFinancieras.createMany({ data: rows, skipDuplicates: true });
+        break;
+      case 'MonedaFundReturns':
+        await prisma.monedaFundReturns.createMany({ data: rows, skipDuplicates: true });
+        break;
+      case 'SsUniverse':
+        await prisma.ssUniverse.createMany({ data: rows, skipDuplicates: true });
+        break;
+      case 'PerformanceAttribution':
+        await prisma.performanceAttribution.createMany({ data: rows, skipDuplicates: true });
+        break;
+
       default:
         return NextResponse.json({ error: `Tabla ${table} no reconocida` }, { status: 400 });
     }
 
     return NextResponse.json({ success: true, message: `Inyectados ${rows.length} registros en ${table}` });
   } catch (error) {
+    // Mejoramos el log para ver el error real si algo falla en Prisma
     console.error(`Error en API [${table}]:`, error);
-    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
+    return NextResponse.json({ error: 'Error interno del servidor', details: String(error) }, { status: 500 });
   }
 }
