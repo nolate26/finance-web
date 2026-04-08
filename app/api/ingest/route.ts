@@ -63,7 +63,7 @@ export async function POST(request: Request) {
       case 'LatamEquitySnapshot':
         // Prisma siempre pone la primera letra en minúscula para el cliente
         await prisma.latamEquitySnapshot.createMany({ data: rows });
-        break;``
+        break;
     }
 
     return NextResponse.json({ success: true, message: `Inyectados ${rows.length} registros en ${table}` });
