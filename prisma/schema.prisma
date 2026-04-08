@@ -44,6 +44,7 @@ model EmpresasIndustrias {
   nombreChile    String? @map("nombre_chile") @db.VarChar(200)
   industriaGics  String? @map("industria_gics") @db.VarChar(200)
   industriaChile String? @map("industria_chile") @db.VarChar(200)
+  tickerBloomberg String? @map("ticker_bloomberg") @db.VarChar(100)
 
   @@map("empresas_industrias")
 }
@@ -172,6 +173,118 @@ model proyecciones_financieras {
 
   @@id([generated_at, empresa])
 }
+
+
+model LatamEquitySnapshot {
+
+  id            Int      @id @default(autoincrement())
+
+  snapshotDate  DateTime @default(now())
+ 
+  // Identificación
+
+  ticker        String
+ 
+  // Paso 1 — Retornos USD (TRI)
+
+  priceUsdTri   Float?   // Price (USD) — último valor TRI
+
+  ret1W         Float?
+
+  ret1M         Float?
+
+  retYtd        Float?
+
+  ret1Y         Float?
+
+  ret5Y         Float?
+ 
+  // Paso 2 — Precio y balance en USD
+
+  priceUsd      Float?   // CRNCY_ADJ_PX_LAST
+
+  mktCapUsd     Float?   // CRNCY_ADJ_MKT_CAP (MM USD)
+
+  netDebtUsd    Float?   // NET_DEBT en USD (MM)
+
+  evUsd         Float?   // Mkt Cap + Net Debt (MM USD)
+ 
+  // Paso 3 — Múltiplos y ratios
+
+  peCurYr       Float?   // PE año actual
+
+  peNxtYr       Float?   // PE año siguiente
+
+  evEbitdaCurYr Float?   // EV/EBITDA año actual
+
+  evEbitdaNxtYr Float?   // EV/EBITDA año siguiente
+
+  evSalesCurYr  Float?   // EV/Sales año actual
+
+  evSalesNxtYr  Float?   // EV/Sales año siguiente
+
+  pBv           Float?   // P/BV LTM
+
+  leverage      Float?   // Net Debt / EBITDA
+
+  roeEst        Float?   // ROE estimado año actual
+
+  divYield      Float?   // Dividend Yield estimado
+
+  priceLocal    Float?   // Precio en moneda local
+
+  targetPrice   Float?   // Target Price local
+
+  tpUpside      Float?   // Upside vs TP
+ 
+  // Paso 4 — NI Quarters real año anterior
+
+  niRealQ1      Float?
+
+  niRealQ2      Float?
+
+  niRealQ3      Float?
+
+  niRealQ4      Float?
+
+  // NI Quarters estimado año actual
+
+  niEstQ1       Float?
+
+  niEstQ2       Float?
+
+  niEstQ3       Float?
+
+  niEstQ4       Float?
+
+  // YoY %
+
+  niYoyQ1       Float?
+
+  niYoyQ2       Float?
+
+  niYoyQ3       Float?
+
+  niYoyQ4       Float?
+ 
+  // Paso 5 — EPS consenso
+
+  epsEst        Float?   // EPS año actual
+
+  epsRev1W      Float?   // Revisión EPS 1 semana
+
+  epsRev4W      Float?   // Revisión EPS 4 semanas
+
+  epsRev3M      Float?   // Revisión EPS 3 meses
+ 
+  @@index([snapshotDate])
+
+  @@index([ticker])
+
+  @@map("latam_equity_snapshots")
+
+}
+ 
 
 // ==========================================
 // SECCIÓN ECONOMÍA: HISTÓRICOS (Series de Tiempo)
