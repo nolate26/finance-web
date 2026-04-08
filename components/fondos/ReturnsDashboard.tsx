@@ -58,7 +58,7 @@ interface Props {
 
 // Lines to show in the chart per fund (others hidden to reduce noise)
 const CHART_LINES: Record<string, string[]> = {
-  Pionero: ["Pionero A", "MSCI EM Latam SC Net","Compass SC Chile - I","Siglo XXI","LarrainVial SC Chile", "Toesca SC Chile" ],
+  Pionero: ["Pionero A", "MSCI Chile SC Net","Compass SC Chile - I","Siglo XXI","LarrainVial SC Chile", "Toesca SC Chile" ],
   Moneda_Renta_Variable: ["MRV A", "IPSA", "FM LarrainVial Enfoque", "Falcom Tactical Chilean Equities" ],
   Orange: ["FTSE Chile All Cap TR Gross Orange", "Orange"],
   "Moneda_Latin_America_Equities_(LX)": ["MLE A (LX)", "MLE I (LX)", "iShares Latam 40 ETF", "DWS Invest Latam Equities", "BCI SICAV Latam Equity Fund","MSCI Latam 10/40 Net" ],
