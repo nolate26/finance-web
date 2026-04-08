@@ -58,6 +58,12 @@ export async function POST(request: Request) {
 
       default:
         return NextResponse.json({ error: `Tabla ${table} no reconocida` }, { status: 400 });
+
+      // --- NUEVA VISTA: SS LATAM ---
+      case 'LatamEquitySnapshot':
+        // Prisma siempre pone la primera letra en minúscula para el cliente
+        await prisma.latamEquitySnapshot.createMany({ data: rows });
+        break;``
     }
 
     return NextResponse.json({ success: true, message: `Inyectados ${rows.length} registros en ${table}` });
