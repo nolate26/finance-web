@@ -65,6 +65,7 @@ function recBadge(rec: unknown) {
 const COLUMNS: { key: string; label: string }[] = [
   { key: "company",         label: "Company"       },
   { key: "sector",          label: "Sector"        },
+  { key: "industria",       label: "Industry"      },
   { key: "price",           label: "Price"         },
   { key: "ret_ytd",         label: "YTD Ret"       },
   { key: "mkt_cap_bn",      label: "Mkt Cap"       },
@@ -79,7 +80,7 @@ const COLUMNS: { key: string; label: string }[] = [
   { key: "target_price",    label: "Target"        },
 ];
 
-const CENTER_FROM = 2; // Company + Sector are left-aligned; rest centered
+const CENTER_FROM = 3; // Company + Sector + Industry are left-aligned; rest centered
 
 export default function CompanyTable({
   companies,
@@ -166,6 +167,17 @@ export default function CompanyTable({
                     <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "rgba(43,92,224,0.06)", color: "#2B5CE0", border: "1px solid rgba(43,92,224,0.12)", whiteSpace: "nowrap" }}>
                       {sectorEn}
                     </span>
+                  </td>
+
+                  {/* Industry */}
+                  <td style={{ padding: "9px 10px" }}>
+                    {c.industria ? (
+                      <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "rgba(16,185,129,0.06)", color: "#065F46", border: "1px solid rgba(16,185,129,0.18)", whiteSpace: "nowrap" }}>
+                        {c.industria as string}
+                      </span>
+                    ) : (
+                      <span style={{ color: "#CBD5E1" }}>—</span>
+                    )}
                   </td>
 
                   {/* Price */}

@@ -108,16 +108,33 @@ export async function GET(request: NextRequest) {
 
   try {
     // ── Find the most recent cierre_cartera ───────────────────────────────────
-    const latest = await prisma.ssUniverse.findFirst({
-      orderBy: { cierreCartera: "desc" },
-      select: { cierreCartera: true, precios: true, resultados: true },
-    });
+    const [latest, allIndustries] = await Promise.all([
+      prisma.ssUniverse.findFirst({
+        orderBy: { cierreCartera: "desc" },
+        select: { cierreCartera: true, precios: true, resultados: true },
+      }),
+      // Load full table so we can replicate the fondos dual-lookup pattern
+      prisma.empresasIndustrias.findMany(),
+    ]);
 
     if (!latest) {
       return NextResponse.json(
         { error: "No stock selection data found" },
         { status: 404 }
       );
+    }
+
+    // ── Build industry lookups (same approach as fondos/route.ts) ─────────────
+    // Chile companies: try nombre_chile first, fall back to nombre_latam.
+    // Both keys resolve to industria_chile.
+    const chileByChile = new Map<string, string>(); // nombre_chile.lower → industria_chile
+    const chileByLatam = new Map<string, string>(); // nombre_latam.lower → industria_chile
+    for (const ind of allIndustries) {
+      const latamKey = ind.nombreLatam.toLowerCase().trim();
+      if (ind.industriaChile) {
+        if (ind.nombreChile) chileByChile.set(ind.nombreChile.toLowerCase().trim(), ind.industriaChile);
+        chileByLatam.set(latamKey, ind.industriaChile);
+      }
     }
 
     const latestDate = latest.cierreCartera;
@@ -134,9 +151,16 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
-    // ── Map to legacy CSV-keyed shape ─────────────────────────────────────────
-    const indices = indicesRaw.map(toFrontendRow);
-    let companies = companiesRaw.map(toFrontendRow);
+    // ── Map to legacy CSV-keyed shape (+ industria_chile) ─────────────────────
+    // Try nombre_chile key first, then nombre_latam fallback — same as fondos API.
+    const addIndustry = (row: ReturnType<typeof toFrontendRow>) => {
+      const key = String(row.company ?? "").toLowerCase().trim();
+      const industria = chileByChile.get(key) ?? chileByLatam.get(key) ?? null;
+      return { ...row, industria };
+    };
+
+    const indices = indicesRaw.map((r) => addIndustry(toFrontendRow(r)));
+    let companies = companiesRaw.map((r) => addIndustry(toFrontendRow(r)));
 
     // ── Optional server-side filters (kept for API backward-compatibility) ────
     if (sectorFilter) {

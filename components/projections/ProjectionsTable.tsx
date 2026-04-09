@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 interface MetricBlock {
   y2025: number;
   y2026: number;
@@ -42,17 +44,75 @@ function MetricCell({ block, year }: { block: MetricBlock | null; year: keyof Me
   );
 }
 
-
-// Company Info columns: Empresa, Sector, Moneda = 3 cols
+// Only show forward-looking years (2025 is past)
 const METRIC_HEADERS = ["Ingresos", "EBITDA", "EBIT", "Utilidad"] as const;
-const YEARS = ["'25", "'26", "'27"] as const;
-const YEAR_KEYS: (keyof MetricBlock)[] = ["y2025", "y2026", "y2027"];
+const YEARS = ["'26", "'27"] as const;
+const YEAR_KEYS: (keyof MetricBlock)[] = ["y2026", "y2027"];
 
-// 3 Company Info cols + 4 metrics × 3 years = 15 total
 const BORDER_METRIC = "1px solid rgba(43,92,224,0.12)";
 const BORDER_LIGHT  = "1px solid rgba(15,23,42,0.05)";
 
+type SortKey =
+  | "empresa"
+  | "sector"
+  | "ingresos_2026" | "ingresos_2027"
+  | "ebitda_2026"   | "ebitda_2027"
+  | "ebit_2026"     | "ebit_2027"
+  | "utilidad_2026" | "utilidad_2027";
+
+interface SortState { key: SortKey; dir: "asc" | "desc" }
+
+function getVal(row: ProjectionRow, key: SortKey): number | string | null {
+  if (key === "empresa") return row.empresa;
+  if (key === "sector")  return row.sector;
+  const [metric, yearStr] = key.split("_");
+  const block = row[metric as keyof Pick<ProjectionRow, "ingresos" | "ebitda" | "ebit" | "utilidad">];
+  if (!block) return null;
+  return (block as MetricBlock)[`y${yearStr}` as keyof MetricBlock] ?? null;
+}
+
 export default function ProjectionsTable({ rows }: Props) {
+  const [sort, setSort] = useState<SortState>({ key: "empresa", dir: "asc" });
+
+  function toggleSort(key: SortKey) {
+    setSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: key === "empresa" || key === "sector" ? "asc" : "desc" }
+    );
+  }
+
+  function SortIcon({ colKey }: { colKey: SortKey }) {
+    if (sort.key !== colKey) return <span style={{ opacity: 0.25, marginLeft: 2, fontSize: 8 }}>⇅</span>;
+    return (
+      <span style={{ color: "#2B5CE0", marginLeft: 2, fontSize: 8 }}>
+        {sort.dir === "asc" ? "↑" : "↓"}
+      </span>
+    );
+  }
+
+  const sorted = [...rows].sort((a, b) => {
+    const av = getVal(a, sort.key);
+    const bv = getVal(b, sort.key);
+    if (av === null && bv === null) return 0;
+    if (av === null) return 1;
+    if (bv === null) return -1;
+    const cmp =
+      typeof av === "string" && typeof bv === "string"
+        ? av.localeCompare(bv)
+        : (av as number) - (bv as number);
+    return sort.dir === "asc" ? cmp : -cmp;
+  });
+
+  function thStyle(active: boolean): React.CSSProperties {
+    return {
+      cursor: "pointer",
+      userSelect: "none",
+      color: active ? "#2B5CE0" : "#64748B",
+      background: active ? "rgba(43,92,224,0.06)" : undefined,
+    };
+  }
+
   return (
     <div className="card overflow-hidden">
       <div className="overflow-x-auto">
@@ -70,7 +130,7 @@ export default function ProjectionsTable({ rows }: Props) {
               {METRIC_HEADERS.map((m) => (
                 <th
                   key={m}
-                  colSpan={3}
+                  colSpan={2}
                   className="px-4 py-2 text-center text-[10px] font-bold tracking-widest uppercase"
                   style={{ color: "#2B5CE0", borderBottom: BORDER_METRIC, borderRight: BORDER_METRIC }}
                 >
@@ -80,28 +140,46 @@ export default function ProjectionsTable({ rows }: Props) {
             </tr>
             {/* Row 2 — column headers */}
             <tr style={{ background: "#F0F4FA" }}>
-              <th className="px-4 py-2 text-left font-medium" style={{ color: "#64748B", borderBottom: BORDER_LIGHT }}>Empresa</th>
-              <th className="px-3 py-2 text-left font-medium" style={{ color: "#64748B", borderBottom: BORDER_LIGHT }}>Sector</th>
-              <th className="px-3 py-2 text-left font-medium" style={{ color: "#64748B", borderBottom: BORDER_LIGHT, borderRight: BORDER_METRIC }}>Mon.</th>
+              <th
+                className="px-4 py-2 text-left font-medium"
+                style={{ ...thStyle(sort.key === "empresa"), borderBottom: BORDER_LIGHT }}
+                onClick={() => toggleSort("empresa")}
+              >
+                Empresa <SortIcon colKey="empresa" />
+              </th>
+              <th
+                className="px-3 py-2 text-left font-medium"
+                style={{ ...thStyle(sort.key === "sector"), borderBottom: BORDER_LIGHT }}
+                onClick={() => toggleSort("sector")}
+              >
+                Sector <SortIcon colKey="sector" />
+              </th>
+              <th className="px-3 py-2 text-left font-medium" style={{ color: "#64748B", borderBottom: BORDER_LIGHT, borderRight: BORDER_METRIC }}>
+                Mon.
+              </th>
               {METRIC_HEADERS.map((m) =>
-                YEARS.map((y, yi) => (
-                  <th
-                    key={`${m}-${y}`}
-                    className="px-3 py-2 text-right font-medium"
-                    style={{
-                      color: "#64748B",
-                      borderBottom: BORDER_LIGHT,
-                      borderRight: yi === 2 ? BORDER_METRIC : undefined,
-                    }}
-                  >
-                    {y}
-                  </th>
-                ))
+                YEARS.map((y, yi) => {
+                  const sortKey = `${m.toLowerCase()}_20${y.slice(1)}` as SortKey;
+                  return (
+                    <th
+                      key={`${m}-${y}`}
+                      className="px-3 py-2 text-right font-medium"
+                      style={{
+                        ...thStyle(sort.key === sortKey),
+                        borderBottom: BORDER_LIGHT,
+                        borderRight: yi === 1 ? BORDER_METRIC : undefined,
+                      }}
+                      onClick={() => toggleSort(sortKey)}
+                    >
+                      {y} <SortIcon colKey={sortKey} />
+                    </th>
+                  );
+                })
               )}
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, i) => (
+            {sorted.map((row, i) => (
               <tr
                 key={i}
                 className="transition-colors"
@@ -113,23 +191,23 @@ export default function ProjectionsTable({ rows }: Props) {
                 <td className="px-3 py-2.5" style={{ color: "#64748B" }}>{row.sector || "—"}</td>
                 <td className="px-3 py-2.5 font-mono" style={{ color: "#94A3B8", borderRight: BORDER_METRIC }}>{row.moneda}</td>
 
-                {/* Ingresos — no tint */}
+                {/* Ingresos */}
                 {YEAR_KEYS.map((k, ki) => (
-                  <td key={`ing-${k}`} style={{ borderLeft: ki === 0 ? "2px solid #E2E8F0" : undefined, borderRight: ki === 2 ? BORDER_METRIC : undefined }}>
+                  <td key={`ing-${k}`} style={{ borderLeft: ki === 0 ? "2px solid #E2E8F0" : undefined, borderRight: ki === 1 ? BORDER_METRIC : undefined }}>
                     <MetricCell block={row.ingresos} year={k} />
                   </td>
                 ))}
 
                 {/* EBITDA — light tint */}
                 {YEAR_KEYS.map((k, ki) => (
-                  <td key={`ebd-${k}`} style={{ borderLeft: ki === 0 ? "2px solid #E2E8F0" : undefined, borderRight: ki === 2 ? BORDER_METRIC : undefined, background: ki >= 0 ? "rgba(248,250,252,0.8)" : undefined }}>
+                  <td key={`ebd-${k}`} style={{ borderLeft: ki === 0 ? "2px solid #E2E8F0" : undefined, borderRight: ki === 1 ? BORDER_METRIC : undefined, background: "rgba(248,250,252,0.8)" }}>
                     <MetricCell block={row.ebitda} year={k} />
                   </td>
                 ))}
 
-                {/* EBIT — no tint */}
+                {/* EBIT */}
                 {YEAR_KEYS.map((k, ki) => (
-                  <td key={`ebt-${k}`} style={{ borderLeft: ki === 0 ? "2px solid #E2E8F0" : undefined, borderRight: ki === 2 ? BORDER_METRIC : undefined }}>
+                  <td key={`ebt-${k}`} style={{ borderLeft: ki === 0 ? "2px solid #E2E8F0" : undefined, borderRight: ki === 1 ? BORDER_METRIC : undefined }}>
                     <MetricCell block={row.ebit} year={k} />
                   </td>
                 ))}

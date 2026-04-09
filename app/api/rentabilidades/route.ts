@@ -104,7 +104,7 @@ export async function GET(request: Request) {
   }
 
   // ── Map DB rows → RentabilidadRow ─────────────────────────────────────────
-  const rows: RentabilidadRow[] = dbRows.map((r) => {
+  function mapDbRow(r: (typeof dbRows)[number]): RentabilidadRow {
     const group = r.fundGroup ?? "";
     const fund = r.fund ?? "";
     return {
@@ -124,7 +124,20 @@ export async function GET(request: Request) {
       annSinceIncep: toDec(r.incep),
       isMoneda: isMonedaFund(group),
     };
-  });
+  }
+
+  const rows: RentabilidadRow[] = dbRows.map(mapDbRow);
+
+  // ── For MRV (page 2): also fetch IPSA if it lives on a different page ──────
+  // IPSA is the MRV benchmark but may be stored under page 1 (Pionero).
+  if (pageFilter === "2" && !rows.some((r) => r.fund === "IPSA")) {
+    const ipsaDbRow = await prisma.monedaFundReturn.findFirst({
+      where: { fund: "IPSA", reportDate: latestDateRaw },
+    });
+    if (ipsaDbRow) {
+      rows.push(mapDbRow(ipsaDbRow));
+    }
+  }
 
   // ── Determine chart funds ─────────────────────────────────────────────────
   const monedaFunds = rows
@@ -158,11 +171,13 @@ export async function GET(request: Request) {
   // Dates in DB end with "/<year>" (e.g. "9/Jan/2026"), so use endsWith filter.
   const year = latestDateISO.substring(0, 4);
 
+  // For MRV (page 2): fetch by fund name set (includes IPSA from any page).
+  // For all other pages: keep the pageNum filter as before.
   const yearRows = await prisma.monedaFundReturn.findMany({
-    where: {
-      reportDate: { endsWith: `/${year}` },
-      pageNum: parseInt(pageFilter, 10),
-    },
+    where:
+      pageFilter === "2"
+        ? { reportDate: { endsWith: `/${year}` }, fund: { in: [...fundSet] } }
+        : { reportDate: { endsWith: `/${year}` }, pageNum: parseInt(pageFilter, 10) },
     select: { reportDate: true, fund: true, ytd: true },
   });
 

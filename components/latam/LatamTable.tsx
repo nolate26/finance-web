@@ -380,7 +380,7 @@ export default function LatamTable({
         border:       `1px solid ${BORDER}`,
         boxShadow:    "0 2px 12px rgba(15,23,42,0.07)",
         background:   BG_BODY_ODD,
-        maxHeight:    "calc(100vh - 290px)",
+        maxHeight:    "calc(100vh - 320px)",
       }}
     >
       <table
@@ -391,17 +391,23 @@ export default function LatamTable({
         }}
       >
         {/* ── THEAD ─────────────────────────────────────────────────────────── */}
-        <thead style={{ position: "sticky", top: 0, zIndex: 40 }}>
+        {/*
+          NOTE: position:sticky on <thead> is unreliable across browsers.
+          Each <th> must carry its own sticky positioning.
+          Row 1 sticks at top:0; Row 2 sticks at top:ROW1_H so it slides under row 1.
+        */}
+        <thead>
 
           {/* Row 1 — group labels */}
           <tr>
-            {/* Only Company is sticky — spans both header rows */}
+            {/* Company — sticky both axes (rowSpan=2 covers both header rows) */}
             <th
               rowSpan={2}
               onClick={() => handleHeaderClick("company")}
               style={{
                 ...TH_BASE,
                 position:      "sticky",
+                top:           0,
                 left:          0,
                 zIndex:        52,
                 minWidth:      W_COMPANY,
@@ -417,13 +423,16 @@ export default function LatamTable({
               Company <SortIndicator colKey="company" />
             </th>
 
-            {/* Group headers */}
+            {/* Group headers — sticky top row */}
             {COL_GROUPS.map((g) => (
               <th
                 key={g.label}
                 colSpan={g.cols.length}
                 style={{
                   ...TH_BASE,
+                  position:      "sticky",
+                  top:           0,
+                  zIndex:        41,
                   textAlign:     "center",
                   background:    g.accent ? BG_HEADER_ACC : BG_HEADER,
                   color:         g.accent ? "#1E40AF" : "#64748B",
@@ -441,7 +450,7 @@ export default function LatamTable({
             ))}
           </tr>
 
-          {/* Row 2 — column labels */}
+          {/* Row 2 — column labels (sticks below row 1) */}
           <tr>
             {ALL_COLS.map((col) => {
               const isActive = sortBy === col.key;
@@ -452,8 +461,11 @@ export default function LatamTable({
                   onClick={() => handleHeaderClick(col.key)}
                   style={{
                     ...TH_BASE,
-                    textAlign:  col.align,
-                    minWidth:   col.minW,
+                    position:  "sticky",
+                    top:       28,   // height of row 1 (~28px)
+                    zIndex:    41,
+                    textAlign: col.align,
+                    minWidth:  col.minW,
                     background: isActive
                       ? "rgba(43,92,224,0.12)"
                       : accent
