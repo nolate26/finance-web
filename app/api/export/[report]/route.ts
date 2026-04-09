@@ -30,15 +30,13 @@ function jsonToCsv(data: Record<string, unknown>[]): string {
 function pivotLongToWide(
   records: { date: Date; colKey: string; value: number | null }[]
 ): Record<string, unknown>[] {
-  // Collect all unique column keys, preserving insertion order (already date-sorted)
   const colSet = new Set<string>();
   for (const r of records) colSet.add(r.colKey);
   const cols = Array.from(colSet);
 
-  // Build a map: dateStr → { date, col1, col2, … }
   const rowMap = new Map<string, Record<string, unknown>>();
   for (const r of records) {
-    const dateStr = r.date.toISOString().slice(0, 10); // YYYY-MM-DD
+    const dateStr = r.date.toISOString().slice(0, 10);
     if (!rowMap.has(dateStr)) {
       const base: Record<string, unknown> = { date: dateStr };
       for (const c of cols) base[c] = null;
@@ -51,7 +49,7 @@ function pivotLongToWide(
 }
 
 // ---------------------------------------------------------------------------
-// Report handlers
+// Report handlers (Originales)
 // ---------------------------------------------------------------------------
 
 async function exportPeHistorico(): Promise<Record<string, unknown>[]> {
@@ -68,7 +66,6 @@ async function exportCommoditiesHistorico(): Promise<Record<string, unknown>[]> 
 
 async function exportMacroHistorico(): Promise<Record<string, unknown>[]> {
   const rows = await prisma.macroHistorico.findMany({ orderBy: { date: 'asc' } });
-  // Column key = "País - Indicador"
   const mapped = rows.map((r) => ({
     date: r.date,
     colKey: `${r.pais} - ${r.indicador}`,
@@ -77,7 +74,6 @@ async function exportMacroHistorico(): Promise<Record<string, unknown>[]> {
   return pivotLongToWide(mapped);
 }
 
-/** Returns only rows from the latest snapshotDate. Strips id & snapshotDate. */
 async function latestSnapshot<T extends { id: number; snapshotDate: Date }>(
   model: {
     findFirst: (args: {
@@ -98,11 +94,44 @@ async function latestSnapshot<T extends { id: number; snapshotDate: Date }>(
     orderBy: { id: 'asc' },
   });
 
-  // Remove internal fields and format snapshotDate
   return rows.map(({ id: _id, snapshotDate, ...rest }) => ({
     snapshotDate: snapshotDate.toISOString().slice(0, 10),
     ...rest,
   }));
+}
+
+// ---------------------------------------------------------------------------
+// Report handlers (NUEVOS - Company Deep Dive)
+// ---------------------------------------------------------------------------
+
+async function exportValuationHistory(): Promise<Record<string, unknown>[]> {
+  const rows = await prisma.valuationHistory.findMany({ orderBy: [{ date: 'asc' }, { ticker: 'asc' }] });
+  return rows.map(({ id: _id, date, ...rest }) => ({ date: date.toISOString().slice(0, 10), ...rest }));
+}
+
+async function exportConsensusEstimate(): Promise<Record<string, unknown>[]> {
+  const rows = await prisma.consensusEstimate.findMany({ orderBy: [{ date: 'asc' }, { ticker: 'asc' }] });
+  return rows.map(({ id: _id, date, ...rest }) => ({ date: date.toISOString().slice(0, 10), ...rest }));
+}
+
+async function exportPriceVsEarnings(): Promise<Record<string, unknown>[]> {
+  const rows = await prisma.priceVsEarnings.findMany({ orderBy: [{ date: 'asc' }, { ticker: 'asc' }] });
+  return rows.map(({ id: _id, date, ...rest }) => ({ date: date.toISOString().slice(0, 10), ...rest }));
+}
+
+async function exportShortInterest(): Promise<Record<string, unknown>[]> {
+  const rows = await prisma.shortInterest.findMany({ orderBy: [{ date: 'asc' }, { ticker: 'asc' }] });
+  return rows.map(({ id: _id, date, ...rest }) => ({ date: date.toISOString().slice(0, 10), ...rest }));
+}
+
+async function exportPriceRange52w(): Promise<Record<string, unknown>[]> {
+  const rows = await prisma.priceRange52w.findMany({ orderBy: [{ date: 'asc' }, { ticker: 'asc' }] });
+  return rows.map(({ id: _id, date, ...rest }) => ({ date: date.toISOString().slice(0, 10), ...rest }));
+}
+
+async function exportAnalystRecommendation(): Promise<Record<string, unknown>[]> {
+  const rows = await prisma.analystRecommendation.findMany({ orderBy: [{ date: 'asc' }, { ticker: 'asc' }] });
+  return rows.map(({ id: _id, date, ...rest }) => ({ date: date.toISOString().slice(0, 10), ...rest }));
 }
 
 // ---------------------------------------------------------------------------
@@ -116,7 +145,13 @@ type ReportKey =
   | 'pe-resumen'
   | 'comps-maestra'
   | 'macro-forecasts'
-  | 'commodities-proyecciones';
+  | 'commodities-proyecciones'
+  | 'valuation-history'
+  | 'consensus-estimates'
+  | 'price-vs-earnings'
+  | 'short-interest'
+  | 'price-range-52w'
+  | 'analyst-recommendations';
 
 const REPORT_HANDLERS: Record<ReportKey, () => Promise<Record<string, unknown>[]>> = {
   'pe-historico': exportPeHistorico,
@@ -126,6 +161,14 @@ const REPORT_HANDLERS: Record<ReportKey, () => Promise<Record<string, unknown>[]
   'comps-maestra': () => latestSnapshot(prisma.equityCompsSnapshot as never),
   'macro-forecasts': () => latestSnapshot(prisma.macroForecasts as never),
   'commodities-proyecciones': () => latestSnapshot(prisma.commodityForecasts as never),
+  
+  // Nuevas rutas agregadas
+  'valuation-history': exportValuationHistory,
+  'consensus-estimates': exportConsensusEstimate,
+  'price-vs-earnings': exportPriceVsEarnings,
+  'short-interest': exportShortInterest,
+  'price-range-52w': exportPriceRange52w,
+  'analyst-recommendations': exportAnalystRecommendation,
 };
 
 function isReportKey(key: string): key is ReportKey {
@@ -160,7 +203,7 @@ export async function GET(
     }
 
     const csv = jsonToCsv(data);
-    const dateTag = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const dateTag = new Date().toISOString().slice(0, 10);
     const filename = `${report}_${dateTag}.csv`;
 
     return new NextResponse(csv, {

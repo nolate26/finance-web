@@ -56,14 +56,38 @@ export async function POST(request: Request) {
         await prisma.performanceAttribution.createMany({ data: rows, skipDuplicates: true });
         break;
 
-      default:
-        return NextResponse.json({ error: `Tabla ${table} no reconocida` }, { status: 400 });
-
-      // --- NUEVA VISTA: SS LATAM ---
+      // --- NUEVAS TABLAS: COMPANY DEEP DIVE ---
+      case 'ValuationHistory':
+        await prisma.valuationHistory.createMany({ data: rows, skipDuplicates: true });
+        break;
+      case 'ConsensusEstimate':
+        await prisma.consensusEstimate.createMany({ data: rows, skipDuplicates: true });
+        break;
+      case 'PriceVsEarnings':
+        await prisma.priceVsEarnings.createMany({ data: rows, skipDuplicates: true });
+        break;
+      case 'ShortInterest':
+        await prisma.shortInterest.createMany({ data: rows, skipDuplicates: true });
+        break;
+      case 'PriceRange52w':
+        await prisma.priceRange52w.createMany({ data: rows, skipDuplicates: true });
+        break;
+      case 'AnalystRecommendation':
+        await prisma.analystRecommendation.createMany({ data: rows, skipDuplicates: true });
+        break;
+      case 'LastRun':
+        await prisma.lastRun.createMany({ data: rows, skipDuplicates: true });
+        break;
+       // --- NUEVA VISTA: SS LATAM ---
       case 'LatamEquitySnapshot':
         // Prisma siempre pone la primera letra en minúscula para el cliente
         await prisma.latamEquitySnapshot.createMany({ data: rows });
         break;
+        
+      default:
+        return NextResponse.json({ error: `Tabla ${table} no reconocida` }, { status: 400 });
+
+     
     }
 
     return NextResponse.json({ success: true, message: `Inyectados ${rows.length} registros en ${table}` });
