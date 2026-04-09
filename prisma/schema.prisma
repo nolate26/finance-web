@@ -380,3 +380,106 @@ model EquityCompsSnapshot {
 
   @@index([snapshotDate])
 }
+
+
+// ─── Tabla 1: Valuación histórica (SERIE diaria, 10Y) ────────────────────
+model ValuationHistory {
+  id           Int      @id @default(autoincrement())
+  ticker       String
+  date         DateTime @db.Date
+
+  peFwd        Float?
+  evEbitdaFwd  Float?
+  pbv          Float?
+  roeFwd       Float?
+
+  @@unique([ticker, date])
+  @@index([ticker])
+  @@index([date])
+  @@map("valuation_history")
+}
+
+// ─── Tabla 2: Consenso de estimaciones (SERIE mensual) ───────────────────
+model ConsensusEstimate {
+  id       Int      @id @default(autoincrement())
+  ticker   String
+  date     DateTime @db.Date
+  metric   String
+  period   String
+  value    Float
+
+  @@unique([ticker, date, metric, period])
+  @@index([ticker])
+  @@index([ticker, metric])
+  @@map("consensus_estimates")
+}
+
+// ─── Tabla 3: Precio vs Net Income (SERIE diaria) ────────────────────────
+model PriceVsEarnings {
+  id             Int      @id @default(autoincrement())
+  ticker         String
+  date           DateTime @db.Date
+  pxLast         Float
+  ni1fy          Float?
+  niCurrentYear  Float?
+  niNextYear     Float?
+
+  @@unique([ticker, date])
+  @@index([ticker])
+  @@index([date])
+  @@map("price_vs_earnings")
+}
+
+// ─── Tabla 4: Short Interest (FOTO acumulada) ────────────────────────────
+model ShortInterest {
+  id             Int      @id @default(autoincrement())
+  ticker         String
+  date           DateTime @db.Date
+  shortIntRatio  Float
+
+  @@unique([ticker, date])
+  @@index([ticker])
+  @@map("short_interest")
+}
+
+// ─── Tabla 5: Rango 52 semanas (FOTO acumulada) ─────────────────────────
+model PriceRange52w {
+  id        Int      @id @default(autoincrement())
+  ticker    String
+  date      DateTime @db.Date
+  pxLast    Float
+  high52w   Float
+  low52w    Float
+  pctRange  Float?
+
+  @@unique([ticker, date])
+  @@index([ticker])
+  @@map("price_range_52w")
+}
+
+// ─── Tabla 6: Recomendaciones de analistas (FOTO acumulada) ──────────────
+model AnalystRecommendation {
+  id           Int      @id @default(autoincrement())
+  ticker       String
+  date         DateTime @db.Date
+  totAnalysts  Int
+  buy          Int      @default(0)
+  hold         Int      @default(0)
+  sell         Int      @default(0)
+  consenso     String?
+
+  @@unique([ticker, date])
+  @@index([ticker])
+  @@map("analyst_recommendations")
+}
+
+// ─── Tracking de corridas incrementales ──────────────────────────────────
+model LastRun {
+  id        Int    @id @default(autoincrement())
+  ticker    String
+  module    String
+  lastDate  String
+
+  @@unique([ticker, module])
+  @@map("last_run")
+}
