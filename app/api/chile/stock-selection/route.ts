@@ -151,12 +151,22 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
-    // ── Map to legacy CSV-keyed shape (+ industria_chile) ─────────────────────
+    // ── Map to legacy CSV-keyed shape (+ industria_chile) ────────────────────────
     // Try nombre_chile key first, then nombre_latam fallback — same as fondos API.
-    const addIndustry = (row: ReturnType<typeof toFrontendRow>) => {
+    //
+    // We explicitly re-declare `sector` in the return type so TypeScript knows the
+    // property exists after spreading Record<string,unknown> (spreading an index
+    // signature loses named properties in the inferred type).
+    type EnrichedRow = Record<string, unknown> & {
+      sector: string | null;
+      industria: string | null;
+    };
+
+    const addIndustry = (row: ReturnType<typeof toFrontendRow>): EnrichedRow => {
       const key = String(row.company ?? "").toLowerCase().trim();
       const industria = chileByChile.get(key) ?? chileByLatam.get(key) ?? null;
-      return { ...row, industria };
+      const sector = (row.sector as string | null) ?? null;
+      return { ...row, sector, industria };
     };
 
     const indices = indicesRaw.map((r) => addIndustry(toFrontendRow(r)));
