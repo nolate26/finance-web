@@ -1,422 +1,310 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { RefreshCw, LayoutList, Grid3X3 } from "lucide-react";
-import CompanyTable from "@/components/companies/CompanyTable";
-import IndustryView from "@/components/companies/IndustryView";
-import CompanyModal from "@/components/companies/CompanyModal";
-import { Company, SECTOR_MAP } from "@/lib/companies";
+import CompanySidebar from "@/components/deep-dive/CompanySidebar";
+import ValuationChart from "@/components/deep-dive/ValuationChart";
+import KPICards from "@/components/deep-dive/KPICards";
+import ConsensusChart from "@/components/deep-dive/ConsensusChart";
+import PriceEarningsChart from "@/components/deep-dive/PriceEarningsChart";
+import AnalystDonut from "@/components/deep-dive/AnalystDonut";
+import ConsensusMomentumCards from "@/components/deep-dive/ConsensusMomentumCards";
+import RelatedReports from "@/components/deep-dive/RelatedReports";
+import type { CompanyListItem } from "@/app/api/companies/list/route";
+import type { DeepDivePayload } from "@/app/api/companies/[ticker]/route";
 
-const REVERSE_SECTOR_MAP: Record<string, string> = Object.fromEntries(
-  Object.entries(SECTOR_MAP).map(([k, v]) => [v, k])
-);
+// ── Shared card style ─────────────────────────────────────────────────────────
+const CARD: React.CSSProperties = {
+  background: "#fff",
+  border: "1px solid rgba(15,23,42,0.08)",
+  borderRadius: 12,
+  padding: "18px 20px",
+  boxShadow: "0 1px 4px rgba(15,23,42,0.06)",
+};
 
-const SORT_OPTIONS = [
-  { value: "mkt_cap_bn_desc", label: "Market Cap ↓", key: "mkt_cap_bn", order: "desc" as const },
-  { value: "ret_1y_desc", label: "1Y Return ↓", key: "ret_1y", order: "desc" as const },
-  { value: "Fv_ebitda_ltm_asc", label: "FV/EBITDA ↑", key: "Fv_ebitda_ltm", order: "asc" as const },
-  { value: "pe_ltm_asc", label: "P/E ↑", key: "pe_ltm", order: "asc" as const },
-];
-
-function sortCompanies(
-  list: Company[],
-  sortBy: string,
-  sortOrder: "asc" | "desc"
-): Company[] {
-  return [...list].sort((a, b) => {
-    const av = a[sortBy];
-    const bv = b[sortBy];
-    if (av === null && bv === null) return 0;
-    if (av === null) return 1;
-    if (bv === null) return -1;
-    const diff =
-      typeof av === "number" && typeof bv === "number"
-        ? av - bv
-        : String(av).localeCompare(String(bv));
-    return sortOrder === "asc" ? diff : -diff;
-  });
+// ── Section label ─────────────────────────────────────────────────────────────
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: "0.10em",
+        color: "#64748B",
+        textTransform: "uppercase",
+        marginBottom: 14,
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+      }}
+    >
+      <span style={{ display: "inline-block", width: 3, height: 12, borderRadius: 2, background: "#2B5CE0" }} />
+      {children}
+    </div>
+  );
 }
 
+// ── Loading spinner ────────────────────────────────────────────────────────────
+function Spinner({ small }: { small?: boolean }) {
+  const size = small ? 20 : 32;
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        border: `2px solid rgba(43,92,224,0.15)`,
+        borderTopColor: "#2B5CE0",
+        animation: "spin 0.8s linear infinite",
+      }}
+    />
+  );
+}
+
+// ── Empty / placeholder ───────────────────────────────────────────────────────
+function EmptyState() {
+  return (
+    <div
+      style={{
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 12,
+        color: "#94A3B8",
+      }}
+    >
+      <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+        <circle cx="24" cy="24" r="20" stroke="#E2E8F0" strokeWidth="2" />
+        <path d="M16 24h16M24 16v16" stroke="#CBD5E1" strokeWidth="2" strokeLinecap="round" />
+      </svg>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "#64748B", marginBottom: 4 }}>
+          Select a company
+        </div>
+        <div style={{ fontSize: 12, color: "#94A3B8" }}>
+          Choose a ticker from the sidebar to explore its deep dive
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+
 export default function CompaniesPage() {
-  const [allCompanies, setAllCompanies] = useState<Company[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [companies, setCompanies] = useState<CompanyListItem[]>([]);
+  const [listLoading, setListLoading] = useState(true);
 
-  const [search, setSearch] = useState("");
-  const [selectedSector, setSelectedSector] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState("mkt_cap_bn");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
-  const [viewMode, setViewMode] = useState<"table" | "industry">("table");
-  const [selectedCompanies, setSelectedCompanies] = useState<Company[]>([]);
+  const [selectedItem, setSelectedItem] = useState<CompanyListItem | null>(null);
+  const [deepDive, setDeepDive] = useState<DeepDivePayload | null>(null);
+  const [diveLoading, setDiveLoading] = useState(false);
+  const [diveError, setDiveError] = useState<string | null>(null);
 
-  function handleSelectCompany(company: Company) {
-    setSelectedCompanies((prev) => {
-      // If already in list, bring to front (dedup)
-      if (prev.some((c) => c.company === company.company)) return prev;
-      return [company, ...prev];
-    });
-  }
-
-  function handleCloseCompany(company: Company) {
-    setSelectedCompanies((prev) => prev.filter((c) => c.company !== company.company));
-  }
-
-  const fetchCompanies = useCallback(() => {
-    setLoading(true);
-    setError(false);
-    fetch("/api/companies")
+  // Fetch company list once
+  useEffect(() => {
+    fetch("/api/companies/list")
       .then((r) => r.json())
-      .then((d: { companies?: Company[]; error?: string }) => {
-        if (d.error) {
-          setError(true);
-        } else {
-          setAllCompanies(d.companies ?? []);
-        }
-        setLoading(false);
+      .then((d: { companies?: CompanyListItem[] }) => {
+        setCompanies(d.companies ?? []);
       })
-      .catch(() => {
-        setError(true);
-        setLoading(false);
-      });
+      .catch(() => setCompanies([]))
+      .finally(() => setListLoading(false));
   }, []);
 
-  useEffect(() => {
-    fetchCompanies();
-  }, [fetchCompanies]);
+  // Fetch deep dive when ticker changes
+  const handleSelect = useCallback((item: CompanyListItem) => {
+    setSelectedItem(item);
+    setDiveLoading(true);
+    setDiveError(null);
+    setDeepDive(null);
 
-  // Filtered + sorted companies for table/industry
-  const filtered = (() => {
-    let list = allCompanies;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter((c) =>
-        String(c.company ?? "").toLowerCase().includes(q)
-      );
-    }
-    if (selectedSector) {
-      list = list.filter((c) => c.sector === selectedSector);
-    }
-    return sortCompanies(list, sortBy, sortOrder);
-  })();
+    fetch(`/api/companies/${item.ticker}`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((d: DeepDivePayload) => setDeepDive(d))
+      .catch((e) => setDiveError(String(e)))
+      .finally(() => setDiveLoading(false));
+  }, []);
 
-  // Unique sectors from all companies (English display, sorted)
-  const uniqueSectorEnglish = Array.from(
-    new Set(
-      allCompanies
-        .map((c) => {
-          const sp = c.sector as string;
-          return sp ? SECTOR_MAP[sp] ?? sp : null;
-        })
-        .filter(Boolean) as string[]
-    )
-  ).sort();
-
-  // Selected sort option label
-  const activeSortOption =
-    SORT_OPTIONS.find((o) => o.key === sortBy && o.order === sortOrder) ?? SORT_OPTIONS[0];
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-[80vh]">
-        <div className="flex flex-col items-center gap-4">
-          <div
-            className="w-10 h-10 rounded-full border-2 animate-spin"
-            style={{
-              borderColor: "rgba(43,92,224,0.15)",
-              borderTopColor: "#2B5CE0",
-            }}
-          />
-          <p className="text-sm font-mono" style={{ color: "#64748B" }}>
-            Loading companies...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center h-[80vh]">
-        <div
-          style={{
-            background: "rgba(220,38,38,0.06)",
-            border: "1px solid rgba(220,38,38,0.15)",
-            borderRadius: 10,
-            padding: "24px 32px",
-            textAlign: "center",
-          }}
-        >
-          <p style={{ color: "#DC2626", marginBottom: 12, fontSize: 14 }}>
-            Failed to load companies data
-          </p>
-          <button
-            onClick={fetchCompanies}
-            style={{
-              padding: "6px 16px",
-              borderRadius: 6,
-              background: "rgba(43,92,224,0.08)",
-              border: "1px solid rgba(43,92,224,0.20)",
-              color: "#2B5CE0",
-              cursor: "pointer",
-              fontSize: 13,
-            }}
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // Derived values for analyst donut
+  const latestPrice = deepDive?.priceVsEarnings.at(-1)?.pxLast ?? null;
+  const latestPriceRange = deepDive?.priceRange52w ?? null;
 
   return (
-    <div className="max-w-[1600px] mx-auto px-6 py-6">
-      {/* Page header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          marginBottom: 20,
-          flexWrap: "wrap",
-          gap: 12,
-        }}
-      >
-        <div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, color: "#0F172A", letterSpacing: "-0.02em" }}>
-            Companies Stock Selection
-          </h1>
-          <p style={{ fontSize: 12, marginTop: 4, color: "#64748B" }}>
-            Chilean Equity Universe — AGF Coverage
-          </p>
-        </div>
-        <button
-          onClick={fetchCompanies}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "6px 12px",
-            borderRadius: 8,
-            background: "rgba(43,92,224,0.06)",
-            border: "1px solid rgba(15,23,42,0.10)",
-            color: "#64748B",
-            cursor: "pointer",
-            fontSize: 12,
-            fontFamily: "JetBrains Mono, monospace",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.color = "#334155";
-            (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.25)";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.color = "#64748B";
-            (e.currentTarget as HTMLElement).style.borderColor = "rgba(15,23,42,0.10)";
-          }}
-        >
-          <RefreshCw size={12} />
-          <span>Refresh</span>
-        </button>
-      </div>
+    <>
+      {/* Spin keyframe — injected once */}
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
-      {/* Search & Filter Bar */}
-      <div
-        className="card"
-        style={{
-          padding: "12px 16px",
-          marginBottom: 16,
-          display: "flex",
-          gap: 10,
-          flexWrap: "wrap",
-          alignItems: "center",
-        }}
-      >
-        {/* Search input */}
-        <div style={{ position: "relative", flex: "1 1 200px", minWidth: 160 }}>
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search company..."
-            style={{
-              width: "100%",
-              padding: "7px 12px",
-              borderRadius: 7,
-              background: "#F8FAFF",
-              border: "1px solid rgba(15,23,42,0.10)",
-              color: "#0F172A",
-              fontSize: 13,
-              outline: "none",
-              fontFamily: "Inter, sans-serif",
-            }}
-            onFocus={(e) => {
-              (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.35)";
-            }}
-            onBlur={(e) => {
-              (e.currentTarget as HTMLElement).style.borderColor = "rgba(15,23,42,0.10)";
-            }}
+      <div style={{ display: "flex", height: "calc(100vh - 64px)", overflow: "hidden" }}>
+        {/* ── Sidebar ───────────────────────────────────────────────────────── */}
+        <div style={{ width: 220, flexShrink: 0, overflow: "hidden" }}>
+          <CompanySidebar
+            companies={companies}
+            selectedTicker={selectedItem?.ticker ?? null}
+            onSelect={handleSelect}
+            loading={listLoading}
           />
         </div>
 
-        {/* Sector dropdown */}
-        <select
-          value={selectedSector ? (SECTOR_MAP[selectedSector] ?? selectedSector) : ""}
-          onChange={(e) => {
-            const englishName = e.target.value;
-            setSelectedSector(
-              englishName ? (REVERSE_SECTOR_MAP[englishName] ?? englishName) : null
-            );
-          }}
-          style={{
-            padding: "7px 12px",
-            borderRadius: 7,
-            background: "#F8FAFF",
-            border: "1px solid rgba(15,23,42,0.10)",
-            color: selectedSector ? "#0F172A" : "#64748B",
-            fontSize: 13,
-            cursor: "pointer",
-            outline: "none",
-            minWidth: 160,
-          }}
-        >
-          <option value="">All Sectors</option>
-          {uniqueSectorEnglish.map((en) => (
-            <option key={en} value={en}>
-              {en}
-            </option>
-          ))}
-        </select>
+        {/* ── Main content ──────────────────────────────────────────────────── */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", display: "flex", flexDirection: "column", gap: 0 }}>
 
-        {/* Sort dropdown */}
-        <select
-          value={activeSortOption.value}
-          onChange={(e) => {
-            const opt = SORT_OPTIONS.find((o) => o.value === e.target.value);
-            if (opt) {
-              setSortBy(opt.key);
-              setSortOrder(opt.order);
-            }
-          }}
-          style={{
-            padding: "7px 12px",
-            borderRadius: 7,
-            background: "#F8FAFF",
-            border: "1px solid rgba(15,23,42,0.10)",
-            color: "#0F172A",
-            fontSize: 13,
-            cursor: "pointer",
-            outline: "none",
-            minWidth: 150,
-          }}
-        >
-          {SORT_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+          {/* No selection */}
+          {!selectedItem && !diveLoading && <EmptyState />}
 
-        {/* View toggle */}
-        <div
-          style={{
-            display: "flex",
-            gap: 4,
-            padding: 3,
-            borderRadius: 8,
-            background: "#F0F4FA",
-            border: "1px solid rgba(15,23,42,0.08)",
-            marginLeft: "auto",
-          }}
-        >
-          {(["table", "industry"] as const).map((mode) => {
-            const isActive = viewMode === mode;
-            return (
-              <button
-                key={mode}
-                onClick={() => setViewMode(mode)}
+          {/* Loading */}
+          {diveLoading && (
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+                <Spinner />
+                <span style={{ fontSize: 12, color: "#94A3B8", fontFamily: "JetBrains Mono, monospace" }}>
+                  Loading {selectedItem?.ticker}...
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Error */}
+          {diveError && (
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <div
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 5,
-                  padding: "5px 12px",
-                  borderRadius: 6,
-                  fontSize: 12,
-                  fontWeight: 500,
-                  cursor: "pointer",
-                  border: "none",
-                  background: isActive ? "rgba(43,92,224,0.10)" : "transparent",
-                  color: isActive ? "#1E3A8A" : "#64748B",
-                  transition: "all 0.15s",
-                }}
-                onMouseEnter={(e) => {
-                  if (!isActive)
-                    (e.currentTarget as HTMLElement).style.color = "#334155";
-                }}
-                onMouseLeave={(e) => {
-                  if (!isActive)
-                    (e.currentTarget as HTMLElement).style.color = "#64748B";
+                  background: "rgba(220,38,38,0.06)",
+                  border: "1px solid rgba(220,38,38,0.15)",
+                  borderRadius: 10,
+                  padding: "20px 28px",
+                  textAlign: "center",
                 }}
               >
-                {mode === "table" ? <LayoutList size={13} /> : <Grid3X3 size={13} />}
-                {mode === "table" ? "Table" : "Industry"}
-              </button>
-            );
-          })}
+                <div style={{ color: "#DC2626", fontSize: 13, marginBottom: 8 }}>
+                  Failed to load data for {selectedItem?.ticker}
+                </div>
+                <div style={{ color: "#94A3B8", fontSize: 11 }}>{diveError}</div>
+              </div>
+            </div>
+          )}
+
+          {/* Dashboard — only when data is ready */}
+          {deepDive && !diveLoading && (
+            <>
+              {/* Company header */}
+              <div style={{ marginBottom: 20 }}>
+                <h1
+                  style={{
+                    fontSize: 22,
+                    fontWeight: 800,
+                    color: "#0F172A",
+                    letterSpacing: "-0.02em",
+                    fontFamily: "JetBrains Mono, monospace",
+                  }}
+                >
+                  {deepDive.ticker}
+                </h1>
+                {selectedItem?.nombre && (
+                  <p style={{ fontSize: 12, color: "#64748B", marginTop: 3 }}>
+                    {selectedItem.nombre}
+                  </p>
+                )}
+              </div>
+
+              {/* ── ROW 1: Valuation + KPIs ─────────────────────────────────── */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 280px",
+                  gap: 16,
+                  marginBottom: 16,
+                }}
+              >
+                {/* Valuation chart */}
+                <div style={{ ...CARD, minHeight: 320 }}>
+                  <SectionLabel>Historical Valuation</SectionLabel>
+                  {deepDive.valuationHistory.length > 0 ? (
+                    <div style={{ height: 260 }}>
+                      <ValuationChart data={deepDive.valuationHistory} />
+                    </div>
+                  ) : (
+                    <div style={{ height: 260, display: "flex", alignItems: "center", justifyContent: "center", color: "#CBD5E1", fontSize: 12 }}>
+                      No valuation history data
+                    </div>
+                  )}
+                </div>
+
+                {/* KPI sidebar cards */}
+                <div style={{ ...CARD }}>
+                  <SectionLabel>Market Snapshot</SectionLabel>
+                  <KPICards
+                    priceRange={latestPriceRange}
+                    shortInterest={deepDive.shortInterest}
+                  />
+                </div>
+              </div>
+
+              {/* ── ROW 2: Consensus chart + Price vs Earnings ───────────────── */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 16,
+                  marginBottom: 16,
+                }}
+              >
+                <div style={{ ...CARD }}>
+                  <SectionLabel>Consensus Evolution</SectionLabel>
+                  <div style={{ height: 220 }}>
+                    <ConsensusChart data={deepDive.consensusEstimates} />
+                  </div>
+                </div>
+
+                <div style={{ ...CARD }}>
+                  <SectionLabel>Price vs Blended Forward Earnings</SectionLabel>
+                  <div style={{ height: 220 }}>
+                    <PriceEarningsChart data={deepDive.priceVsEarnings} />
+                  </div>
+                </div>
+              </div>
+
+              {/* ── ROW 3: Analyst Donut + Consensus Cards + Related Reports ── */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "3fr 6fr 3fr",
+                  gap: 16,
+                  marginBottom: 24,
+                  alignItems: "stretch",
+                }}
+              >
+                <div style={{ ...CARD }}>
+                  <SectionLabel>Analyst Sentiment</SectionLabel>
+                  <AnalystDonut
+                    analystRec={deepDive.analystRec}
+                    targetPrice={latestPriceRange?.pxLast ?? null}
+                    currentPrice={latestPrice}
+                  />
+                </div>
+
+                <div style={{ ...CARD }}>
+                  <ConsensusMomentumCards data={deepDive.consensusEstimates} />
+                </div>
+
+                <div style={{ ...CARD }}>
+                  <RelatedReports />
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
-
-      {/* Results count */}
-      {(search || selectedSector) && (
-        <div
-          style={{
-            fontSize: 12,
-            color: "#64748B",
-            fontFamily: "JetBrains Mono, monospace",
-            marginBottom: 10,
-          }}
-        >
-          {filtered.length} result{filtered.length !== 1 ? "s" : ""}
-          {selectedSector && (
-            <span style={{ color: "#2B5CE0" }}>
-              {" "}in {SECTOR_MAP[selectedSector] ?? selectedSector}
-            </span>
-          )}
-          {search && (
-            <span>
-              {" "}matching &ldquo;{search}&rdquo;
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Main content */}
-      {viewMode === "table" ? (
-        <CompanyTable
-          companies={filtered}
-          onSelect={handleSelectCompany}
-          sortBy={sortBy}
-          setSortBy={setSortBy}
-          sortOrder={sortOrder}
-          setSortOrder={setSortOrder}
-        />
-      ) : (
-        <IndustryView
-          companies={allCompanies}
-          onSectorClick={(sector) => {
-            setSelectedSector(sector === "" ? null : sector);
-            if (sector) setViewMode("table");
-          }}
-          activeSector={selectedSector}
-        />
-      )}
-
-      {/* Inline comparison panels — one per selected company */}
-      {selectedCompanies.map((company) => (
-        <CompanyModal
-          key={company.company as string}
-          company={company}
-          onClose={() => handleCloseCompany(company)}
-        />
-      ))}
-    </div>
+    </>
   );
 }
