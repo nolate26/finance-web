@@ -7,6 +7,10 @@ datasource db {
   provider = "postgresql"
 }
 
+// ==========================================
+// SECCIÓN: FONDOS Y UNIVERSO
+// ==========================================
+
 model FundPortfolioWeight {
   fundName        String   @map("fund_name") @db.VarChar(100)
   reportDate      DateTime @map("report_date") @db.Date
@@ -40,10 +44,10 @@ model PerformanceAttribution {
 }
 
 model EmpresasIndustrias {
-  nombreLatam    String  @id @map("nombre_latam") @db.VarChar(200)
-  nombreChile    String? @map("nombre_chile") @db.VarChar(200)
-  industriaGics  String? @map("industria_gics") @db.VarChar(200)
-  industriaChile String? @map("industria_chile") @db.VarChar(200)
+  nombreLatam     String  @id @map("nombre_latam") @db.VarChar(200)
+  nombreChile     String? @map("nombre_chile") @db.VarChar(200)
+  industriaGics   String? @map("industria_gics") @db.VarChar(200)
+  industriaChile  String? @map("industria_chile") @db.VarChar(200)
   tickerBloomberg String? @map("ticker_bloomberg") @db.VarChar(100)
 
   @@map("empresas_industrias")
@@ -174,120 +178,57 @@ model proyecciones_financieras {
   @@id([generated_at, empresa])
 }
 
-
 model LatamEquitySnapshot {
-
   id            Int      @id @default(autoincrement())
-
   snapshotDate  DateTime @default(now())
- 
-  // Identificación
-
   ticker        String
- 
-  // Paso 1 — Retornos USD (TRI)
-
-  priceUsdTri   Float?   // Price (USD) — último valor TRI
-
+  priceUsdTri   Float?   
   ret1W         Float?
-
   ret1M         Float?
-
   retYtd        Float?
-
   ret1Y         Float?
-
   ret5Y         Float?
- 
-  // Paso 2 — Precio y balance en USD
-
-  priceUsd      Float?   // CRNCY_ADJ_PX_LAST
-
-  mktCapUsd     Float?   // CRNCY_ADJ_MKT_CAP (MM USD)
-
-  netDebtUsd    Float?   // NET_DEBT en USD (MM)
-
-  evUsd         Float?   // Mkt Cap + Net Debt (MM USD)
- 
-  // Paso 3 — Múltiplos y ratios
-
-  peCurYr       Float?   // PE año actual
-
-  peNxtYr       Float?   // PE año siguiente
-
-  evEbitdaCurYr Float?   // EV/EBITDA año actual
-
-  evEbitdaNxtYr Float?   // EV/EBITDA año siguiente
-
-  evSalesCurYr  Float?   // EV/Sales año actual
-
-  evSalesNxtYr  Float?   // EV/Sales año siguiente
-
-  pBv           Float?   // P/BV LTM
-
-  leverage      Float?   // Net Debt / EBITDA
-
-  roeEst        Float?   // ROE estimado año actual
-
-  divYield      Float?   // Dividend Yield estimado
-
-  priceLocal    Float?   // Precio en moneda local
-
-  targetPrice   Float?   // Target Price local
-
-  tpUpside      Float?   // Upside vs TP
- 
-  // Paso 4 — NI Quarters real año anterior
-
+  priceUsd      Float?   
+  mktCapUsd     Float?   
+  netDebtUsd    Float?   
+  evUsd         Float?   
+  peCurYr       Float?   
+  peNxtYr       Float?   
+  evEbitdaCurYr Float?   
+  evEbitdaNxtYr Float?   
+  evSalesCurYr  Float?   
+  evSalesNxtYr  Float?   
+  pBv           Float?   
+  leverage      Float?   
+  roeEst        Float?   
+  divYield      Float?   
+  priceLocal    Float?   
+  targetPrice   Float?   
+  tpUpside      Float?   
   niRealQ1      Float?
-
   niRealQ2      Float?
-
   niRealQ3      Float?
-
   niRealQ4      Float?
-
-  // NI Quarters estimado año actual
-
   niEstQ1       Float?
-
   niEstQ2       Float?
-
   niEstQ3       Float?
-
   niEstQ4       Float?
-
-  // YoY %
-
   niYoyQ1       Float?
-
   niYoyQ2       Float?
-
   niYoyQ3       Float?
-
   niYoyQ4       Float?
- 
-  // Paso 5 — EPS consenso
+  epsEst        Float?   
+  epsRev1W      Float?   
+  epsRev4W      Float?   
+  epsRev3M      Float?   
 
-  epsEst        Float?   // EPS año actual
-
-  epsRev1W      Float?   // Revisión EPS 1 semana
-
-  epsRev4W      Float?   // Revisión EPS 4 semanas
-
-  epsRev3M      Float?   // Revisión EPS 3 meses
- 
   @@index([snapshotDate])
-
   @@index([ticker])
-
   @@map("latam_equity_snapshots")
-
 }
- 
 
 // ==========================================
-// SECCIÓN ECONOMÍA: HISTÓRICOS (Series de Tiempo)
+// SECCIÓN ECONOMÍA Y MERCADO
 // ==========================================
 
 model MacroHistorico {
@@ -315,10 +256,6 @@ model CommodityHistorico {
 
   @@id([date, commodity])
 }
-
-// ==========================================
-// SECCIÓN ECONOMÍA: SNAPSHOTS (Las Fotos)
-// ==========================================
 
 model MacroForecasts {
   id           Int      @id @default(autoincrement())
@@ -381,17 +318,19 @@ model EquityCompsSnapshot {
   @@index([snapshotDate])
 }
 
+// ==========================================
+// SECCIÓN: COMPANY DEEP DIVE (NUEVAS TABLAS)
+// ==========================================
 
-// ─── Tabla 1: Valuación histórica (SERIE diaria, 10Y) ────────────────────
+// ─── Tabla 1: Valuación histórica (SERIE MENSUAL, 10Y) ────────────────────
 model ValuationHistory {
-  id           Int      @id @default(autoincrement())
-  ticker       String
-  date         DateTime @db.Date
-
-  peFwd        Float?
-  evEbitdaFwd  Float?
-  pbv          Float?
-  roeFwd       Float?
+  id          Int      @id @default(autoincrement())
+  ticker      String
+  date        DateTime @db.Date
+  peFwd       Float?
+  evEbitdaFwd Float?
+  pbv         Float?
+  roeFwd      Float?
 
   @@unique([ticker, date])
   @@index([ticker])
@@ -401,28 +340,27 @@ model ValuationHistory {
 
 // ─── Tabla 2: Consenso de estimaciones (SERIE mensual) ───────────────────
 model ConsensusEstimate {
-  id       Int      @id @default(autoincrement())
-  ticker   String
-  date     DateTime @db.Date
-  metric   String
-  period   String
-  value    Float
+  id      Int      @id @default(autoincrement())
+  ticker  String
+  date    DateTime @db.Date
+  metric  String
+  period  String   // AHORA: '1FY' o '2FY' (antes '2026Y')
+  value   Float
 
   @@unique([ticker, date, metric, period])
   @@index([ticker])
   @@index([ticker, metric])
+  @@index([period]) // NUEVO: para filtrar rápido 1FY vs 2FY
   @@map("consensus_estimates")
 }
 
-// ─── Tabla 3: Precio vs Net Income (SERIE diaria) ────────────────────────
+// ─── Tabla 3: Precio vs Net Income (SERIE MENSUAL 5Y, solo 1BF blended) ────────────────────────
 model PriceVsEarnings {
-  id             Int      @id @default(autoincrement())
-  ticker         String
-  date           DateTime @db.Date
-  pxLast         Float
-  ni1fy          Float?
-  niCurrentYear  Float?
-  niNextYear     Float?
+  id      Int      @id @default(autoincrement())
+  ticker  String
+  date    DateTime @db.Date
+  pxLast  Float
+  ni1bf   Float?   // NUEVO: Net Income blended 12m
 
   @@unique([ticker, date])
   @@index([ticker])
@@ -432,10 +370,10 @@ model PriceVsEarnings {
 
 // ─── Tabla 4: Short Interest (FOTO acumulada) ────────────────────────────
 model ShortInterest {
-  id             Int      @id @default(autoincrement())
-  ticker         String
-  date           DateTime @db.Date
-  shortIntRatio  Float
+  id            Int      @id @default(autoincrement())
+  ticker        String
+  date          DateTime @db.Date
+  shortIntRatio Float
 
   @@unique([ticker, date])
   @@index([ticker])
@@ -444,13 +382,13 @@ model ShortInterest {
 
 // ─── Tabla 5: Rango 52 semanas (FOTO acumulada) ─────────────────────────
 model PriceRange52w {
-  id        Int      @id @default(autoincrement())
-  ticker    String
-  date      DateTime @db.Date
-  pxLast    Float
-  high52w   Float
-  low52w    Float
-  pctRange  Float?
+  id       Int      @id @default(autoincrement())
+  ticker   String
+  date     DateTime @db.Date
+  pxLast   Float
+  high52w  Float
+  low52w   Float
+  pctRange Float?
 
   @@unique([ticker, date])
   @@index([ticker])
@@ -459,14 +397,14 @@ model PriceRange52w {
 
 // ─── Tabla 6: Recomendaciones de analistas (FOTO acumulada) ──────────────
 model AnalystRecommendation {
-  id           Int      @id @default(autoincrement())
-  ticker       String
-  date         DateTime @db.Date
-  totAnalysts  Int
-  buy          Int      @default(0)
-  hold         Int      @default(0)
-  sell         Int      @default(0)
-  consenso     String?
+  id          Int      @id @default(autoincrement())
+  ticker      String
+  date        DateTime @db.Date
+  totAnalysts Int
+  buy         Int      @default(0)
+  hold        Int      @default(0)
+  sell        Int      @default(0)
+  consenso    String?
 
   @@unique([ticker, date])
   @@index([ticker])
@@ -475,10 +413,10 @@ model AnalystRecommendation {
 
 // ─── Tracking de corridas incrementales ──────────────────────────────────
 model LastRun {
-  id        Int    @id @default(autoincrement())
-  ticker    String
-  module    String
-  lastDate  String
+  id       Int    @id @default(autoincrement())
+  ticker   String
+  module   String
+  lastDate String
 
   @@unique([ticker, module])
   @@map("last_run")

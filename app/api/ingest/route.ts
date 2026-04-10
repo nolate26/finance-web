@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { table } from 'console';
+// ❌ ELIMINADO: import { table } from 'console'; (Esto rompe la API en producción)
 
 export async function POST(request: Request) {
+  // Declaramos la variable afuera para que sobreviva si ocurre un error
+  let tableName = 'Desconocida';
+
   try {
     const data = await request.json();
     const { table, rows } = data;
@@ -11,9 +14,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Payload inválido' }, { status: 400 });
     }
 
+    // Guardamos el nombre real para el log
+    tableName = table;
+
     // Usamos skipDuplicates para proteger la base de datos de cargas repetidas
     switch (table) {
-      // --- TABLAS DE MARKET (Las que ya funcionan) ---
+      // --- TABLAS DE MARKET ---
       case 'PeHistorico':
         await prisma.peHistorico.createMany({ data: rows, skipDuplicates: true });
         break;
@@ -36,17 +42,14 @@ export async function POST(request: Request) {
         await prisma.equityCompsSnapshot.createMany({ data: rows });
         break;
 
-     // --- NUEVAS TABLAS DE FONDOS Y UNIVERSO ---
+      // --- TABLAS DE FONDOS Y UNIVERSO ---
       case 'FundPortfolioWeights':
-        // Prisma le quitó la 's' al final
         await prisma.fundPortfolioWeight.createMany({ data: rows, skipDuplicates: true }); 
         break;
       case 'ProyeccionesFinancieras':
-        // Prisma probablemente lo dejó como 'proyeccionesFinanciera' (sin la s)
         await prisma.proyecciones_financieras.createMany({ data: rows, skipDuplicates: true }); 
         break;
       case 'MonedaFundReturns':
-        // Prisma le quitó la 's' a Returns
         await prisma.monedaFundReturn.createMany({ data: rows, skipDuplicates: true }); 
         break;
       case 'SsUniverse':
@@ -78,22 +81,20 @@ export async function POST(request: Request) {
       case 'LastRun':
         await prisma.lastRun.createMany({ data: rows, skipDuplicates: true });
         break;
-       // --- NUEVA VISTA: SS LATAM ---
+
+      // --- VISTA: SS LATAM ---
       case 'LatamEquitySnapshot':
-        // Prisma siempre pone la primera letra en minúscula para el cliente
         await prisma.latamEquitySnapshot.createMany({ data: rows });
         break;
         
       default:
         return NextResponse.json({ error: `Tabla ${table} no reconocida` }, { status: 400 });
-
-     
     }
 
     return NextResponse.json({ success: true, message: `Inyectados ${rows.length} registros en ${table}` });
   } catch (error) {
-    // Mejoramos el log para ver el error real si algo falla en Prisma
-    console.error(`Error en API [${table}]:`, error);
+    // Ahora usamos tableName, que está definida de forma segura
+    console.error(`Error en API [${tableName}]:`, error);
     return NextResponse.json({ error: 'Error interno del servidor', details: String(error) }, { status: 500 });
   }
 }
