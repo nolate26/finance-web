@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 // ── Type for Prisma row ───────────────────────────────────────────────────────
 // ssUniverse returns camelCase fields; we need to re-key to the exact strings
-// the frontend expects (matching original CSV column headers).
+// the frontend expects (matching original CSV column headers/new relative names).
 
 type PrismaRow = Awaited<
   ReturnType<typeof prisma.ssUniverse.findMany>
@@ -15,9 +15,9 @@ type PrismaRow = Awaited<
  * Re-maps a Prisma SsUniverse row back to the legacy CSV-keyed shape.
  *
  * Critical differences:
- *   fv            → "FV"             (CSV header was uppercase)
- *   fvEbitda*     → "Fv_ebitda_*"   (CSV header used mixed case)
- *   camelCase #s  → snake_case keys  (every other numeric field)
+ * fv            → "FV"             (CSV header was uppercase)
+ * fvEbitda* → "Fv_ebitda_*"    (CSV header used mixed case)
+ * camelCase #s  → snake_case keys  (every other numeric field)
  */
 function toFrontendRow(r: PrismaRow): Record<string, unknown> {
   return {
@@ -42,60 +42,60 @@ function toFrontendRow(r: PrismaRow): Record<string, unknown> {
     net_debt:   r.netDebt,
     FV:         r.fv,          // ← uppercase — CompanyTable uses c.FV
 
-    // EBITDA
+    // EBITDA (Nombres relativos actualizados)
     ebitda_prev:  r.ebitdaPrev,
     ebitda_ltm:   r.ebitdaLtm,
     ebitda_ltm_b: r.ebitdaLtmB,
     ebitda_ltm2:  r.ebitdaLtm2,
     ebitda_chg:   r.ebitdaChg,
-    ebitda_2025e: r.ebitda2025e,
-    ebitda_2026e: r.ebitda2026e,
-    ebitda_2027e: r.ebitda2027e,
+    ebitda_yr1e:  r.ebitdaYr1e,
+    ebitda_yr2e:  r.ebitdaYr2e,
+    ebitda_yr3e:  r.ebitdaYr3e,
 
-    // Net income
+    // Net income (Nombres relativos actualizados)
     net_income_prev: r.netIncomePrev,
     net_income_ltm:  r.netIncomeLtm,
     net_income_chg:  r.netIncomeChg,
 
     // FV/EBITDA multiples — capital "F" matches original CSV & IndicesTable/CompanyTable keys
-    Fv_ebitda_2024:  r.fvEbitda2024,
-    Fv_ebitda_ltm:   r.fvEbitdaLtm,
-    Fv_ebitda_2025e: r.fvEbitda2025e,
-    Fv_ebitda_2026e: r.fvEbitda2026e,
-    Fv_ebitda_2027e: r.fvEbitda2027e,
+    Fv_ebitda_yr0:  r.fvEbitdaYr0,
+    Fv_ebitda_ltm:  r.fvEbitdaLtm,
+    Fv_ebitda_yr1e: r.fvEbitdaYr1e,
+    Fv_ebitda_yr2e: r.fvEbitdaYr2e,
+    Fv_ebitda_yr3e: r.fvEbitdaYr3e,
 
     // NI
-    ni_2024: r.ni2024,
+    ni_yr0:  r.niYr0,
     ni_ltm:  r.niLtm,
-    ni_2025e: r.ni2025e,
-    ni_2026e: r.ni2026e,
-    ni_2027e: r.ni2027e,
+    ni_yr1e: r.niYr1e,
+    ni_yr2e: r.niYr2e,
+    ni_yr3e: r.niYr3e,
 
     // P/E
-    pe_2024:  r.pe2024,
+    pe_yr0:   r.peYr0,
     pe_ltm:   r.peLtm,
-    pe_2025e: r.pe2025e,
-    pe_2026e: r.pe2026e,
-    pe_2027e: r.pe2027e,
-    peg_2026e: r.peg2026e,
+    pe_yr1e:  r.peYr1e,
+    pe_yr2e:  r.peYr2e,
+    pe_yr3e:  r.peYr3e,
+    peg_yr2e: r.pegYr2e,
 
     // Other valuation ratios
     p_ce_ltm:     r.pCeLtm,
     p_bv_ltm:     r.pBvLtm,
     roe_ltm:      r.roeLtm,
-    roe_2025e:    r.roe2025e,
-    roe_2026e:    r.roe2026e,
+    roe_yr1e:     r.roeYr1e,
+    roe_yr2e:     r.roeYr2e,
     fv_s_ltm:     r.fvSLtm,
     fv_ic_ltm:    r.fvIcLtm,
     leverage_ltm: r.leverageLtm,
     roic_ltm:     r.roicLtm,
 
     // Dividend yields
-    div_yield_2026e:   r.divYield2026e,
-    div_yield_2026e_b: r.divYield2026eB,
-    div_yield_ltm:     r.divYieldLtm,
-    div_yield_lagged:  r.divYieldLagged,
-    div_yield_2022:    r.divYield2022,
+    div_yield_yr2e:   r.divYieldYr2e,
+    div_yield_yr2e_b: r.divYieldYr2eB,
+    div_yield_ltm:    r.divYieldLtm,
+    div_yield_lagged: r.divYieldLagged,
+    div_yield_hist:   r.divYieldHist,
   };
 }
 
