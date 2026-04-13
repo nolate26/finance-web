@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 
 // ── Auth configuration (exported for use in Server Components / API routes) ───
 
-export const authOptions: AuthOptions = {
+const authOptions: AuthOptions = {
   // PrismaAdapter handles Account/Session persistence (needed even with JWT)
   adapter: PrismaAdapter(prisma) as AuthOptions["adapter"],
 
