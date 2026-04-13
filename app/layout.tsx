@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import Navbar from "@/components/Navbar";
+import Navbar       from "@/components/Navbar";
+import AuthProvider from "@/components/AuthProvider";
 
 export const metadata: Metadata = {
   title: "Research Hub",
@@ -15,8 +16,10 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className="min-h-screen grid-bg">
-        <Navbar />
-        <main className="pt-16">{children}</main>
+        <AuthProvider>
+          <Navbar />
+          <main className="pt-16">{children}</main>
+        </AuthProvider>
       </body>
     </html>
   );
