@@ -164,16 +164,38 @@ export default function AnalystDonut({ analystRec, targetPrice, currentPrice }: 
 
           {/* Consensus + Target */}
           {consenso && (
-            <div style={{ fontSize: 10, color: "#64748B", marginBottom: 4 }}>
+            <div style={{ fontSize: 11, color: "#64748B", marginBottom: 5 }}>
               Consensus: <strong style={{ color: "#0F172A" }}>{consenso}</strong>
             </div>
           )}
+          {targetPrice != null && (
+            <div
+              style={{
+                fontSize: 11,
+                color: "#64748B",
+                marginBottom: 4,
+                paddingTop: 6,
+                borderTop: "1px solid rgba(15,23,42,0.07)",
+              }}
+            >
+              Target price:{" "}
+              <strong
+                style={{
+                  fontFamily: "JetBrains Mono, monospace",
+                  color: "#0F172A",
+                }}
+              >
+                ${targetPrice.toFixed(2)}
+              </strong>
+            </div>
+          )}
           {upside !== null && (
-            <div style={{ fontSize: 10, color: "#64748B" }}>
+            <div style={{ fontSize: 11, color: "#64748B" }}>
               Target upside:{" "}
               <strong
                 style={{
                   fontFamily: "JetBrains Mono, monospace",
+                  fontSize: 12,
                   color: upside >= 0 ? "#059669" : "#DC2626",
                 }}
               >

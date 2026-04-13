@@ -143,7 +143,7 @@ export default function ConsensusMomentumCards({ data }: Props) {
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="mb-3">
-        <span className="text-[10px] font-bold tracking-widest uppercase text-slate-400">
+        <span className="text-[11px] font-bold tracking-widest uppercase text-slate-400">
           Estimate Momentum — Consensus Revisions
         </span>
       </div>

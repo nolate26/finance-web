@@ -7,6 +7,7 @@ import LatamTable, { type LatamCompany } from "@/components/latam/LatamTable";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type ActiveTab = "stock-selection" | "top-picks";
+type FundFilter = "all" | "MLE" | "MSC" | "others";
 
 interface SortOption {
   value:  string;
@@ -89,6 +90,7 @@ export default function LatAmPage() {
   // filters
   const [search, setSearch]               = useState("");
   const [selectedSector, setSelectedSector] = useState<string | null>(null);
+  const [fundFilter, setFundFilter]       = useState<FundFilter>("all");
   const [sortBy, setSortBy]               = useState("mktCapUsd");
   const [sortOrder, setSortOrder]         = useState<"asc" | "desc">("desc");
 
@@ -132,6 +134,13 @@ export default function LatAmPage() {
     }
     if (selectedSector) {
       list = list.filter((c) => c.sector === selectedSector);
+    }
+    if (fundFilter === "MLE") {
+      list = list.filter((c) => c.funds.includes("MLE"));
+    } else if (fundFilter === "MSC") {
+      list = list.filter((c) => c.funds.includes("MSC"));
+    } else if (fundFilter === "others") {
+      list = list.filter((c) => c.funds.length === 0);
     }
     return sortCompanies(list, sortBy, sortOrder);
   })();
@@ -350,6 +359,53 @@ export default function LatAmPage() {
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
+
+            {/* Fund filter */}
+            <div
+              style={{
+                display:      "flex",
+                alignItems:   "center",
+                gap:          2,
+                padding:      "3px",
+                borderRadius: 8,
+                background:   "rgba(15,23,42,0.04)",
+                border:       "1px solid rgba(15,23,42,0.08)",
+              }}
+            >
+              {(["all", "MLE", "MSC", "others"] as FundFilter[]).map((f) => {
+                const active = fundFilter === f;
+                const labels: Record<FundFilter, string> = {
+                  all: "All", MLE: "MLE", MSC: "MSC", others: "Others",
+                };
+                const colors: Record<FundFilter, { text: string; bg: string; border: string }> = {
+                  all:    { text: "#64748B", bg: "rgba(43,92,224,0.10)",  border: "rgba(43,92,224,0.25)"  },
+                  MLE:    { text: "#1E3A8A", bg: "rgba(43,92,224,0.12)",  border: "rgba(43,92,224,0.30)"  },
+                  MSC:    { text: "#065F46", bg: "rgba(5,150,105,0.12)",  border: "rgba(5,150,105,0.30)"  },
+                  others: { text: "#4B5563", bg: "rgba(100,116,139,0.12)", border: "rgba(100,116,139,0.25)" },
+                };
+                const c = colors[f];
+                return (
+                  <button
+                    key={f}
+                    onClick={() => setFundFilter(f)}
+                    style={{
+                      padding:      "4px 12px",
+                      borderRadius: 6,
+                      fontSize:     12,
+                      fontWeight:   600,
+                      fontFamily:   "Inter, sans-serif",
+                      cursor:       "pointer",
+                      transition:   "all 0.12s",
+                      background:   active ? c.bg      : "transparent",
+                      color:        active ? c.text    : "#94A3B8",
+                      border:       active ? `1px solid ${c.border}` : "1px solid transparent",
+                    }}
+                  >
+                    {labels[f]}
+                  </button>
+                );
+              })}
+            </div>
 
             {/* Sort */}
             <select

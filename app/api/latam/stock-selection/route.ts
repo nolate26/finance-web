@@ -19,6 +19,7 @@ export interface LatamCompanyDTO {
   company:        string;
   ticker:         string;
   sector:         string | null;
+  funds:          string[];   // e.g. ["MLE"], ["MSC"], ["MLE","MSC"], []
   priceUsdTri:    number | null;
   ret1W:          number | null;
   ret1M:          number | null;
@@ -62,11 +63,16 @@ export interface LatamCompanyDTO {
 
 // ── Mapper ────────────────────────────────────────────────────────────────────
 
-function toDTO(snap: LatamRow, empresa: EmpresaRow | undefined): LatamCompanyDTO {
+function toDTO(
+  snap: LatamRow,
+  empresa: EmpresaRow | undefined,
+  funds: string[],
+): LatamCompanyDTO {
   return {
     company:        empresa?.nombreLatam ?? snap.ticker,
     ticker:         snap.ticker,
     sector:         empresa?.industriaGics ?? null,
+    funds,
 
     priceUsdTri:    snap.priceUsdTri,
     ret1W:          snap.ret1W,
@@ -134,27 +140,57 @@ export async function GET() {
 
     const latestDate = latest.snapshotDate;
 
-    // 2. Fetch snapshot batch + empresa master in parallel
-    const [snapshots, empresas] = await Promise.all([
+    // 2. Fetch snapshot batch, empresa master, and fund weights in parallel
+    const [snapshots, empresas, fundWeights] = await Promise.all([
       prisma.latamEquitySnapshot.findMany({
         where: { snapshotDate: latestDate },
         orderBy: { mktCapUsd: "desc" },
       }),
       prisma.empresasIndustrias.findMany(),
+      prisma.fundPortfolioWeight.findMany({
+        where: {
+          fundName: {
+            in: [
+              "Moneda_Latin_America_Equities_(LX)",
+              "Moneda_Latin_America_Small_Cap_(LX)",
+            ],
+          },
+        },
+        select: { fundName: true, company: true },
+        distinct: ["fundName", "company"],
+      }),
     ]);
 
     // 3. O(1) lookup map: normalised ticker → empresa row
     const byTicker = new Map<string, EmpresaRow>();
+    const nombreToTicker = new Map<string, string>();
     for (const e of empresas) {
       if (e.tickerBloomberg) {
-        byTicker.set(e.tickerBloomberg.trim().toUpperCase(), e);
+        const t = e.tickerBloomberg.trim().toUpperCase();
+        byTicker.set(t, e);
+        if (e.nombreLatam) nombreToTicker.set(e.nombreLatam.trim(), t);
       }
     }
 
-    // 4. In-memory JOIN + map to DTO
-    const companies: LatamCompanyDTO[] = snapshots.map((snap) =>
-      toDTO(snap, byTicker.get(snap.ticker.trim().toUpperCase()))
-    );
+    // 4. Build ticker → fund tags map
+    const tickerFunds = new Map<string, Set<string>>();
+    for (const fw of fundWeights) {
+      const ticker = nombreToTicker.get(fw.company.trim());
+      if (!ticker) continue;
+      const tag = fw.fundName.includes("Small_Cap") ? "MSC" : "MLE";
+      if (!tickerFunds.has(ticker)) tickerFunds.set(ticker, new Set());
+      tickerFunds.get(ticker)!.add(tag);
+    }
+
+    // 5. In-memory JOIN + map to DTO
+    const companies: LatamCompanyDTO[] = snapshots.map((snap) => {
+      const t = snap.ticker.trim().toUpperCase();
+      return toDTO(
+        snap,
+        byTicker.get(t),
+        Array.from(tickerFunds.get(t) ?? []),
+      );
+    });
 
     return NextResponse.json({
       metadata: { snapshotDate: latestDate.toISOString().split("T")[0] },

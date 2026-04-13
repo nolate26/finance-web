@@ -17,14 +17,23 @@ export async function GET() {
   try {
     // Raw query to get distinct ticker + nombre_latam pairs
     const rows = await prisma.$queryRaw<{ ticker: string; nombre_latam: string }[]>`
-      SELECT DISTINCT
-        ei.ticker_bloomberg AS ticker,
-        fpw.company         AS nombre_latam
+      SELECT DISTINCT 
+          ei.ticker_bloomberg,
+          fpw.company AS nombre_latam
       FROM fund_portfolio_weights fpw
-      JOIN empresas_industrias ei
+      JOIN empresas_industrias ei 
         ON fpw.company = ei.nombre_latam
-       AND ei.ticker_bloomberg IS NOT NULL
-      ORDER BY ei.ticker_bloomberg ASC
+      WHERE fpw.fund_name IN (
+        'Moneda_Renta_Variable',
+        'Pionero',
+        'Orange',		
+        'Glory', 
+          'Mercer', 
+          'Moneda_Latin_America_Equities_(LX)', 
+          'Moneda_Latin_America_Small_Cap_(LX)'
+      )
+      AND ei.ticker_bloomberg IS NOT NULL
+      ORDER BY ei.ticker_bloomberg ASC;
     `;
 
     const companies: CompanyListItem[] = rows.map((r) => ({

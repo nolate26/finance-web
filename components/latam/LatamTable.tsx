@@ -8,6 +8,7 @@ export interface LatamCompany {
   company:        string;
   ticker:         string;
   sector:         string | null;
+  funds:          string[];   // ["MLE"], ["MSC"], ["MLE","MSC"], or []
   priceUsdTri:    number | null;
   ret1W:          number | null;
   ret1M:          number | null;
