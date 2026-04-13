@@ -2,65 +2,6 @@
 
 type IndexRow = Record<string, unknown>;
 
-// ── Column groups ─────────────────────────────────────────────────────────────
-
-const COLUMN_GROUPS = [
-  {
-    label: "EBITDA Growth",
-    color: "#059669",
-    cols: [
-      { key: "ebitda_ltm",   header: "LTM",   fmt: "pct" },
-      { key: "ebitda_2026e", header: "2026e",  fmt: "pct" },
-      { key: "ebitda_2027e", header: "2027e",  fmt: "pct" },
-    ],
-  },
-  {
-    label: "FV/EBITDA",
-    color: "#2B5CE0",
-    cols: [
-      { key: "Fv_ebitda_ltm",   header: "LTM",   fmt: "mult" },
-      { key: "Fv_ebitda_2026e", header: "2026e", fmt: "mult" },
-      { key: "Fv_ebitda_2027e", header: "2027e", fmt: "mult" },
-    ],
-  },
-  {
-    label: "NI",
-    color: "#059669",
-    cols: [
-      { key: "ni_ltm",   header: "LTM",   fmt: "pct" },
-      { key: "ni_2026e", header: "2026e", fmt: "pct" },
-      { key: "ni_2027e", header: "2027e", fmt: "pct" },
-    ],
-  },
-  {
-    label: "P/E",
-    color: "#7C3AED",
-    cols: [
-      { key: "pe_ltm",   header: "LTM",   fmt: "mult" },
-      { key: "pe_2026e", header: "2026e", fmt: "mult" },
-      { key: "pe_2027e", header: "2027e", fmt: "mult" },
-    ],
-  },
-  {
-    label: "Other Multiples",
-    color: "#475569",
-    cols: [
-      { key: "p_bv_ltm", header: "P/BV",     fmt: "mult" },
-      { key: "fv_s_ltm", header: "FV/S LTM", fmt: "mult" },
-    ],
-  },
-  {
-    label: "Returns & Quality",
-    color: "#D97706",
-    cols: [
-      { key: "div_yield_2026e", header: "Div Yield", fmt: "pct" },
-      { key: "roic_ltm",        header: "ROIC",      fmt: "pct" },
-      { key: "fv_ic_ltm",       header: "FV/IC",     fmt: "mult" },
-      { key: "roe_2026e",       header: "ROE 26e",   fmt: "pct" },
-    ],
-  },
-] as const;
-
 // ── Formatters ────────────────────────────────────────────────────────────────
 
 function fmtPct(v: unknown): string {
@@ -94,6 +35,67 @@ function pctColor(v: unknown): string {
 
 export default function IndicesTable({ indices }: { indices: IndexRow[] }) {
   if (!indices || indices.length === 0) return null;
+
+  // Dynamic year labels — no hardcoded years
+  const yr1e = new Date().getFullYear();
+  const yr2e = yr1e + 1;
+
+  const COLUMN_GROUPS = [
+    {
+      label: "EBITDA Growth",
+      color: "#059669",
+      cols: [
+        { key: "ebitda_ltm",  header: "LTM",          fmt: "pct" as const },
+        { key: "ebitda_yr1e", header: `${yr1e}E`,     fmt: "pct" as const },
+        { key: "ebitda_yr2e", header: `${yr2e}E`,     fmt: "pct" as const },
+      ],
+    },
+    {
+      label: "FV/EBITDA",
+      color: "#2B5CE0",
+      cols: [
+        { key: "fv_ebitda_ltm",  header: "LTM",      fmt: "mult" as const },
+        { key: "fv_ebitda_yr1e", header: `${yr1e}E`, fmt: "mult" as const },
+        { key: "fv_ebitda_yr2e", header: `${yr2e}E`, fmt: "mult" as const },
+      ],
+    },
+    {
+      label: "NI",
+      color: "#059669",
+      cols: [
+        { key: "ni_ltm",  header: "LTM",          fmt: "pct" as const },
+        { key: "ni_yr1e", header: `${yr1e}E`,     fmt: "pct" as const },
+        { key: "ni_yr2e", header: `${yr2e}E`,     fmt: "pct" as const },
+      ],
+    },
+    {
+      label: "P/E",
+      color: "#7C3AED",
+      cols: [
+        { key: "pe_ltm",  header: "LTM",          fmt: "mult" as const },
+        { key: "pe_yr1e", header: `${yr1e}E`,     fmt: "mult" as const },
+        { key: "pe_yr2e", header: `${yr2e}E`,     fmt: "mult" as const },
+      ],
+    },
+    {
+      label: "Other Multiples",
+      color: "#475569",
+      cols: [
+        { key: "p_bv_ltm", header: "P/BV",     fmt: "mult" as const },
+        { key: "fv_s_ltm", header: "FV/S LTM", fmt: "mult" as const },
+      ],
+    },
+    {
+      label: "Returns & Quality",
+      color: "#D97706",
+      cols: [
+        { key: "div_yield", header: "Div Yield",    fmt: "pct"  as const },
+        { key: "roic_ltm",  header: "ROIC",         fmt: "pct"  as const },
+        { key: "fv_ic",     header: "FV/IC",        fmt: "mult" as const },
+        { key: "roe_yr1e",  header: `ROE ${yr1e}E`, fmt: "pct"  as const },
+      ],
+    },
+  ];
 
   const totalCols = COLUMN_GROUPS.reduce((s, g) => s + g.cols.length, 0);
 
@@ -209,9 +211,7 @@ export default function IndicesTable({ indices }: { indices: IndexRow[] }) {
                     g.cols.map((col, ci) => {
                       const v = row[col.key];
                       const cellColor =
-                        col.fmt === "pct"
-                          ? pctColor(v)
-                          : "#334155";
+                        col.fmt === "pct" ? pctColor(v) : "#334155";
                       return (
                         <td
                           key={col.key}

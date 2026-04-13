@@ -60,27 +60,7 @@ function recBadge(rec: unknown) {
   return { label: r, color: "#475569", bg: "transparent", border: "transparent" };
 }
 
-// ── Column definitions (drives thead + sort) ──────────────────────────────────
-
-const COLUMNS: { key: string; label: string }[] = [
-  { key: "company",         label: "Company"       },
-  { key: "sector",          label: "Sector"        },
-  { key: "industria",       label: "Industry"      },
-  { key: "price",           label: "Price"         },
-  { key: "ret_ytd",         label: "YTD Ret"       },
-  { key: "mkt_cap_bn",      label: "Mkt Cap"       },
-  { key: "FV",              label: "FV"            },
-  { key: "Fv_ebitda_2026e", label: "FV/EBITDA 26E" },
-  { key: "Fv_ebitda_2027e", label: "FV/EBITDA 27E" },
-  { key: "pe_2026e",        label: "P/E 26E"       },
-  { key: "pe_2027e",        label: "P/E 27E"       },
-  { key: "p_bv_ltm",        label: "P/BV LTM"      },
-  { key: "div_yield_2026e", label: "Div Yield 26E" },
-  { key: "recommendation",  label: "Rec"           },
-  { key: "target_price",    label: "Target"        },
-];
-
-const CENTER_FROM = 3; // Company + Sector + Industry are left-aligned; rest centered
+const CENTER_FROM = 2; // Company + Industry are left-aligned; rest centered
 
 export default function CompanyTable({
   companies,
@@ -90,6 +70,27 @@ export default function CompanyTable({
   sortOrder,
   setSortOrder,
 }: Props) {
+  // Dynamic year labels
+  const yr1e = new Date().getFullYear();
+  const yr2e = yr1e + 1;
+
+  const COLUMNS: { key: string; label: string }[] = [
+    { key: "company",          label: "Company"                 },
+    { key: "industria",        label: "Industry"                },
+    { key: "price",            label: "Price"                   },
+    { key: "ret_ytd",          label: "YTD Ret"                 },
+    { key: "mkt_cap_bn",       label: "Mkt Cap"                 },
+    { key: "FV",               label: "FV"                      },
+    { key: "fv_ebitda_yr1e",   label: `FV/EBITDA ${yr1e}E`     },
+    { key: "fv_ebitda_yr2e",   label: `FV/EBITDA ${yr2e}E`     },
+    { key: "pe_yr1e",          label: `P/E ${yr1e}E`            },
+    { key: "pe_yr2e",          label: `P/E ${yr2e}E`            },
+    { key: "p_bv_ltm",         label: "P/BV LTM"               },
+    { key: "div_yield",        label: "Div Yield"               },
+    { key: "recommendation",   label: "Rec"                     },
+    { key: "target_price",     label: "Target"                  },
+  ];
+
   function handleSort(key: string) {
     if (sortBy === key) {
       setSortOrder(sortOrder === "asc" ? "desc" : "asc");
@@ -145,9 +146,8 @@ export default function CompanyTable({
 
           <tbody>
             {companies.map((c, i) => {
-              const sectorEn = (c.sector as string) ?? "—";
-              const badge    = recBadge(c.recommendation);
-              const ytd      = fmtPct(c.ret_ytd);
+              const badge = recBadge(c.recommendation);
+              const ytd   = fmtPct(c.ret_ytd);
 
               return (
                 <tr
@@ -160,13 +160,6 @@ export default function CompanyTable({
                   {/* Company */}
                   <td style={{ padding: "9px 10px", fontWeight: 600, color: "#0F172A", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {c.company as string}
-                  </td>
-
-                  {/* Sector */}
-                  <td style={{ padding: "9px 10px" }}>
-                    <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "rgba(43,92,224,0.06)", color: "#2B5CE0", border: "1px solid rgba(43,92,224,0.12)", whiteSpace: "nowrap" }}>
-                      {sectorEn}
-                    </span>
                   </td>
 
                   {/* Industry */}
@@ -200,24 +193,24 @@ export default function CompanyTable({
                     {fmtInt(c.FV) === "—" ? dash : fmtInt(c.FV)}
                   </td>
 
-                  {/* FV/EBITDA 26E */}
+                  {/* FV/EBITDA yr1e */}
                   <td style={{ ...cell(), color: "#2B5CE0" }}>
-                    {fmtX(c.Fv_ebitda_2026e) === "—" ? dash : fmtX(c.Fv_ebitda_2026e)}
+                    {fmtX(c.fv_ebitda_yr1e) === "—" ? dash : fmtX(c.fv_ebitda_yr1e)}
                   </td>
 
-                  {/* FV/EBITDA 27E */}
+                  {/* FV/EBITDA yr2e */}
                   <td style={{ ...cell(), color: "#2B5CE0" }}>
-                    {fmtX(c.Fv_ebitda_2027e) === "—" ? dash : fmtX(c.Fv_ebitda_2027e)}
+                    {fmtX(c.fv_ebitda_yr2e) === "—" ? dash : fmtX(c.fv_ebitda_yr2e)}
                   </td>
 
-                  {/* P/E 26E */}
+                  {/* P/E yr1e */}
                   <td style={{ ...cell(), color: "#7C3AED" }}>
-                    {fmtX(c.pe_2026e) === "—" ? dash : fmtX(c.pe_2026e)}
+                    {fmtX(c.pe_yr1e) === "—" ? dash : fmtX(c.pe_yr1e)}
                   </td>
 
-                  {/* P/E 27E */}
+                  {/* P/E yr2e */}
                   <td style={{ ...cell(), color: "#7C3AED" }}>
-                    {fmtX(c.pe_2027e) === "—" ? dash : fmtX(c.pe_2027e)}
+                    {fmtX(c.pe_yr2e) === "—" ? dash : fmtX(c.pe_yr2e)}
                   </td>
 
                   {/* P/BV LTM */}
@@ -225,9 +218,9 @@ export default function CompanyTable({
                     {fmtX(c.p_bv_ltm) === "—" ? dash : fmtX(c.p_bv_ltm)}
                   </td>
 
-                  {/* Div Yield 26E */}
+                  {/* Div Yield */}
                   <td style={{ ...cell(), color: "#D97706", fontWeight: 600 }}>
-                    {fmtYield(c.div_yield_2026e) === "—" ? dash : fmtYield(c.div_yield_2026e)}
+                    {fmtYield(c.div_yield) === "—" ? dash : fmtYield(c.div_yield)}
                   </td>
 
                   {/* Rec */}

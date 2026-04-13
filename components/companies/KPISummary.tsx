@@ -30,7 +30,7 @@ export default function KPISummary({ companies }: Props) {
   );
 
   const ebitdaValues = companies
-    .map((c) => c.Fv_ebitda_ltm)
+    .map((c) => c.fv_ebitda_ltm)
     .filter((v): v is number => typeof v === "number");
   const medianEbitda = median(ebitdaValues);
 

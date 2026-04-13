@@ -1,6 +1,6 @@
 "use client";
 
-import { Company, SECTOR_MAP } from "@/lib/companies";
+import { Company } from "@/lib/companies";
 
 interface Props {
   companies: Company[];
@@ -18,10 +18,10 @@ function median(values: number[]): number | null {
 }
 
 export default function IndustryView({ companies, onSectorClick, activeSector }: Props) {
-  // Group by Spanish sector key
+  // Group by industria (replaces old sector field)
   const sectorMap = new Map<string, Company[]>();
   for (const c of companies) {
-    const s = (c.sector as string) ?? "Unknown";
+    const s = (c.industria as string) ?? "Unknown";
     if (!sectorMap.has(s)) sectorMap.set(s, []);
     sectorMap.get(s)!.push(c);
   }
@@ -36,12 +36,11 @@ export default function IndustryView({ companies, onSectorClick, activeSector }:
         gap: 14,
       }}
     >
-      {sectors.map(([spanishSector, cos]) => {
-        const displayName = SECTOR_MAP[spanishSector] ?? spanishSector;
-        const isActive = activeSector === spanishSector;
+      {sectors.map(([industria, cos]) => {
+        const isActive = activeSector === industria;
 
         const ebitdaVals = cos
-          .map((c) => c.Fv_ebitda_ltm)
+          .map((c) => c.fv_ebitda_ltm)
           .filter((v): v is number => typeof v === "number");
         const medEbitda = median(ebitdaVals);
 
@@ -56,8 +55,8 @@ export default function IndustryView({ companies, onSectorClick, activeSector }:
 
         return (
           <div
-            key={spanishSector}
-            onClick={() => onSectorClick(isActive ? "" : spanishSector)}
+            key={industria}
+            onClick={() => onSectorClick(isActive ? "" : industria)}
             className="card"
             style={{
               padding: "16px 18px",
@@ -95,7 +94,7 @@ export default function IndustryView({ companies, onSectorClick, activeSector }:
                   color: isActive ? "#1E3A8A" : "#334155",
                 }}
               >
-                {displayName}
+                {industria}
               </div>
               <span
                 className="font-mono"

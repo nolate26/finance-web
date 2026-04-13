@@ -82,12 +82,17 @@ const tdStyle: React.CSSProperties = { padding: "6px 10px", textAlign: "right", 
 export default function CompanyModal({ company, onClose }: Props) {
   if (!company) return null;
 
-  const rec = recBadge(company.recommendation as string | null);
-  const sectorEn = (company.sector as string) ?? "—";
+  // Dynamic year labels
+  const yr1e = new Date().getFullYear();
+  const yr2e = yr1e + 1;
+  const colHeaders = ["LTM", `${yr1e}E`, `${yr2e}E`];
 
-  const price = n(company.price);
+  const rec      = recBadge(company.recommendation as string | null);
+  const industria = (company.industria as string) ?? null;
+
+  const price       = n(company.price);
   const targetPrice = n(company.target_price);
-  const upside = price !== null && targetPrice !== null ? (targetPrice - price) / price : null;
+  const upside      = price !== null && targetPrice !== null ? (targetPrice - price) / price : null;
 
   const returnBars = [
     { name: "1M",  value: n(company.ret_1m) },
@@ -97,26 +102,24 @@ export default function CompanyModal({ company, onClose }: Props) {
   ].filter((d): d is { name: string; value: number } => d.value !== null);
 
   const valuationRows = [
-    { label: "FV/EBITDA", cols: [n(company.Fv_ebitda_ltm), n(company.Fv_ebitda_2026e), n(company.Fv_ebitda_2027e)] },
-    { label: "P/E",       cols: [n(company.pe_ltm),        n(company.pe_2026e),        n(company.pe_2027e)] },
-    { label: "P/BV",      cols: [n(company.p_bv_ltm),      null,                       null] },
-    { label: "ROE",       cols: [n(company.roe_ltm),       n(company.roe_2026e),       null] },
+    { label: "FV/EBITDA", cols: [n(company.fv_ebitda_ltm), n(company.fv_ebitda_yr1e), n(company.fv_ebitda_yr2e)] },
+    { label: "P/E",       cols: [n(company.pe_ltm),        n(company.pe_yr1e),        n(company.pe_yr2e)]        },
+    { label: "P/BV",      cols: [n(company.p_bv_ltm),      null,                      null]                      },
+    { label: "ROE",       cols: [n(company.roe_ltm),       n(company.roe_yr1e),       null]                      },
   ];
 
   const estimateRows = [
-    { label: "EBITDA",     cols: [n(company.ebitda_ltm), n(company.ebitda_2026e), n(company.ebitda_2027e)] },
-    { label: "Net Income", cols: [n(company.net_income_ltm), n(company.ni_2026e), n(company.ni_2027e)] },
+    { label: "EBITDA",     cols: [n(company.ebitda_ltm), n(company.ebitda_yr1e), n(company.ebitda_yr2e)] },
+    { label: "Net Income", cols: [n(company.ni_ltm),     n(company.ni_yr1e),     n(company.ni_yr2e)]     },
   ];
 
   const roicLtm = n(company.roic_ltm);
   const qualityChips = [
-    { label: "ROIC LTM",       value: roicLtm !== null ? fmtPct(roicLtm) : "—", color: roicLtm !== null && roicLtm >= 0 ? "#059669" : "#DC2626" },
-    { label: "ND/EBITDA",      value: fmtX(n(company.leverage_ltm)),             color: "#2B5CE0" },
-    { label: "Div Yield 2026E",value: fmtPct(n(company.div_yield_2026e)),        color: "#D97706" },
-    { label: "P/CE LTM",       value: fmtX(n(company.p_ce_ltm)),                 color: "#7C3AED" },
+    { label: "ROIC LTM",      value: roicLtm !== null ? fmtPct(roicLtm) : "—", color: roicLtm !== null && roicLtm >= 0 ? "#059669" : "#DC2626" },
+    { label: "ND/EBITDA",     value: fmtX(n(company.leverage_ltm)),             color: "#2B5CE0" },
+    { label: "Div Yield",     value: fmtPct(n(company.div_yield)),              color: "#D97706" },
+    { label: "P/CE LTM",      value: fmtX(n(company.p_ce_ltm)),                color: "#7C3AED" },
   ];
-
-  const colHeaders = ["LTM", "2026E", "2027E"];
 
   return (
     // Inline panel — no overlay, no fixed positioning
@@ -131,9 +134,11 @@ export default function CompanyModal({ company, onClose }: Props) {
             {company.company as string}
           </h2>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-            <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: "rgba(43,92,224,0.08)", color: "#2B5CE0", border: "1px solid rgba(43,92,224,0.15)", fontWeight: 500 }}>
-              {sectorEn}
-            </span>
+            {industria && (
+              <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: "rgba(16,185,129,0.08)", color: "#065F46", border: "1px solid rgba(16,185,129,0.18)", fontWeight: 500 }}>
+                {industria}
+              </span>
+            )}
             {(company.recommendation as string | null) && (
               <span className="font-mono" style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 4, background: rec.bg, color: rec.color, border: `1px solid ${rec.border}` }}>
                 {rec.label}
@@ -228,7 +233,7 @@ export default function CompanyModal({ company, onClose }: Props) {
               <thead>
                 <tr>
                   <th style={{ ...thStyle, textAlign: "left", paddingLeft: 0 }}>Item</th>
-                  {["LTM", "2026E", "2027E"].map((h) => <th key={h} style={thStyle}>{h}</th>)}
+                  {colHeaders.map((h) => <th key={h} style={thStyle}>{h}</th>)}
                 </tr>
               </thead>
               <tbody>
