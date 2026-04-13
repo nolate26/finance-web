@@ -52,7 +52,6 @@ model EmpresasIndustrias {
 
   @@map("empresas_industrias")
 }
-
 model SsUniverse {
   cierreCartera  DateTime @map("cierre_cartera") @db.Date
   recordType     String   @map("record_type") @db.VarChar(10)
@@ -60,14 +59,9 @@ model SsUniverse {
   sourceFile     String?  @map("source_file") @db.VarChar(255)
   precios        String?  @db.VarChar(30)
   resultados     String?  @db.VarChar(30)
-  pioVsIgpaMcSc  String?  @map("pio_vs_igpa_mc_sc") @db.VarChar(50)
+
   mrvVsIpsa      String?  @map("mrv_vs_ipsa") @db.VarChar(50)
-  recommendation String?  @db.VarChar(50)
-  recDate        String?  @map("rec_date") @db.VarChar(30)
-  divPolicy      String?  @map("div_policy") @db.VarChar(100)
-  sector         String?  @db.VarChar(100)
   price          Float?
-  targetPrice    Float?   @map("target_price")
   ret1m          Float?   @map("ret_1m")
   retYtd         Float?   @map("ret_ytd")
   ret1y          Float?   @map("ret_1y")
@@ -75,61 +69,44 @@ model SsUniverse {
   mktCapBn       Float?   @map("mkt_cap_bn")
   netDebt        Float?   @map("net_debt")
   fv             Float?
+
   ebitdaPrev     Float?   @map("ebitda_prev")
-  ebitdaLtm      Float?   @map("ebitda_ltm")
-  ebitdaLtmB     Float?   @map("ebitda_ltm_b")
-  ebitdaLtm2     Float?   @map("ebitda_ltm2")
+  ebitdaAct      Float?   @map("ebitda_act")
   ebitdaChg      Float?   @map("ebitda_chg")
 
-  // --- CAMPOS ACTUALIZADOS (RELATIVOS) ---
-  
-  // EBITDA
+  netIncomePrev  Float?   @map("net_income_prev")
+  netIncomeAct   Float?   @map("net_income_act")
+  netIncomeChg   Float?   @map("net_income_chg")
+
+  ebitdaLtm      Float?   @map("ebitda_ltm")
   ebitdaYr1e     Float?   @map("ebitda_yr1e")
   ebitdaYr2e     Float?   @map("ebitda_yr2e")
-  ebitdaYr3e     Float?   @map("ebitda_yr3e")
 
-  // Net Income (NI)
-  netIncomePrev  Float?   @map("net_income_prev")
-  netIncomeLtm   Float?   @map("net_income_ltm")
-  netIncomeChg   Float?   @map("net_income_chg")
-  niYr0          Float?   @map("ni_yr0")
-  niLtm          Float?   @map("ni_ltm")
-  niYr1e         Float?   @map("ni_yr1e")
-  niYr2e         Float?   @map("ni_yr2e")
-  niYr3e         Float?   @map("ni_yr3e")
-
-  // FV / EBITDA
-  fvEbitdaYr0    Float?   @map("fv_ebitda_yr0")
   fvEbitdaLtm    Float?   @map("fv_ebitda_ltm")
   fvEbitdaYr1e   Float?   @map("fv_ebitda_yr1e")
   fvEbitdaYr2e   Float?   @map("fv_ebitda_yr2e")
-  fvEbitdaYr3e   Float?   @map("fv_ebitda_yr3e")
 
-  // Price to Earnings (PE)
-  peYr0          Float?   @map("pe_yr0")
+  niLtm          Float?   @map("ni_ltm")
+  niYr1e         Float?   @map("ni_yr1e")
+  niYr2e         Float?   @map("ni_yr2e")
+
   peLtm          Float?   @map("pe_ltm")
   peYr1e         Float?   @map("pe_yr1e")
   peYr2e         Float?   @map("pe_yr2e")
-  peYr3e         Float?   @map("pe_yr3e")
-  pegYr2e        Float?   @map("peg_yr2e")
 
-  // Otros Múltiplos
   pCeLtm         Float?   @map("p_ce_ltm")
   pBvLtm         Float?   @map("p_bv_ltm")
   roeLtm         Float?   @map("roe_ltm")
   roeYr1e        Float?   @map("roe_yr1e")
-  roeYr2e        Float?   @map("roe_yr2e")
   fvSLtm         Float?   @map("fv_s_ltm")
-  fvIcLtm        Float?   @map("fv_ic_ltm")
-  leverageLtm    Float?   @map("leverage_ltm")
+  
+  poolDiv        String?  @map("pool_div") @db.VarChar(100)
+  divYield       Float?   @map("div_yield")
   roicLtm        Float?   @map("roic_ltm")
+  fvIc           Float?   @map("fv_ic")
+  recommendation String?  @db.VarChar(50)
 
-  // Dividendos
-  divYieldYr2e   Float?   @map("div_yield_yr2e")
-  divYieldYr2eB  Float?   @map("div_yield_yr2e_b")
-  divYieldLtm    Float?   @map("div_yield_ltm")
-  divYieldLagged Float?   @map("div_yield_lagged")
-  divYieldHist   Float?   @map("div_yield_hist")
+  targetPrice    Float?   @map("target_price")
 
   @@id([cierreCartera, recordType, company])
   @@map("ss_universe")

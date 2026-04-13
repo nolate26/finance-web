@@ -43,59 +43,43 @@ function toFrontendRow(r: PrismaRow): Record<string, unknown> {
     FV:         r.fv,          // ← uppercase — CompanyTable uses c.FV
 
     // EBITDA (Nombres relativos actualizados)
-    ebitda_prev:  r.ebitdaPrev,
-    ebitda_ltm:   r.ebitdaLtm,
-    ebitda_ltm_b: r.ebitdaLtmB,
-    ebitda_ltm2:  r.ebitdaLtm2,
-    ebitda_chg:   r.ebitdaChg,
-    ebitda_yr1e:  r.ebitdaYr1e,
-    ebitda_yr2e:  r.ebitdaYr2e,
-    ebitda_yr3e:  r.ebitdaYr3e,
-
-    // Net income (Nombres relativos actualizados)
+    ebitda_prev: r.ebitdaPrev,
+    ebitda_act: r.ebitdaAct,
+    ebitda_chg: r.ebitdaChg,
+    
     net_income_prev: r.netIncomePrev,
-    net_income_ltm:  r.netIncomeLtm,
-    net_income_chg:  r.netIncomeChg,
-
-    // FV/EBITDA multiples — capital "F" matches original CSV & IndicesTable/CompanyTable keys
-    Fv_ebitda_yr0:  r.fvEbitdaYr0,
-    Fv_ebitda_ltm:  r.fvEbitdaLtm,
-    Fv_ebitda_yr1e: r.fvEbitdaYr1e,
-    Fv_ebitda_yr2e: r.fvEbitdaYr2e,
-    Fv_ebitda_yr3e: r.fvEbitdaYr3e,
-
-    // NI
-    ni_yr0:  r.niYr0,
-    ni_ltm:  r.niLtm,
+    net_income_act: r.netIncomeAct,
+    net_income_chg: r.netIncomeChg,
+    
+    ebitda_ltm: r.ebitdaLtm,
+    ebitda_yr1e: r.ebitdaYr1e,
+    ebitda_yr2e: r.ebitdaYr2e,
+    
+    fv_ebitda_ltm: r.fvEbitdaLtm,
+    fv_ebitda_yr1e: r.fvEbitdaYr1e,
+    fv_ebitda_yr2e: r.fvEbitdaYr2e,
+    
+    ni_ltm: r.niLtm,
     ni_yr1e: r.niYr1e,
     ni_yr2e: r.niYr2e,
-    ni_yr3e: r.niYr3e,
+    
+    pe_ltm: r.peLtm,
+    pe_yr1e: r.peYr1e,
+    pe_yr2e: r.peYr2e,
+    
+    p_ce_ltm: r.pCeLtm,
+    p_bv_ltm: r.pBvLtm,
+    roe_ltm: r.roeLtm,
+    roe_yr1e: r.roeYr1e,
+    
+    fv_s_ltm: r.fvSLtm,
+    pool_div: r.poolDiv,
+    div_yield: r.divYield,
+    roic_ltm: r.roicLtm,
+    fv_ic: r.fvIc,
+    recommendation: r.recommendation,
 
-    // P/E
-    pe_yr0:   r.peYr0,
-    pe_ltm:   r.peLtm,
-    pe_yr1e:  r.peYr1e,
-    pe_yr2e:  r.peYr2e,
-    pe_yr3e:  r.peYr3e,
-    peg_yr2e: r.pegYr2e,
-
-    // Other valuation ratios
-    p_ce_ltm:     r.pCeLtm,
-    p_bv_ltm:     r.pBvLtm,
-    roe_ltm:      r.roeLtm,
-    roe_yr1e:     r.roeYr1e,
-    roe_yr2e:     r.roeYr2e,
-    fv_s_ltm:     r.fvSLtm,
-    fv_ic_ltm:    r.fvIcLtm,
-    leverage_ltm: r.leverageLtm,
-    roic_ltm:     r.roicLtm,
-
-    // Dividend yields
-    div_yield_yr2e:   r.divYieldYr2e,
-    div_yield_yr2e_b: r.divYieldYr2eB,
-    div_yield_ltm:    r.divYieldLtm,
-    div_yield_lagged: r.divYieldLagged,
-    div_yield_hist:   r.divYieldHist,
+    target_price: r.targetPrice,
   };
 }
 
