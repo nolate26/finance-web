@@ -32,6 +32,7 @@ export interface AnalystRecSnap {
   hold: number;
   sell: number;
   consenso: string | null;
+  targetPrice: number | null;
 }
 
 export interface PriceRange52wSnap {
@@ -94,7 +95,7 @@ export async function GET(
         prisma.analystRecommendation.findFirst({
           where: { ticker: where },
           orderBy: { date: "desc" },
-          select: { totAnalysts: true, buy: true, hold: true, sell: true, consenso: true },
+          select: { totAnalysts: true, buy: true, hold: true, sell: true, consenso: true, targetPrice: true },
         }),
 
         // 5. 52-week price range — most recent
@@ -143,6 +144,7 @@ export async function GET(
             hold: analystRec.hold,
             sell: analystRec.sell,
             consenso: analystRec.consenso,
+            targetPrice: analystRec.targetPrice ?? null,
           }
         : null,
 

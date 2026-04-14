@@ -209,18 +209,19 @@ model proyecciones_financieras {
   moneda        String?  @db.VarChar(20)
   analyst       String?  @db.VarChar(100)
   div           String?  @db.VarChar(100)
-  ingresos_2025 Float?
-  ingresos_2026 Float?
-  ingresos_2027 Float?
-  ebitda_2025   Float?
-  ebitda_2026   Float?
-  ebitda_2027   Float?
-  utilidad_2025 Float?
-  utilidad_2026 Float?
-  utilidad_2027 Float?
-  ebit_2025     Float?
-  ebit_2026     Float?
-  ebit_2027     Float?
+  base_year     Int      @default(2025)
+  ingresos_y0   Float?
+  ebitda_y0     Float?
+  utilidad_y0   Float?
+  ebit_y0       Float?
+  ingresos_y1   Float?
+  ebitda_y1     Float?
+  utilidad_y1   Float?
+  ebit_y1       Float?
+  ingresos_y2   Float?
+  ebitda_y2     Float?
+  utilidad_y2   Float?
+  ebit_y2       Float?
 
   @@id([generated_at, empresa])
 }

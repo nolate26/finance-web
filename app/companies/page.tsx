@@ -295,7 +295,7 @@ export default function CompaniesPage() {
                   <SectionLabel>Analyst Sentiment</SectionLabel>
                   <AnalystDonut
                     analystRec={deepDive.analystRec}
-                    targetPrice={latestPriceRange?.pxLast ?? null}
+                    targetPrice={deepDive.analystRec?.targetPrice ?? null}
                     currentPrice={latestPrice}
                   />
                 </div>

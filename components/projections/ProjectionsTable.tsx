@@ -3,9 +3,9 @@
 import { useState } from "react";
 
 interface MetricBlock {
-  y2025: number;
-  y2026: number;
-  y2027: number;
+  y0: number;
+  y1: number;
+  y2: number;
 }
 
 export interface ProjectionRow {
@@ -20,6 +20,7 @@ export interface ProjectionRow {
 
 interface Props {
   rows: ProjectionRow[];
+  base_year: number;
 }
 
 /** Format as thousands-separated integer with no suffix — e.g. 1234567 → "1,234,567" */
@@ -44,10 +45,8 @@ function MetricCell({ block, year }: { block: MetricBlock | null; year: keyof Me
   );
 }
 
-// Only show forward-looking years (2025 is past)
 const METRIC_HEADERS = ["Ingresos", "EBITDA", "EBIT", "Utilidad"] as const;
-const YEARS = ["'26", "'27"] as const;
-const YEAR_KEYS: (keyof MetricBlock)[] = ["y2026", "y2027"];
+const YEAR_KEYS: (keyof MetricBlock)[] = ["y0", "y1", "y2"];
 
 const BORDER_METRIC = "1px solid rgba(43,92,224,0.12)";
 const BORDER_LIGHT  = "1px solid rgba(15,23,42,0.05)";
@@ -55,24 +54,29 @@ const BORDER_LIGHT  = "1px solid rgba(15,23,42,0.05)";
 type SortKey =
   | "empresa"
   | "sector"
-  | "ingresos_2026" | "ingresos_2027"
-  | "ebitda_2026"   | "ebitda_2027"
-  | "ebit_2026"     | "ebit_2027"
-  | "utilidad_2026" | "utilidad_2027";
+  | "ingresos_y0" | "ingresos_y1" | "ingresos_y2"
+  | "ebitda_y0"   | "ebitda_y1"   | "ebitda_y2"
+  | "ebit_y0"     | "ebit_y1"     | "ebit_y2"
+  | "utilidad_y0" | "utilidad_y1" | "utilidad_y2";
 
 interface SortState { key: SortKey; dir: "asc" | "desc" }
 
 function getVal(row: ProjectionRow, key: SortKey): number | string | null {
   if (key === "empresa") return row.empresa;
   if (key === "sector")  return row.sector;
-  const [metric, yearStr] = key.split("_");
+  // key format: "metric_yN" e.g. "ingresos_y0"
+  const lastUnderscore = key.lastIndexOf("_");
+  const metric  = key.slice(0, lastUnderscore);  // "ingresos"
+  const yearKey = key.slice(lastUnderscore + 1) as keyof MetricBlock; // "y0"
   const block = row[metric as keyof Pick<ProjectionRow, "ingresos" | "ebitda" | "ebit" | "utilidad">];
   if (!block) return null;
-  return (block as MetricBlock)[`y${yearStr}` as keyof MetricBlock] ?? null;
+  return (block as MetricBlock)[yearKey] ?? null;
 }
 
-export default function ProjectionsTable({ rows }: Props) {
+export default function ProjectionsTable({ rows, base_year }: Props) {
   const [sort, setSort] = useState<SortState>({ key: "empresa", dir: "asc" });
+
+  const yearLabels = [`${base_year}E`, `${base_year + 1}E`, `${base_year + 2}E`];
 
   function toggleSort(key: SortKey) {
     setSort((prev) =>
@@ -130,7 +134,7 @@ export default function ProjectionsTable({ rows }: Props) {
               {METRIC_HEADERS.map((m) => (
                 <th
                   key={m}
-                  colSpan={2}
+                  colSpan={3}
                   className="px-4 py-2 text-center text-[10px] font-bold tracking-widest uppercase"
                   style={{ color: "#2B5CE0", borderBottom: BORDER_METRIC, borderRight: BORDER_METRIC }}
                 >
@@ -158,20 +162,20 @@ export default function ProjectionsTable({ rows }: Props) {
                 Mon.
               </th>
               {METRIC_HEADERS.map((m) =>
-                YEARS.map((y, yi) => {
-                  const sortKey = `${m.toLowerCase()}_20${y.slice(1)}` as SortKey;
+                YEAR_KEYS.map((yk, yi) => {
+                  const sortKey = `${m.toLowerCase()}_${yk}` as SortKey;
                   return (
                     <th
-                      key={`${m}-${y}`}
+                      key={`${m}-${yk}`}
                       className="px-3 py-2 text-right font-medium"
                       style={{
                         ...thStyle(sort.key === sortKey),
                         borderBottom: BORDER_LIGHT,
-                        borderRight: yi === 1 ? BORDER_METRIC : undefined,
+                        borderRight: yi === 2 ? BORDER_METRIC : undefined,
                       }}
                       onClick={() => toggleSort(sortKey)}
                     >
-                      {y} <SortIcon colKey={sortKey} />
+                      {yearLabels[yi]} <SortIcon colKey={sortKey} />
                     </th>
                   );
                 })
@@ -193,28 +197,28 @@ export default function ProjectionsTable({ rows }: Props) {
 
                 {/* Ingresos */}
                 {YEAR_KEYS.map((k, ki) => (
-                  <td key={`ing-${k}`} style={{ borderLeft: ki === 0 ? "2px solid #E2E8F0" : undefined, borderRight: ki === 1 ? BORDER_METRIC : undefined }}>
+                  <td key={`ing-${k}`} style={{ borderLeft: ki === 0 ? "2px solid #E2E8F0" : undefined, borderRight: ki === 2 ? BORDER_METRIC : undefined }}>
                     <MetricCell block={row.ingresos} year={k} />
                   </td>
                 ))}
 
                 {/* EBITDA — light tint */}
                 {YEAR_KEYS.map((k, ki) => (
-                  <td key={`ebd-${k}`} style={{ borderLeft: ki === 0 ? "2px solid #E2E8F0" : undefined, borderRight: ki === 1 ? BORDER_METRIC : undefined, background: "rgba(248,250,252,0.8)" }}>
+                  <td key={`ebd-${k}`} style={{ borderLeft: ki === 0 ? "2px solid #E2E8F0" : undefined, borderRight: ki === 2 ? BORDER_METRIC : undefined, background: "rgba(248,250,252,0.8)" }}>
                     <MetricCell block={row.ebitda} year={k} />
                   </td>
                 ))}
 
                 {/* EBIT */}
                 {YEAR_KEYS.map((k, ki) => (
-                  <td key={`ebt-${k}`} style={{ borderLeft: ki === 0 ? "2px solid #E2E8F0" : undefined, borderRight: ki === 1 ? BORDER_METRIC : undefined }}>
+                  <td key={`ebt-${k}`} style={{ borderLeft: ki === 0 ? "2px solid #E2E8F0" : undefined, borderRight: ki === 2 ? BORDER_METRIC : undefined }}>
                     <MetricCell block={row.ebit} year={k} />
                   </td>
                 ))}
 
                 {/* Utilidad — light tint */}
                 {YEAR_KEYS.map((k, ki) => (
-                  <td key={`utl-${k}`} style={{ borderLeft: ki === 0 ? "2px solid #E2E8F0" : undefined, background: "rgba(248,250,252,0.8)" }}>
+                  <td key={`utl-${k}`} style={{ borderLeft: ki === 0 ? "2px solid #E2E8F0" : undefined, borderRight: ki === 2 ? BORDER_METRIC : undefined, background: "rgba(248,250,252,0.8)" }}>
                     <MetricCell block={row.utilidad} year={k} />
                   </td>
                 ))}

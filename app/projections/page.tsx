@@ -6,6 +6,7 @@ import { Calendar } from "lucide-react";
 
 interface ProjectionsData {
   generatedAt: string | null;
+  base_year: number;
   rows: ProjectionRow[];
 }
 
@@ -70,7 +71,7 @@ export default function ProjectionsPage() {
             Analyst Projections
           </h1>
           <p className="text-xs mt-1" style={{ color: "#64748B" }}>
-            Financial estimates for 2025–2027 · Metrics shown only when 3-year series is complete
+            Financial estimates for {data?.base_year ?? "…"}–{data ? data.base_year + 2 : "…"} · Metrics shown only when 3-year series is complete
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">
@@ -120,7 +121,7 @@ export default function ProjectionsPage() {
         )}
       </div>
 
-      <ProjectionsTable rows={filteredRows} />
+      <ProjectionsTable rows={filteredRows} base_year={data.base_year ?? 2025} />
     </div>
   );
 }
