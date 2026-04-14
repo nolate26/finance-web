@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import ProjectionsTable, { ProjectionRow } from "@/components/projections/ProjectionsTable";
+import ProjectionsTable from "@/components/projections/ProjectionsTable";
+import type { ProjectionRowAPI } from "@/app/api/projections/route";
 import { Calendar } from "lucide-react";
 
 interface ProjectionsData {
   generatedAt: string | null;
-  base_year: number;
-  rows: ProjectionRow[];
+  prevAt:      string | null;
+  base_year:   number;
+  rows:        ProjectionRowAPI[];
 }
 
 function formatDate(d: string): string {
@@ -19,9 +21,9 @@ function formatDate(d: string): string {
 }
 
 export default function ProjectionsPage() {
-  const [data, setData] = useState<ProjectionsData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [data, setData]               = useState<ProjectionsData | null>(null);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState(false);
   const [selectedSector, setSelectedSector] = useState<string>("");
 
   useEffect(() => {
@@ -46,9 +48,13 @@ export default function ProjectionsPage() {
     return (
       <div className="flex items-center justify-center h-[80vh]">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 rounded-full border-2 animate-spin"
-            style={{ borderColor: "rgba(43,92,224,0.15)", borderTopColor: "#2B5CE0" }} />
-          <p className="text-sm font-mono" style={{ color: "#64748B" }}>Loading projections...</p>
+          <div
+            className="w-10 h-10 rounded-full border-2 animate-spin"
+            style={{ borderColor: "rgba(43,92,224,0.15)", borderTopColor: "#2B5CE0" }}
+          />
+          <p className="text-sm font-mono" style={{ color: "#64748B" }}>
+            Loading projections...
+          </p>
         </div>
       </div>
     );
@@ -62,6 +68,8 @@ export default function ProjectionsPage() {
     );
   }
 
+  const hasDelta = data.rows.some((r) => r.delta !== null);
+
   return (
     <div className="max-w-[1600px] mx-auto px-6 py-6">
       {/* Header */}
@@ -71,19 +79,39 @@ export default function ProjectionsPage() {
             Analyst Projections
           </h1>
           <p className="text-xs mt-1" style={{ color: "#64748B" }}>
-            Financial estimates for {data?.base_year ?? "…"}–{data ? data.base_year + 2 : "…"} · Metrics shown only when 3-year series is complete
+            Financial estimates for {data.base_year}E–{data.base_year + 2}E
+            {hasDelta && (
+              <span
+                style={{
+                  marginLeft: 8,
+                  padding: "1px 6px",
+                  borderRadius: 4,
+                  background: "rgba(43,92,224,0.08)",
+                  color: "#2B5CE0",
+                  fontWeight: 600,
+                }}
+              >
+                + revision deltas
+              </span>
+            )}
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">
           {data.generatedAt && (
             <div className="flex items-center gap-1.5 text-xs font-mono" style={{ color: "#94A3B8" }}>
               <Calendar size={11} />
-              <span>Generated: {formatDate(data.generatedAt)}</span>
+              <span>Latest: {formatDate(data.generatedAt)}</span>
+            </div>
+          )}
+          {data.prevAt && (
+            <div className="flex items-center gap-1.5 text-xs font-mono" style={{ color: "#CBD5E1" }}>
+              <Calendar size={11} />
+              <span>Previous: {formatDate(data.prevAt)}</span>
             </div>
           )}
           <div className="flex items-center gap-3 text-xs font-mono" style={{ color: "#CBD5E1" }}>
             <span>{filteredRows.length} / {data.rows.length} companies</span>
-            <span>Fuente: Proyecciones Chile.xlsx </span>
+            <span>Fuente: Proyecciones Chile.xlsx</span>
           </div>
         </div>
       </div>
@@ -114,14 +142,22 @@ export default function ProjectionsPage() {
           <button
             onClick={() => setSelectedSector("")}
             className="text-xs px-2 py-1 rounded"
-            style={{ color: "#2B5CE0", background: "rgba(43,92,224,0.08)", border: "1px solid rgba(43,92,224,0.20)" }}
+            style={{
+              color: "#2B5CE0",
+              background: "rgba(43,92,224,0.08)",
+              border: "1px solid rgba(43,92,224,0.20)",
+            }}
           >
             Clear
           </button>
         )}
       </div>
 
-      <ProjectionsTable rows={filteredRows} base_year={data.base_year ?? 2025} />
+      <ProjectionsTable
+        rows={filteredRows}
+        base_year={data.base_year ?? 2025}
+        prevAt={data.prevAt}
+      />
     </div>
   );
 }
