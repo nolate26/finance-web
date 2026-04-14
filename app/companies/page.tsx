@@ -136,9 +136,20 @@ export default function CompaniesPage() {
       .finally(() => setDiveLoading(false));
   }, []);
 
-  // Derived values for analyst donut
-  const latestPrice = deepDive?.priceVsEarnings.at(-1)?.pxLast ?? null;
+  // Derived values for analyst donut + header
+  // Price and date come from priceRange52w — it holds the real market snapshot date
   const latestPriceRange = deepDive?.priceRange52w ?? null;
+  const latestPrice      = latestPriceRange?.pxLast ?? deepDive?.priceVsEarnings.at(-1)?.pxLast ?? null;
+  const latestPriceDate  = latestPriceRange?.date   ?? null;
+
+  function fmtHeaderPrice(v: number): string {
+    return v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function fmtHeaderDate(iso: string): string {
+    const d = new Date(iso + "T12:00:00");
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+  }
 
   return (
     <>
@@ -206,35 +217,94 @@ export default function CompaniesPage() {
             <>
               {/* Company header */}
               <div style={{ marginBottom: 20 }}>
-                <h1
-                  style={{
-                    fontSize: 22,
-                    fontWeight: 800,
-                    color: "#0F172A",
-                    letterSpacing: "-0.02em",
-                    fontFamily: "JetBrains Mono, monospace",
-                  }}
-                >
-                  {deepDive.ticker}
-                </h1>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 16, flexWrap: "wrap" }}>
+                  {/* Ticker */}
+                  <h1
+                    style={{
+                      fontSize: 32,
+                      fontWeight: 800,
+                      color: "#0F172A",
+                      letterSpacing: "-0.03em",
+                      fontFamily: "JetBrains Mono, monospace",
+                      lineHeight: 1,
+                    }}
+                  >
+                    {deepDive.ticker}
+                  </h1>
+
+                  {/* Price chip — dark "live quote" treatment */}
+                  {latestPrice != null && (
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 8,
+                        background: "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)",
+                        border: "1px solid rgba(255,255,255,0.07)",
+                        borderRadius: 10,
+                        padding: "5px 14px 5px 10px",
+                        boxShadow: "0 2px 12px rgba(15,23,42,0.18), inset 0 1px 0 rgba(255,255,255,0.05)",
+                        alignSelf: "center",
+                      }}
+                    >
+                      {/* Live indicator dot */}
+                      <span
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: "50%",
+                          background: "#10B981",
+                          boxShadow: "0 0 6px #10B981",
+                          flexShrink: 0,
+                        }}
+                      />
+                      <span
+                        style={{
+                          fontSize: 28,
+                          fontWeight: 700,
+                          fontFamily: "JetBrains Mono, monospace",
+                          color: "#F1F5F9",
+                          lineHeight: 1,
+                          letterSpacing: "-0.02em",
+                        }}
+                      >
+                        {fmtHeaderPrice(latestPrice)}
+                      </span>
+                    </span>
+                  )}
+
+                  {/* "As of" badge */}
+                  {latestPriceDate && (
+                    <span
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: "#64748B",
+                        background: "#F1F5F9",
+                        border: "1px solid #E2E8F0",
+                        borderRadius: 6,
+                        padding: "4px 10px",
+                        fontFamily: "Inter, sans-serif",
+                        letterSpacing: "0.01em",
+                        alignSelf: "center",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      As of {fmtHeaderDate(latestPriceDate)}
+                    </span>
+                  )}
+                </div>
+
                 {selectedItem?.nombre && (
-                  <p style={{ fontSize: 12, color: "#64748B", marginTop: 3 }}>
+                  <p style={{ fontSize: 12, color: "#64748B", marginTop: 5 }}>
                     {selectedItem.nombre}
                   </p>
                 )}
               </div>
 
-              {/* ── ROW 1: Valuation + KPIs ─────────────────────────────────── */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 280px",
-                  gap: 16,
-                  marginBottom: 16,
-                }}
-              >
-                {/* Valuation chart */}
-                <div style={{ ...CARD, minHeight: 320 }}>
+              {/* ── ROW 1: Historical Valuation (3/4) + Market Snapshot (1/4) ── */}
+              <div className="grid lg:grid-cols-4 gap-6 mb-4">
+                <div className="lg:col-span-3" style={{ ...CARD, minHeight: 320 }}>
                   <SectionLabel>Historical Valuation</SectionLabel>
                   {deepDive.valuationHistory.length > 0 ? (
                     <div style={{ height: 260 }}>
@@ -247,8 +317,7 @@ export default function CompaniesPage() {
                   )}
                 </div>
 
-                {/* KPI sidebar cards */}
-                <div style={{ ...CARD }}>
+                <div className="lg:col-span-1" style={{ ...CARD }}>
                   <SectionLabel>Market Snapshot</SectionLabel>
                   <KPICards
                     priceRange={latestPriceRange}
@@ -257,15 +326,8 @@ export default function CompaniesPage() {
                 </div>
               </div>
 
-              {/* ── ROW 2: Consensus chart + Price vs Earnings ───────────────── */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 16,
-                  marginBottom: 16,
-                }}
-              >
+              {/* ── ROW 2: Consensus Evolution + Estimate Momentum ───────────── */}
+              <div className="grid lg:grid-cols-2 gap-6 mb-4">
                 <div style={{ ...CARD }}>
                   <SectionLabel>Consensus Evolution</SectionLabel>
                   <div style={{ height: 220 }}>
@@ -274,24 +336,13 @@ export default function CompaniesPage() {
                 </div>
 
                 <div style={{ ...CARD }}>
-                  <SectionLabel>Price vs Blended Forward Earnings</SectionLabel>
-                  <div style={{ height: 220 }}>
-                    <PriceEarningsChart data={deepDive.priceVsEarnings} />
-                  </div>
+                  <ConsensusMomentumCards data={deepDive.consensusEstimates} />
                 </div>
               </div>
 
-              {/* ── ROW 3: Analyst Donut + Consensus Cards + Related Reports ── */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "3fr 6fr 3fr",
-                  gap: 16,
-                  marginBottom: 24,
-                  alignItems: "stretch",
-                }}
-              >
-                <div style={{ ...CARD }}>
+              {/* ── ROW 3: Analyst Sentiment (1/3) + Price vs Earnings (2/3) ─── */}
+              <div className="grid lg:grid-cols-3 gap-6 items-start mb-4">
+                <div className="lg:col-span-1" style={{ ...CARD }}>
                   <SectionLabel>Analyst Sentiment</SectionLabel>
                   <AnalystDonut
                     analystRec={deepDive.analystRec}
@@ -300,13 +351,17 @@ export default function CompaniesPage() {
                   />
                 </div>
 
-                <div style={{ ...CARD }}>
-                  <ConsensusMomentumCards data={deepDive.consensusEstimates} />
+                <div className="lg:col-span-2" style={{ ...CARD }}>
+                  <SectionLabel>Price vs Blended Forward Earnings</SectionLabel>
+                  <div style={{ height: 220 }}>
+                    <PriceEarningsChart data={deepDive.priceVsEarnings} />
+                  </div>
                 </div>
+              </div>
 
-                <div style={{ ...CARD }}>
-                  <RelatedReports />
-                </div>
+              {/* ── ROW 4: Related Reports — full width ──────────────────────── */}
+              <div style={{ ...CARD, marginBottom: 24 }}>
+                <RelatedReports />
               </div>
             </>
           )}

@@ -36,6 +36,7 @@ export interface AnalystRecSnap {
 }
 
 export interface PriceRange52wSnap {
+  date: string;
   pxLast: number;
   high52w: number;
   low52w: number;
@@ -102,7 +103,7 @@ export async function GET(
         prisma.priceRange52w.findFirst({
           where: { ticker: where },
           orderBy: { date: "desc" },
-          select: { pxLast: true, high52w: true, low52w: true, pctRange: true },
+          select: { date: true, pxLast: true, high52w: true, low52w: true, pctRange: true },
         }),
 
         // 6. Short interest — most recent
@@ -150,9 +151,10 @@ export async function GET(
 
       priceRange52w: priceRange
         ? {
-            pxLast: priceRange.pxLast,
+            date:    priceRange.date.toISOString().split("T")[0],
+            pxLast:  priceRange.pxLast,
             high52w: priceRange.high52w,
-            low52w: priceRange.low52w,
+            low52w:  priceRange.low52w,
             pctRange: priceRange.pctRange,
           }
         : null,

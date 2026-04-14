@@ -4,6 +4,16 @@ export function mean(values: number[]): number {
   return values.reduce((sum, v) => sum + v, 0) / values.length;
 }
 
+/** Returns the median of a numeric array. Returns NaN on empty input. */
+export function median(values: number[]): number {
+  if (values.length === 0) return NaN;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? (sorted[mid - 1] + sorted[mid]) / 2
+    : sorted[mid];
+}
+
 /** Returns the population standard deviation of a numeric array. Returns 0 on single-element input. */
 export function stddev(values: number[]): number {
   if (values.length < 2) return 0;
@@ -13,17 +23,19 @@ export function stddev(values: number[]): number {
 }
 
 /**
- * Given a series of values, computes the mean and ±1 SD band.
- * Filters out nulls before computing.
+ * Given a series of values, computes mean, median, and ±1 SD band (around mean).
+ * Filters out nulls/non-finite values before computing.
  */
 export function computeBands(values: (number | null)[]): {
-  avg: number;
-  upper: number;
-  lower: number;
+  avg:    number;
+  median: number;
+  upper:  number;
+  lower:  number;
 } {
   const clean = values.filter((v): v is number => v !== null && isFinite(v));
-  if (clean.length === 0) return { avg: 0, upper: 0, lower: 0 };
-  const m = mean(clean);
+  if (clean.length === 0) return { avg: 0, median: 0, upper: 0, lower: 0 };
+  const m  = mean(clean);
+  const md = median(clean);
   const sd = stddev(clean);
-  return { avg: m, upper: m + sd, lower: m - sd };
+  return { avg: m, median: md, upper: m + sd, lower: m - sd };
 }

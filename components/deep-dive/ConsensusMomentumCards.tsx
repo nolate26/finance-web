@@ -11,7 +11,15 @@ const CARDS = [
   { label: "Net Income", aliases: ["NET_INCOME"],        color: "#7C3AED", bg: "rgba(124,58,237,0.04)", border: "rgba(124,58,237,0.13)"  },
 ] as const;
 
-const PERIODS = ["1FY", "2FY"] as const;
+// Delta columns: label shown in header + months to look back
+const DELTAS = [
+  { label: "1M",  months:  1 },
+  { label: "3M",  months:  3 },
+  { label: "1Y",  months: 12 },
+  { label: "2Y",  months: 24 },
+] as const;
+
+type DeltaKey = typeof DELTAS[number]["label"];
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
@@ -23,33 +31,32 @@ function fmtCompact(v: number): string {
   return v.toFixed(2);
 }
 
-function fmtChg(chgPct: number | null): { text: string; cls: string } {
-  if (chgPct === null) return { text: "—", cls: "text-gray-300" };
-  // Threshold: ±0.05% considered flat (floating-point noise guard)
-  if (chgPct >  0.05) return { text: `+${chgPct.toFixed(1)}%`, cls: "text-green-600" };
-  if (chgPct < -0.05) return { text: `${chgPct.toFixed(1)}%`,  cls: "text-red-600"   };
-  return { text: `${chgPct.toFixed(1)}%`, cls: "text-slate-400" };
+function fmtChg(chgPct: number | null): { text: string; color: string } {
+  if (chgPct === null) return { text: "—", color: "#CBD5E1" };
+  if (chgPct >  0.05)  return { text: `+${chgPct.toFixed(1)}%`, color: "#059669" };
+  if (chgPct < -0.05)  return { text: `${chgPct.toFixed(1)}%`,  color: "#DC2626" };
+  return { text: `${chgPct.toFixed(1)}%`, color: "#94A3B8" };
 }
 
 // ── Data helpers ──────────────────────────────────────────────────────────────
 
 /**
- * Given a sorted-descending array of data points for one (metric, period),
- * finds the value whose date is closest to `targetDate`, excluding `skipDate`.
- * Returns null if no point falls within ±45 days of the target.
+ * Finds the value closest to `targetDate` within a tolerance window.
+ * Larger tolerance for longer lookback periods to account for sparse data.
  */
 function findValueNear(
   points: ConsensusPoint[],
   targetDate: Date,
-  skipDate: string
+  skipDate: string,
+  toleranceDays = 45
 ): number | null {
-  const TOLERANCE_MS = 45 * 24 * 60 * 60 * 1000; // 45-day window
+  const toleranceMs = toleranceDays * 24 * 60 * 60 * 1000;
   let best: { value: number; diff: number } | null = null;
 
   for (const p of points) {
     if (p.date === skipDate) continue;
     const diff = Math.abs(new Date(p.date).getTime() - targetDate.getTime());
-    if (diff <= TOLERANCE_MS && (!best || diff < best.diff)) {
+    if (diff <= toleranceMs && (!best || diff < best.diff)) {
       best = { value: p.value, diff };
     }
   }
@@ -65,13 +72,10 @@ function pctChange(current: number, past: number | null): number | null {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface PeriodMomentum {
+interface YearMomentum {
   current: number | null;
-  chg1M:   number | null; // pct
-  chg3M:   number | null; // pct
+  deltas: Record<DeltaKey, number | null>;
 }
-
-type CardData = Record<"1FY" | "2FY", PeriodMomentum>;
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -80,55 +84,66 @@ interface Props {
 }
 
 export default function ConsensusMomentumCards({ data }: Props) {
-  const cardData = useMemo<Record<string, CardData>>(() => {
-    const result: Record<string, CardData> = {};
+
+  // Extract available calendar years from the data (e.g. "2026", "2027")
+  const availableYears = useMemo(() => {
+    const years = new Set<string>();
+    for (const row of data) {
+      const y = String(row.period).trim();
+      if (y && !isNaN(Number(y))) years.add(y);
+    }
+    return Array.from(years).sort();
+  }, [data]);
+
+  const cardData = useMemo(() => {
+    const result: Record<string, Record<string, YearMomentum>> = {};
 
     for (const card of CARDS) {
-      const cardResult: CardData = {
-        "1FY": { current: null, chg1M: null, chg3M: null },
-        "2FY": { current: null, chg1M: null, chg3M: null },
-      };
+      const yearMap: Record<string, YearMomentum> = {};
 
-      for (const period of PERIODS) {
-        // Collect all points for this (card, period) combo
+      for (const year of availableYears) {
+        // All points for this (card, year) combo, sorted newest→oldest
         const points = data
           .filter((r) => {
             const up = r.metric.toUpperCase();
-            return card.aliases.includes(up as never) && r.period === period;
+            return (
+              card.aliases.includes(up as never) &&
+              String(r.period).trim() === year
+            );
           })
-          .sort((a, b) => b.date.localeCompare(a.date)); // desc
+          .sort((a, b) => b.date.localeCompare(a.date));
 
-        if (points.length === 0) continue;
+        if (points.length === 0) {
+          yearMap[year] = { current: null, deltas: { "1M": null, "3M": null, "1Y": null, "2Y": null } };
+          continue;
+        }
 
-        const latest      = points[0];
-        const latestDate  = new Date(latest.date);
-        const currentVal  = latest.value;
+        const latest     = points[0];
+        const latestDate = new Date(latest.date);
+        const currentVal = latest.value;
 
-        // Build target dates for -1M and -3M
-        const target1M = new Date(latestDate);
-        target1M.setMonth(target1M.getMonth() - 1);
+        // Compute each delta with a tolerance that scales with lookback distance
+        const deltas = {} as Record<DeltaKey, number | null>;
+        for (const { label, months } of DELTAS) {
+          const target = new Date(latestDate);
+          target.setMonth(target.getMonth() - months);
+          // Allow ±(months * 15) days tolerance — wider window for older lookbacks
+          const tolerance = Math.max(45, months * 15);
+          const past = findValueNear(points, target, latest.date, tolerance);
+          deltas[label] = pctChange(currentVal, past);
+        }
 
-        const target3M = new Date(latestDate);
-        target3M.setMonth(target3M.getMonth() - 3);
-
-        const val1M = findValueNear(points, target1M, latest.date);
-        const val3M = findValueNear(points, target3M, latest.date);
-
-        cardResult[period] = {
-          current: currentVal,
-          chg1M:   pctChange(currentVal, val1M),
-          chg3M:   pctChange(currentVal, val3M),
-        };
+        yearMap[year] = { current: currentVal, deltas };
       }
 
-      result[card.label] = cardResult;
+      result[card.label] = yearMap;
     }
 
     return result;
-  }, [data]);
+  }, [data, availableYears]);
 
   const hasAnyData = CARDS.some((c) =>
-    PERIODS.some((p) => cardData[c.label]?.[p]?.current !== null)
+    availableYears.some((y) => cardData[c.label]?.[y]?.current !== null)
   );
 
   if (!hasAnyData) {
@@ -142,80 +157,96 @@ export default function ConsensusMomentumCards({ data }: Props) {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="mb-3">
+      <div className="mb-4">
         <span className="text-[11px] font-bold tracking-widest uppercase text-slate-400">
           Estimate Momentum — Consensus Revisions
         </span>
       </div>
 
-      {/* 3-column grid */}
-      <div className="grid grid-cols-3 gap-3 flex-1">
+      {/* 3-column grid of cards */}
+      <div className="grid grid-cols-3 gap-4 flex-1">
         {CARDS.map((card) => {
-          const cData = cardData[card.label];
+          const cData = cardData[card.label] ?? {};
 
           return (
             <div
               key={card.label}
               style={{ background: card.bg, border: `1px solid ${card.border}` }}
-              className="rounded-xl p-3 flex flex-col gap-2"
+              className="rounded-xl p-4 flex flex-col"
             >
               {/* Card title */}
               <div
-                className="text-[9px] font-bold tracking-widest uppercase pb-2"
-                style={{
-                  color: card.color,
-                  borderBottom: `1px solid ${card.border}`,
-                }}
+                className="text-[9px] font-bold tracking-widest uppercase pb-3 mb-3"
+                style={{ color: card.color, borderBottom: `1px solid ${card.border}` }}
               >
                 {card.label}
               </div>
 
-              {/* Column headers */}
-              <div className="grid grid-cols-4 gap-1">
-                <div className="text-[8px] font-semibold uppercase text-slate-400">Period</div>
-                <div className="text-[8px] font-semibold uppercase text-slate-400 text-right">Now</div>
-                <div className="text-[8px] font-semibold uppercase text-slate-400 text-right">1M Chg</div>
-                <div className="text-[8px] font-semibold uppercase text-slate-400 text-right">3M Chg</div>
-              </div>
+              {/* Table */}
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr>
+                    {/* Year column — left-aligned */}
+                    <th className="text-[8px] font-semibold uppercase text-slate-400 text-left pb-2 pr-3 w-10">
+                      Yr
+                    </th>
+                    {/* NOW — right-aligned, separated by right border */}
+                    <th className="text-[8px] font-semibold uppercase text-slate-400 text-right pb-2 pr-4 border-r border-slate-200">
+                      Now
+                    </th>
+                    {/* Delta columns */}
+                    {DELTAS.map(({ label }) => (
+                      <th key={label} className="text-[8px] font-semibold uppercase text-slate-400 text-right pb-2 pr-3">
+                        {label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {availableYears.map((year, i) => {
+                    const m = cData[year];
+                    return (
+                      <tr
+                        key={year}
+                        className={i < availableYears.length - 1 ? "border-b border-slate-100" : ""}
+                      >
+                        {/* Year */}
+                        <td className="text-[10px] font-mono font-semibold text-slate-500 py-2.5 pr-3">
+                          {year}
+                        </td>
 
-              {/* Data rows */}
-              {PERIODS.map((period, i) => {
-                const m = cData?.[period];
-                const chg1M = fmtChg(m?.chg1M ?? null);
-                const chg3M = fmtChg(m?.chg3M ?? null);
+                        {/* Current value — right border separator */}
+                        <td
+                          className="text-[10px] font-mono font-bold text-right py-2.5 pr-4 border-r border-slate-200"
+                          style={{ color: m?.current != null ? card.color : "#CBD5E1" }}
+                        >
+                          {m?.current != null ? fmtCompact(m.current) : "—"}
+                        </td>
 
-                return (
-                  <div
-                    key={period}
-                    className={`grid grid-cols-4 gap-1 pt-1.5 ${
-                      i < PERIODS.length - 1 ? "border-b border-slate-100 pb-1.5" : ""
-                    }`}
-                  >
-                    {/* Period label */}
-                    <div className="text-[10px] font-mono font-semibold text-slate-500">
-                      {period}
-                    </div>
+                        {/* Delta columns */}
+                        {DELTAS.map(({ label }) => {
+                          const { text, color } = fmtChg(m?.deltas[label] ?? null);
+                          return (
+                            <td
+                              key={label}
+                              className="text-[10px] font-mono font-bold text-right py-2.5 pr-3"
+                              style={{ color }}
+                            >
+                              {text}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
 
-                    {/* Current value */}
-                    <div
-                      className="text-[10px] font-mono font-bold text-right"
-                      style={{ color: m?.current != null ? card.color : "#CBD5E1" }}
-                    >
-                      {m?.current != null ? fmtCompact(m.current) : "—"}
-                    </div>
-
-                    {/* 1M change */}
-                    <div className={`text-[10px] font-mono font-bold text-right ${chg1M.cls}`}>
-                      {chg1M.text}
-                    </div>
-
-                    {/* 3M change */}
-                    <div className={`text-[10px] font-mono font-bold text-right ${chg3M.cls}`}>
-                      {chg3M.text}
-                    </div>
-                  </div>
-                );
-              })}
+                  {availableYears.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="text-[10px] text-slate-300 text-center py-3">—</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           );
         })}

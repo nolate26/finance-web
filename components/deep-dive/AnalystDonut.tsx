@@ -71,7 +71,7 @@ export default function AnalystDonut({ analystRec, targetPrice, currentPrice }: 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ marginBottom: 8 }}>
-        <span style={{ fontSize: 10, fontWeight: 600, color: "#D97706", letterSpacing: "0.06em" }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: "#D97706", letterSpacing: "0.06em" }}>
           Analyst Recommendations
         </span>
       </div>
@@ -111,10 +111,10 @@ export default function AnalystDonut({ analystRec, targetPrice, currentPrice }: 
               pointerEvents: "none",
             }}
           >
-            <span style={{ fontSize: 11, fontWeight: 700, color: "#0F172A", fontFamily: "JetBrains Mono, monospace" }}>
+            <span style={{ fontSize: 16, fontWeight: 700, color: "#0F172A", fontFamily: "JetBrains Mono, monospace" }}>
               {totAnalysts}
             </span>
-            <span style={{ fontSize: 9, color: "#94A3B8" }}>analysts</span>
+            <span style={{ fontSize: 11, color: "#94A3B8" }}>analysts</span>
           </div>
         </div>
 
@@ -155,7 +155,7 @@ export default function AnalystDonut({ analystRec, targetPrice, currentPrice }: 
                     }}
                   />
                 </div>
-                <span style={{ fontSize: 11, fontFamily: "JetBrains Mono, monospace", color: "#334155", minWidth: 20, textAlign: "right" }}>
+                <span style={{ fontSize: 12, fontFamily: "JetBrains Mono, monospace", color: "#334155", minWidth: 20, textAlign: "right" }}>
                   {value}
                 </span>
               </div>
@@ -164,14 +164,14 @@ export default function AnalystDonut({ analystRec, targetPrice, currentPrice }: 
 
           {/* Consensus + Target */}
           {consenso && (
-            <div style={{ fontSize: 11, color: "#64748B", marginBottom: 5 }}>
+            <div style={{ fontSize: 13, color: "#64748B", marginBottom: 5 }}>
               Consensus: <strong style={{ color: "#0F172A" }}>{consenso}</strong>
             </div>
           )}
           {targetPrice != null && (
             <div
               style={{
-                fontSize: 11,
+                fontSize: 12,
                 color: "#64748B",
                 marginBottom: 4,
                 paddingTop: 6,
@@ -190,7 +190,7 @@ export default function AnalystDonut({ analystRec, targetPrice, currentPrice }: 
             </div>
           )}
           {upside !== null && (
-            <div style={{ fontSize: 11, color: "#64748B" }}>
+            <div style={{ fontSize: 12, color: "#64748B" }}>
               Target upside:{" "}
               <strong
                 style={{

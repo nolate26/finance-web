@@ -34,7 +34,10 @@ export default function KPICards({ priceRange, shortInterest }: Props) {
         const { pxLast, high52w, low52w } = priceRange;
         const span = high52w - low52w;
         const pct = span > 0 ? ((pxLast - low52w) / span) * 100 : 50;
-        return { pct: Math.max(0, Math.min(100, pct)) };
+        const clamped = Math.max(0, Math.min(100, pct));
+        // Dynamic colour: red near low, blue in mid-range, green near high
+        const dotColor = clamped >= 70 ? "#059669" : clamped <= 30 ? "#DC2626" : "#2B5CE0";
+        return { pct: clamped, dotColor };
       })()
     : null;
 
@@ -45,8 +48,27 @@ export default function KPICards({ priceRange, shortInterest }: Props) {
         <div style={LABEL}>52-Week Range</div>
         {priceRange && range52 ? (
           <>
-            {/* Range bar */}
-            <div style={{ position: "relative", height: 6, borderRadius: 4, background: "rgba(15,23,42,0.08)", marginBottom: 10 }}>
+            {/* Range bar — extra top padding makes room for the floating label */}
+            <div style={{ position: "relative", height: 6, borderRadius: 4, background: "rgba(15,23,42,0.08)", marginBottom: 10, marginTop: 22 }}>
+              {/* Floating percentage label above the dot */}
+              <div
+                style={{
+                  position: "absolute",
+                  left: `${range52.pct}%`,
+                  transform: "translateX(-50%)",
+                  top: -20,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  fontFamily: "JetBrains Mono, monospace",
+                  color: range52.dotColor,
+                  whiteSpace: "nowrap",
+                  pointerEvents: "none",
+                }}
+              >
+                {range52.pct.toFixed(0)}%
+              </div>
+
+              {/* Dot */}
               <div
                 style={{
                   position: "absolute",
@@ -55,9 +77,9 @@ export default function KPICards({ priceRange, shortInterest }: Props) {
                   width: 12,
                   height: 12,
                   borderRadius: "50%",
-                  background: "#2B5CE0",
+                  background: range52.dotColor,
                   border: "2px solid #fff",
-                  boxShadow: "0 1px 4px rgba(43,92,224,0.35)",
+                  boxShadow: `0 1px 4px ${range52.dotColor}55`,
                 }}
               />
               {/* Low-to-high fill */}
@@ -97,15 +119,7 @@ export default function KPICards({ priceRange, shortInterest }: Props) {
               </div>
             </div>
 
-            {/* Range pct */}
-            {priceRange.pctRange !== null && (
-              <div style={{ marginTop: 10, fontSize: 11, color: "#64748B", textAlign: "center" }}>
-                <span style={{ fontFamily: "JetBrains Mono, monospace" }}>
-                  {range52.pct.toFixed(0)}%
-                </span>
-                <span style={{ marginLeft: 4, fontSize: 10 }}>of 52w range</span>
-              </div>
-            )}
+            {/* Range pct — now shown as floating label above the dot */}
           </>
         ) : (
           <div style={{ color: "#CBD5E1", fontSize: 12, textAlign: "center" }}>No data</div>
