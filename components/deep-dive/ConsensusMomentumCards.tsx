@@ -156,15 +156,9 @@ export default function ConsensusMomentumCards({ data }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="mb-4">
-        <span className="text-[11px] font-bold tracking-widest uppercase text-slate-400">
-          Estimate Momentum — Consensus Revisions
-        </span>
-      </div>
 
-      {/* 3-column grid of cards */}
-      <div className="grid grid-cols-3 gap-4 flex-1">
+      {/* 3 cards — horizontal scroll if they don't fit */}
+      <div className="flex overflow-x-auto gap-3 pb-1 w-full">
         {CARDS.map((card) => {
           const cData = cardData[card.label] ?? {};
 
@@ -172,11 +166,11 @@ export default function ConsensusMomentumCards({ data }: Props) {
             <div
               key={card.label}
               style={{ background: card.bg, border: `1px solid ${card.border}` }}
-              className="rounded-xl p-4 flex flex-col"
+              className="rounded-xl p-3 flex flex-col shrink-0 min-w-[260px] flex-1"
             >
               {/* Card title */}
               <div
-                className="text-[9px] font-bold tracking-widest uppercase pb-3 mb-3"
+                className="text-[10px] font-bold tracking-widest uppercase pb-2 mb-2"
                 style={{ color: card.color, borderBottom: `1px solid ${card.border}` }}
               >
                 {card.label}
@@ -186,17 +180,14 @@ export default function ConsensusMomentumCards({ data }: Props) {
               <table className="w-full border-collapse">
                 <thead>
                   <tr>
-                    {/* Year column — left-aligned */}
-                    <th className="text-[8px] font-semibold uppercase text-slate-400 text-left pb-2 pr-3 w-10">
-                      Yr
+                    <th className="text-[8px] font-semibold uppercase text-slate-400 text-left pb-1.5 pr-2 w-9">
+                      Year
                     </th>
-                    {/* NOW — right-aligned, separated by right border */}
-                    <th className="text-[8px] font-semibold uppercase text-slate-400 text-right pb-2 pr-4 border-r border-slate-200">
+                    <th className="text-[8px] font-semibold uppercase text-slate-400 text-right pb-1.5 pr-2">
                       Now
                     </th>
-                    {/* Delta columns */}
                     {DELTAS.map(({ label }) => (
-                      <th key={label} className="text-[8px] font-semibold uppercase text-slate-400 text-right pb-2 pr-3">
+                      <th key={label} className="text-[8px] font-semibold uppercase text-slate-400 text-right pb-1.5 pr-1">
                         {label}
                       </th>
                     ))}
@@ -211,13 +202,13 @@ export default function ConsensusMomentumCards({ data }: Props) {
                         className={i < availableYears.length - 1 ? "border-b border-slate-100" : ""}
                       >
                         {/* Year */}
-                        <td className="text-[10px] font-mono font-semibold text-slate-500 py-2.5 pr-3">
+                        <td className="text-[11px] font-mono font-semibold text-slate-500 py-2 pr-2">
                           {year}
                         </td>
 
-                        {/* Current value — right border separator */}
+                        {/* Current value */}
                         <td
-                          className="text-[10px] font-mono font-bold text-right py-2.5 pr-4 border-r border-slate-200"
+                          className="text-[10px] font-mono font-bold text-right py-2 pr-2"
                           style={{ color: m?.current != null ? card.color : "#CBD5E1" }}
                         >
                           {m?.current != null ? fmtCompact(m.current) : "—"}
@@ -229,7 +220,7 @@ export default function ConsensusMomentumCards({ data }: Props) {
                           return (
                             <td
                               key={label}
-                              className="text-[10px] font-mono font-bold text-right py-2.5 pr-3"
+                              className="text-[10px] font-mono font-bold text-right py-2 pr-1"
                               style={{ color }}
                             >
                               {text}
@@ -242,7 +233,7 @@ export default function ConsensusMomentumCards({ data }: Props) {
 
                   {availableYears.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="text-[10px] text-slate-300 text-center py-3">—</td>
+                      <td colSpan={6} className="text-[10px] text-slate-300 text-center py-2">—</td>
                     </tr>
                   )}
                 </tbody>

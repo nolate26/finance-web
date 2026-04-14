@@ -326,22 +326,23 @@ export default function CompaniesPage() {
                 </div>
               </div>
 
-              {/* ── ROW 2: Consensus Evolution + Estimate Momentum ───────────── */}
-              <div className="grid lg:grid-cols-2 gap-6 mb-4">
-                <div style={{ ...CARD }}>
+              {/* ── ROW 2: Consensus Evolution (2/5) + Estimate Momentum (3/5) ── */}
+              <div className="grid lg:grid-cols-5 gap-4 mb-4">
+                <div className="lg:col-span-2" style={{ ...CARD }}>
                   <SectionLabel>Consensus Evolution</SectionLabel>
                   <div style={{ height: 220 }}>
                     <ConsensusChart data={deepDive.consensusEstimates} />
                   </div>
                 </div>
 
-                <div style={{ ...CARD }}>
+                <div className="lg:col-span-3" style={{ ...CARD }}>
+                  <SectionLabel>Estimate Momentum — Consensus Revisions</SectionLabel>
                   <ConsensusMomentumCards data={deepDive.consensusEstimates} />
                 </div>
               </div>
 
               {/* ── ROW 3: Analyst Sentiment (1/3) + Price vs Earnings (2/3) ─── */}
-              <div className="grid lg:grid-cols-3 gap-6 items-start mb-4">
+              <div className="grid lg:grid-cols-3 gap-6 mb-4">
                 <div className="lg:col-span-1" style={{ ...CARD }}>
                   <SectionLabel>Analyst Sentiment</SectionLabel>
                   <AnalystDonut

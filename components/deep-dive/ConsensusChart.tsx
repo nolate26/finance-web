@@ -267,12 +267,7 @@ export default function ConsensusChart({ data }: Props) {
         justifyContent: "space-between",
         marginBottom: 4, flexWrap: "wrap", gap: 6,
       }}>
-        <span style={{
-          fontSize: 10, fontWeight: 700, color: "#64748B",
-          letterSpacing: "0.07em", textTransform: "uppercase",
-        }}>
-          Consensus Evolution
-        </span>
+        
 
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {lastDate && (
