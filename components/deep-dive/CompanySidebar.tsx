@@ -19,8 +19,8 @@ export default function CompanySidebar({ companies, selectedTicker, onSelect, lo
     if (!q) return companies;
     return companies.filter(
       (c) =>
-        c.ticker.toLowerCase().includes(q) ||
-        c.nombre.toLowerCase().includes(q)
+        (c.ticker?.toLowerCase() ?? "").includes(q) ||
+        (c.nombre?.toLowerCase() ?? "").includes(q)
     );
   }, [companies, query]);
 

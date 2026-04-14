@@ -16,7 +16,7 @@ export interface CompanyListItem {
 export async function GET() {
   try {
     // Raw query to get distinct ticker + nombre_latam pairs
-    const rows = await prisma.$queryRaw<{ ticker: string; nombre_latam: string }[]>`
+    const rows = await prisma.$queryRaw<{ ticker_bloomberg: string; nombre_latam: string }[]>`
       SELECT DISTINCT 
           ei.ticker_bloomberg,
           fpw.company AS nombre_latam
@@ -37,7 +37,7 @@ export async function GET() {
     `;
 
     const companies: CompanyListItem[] = rows.map((r) => ({
-      ticker: r.ticker,
+      ticker: r.ticker_bloomberg,   // $queryRaw returns the real column name, not an alias
       nombre: r.nombre_latam,
     }));
 

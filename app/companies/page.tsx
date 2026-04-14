@@ -101,16 +101,23 @@ export default function CompaniesPage() {
   const [diveLoading, setDiveLoading] = useState(false);
   const [diveError, setDiveError] = useState<string | null>(null);
 
-  // Fetch company list once
+  // Fetch company list once, then auto-select CCU (or first company)
   useEffect(() => {
     fetch("/api/companies/list")
       .then((r) => r.json())
       .then((d: { companies?: CompanyListItem[] }) => {
-        setCompanies(d.companies ?? []);
+        const list = d.companies ?? [];
+        setCompanies(list);
+        if (list.length > 0) {
+          const defaultItem =
+            list.find((c) => c.ticker === "CCU CI Equity") ?? list[0];
+          handleSelect(defaultItem);
+        }
       })
       .catch(() => setCompanies([]))
       .finally(() => setListLoading(false));
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);  // handleSelect is stable (useCallback with no deps) — intentionally omitted
 
   // Fetch deep dive when ticker changes
   const handleSelect = useCallback((item: CompanyListItem) => {
