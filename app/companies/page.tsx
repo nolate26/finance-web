@@ -326,7 +326,7 @@ export default function CompaniesPage() {
                     lineHeight: 1,
                     margin: 0,
                   }}>
-                    {selectedItem.nombre}
+                    {selectedItem?.nombre}
                   </h1>
 
                   {/* Price chip */}
