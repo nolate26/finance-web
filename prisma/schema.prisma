@@ -105,6 +105,7 @@ model EmpresasIndustrias {
   industriaGics   String? @map("industria_gics") @db.VarChar(200)
   industriaChile  String? @map("industria_chile") @db.VarChar(200)
   tickerBloomberg String? @map("ticker_bloomberg") @db.VarChar(100)
+  companyDescription String? @map("company_description") @db.Text
 
   @@map("empresas_industrias")
 }

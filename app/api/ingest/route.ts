@@ -59,6 +59,23 @@ export async function POST(request: Request) {
         await prisma.performanceAttribution.createMany({ data: rows, skipDuplicates: true });
         break;
 
+
+      // --- ACTUALIZACIONES DE TABLAS EXISTENTES ---
+      case 'EmpresasIndustrias_Description':
+        // Como es una actualización, usamos un bucle con updateMany
+        // updateMany es seguro: si el ticker no existe, no hace nada y no rompe el servidor.
+        for (const row of rows) {
+          if (row.ticker_bloomberg && row.company_description) {
+            await prisma.empresas_industrias.updateMany({
+              where: { ticker_bloomberg: row.ticker_bloomberg },
+              data: { company_description: row.company_description },
+            });
+          }
+        }
+        break;
+
+
+
       // --- NUEVAS TABLAS: COMPANY DEEP DIVE ---
       case 'ValuationHistory':
         await prisma.valuationHistory.createMany({ data: rows, skipDuplicates: true });

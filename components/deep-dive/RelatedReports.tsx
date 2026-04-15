@@ -199,15 +199,6 @@ export default function RelatedReports() {
           </button>
         </div>
 
-        {/* ── Sell Sides ──────────────────────────────────────────────────── */}
-        {sellSide.length > 0 && (
-          <div className="mb-3">
-            <SectionDivider label="Sell Sides" count={sellSide.length} />
-            <div className="flex flex-col">
-              {sellSide.map((r) => <ReportRow key={r.id} report={r} />)}
-            </div>
-          </div>
-        )}
 
         {/* ── Moneda ──────────────────────────────────────────────────────── */}
         {moneda.length > 0 && (
@@ -215,6 +206,15 @@ export default function RelatedReports() {
             <SectionDivider label="Moneda" count={moneda.length} />
             <div className="flex flex-col">
               {moneda.map((r) => <ReportRow key={r.id} report={r} />)}
+            </div>
+          </div>
+        )}
+        {/* ── Sell Sides ──────────────────────────────────────────────────── */}
+        {sellSide.length > 0 && (
+          <div className="mb-3">
+            <SectionDivider label="Sell Sides" count={sellSide.length} />
+            <div className="flex flex-col">
+              {sellSide.map((r) => <ReportRow key={r.id} report={r} />)}
             </div>
           </div>
         )}

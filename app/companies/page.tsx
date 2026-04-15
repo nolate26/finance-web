@@ -10,7 +10,7 @@ import AnalystDonut from "@/components/deep-dive/AnalystDonut";
 import ConsensusMomentumCards from "@/components/deep-dive/ConsensusMomentumCards";
 import RelatedReports from "@/components/deep-dive/RelatedReports";
 import type { CompanyListItem } from "@/app/api/companies/list/route";
-import type { DeepDivePayload } from "@/app/api/companies/[ticker]/route";
+import type { DeepDivePayload, PortfolioWeightSnap } from "@/app/api/companies/[ticker]/route";
 
 // ── Shared card style ─────────────────────────────────────────────────────────
 const CARD: React.CSSProperties = {
@@ -85,6 +85,90 @@ function EmptyState() {
         <div style={{ fontSize: 12, color: "#94A3B8" }}>
           Choose a ticker from the sidebar to explore its deep dive
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Active Weight Badge ───────────────────────────────────────────────────────
+
+function fmtPct(v: number | null): string {
+  if (v == null) return "—";
+  return (v >= 0 ? "+" : "") + v.toFixed(1) + "%";
+}
+
+function owColor(v: number | null): { text: string; bg: string; border: string } {
+  if (v == null || v === 0) return { text: "#475569", bg: "rgba(100,116,139,0.07)", border: "rgba(100,116,139,0.20)" };
+  return v > 0
+    ? { text: "#15803D", bg: "rgba(22,163,74,0.07)",  border: "rgba(22,163,74,0.22)"  }
+    : { text: "#B91C1C", bg: "rgba(220,38,38,0.07)",  border: "rgba(220,38,38,0.22)"  };
+}
+
+function ActiveWeightBadge({ weights }: { weights: PortfolioWeightSnap[] }) {
+  if (weights.length === 0) return null;
+
+  // Short display name: strip common suffixes for compact columns
+  const shortName = (name: string) =>
+    name.replace(/\s*(fund|fondo|equity|latam)\s*/gi, "").trim() || name;
+
+  return (
+    <div style={{
+      display:       "flex",
+      flexDirection: "column",
+      gap:           6,
+      fontFamily:    "JetBrains Mono, monospace",
+      background:    "#F8FAFC",
+      border:        "1px solid rgba(15,23,42,0.08)",
+      borderRadius:  10,
+      padding:       "10px 14px",
+      minWidth:      0,
+    }}>
+      {/* Label */}
+      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.10em", color: "#94A3B8", textTransform: "uppercase" }}>
+        Portfolio Positioning
+      </div>
+
+      {/* Table */}
+      <div style={{ display: "grid", gridTemplateColumns: `80px repeat(${weights.length}, 1fr)`, gap: "3px 10px", alignItems: "center" }}>
+
+        {/* Header row — fund names */}
+        <div style={{ fontSize: 9, color: "#94A3B8" }} />
+        {weights.map((w) => (
+          <div key={w.fundName} style={{ fontSize: 11, fontWeight: 700, color: "#64748B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {shortName(w.fundName)}
+          </div>
+        ))}
+
+        {/* Benchmark weight row */}
+        <div style={{ fontSize: 11, color: "#94A3B8", whiteSpace: "nowrap" }}>Bmk Weight</div>
+        {weights.map((w) => (
+          <div key={w.fundName} style={{ fontSize: 10, color: "#475569", fontWeight: 600 }}>
+            {fmtPct(w.benchmarkWeight)}
+          </div>
+        ))}
+
+        {/* Active weight row */}
+        <div style={{ fontSize: 11, color: "#94A3B8", whiteSpace: "nowrap" }}>Active Wgt</div>
+        {weights.map((w) => {
+          const c = owColor(w.overweight);
+          return (
+            <div key={w.fundName} style={{
+              display:      "inline-flex",
+              alignItems:   "center",
+              justifyContent: "center",
+              fontSize:     10,
+              fontWeight:   800,
+              color:        c.text,
+              background:   c.bg,
+              border:       `1px solid ${c.border}`,
+              borderRadius: 4,
+              padding:      "1px 5px",
+              whiteSpace:   "nowrap",
+            }}>
+              {fmtPct(w.overweight)}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -216,89 +300,73 @@ export default function CompaniesPage() {
           {deepDive && !diveLoading && (
             <>
               {/* Company header */}
-              <div style={{ marginBottom: 20 }}>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 16, flexWrap: "wrap" }}>
-                  {/* Ticker */}
-                  <h1
-                    style={{
-                      fontSize: 32,
-                      fontWeight: 800,
-                      color: "#0F172A",
-                      letterSpacing: "-0.03em",
-                      fontFamily: "JetBrains Mono, monospace",
-                      lineHeight: 1,
-                    }}
-                  >
-                    {deepDive.ticker}
-                  </h1>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, marginBottom: 20, flexWrap: "wrap" }}>
 
-                  {/* Price chip — dark "live quote" treatment */}
-                  {latestPrice != null && (
-                    <span
+                {/* ── Left: ticker, price, name ── */}
+                <div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 16, flexWrap: "wrap" }}>
+                    {/* Ticker */}
+                    <h1
                       style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 8,
-                        background: "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)",
-                        border: "1px solid rgba(255,255,255,0.07)",
-                        borderRadius: 10,
-                        padding: "5px 14px 5px 10px",
-                        boxShadow: "0 2px 12px rgba(15,23,42,0.18), inset 0 1px 0 rgba(255,255,255,0.05)",
-                        alignSelf: "center",
+                        fontSize: 32,
+                        fontWeight: 800,
+                        color: "#0F172A",
+                        letterSpacing: "-0.03em",
+                        fontFamily: "JetBrains Mono, monospace",
+                        lineHeight: 1,
                       }}
                     >
-                      {/* Live indicator dot */}
+                      {deepDive.ticker}
+                    </h1>
+
+                    {/* Price chip */}
+                    {latestPrice != null && (
                       <span
                         style={{
-                          width: 6,
-                          height: 6,
-                          borderRadius: "50%",
-                          background: "#10B981",
-                          boxShadow: "0 0 6px #10B981",
-                          flexShrink: 0,
-                        }}
-                      />
-                      <span
-                        style={{
-                          fontSize: 28,
-                          fontWeight: 700,
-                          fontFamily: "JetBrains Mono, monospace",
-                          color: "#F1F5F9",
-                          lineHeight: 1,
-                          letterSpacing: "-0.02em",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 8,
+                          background: "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)",
+                          border: "1px solid rgba(255,255,255,0.07)",
+                          borderRadius: 10,
+                          padding: "5px 14px 5px 10px",
+                          boxShadow: "0 2px 12px rgba(15,23,42,0.18), inset 0 1px 0 rgba(255,255,255,0.05)",
+                          alignSelf: "center",
                         }}
                       >
-                        {fmtHeaderPrice(latestPrice)}
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981", boxShadow: "0 0 6px #10B981", flexShrink: 0 }} />
+                        <span style={{ fontSize: 28, fontWeight: 700, fontFamily: "JetBrains Mono, monospace", color: "#F1F5F9", lineHeight: 1, letterSpacing: "-0.02em" }}>
+                          {fmtHeaderPrice(latestPrice)}
+                        </span>
                       </span>
-                    </span>
-                  )}
+                    )}
 
-                  {/* "As of" badge */}
-                  {latestPriceDate && (
-                    <span
-                      style={{
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: "#64748B",
-                        background: "#F1F5F9",
-                        border: "1px solid #E2E8F0",
-                        borderRadius: 6,
-                        padding: "4px 10px",
-                        fontFamily: "Inter, sans-serif",
-                        letterSpacing: "0.01em",
-                        alignSelf: "center",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      As of {fmtHeaderDate(latestPriceDate)}
-                    </span>
+                    {/* "As of" badge */}
+                    {latestPriceDate && (
+                      <span
+                        style={{
+                          fontSize: 12, fontWeight: 600, color: "#64748B",
+                          background: "#F1F5F9", border: "1px solid #E2E8F0",
+                          borderRadius: 6, padding: "4px 10px",
+                          fontFamily: "Inter, sans-serif", letterSpacing: "0.01em",
+                          alignSelf: "center", whiteSpace: "nowrap",
+                        }}
+                      >
+                        As of {fmtHeaderDate(latestPriceDate)}
+                      </span>
+                    )}
+                  </div>
+
+                  {selectedItem?.nombre && (
+                    <p style={{ fontSize: 16, color: "#64748B", marginTop: 5 }}>
+                      {selectedItem.nombre}
+                    </p>
                   )}
                 </div>
 
-                {selectedItem?.nombre && (
-                  <p style={{ fontSize: 12, color: "#64748B", marginTop: 5 }}>
-                    {selectedItem.nombre}
-                  </p>
+                {/* ── Right: portfolio positioning ── */}
+                {deepDive.portfolioWeights.length > 0 && (
+                  <ActiveWeightBadge weights={deepDive.portfolioWeights} />
                 )}
               </div>
 
@@ -341,10 +409,10 @@ export default function CompaniesPage() {
                 </div>
               </div>
 
-              {/* ── ROW 3: Analyst Sentiment (1/3) + Price vs Earnings (2/3) ─── */}
+              {/* ── ROW 3: Sell Side Sentiment (1/3) + Price vs Earnings (2/3) ─── */}
               <div className="grid lg:grid-cols-3 gap-6 mb-4">
                 <div className="lg:col-span-1" style={{ ...CARD }}>
-                  <SectionLabel>Analyst Sentiment</SectionLabel>
+                  <SectionLabel>Sell Side Sentiment</SectionLabel>
                   <AnalystDonut
                     analystRec={deepDive.analystRec}
                     targetPrice={deepDive.analystRec?.targetPrice ?? null}
@@ -353,9 +421,9 @@ export default function CompaniesPage() {
                 </div>
 
                 <div className="lg:col-span-2" style={{ ...CARD }}>
-                  <SectionLabel>Price vs Blended Forward Earnings</SectionLabel>
+                  <SectionLabel>Price vs Earnings Estimates</SectionLabel>
                   <div style={{ height: 220 }}>
-                    <PriceEarningsChart data={deepDive.priceVsEarnings} />
+                    <PriceEarningsChart data={deepDive.priceVsEarnings} consensus={deepDive.consensusEstimates} />
                   </div>
                 </div>
               </div>

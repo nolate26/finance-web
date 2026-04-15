@@ -47,6 +47,12 @@ export interface ShortInterestSnap {
   shortIntRatio: number;
 }
 
+export interface PortfolioWeightSnap {
+  fundName:       string;
+  benchmarkWeight: number | null;
+  overweight:      number | null;
+}
+
 export interface DeepDivePayload {
   ticker: string;
   valuationHistory: ValuationPoint[];
@@ -55,6 +61,7 @@ export interface DeepDivePayload {
   analystRec: AnalystRecSnap | null;
   priceRange52w: PriceRange52wSnap | null;
   shortInterest: ShortInterestSnap | null;
+  portfolioWeights: PortfolioWeightSnap[];
 }
 
 // ── Route handler ─────────────────────────────────────────────────────────────
@@ -69,7 +76,13 @@ export async function GET(
   try {
     const where = { equals: decodedTicker, mode: "insensitive" as const };
 
-    const [valuation, priceEarnings, consensus, analystRec, priceRange, shortInt] =
+    // Step A: resolve nombre_latam from ticker (needed for portfolio weights join)
+    const empresa = await prisma.empresasIndustrias.findFirst({
+      where: { tickerBloomberg: { equals: decodedTicker, mode: "insensitive" } },
+      select: { nombreLatam: true },
+    });
+
+    const [valuation, priceEarnings, consensus, analystRec, priceRange, shortInt, rawWeights] =
       await Promise.all([
         // 1. Valuation history — ascending date
         prisma.valuationHistory.findMany({
@@ -112,7 +125,30 @@ export async function GET(
           orderBy: { date: "desc" },
           select: { shortIntRatio: true },
         }),
+
+        // 7. Portfolio weights — most recent per fund (Step B of the ticker→company join)
+        empresa?.nombreLatam
+          ? prisma.fundPortfolioWeight.findMany({
+              where: { company: empresa.nombreLatam },
+              orderBy: { reportDate: "desc" },
+              select: { fundName: true, reportDate: true, benchmarkWeight: true, overweight: true },
+            })
+          : Promise.resolve([]),
       ]);
+
+    // Keep only the most recent record per fund (rawWeights is already sorted desc)
+    const seenFunds = new Set<string>();
+    const portfolioWeights: PortfolioWeightSnap[] = rawWeights
+      .filter((w) => {
+        if (seenFunds.has(w.fundName)) return false;
+        seenFunds.add(w.fundName);
+        return true;
+      })
+      .map((w) => ({
+        fundName:        w.fundName,
+        benchmarkWeight: w.benchmarkWeight ?? null,
+        overweight:      w.overweight      ?? null,
+      }));
 
     const payload: DeepDivePayload = {
       ticker: decodedTicker,
@@ -160,6 +196,7 @@ export async function GET(
         : null,
 
       shortInterest: shortInt ? { shortIntRatio: shortInt.shortIntRatio } : null,
+      portfolioWeights,
     };
 
     return NextResponse.json(payload);

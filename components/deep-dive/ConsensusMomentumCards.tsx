@@ -33,8 +33,8 @@ function fmtCompact(v: number): string {
 
 function fmtChg(chgPct: number | null): { text: string; color: string } {
   if (chgPct === null) return { text: "—", color: "#CBD5E1" };
-  if (chgPct >  0.05)  return { text: `+${chgPct.toFixed(1)}%`, color: "#059669" };
-  if (chgPct < -0.05)  return { text: `${chgPct.toFixed(1)}%`,  color: "#DC2626" };
+  if (chgPct >  0.05)  return { text: `+${chgPct.toFixed(0)}%`, color: "#059669" };
+  if (chgPct < -0.05)  return { text: `${chgPct.toFixed(0)}%`,  color: "#DC2626" };
   return { text: `${chgPct.toFixed(1)}%`, color: "#94A3B8" };
 }
 
@@ -75,6 +75,58 @@ function pctChange(current: number, past: number | null): number | null {
 interface YearMomentum {
   current: number | null;
   deltas: Record<DeltaKey, number | null>;
+}
+
+type TrendDir = "up" | "down" | "mixed" | "insufficient";
+
+interface TrendResult {
+  direction: TrendDir;
+  label:     string;   // colored word
+  sentence:  string;   // full sentence text after the label
+}
+
+// ── Trend analysis ────────────────────────────────────────────────────────────
+
+/**
+ * Evaluates the month-over-month direction for the last 3 consecutive data
+ * points of a given (metric, year) series.
+ *
+ * Returns:
+ *   "up"           — all 3 MoM changes are positive
+ *   "down"         — all 3 MoM changes are negative
+ *   "mixed"        — direction flipped at least once
+ *   "insufficient" — fewer than 4 data points (need 4 to get 3 MoM changes)
+ */
+function computeTrend(
+  data: ConsensusPoint[],
+  aliases: readonly string[],
+  year: string
+): TrendResult {
+  const points = data
+    .filter((r) => {
+      const up = r.metric.toUpperCase();
+      return aliases.includes(up) && String(r.period).trim() === year;
+    })
+    .sort((a, b) => a.date.localeCompare(b.date)); // asc
+
+  if (points.length < 4) {
+    return { direction: "insufficient", label: "stable", sentence: "over the last 3 months." };
+  }
+
+  // Take the 4 most recent points → 3 consecutive MoM changes
+  const tail = points.slice(-4);
+  const changes = [
+    tail[1].value - tail[0].value,
+    tail[2].value - tail[1].value,
+    tail[3].value - tail[2].value,
+  ];
+
+  const allUp   = changes.every((c) => c > 0);
+  const allDown = changes.every((c) => c < 0);
+
+  if (allUp)   return { direction: "up",   label: "upward",  sentence: "over the last 3 months." };
+  if (allDown) return { direction: "down", label: "downward", sentence: "over the last 3 months." };
+  return        { direction: "mixed", label: "mixed",    sentence: "with no clear direction over the last 3 months." };
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -154,8 +206,19 @@ export default function ConsensusMomentumCards({ data }: Props) {
     );
   }
 
+  // ── Trend summary — first available year across all 3 metrics ──────────────
+  const trendYear = availableYears[0] ?? null;
+
+  const trends = useMemo(() => {
+    if (!trendYear) return null;
+    return CARDS.map((card) => ({
+      card,
+      trend: computeTrend(data, card.aliases, trendYear),
+    }));
+  }, [data, trendYear]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full gap-3">
 
       {/* 3 cards — horizontal scroll if they don't fit */}
       <div className="flex overflow-x-auto gap-3 pb-1 w-full">
@@ -242,6 +305,84 @@ export default function ConsensusMomentumCards({ data }: Props) {
           );
         })}
       </div>
+
+      {/* ── 3-Month Trend Analysis panel ──────────────────────────────────── */}
+      {trends && trendYear && (
+        <div className="rounded-lg bg-slate-50 border border-slate-100 px-4 py-3">
+          <div className="flex items-center gap-2 mb-3">
+            <span
+              className="text-[10px] font-bold tracking-widest uppercase"
+              style={{ color: "#64748B" }}
+            >
+              3-Month Trend Analysis
+            </span>
+            <span
+              className="text-[10px] font-mono"
+              style={{
+                color: "#64748B",
+                background: "rgba(15,23,42,0.04)",
+                border: "1px solid rgba(15,23,42,0.07)",
+                borderRadius: 3,
+                padding: "0px 5px",
+              }}
+            >
+              {trendYear}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            {trends.map(({ card, trend }) => {
+              const dirColor =
+                trend.direction === "up"   ? "#059669" :
+                trend.direction === "down" ? "#DC2626" : "#94A3B8";
+
+              const dirBg =
+                trend.direction === "up"   ? "rgba(5,150,105,0.07)"  :
+                trend.direction === "down" ? "rgba(220,38,38,0.07)"  :
+                                             "rgba(15,23,42,0.04)";
+
+              const arrow =
+                trend.direction === "up"   ? "↑" :
+                trend.direction === "down" ? "↓" : "→";
+
+              return (
+                <div key={card.label} className="flex flex-col gap-1.5">
+                  {/* Metric name + color dot */}
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      style={{ width: 6, height: 6, borderRadius: "50%", background: card.color, flexShrink: 0 }}
+                      className="inline-block"
+                    />
+                    <span className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: card.color }}>
+                      {card.label}
+                    </span>
+                  </div>
+
+                  {/* Trend badge */}
+                  <div
+                    className="inline-flex items-center gap-1 rounded-md px-2 py-1 self-start"
+                    style={{ background: dirBg, border: `1px solid ${dirColor}22` }}
+                  >
+                    <span className="text-[11px] font-bold leading-none" style={{ color: dirColor }}>
+                      {arrow}
+                    </span>
+                    <span className="text-[9px] font-bold font-mono capitalize" style={{ color: dirColor }}>
+                      {trend.label}
+                    </span>
+                  </div>
+
+                  {/* Sentence */}
+                  <span className="text-[9px] text-slate-400 leading-tight">
+                    Estimates trended{" "}
+                    <span style={{ color: dirColor, fontWeight: 700 }}>{trend.label}</span>{" "}
+                    {trend.sentence}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
