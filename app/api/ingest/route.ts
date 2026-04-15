@@ -66,7 +66,7 @@ export async function POST(request: Request) {
         // updateMany es seguro: si el ticker no existe, no hace nada y no rompe el servidor.
         for (const row of rows) {
           if (row.ticker_bloomberg && row.company_description) {
-            await prisma.empresas_industrias.updateMany({
+            await prisma.empresasIndustrias.updateMany({
               where: { ticker_bloomberg: row.ticker_bloomberg },
               data: { company_description: row.company_description },
             });
