@@ -53,6 +53,15 @@ export interface PortfolioWeightSnap {
   overweight:      number | null;
 }
 
+export interface TotalReturnSnap {
+  date:     string;
+  triToday: number | null;
+  tri1m:    number | null;
+  tri3m:    number | null;
+  tri1y:    number | null;
+  tri2y:    number | null;
+}
+
 export interface DeepDivePayload {
   ticker: string;
   companyDescription: string | null;
@@ -63,6 +72,7 @@ export interface DeepDivePayload {
   priceRange52w: PriceRange52wSnap | null;
   shortInterest: ShortInterestSnap | null;
   portfolioWeights: PortfolioWeightSnap[];
+  totalReturn: TotalReturnSnap | null;
 }
 
 // ── Route handler ─────────────────────────────────────────────────────────────
@@ -83,7 +93,7 @@ export async function GET(
       select: { nombreLatam: true, companyDescription: true },
     });
 
-    const [valuation, priceEarnings, consensus, analystRec, priceRange, shortInt, rawWeights] =
+    const [valuation, priceEarnings, consensus, analystRec, priceRange, shortInt, rawWeights, triRow] =
       await Promise.all([
         // 1. Valuation history — ascending date
         prisma.valuationHistory.findMany({
@@ -135,6 +145,13 @@ export async function GET(
               select: { fundName: true, reportDate: true, benchmarkWeight: true, overweight: true },
             })
           : Promise.resolve([]),
+
+        // 8. Total Return Index — most recent snapshot
+        prisma.totalReturnIndex.findFirst({
+          where:   { ticker: { equals: decodedTicker, mode: "insensitive" } },
+          orderBy: { date: "desc" },
+          select:  { date: true, triToday: true, tri1m: true, tri3m: true, tri1y: true, tri2y: true },
+        }),
       ]);
 
     // Keep only the most recent record per fund (rawWeights is already sorted desc)
@@ -199,6 +216,17 @@ export async function GET(
 
       shortInterest: shortInt ? { shortIntRatio: shortInt.shortIntRatio } : null,
       portfolioWeights,
+
+      totalReturn: triRow
+        ? {
+            date:     triRow.date.toISOString().split("T")[0],
+            triToday: triRow.triToday ?? null,
+            tri1m:    triRow.tri1m    ?? null,
+            tri3m:    triRow.tri3m    ?? null,
+            tri1y:    triRow.tri1y    ?? null,
+            tri2y:    triRow.tri2y    ?? null,
+          }
+        : null,
     };
 
     return NextResponse.json(payload);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import type { ConsensusPoint } from "@/app/api/companies/[ticker]/route";
+import type { ConsensusPoint, TotalReturnSnap } from "@/app/api/companies/[ticker]/route";
 
 // ── Card config ───────────────────────────────────────────────────────────────
 
@@ -62,6 +62,19 @@ function findValueNear(
   }
 
   return best ? best.value : null;
+}
+
+function fmtTriPrice(v: number | null): { text: string; color: string } {
+  if (v === null) return { text: "—", color: "#CBD5E1" };
+  return { text: v.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }), color: "#7C3AED" };
+}
+
+function fmtTriPct(current: number | null, past: number | null): { text: string; color: string } {
+  if (current === null || past === null || past === 0) return { text: "—", color: "#CBD5E1" };
+  const pct = (current / past - 1) * 100;
+  if (pct >  0.5) return { text: `+${Math.round(pct)}%`, color: "#059669" };
+  if (pct < -0.5) return { text: `${Math.round(pct)}%`,  color: "#DC2626" };
+  return               { text: `${Math.round(pct)}%`,    color: "#94A3B8" };
 }
 
 /** `((current / past) - 1) * 100` — returns null when past is 0 or missing. */
@@ -132,10 +145,11 @@ function computeTrend(
 // ── Component ─────────────────────────────────────────────────────────────────
 
 interface Props {
-  data: ConsensusPoint[];
+  data:        ConsensusPoint[];
+  totalReturn: TotalReturnSnap | null;
 }
 
-export default function ConsensusMomentumCards({ data }: Props) {
+export default function ConsensusMomentumCards({ data, totalReturn }: Props) {
 
   // Extract available calendar years from the data (e.g. "2026", "2027")
   const availableYears = useMemo(() => {
@@ -221,7 +235,7 @@ export default function ConsensusMomentumCards({ data }: Props) {
     <div className="flex flex-col h-full gap-3">
 
       {/* 3 cards — horizontal scroll if they don't fit */}
-      <div className="flex overflow-x-auto gap-3 pb-1 w-full">
+      <div className="flex items-stretch overflow-x-auto gap-3 pb-1 w-full flex-1 min-h-0">
         {CARDS.map((card) => {
           const cData = cardData[card.label] ?? {};
 
@@ -229,7 +243,7 @@ export default function ConsensusMomentumCards({ data }: Props) {
             <div
               key={card.label}
               style={{ background: card.bg, border: `1px solid ${card.border}` }}
-              className="rounded-xl p-3 flex flex-col shrink-0 min-w-[260px] flex-1"
+              className="rounded-xl p-3 flex flex-col shrink-0 min-w-[260px] flex-1 h-full"
             >
               {/* Card title */}
               <div
@@ -297,6 +311,26 @@ export default function ConsensusMomentumCards({ data }: Props) {
                   {availableYears.length === 0 && (
                     <tr>
                       <td colSpan={6} className="text-[10px] text-slate-300 text-center py-2">—</td>
+                    </tr>
+                  )}
+
+                  {/* Total Return row — only in Net Income card */}
+                  {card.label === "Net Income" && totalReturn && (
+                    <tr style={{ borderTop: "1px solid rgba(124,58,237,0.15)" }}>
+                      <td className="text-[10px] font-mono font-semibold text-slate-400 py-2 pr-2">
+                        TRI
+                      </td>
+                      <td className="text-[10px] font-mono font-bold text-right py-2 pr-2" style={{ color: fmtTriPrice(totalReturn.triToday).color }}>
+                        {fmtTriPrice(totalReturn.triToday).text}
+                      </td>
+                      {([totalReturn.tri1m, totalReturn.tri3m, totalReturn.tri1y, totalReturn.tri2y] as (number | null)[]).map((v, i) => {
+                        const { text, color } = fmtTriPct(totalReturn.triToday, v);
+                        return (
+                          <td key={i} className="text-[10px] font-mono font-bold text-right py-2 pr-1" style={{ color }}>
+                            {text}
+                          </td>
+                        );
+                      })}
                     </tr>
                   )}
                 </tbody>
