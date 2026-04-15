@@ -67,8 +67,8 @@ export async function POST(request: Request) {
         for (const row of rows) {
           if (row.ticker_bloomberg && row.company_description) {
             await prisma.empresasIndustrias.updateMany({
-              where: { ticker_bloomberg: row.ticker_bloomberg },
-              data: { company_description: row.company_description },
+              where: { tickerBloomberg: row.ticker_bloomberg },
+              data: { companyDescription: row.company_description },
             });
           }
         }
