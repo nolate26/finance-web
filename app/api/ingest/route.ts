@@ -75,6 +75,55 @@ export async function POST(request: Request) {
         break;
 
 
+      // --- TABLA TOTAL RETURN INDEX (UPSERT) ---
+      case 'TotalReturnIndex':
+        // Mapeamos las filas para crear una lista de operaciones UPSERT
+        const triUpserts = rows.map((row: any) => {
+          // Extraemos los valores soportando tanto camelCase como snake_case 
+          // dependiendo de cómo los envíe tu script de Python
+          const triToday = row.triToday ?? row.tri_today ?? null;
+          const tri1m = row.tri1m ?? row.tri_1m ?? null;
+          const tri3m = row.tri3m ?? row.tri_3m ?? null;
+          const tri6m = row.tri6m ?? row.tri_6m ?? null;
+          const tri1y = row.tri1y ?? row.tri_1y ?? null;
+          const tri2y = row.tri2y ?? row.tri_2y ?? null;
+
+          return prisma.totalReturnIndex.upsert({
+            // El 'where' busca la llave única compuesta que definiste (@@unique)
+            where: {
+              ticker_date: {
+                ticker: row.ticker,
+                date: new Date(row.date),
+              },
+            },
+            // Si lo encuentra, ACTUALIZA estos campos
+            update: {
+              triToday,
+              tri1m,
+              tri3m,
+              tri6m,
+              tri1y,
+              tri2y,
+            },
+            // Si no lo encuentra, CREA una fila nueva
+            create: {
+              ticker: row.ticker,
+              date: new Date(row.date),
+              triToday,
+              tri1m,
+              tri3m,
+              tri6m,
+              tri1y,
+              tri2y,
+            },
+          });
+        });
+
+        // Ejecutamos todas las operaciones de golpe en la base de datos
+        await prisma.$transaction(triUpserts);
+        break;
+
+
 
       // --- NUEVAS TABLAS: COMPANY DEEP DIVE ---
       case 'ValuationHistory':
