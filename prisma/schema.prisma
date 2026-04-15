@@ -98,6 +98,43 @@ model PerformanceAttribution {
   @@id([reportDate, fund, security])
   @@map("performance_attribution")
 }
+model top_picks {
+  id                 String   @id @default(cuid())
+  region             String   // Guardará "LATAM" o "CHILE"
+  period_date        DateTime // Guardará el mes (ej: 2026-04-01)
+  
+  // La conexión con tu tabla maestra usando el Nombre (Llave Primaria)
+  nombre_latam       String   
+  empresa            EmpresasIndustrias @relation(fields: [nombre_latam], references: [nombreLatam])
+
+  // Los datos del reporte
+  industry_group     String
+  comment            String   @db.Text
+  target_price       Float?   // Opcional
+  
+  created_at         DateTime @default(now())
+
+  // Esto evita que alguien ingrese la misma empresa dos veces en el mismo reporte
+  @@unique([region, period_date, nombre_latam])
+}
+
+
+// ─── Tabla 7: Total Return Index con dividendos brutos ───────────────────
+model TotalReturnIndex {
+  id Int @id @default(autoincrement())
+  ticker String
+  date DateTime @db.Date
+  triToday Float? @map("tri_today")
+  tri1m Float? @map("tri_1m")
+  tri3m Float? @map("tri_3m")
+  tri6m Float? @map("tri_6m")
+  tri1y Float? @map("tri_1y")
+  tri2y Float? @map("tri_2y")
+ 
+  @@unique([ticker, date])
+  @@index([ticker])
+  @@map("total_return_index")
+}
 
 model EmpresasIndustrias {
   nombreLatam     String  @id @map("nombre_latam") @db.VarChar(200)
@@ -106,7 +143,7 @@ model EmpresasIndustrias {
   industriaChile  String? @map("industria_chile") @db.VarChar(200)
   tickerBloomberg String? @map("ticker_bloomberg") @db.VarChar(100)
   companyDescription String? @map("company_description") @db.Text
-
+  top_picks           top_picks[]
   @@map("empresas_industrias")
 }
 model SsUniverse {

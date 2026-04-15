@@ -55,6 +55,7 @@ export interface PortfolioWeightSnap {
 
 export interface DeepDivePayload {
   ticker: string;
+  companyDescription: string | null;
   valuationHistory: ValuationPoint[];
   priceVsEarnings: PriceEarningsPoint[];
   consensusEstimates: ConsensusPoint[];
@@ -79,7 +80,7 @@ export async function GET(
     // Step A: resolve nombre_latam from ticker (needed for portfolio weights join)
     const empresa = await prisma.empresasIndustrias.findFirst({
       where: { tickerBloomberg: { equals: decodedTicker, mode: "insensitive" } },
-      select: { nombreLatam: true },
+      select: { nombreLatam: true, companyDescription: true },
     });
 
     const [valuation, priceEarnings, consensus, analystRec, priceRange, shortInt, rawWeights] =
@@ -152,6 +153,7 @@ export async function GET(
 
     const payload: DeepDivePayload = {
       ticker: decodedTicker,
+      companyDescription: empresa?.companyDescription ?? null,
 
       valuationHistory: valuation.map((r) => ({
         date: r.date.toISOString().split("T")[0],

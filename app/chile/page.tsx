@@ -6,7 +6,7 @@ import CompanyTable from "@/components/companies/CompanyTable";
 import IndustryView from "@/components/companies/IndustryView";
 import CompanyModal from "@/components/companies/CompanyModal";
 import IndicesTable from "@/components/chile/IndicesTable";
-import TopPicks from "@/components/chile/TopPicks";
+import TopPicksForm from "@/components/top-picks/TopPicksForm";
 import { Company } from "@/lib/companies";
 import ProjectionsPage from "@/app/projections/page";
 
@@ -94,13 +94,13 @@ export default function ChilePage() {
       list = list.filter((c) => String(c.company ?? "").toLowerCase().includes(q));
     }
     if (selectedSector) {
-      list = list.filter((c) => c.sector === selectedSector);
+      list = list.filter((c) => (c.industria as string)?.trim() === selectedSector.trim());
     }
     return sortCompanies(list, sortBy, sortOrder);
   })();
 
   const uniqueSectors = Array.from(
-    new Set(allCompanies.map((c) => c.sector as string).filter(Boolean))
+    new Set(allCompanies.map((c) => (c.industria as string)?.trim()).filter(Boolean))
   ).sort();
 
   const activeSortOption =
@@ -303,31 +303,33 @@ export default function ChilePage() {
               ))}
             </select>
 
-            <select
-              value={activeSortOption.value}
-              onChange={(e) => {
-                const opt = SORT_OPTIONS.find((o) => o.value === e.target.value);
-                if (opt) {
-                  setSortBy(opt.key);
-                  setSortOrder(opt.order);
-                }
-              }}
-              style={{
-                padding: "7px 12px",
-                borderRadius: 7,
-                background: "#F8FAFF",
-                border: "1px solid rgba(15,23,42,0.10)",
-                color: "#0F172A",
-                fontSize: 13,
-                cursor: "pointer",
-                outline: "none",
-                minWidth: 150,
-              }}
-            >
-              {SORT_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
+            {viewMode === "table" && (
+              <select
+                value={activeSortOption.value}
+                onChange={(e) => {
+                  const opt = SORT_OPTIONS.find((o) => o.value === e.target.value);
+                  if (opt) {
+                    setSortBy(opt.key);
+                    setSortOrder(opt.order);
+                  }
+                }}
+                style={{
+                  padding: "7px 12px",
+                  borderRadius: 7,
+                  background: "#F8FAFF",
+                  border: "1px solid rgba(15,23,42,0.10)",
+                  color: "#0F172A",
+                  fontSize: 13,
+                  cursor: "pointer",
+                  outline: "none",
+                  minWidth: 150,
+                }}
+              >
+                {SORT_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            )}
 
             <div
               style={{
@@ -428,7 +430,7 @@ export default function ChilePage() {
       {activeTab === "projections" && <ProjectionsPage />}
 
       {/* ── Top Picks ───────────────────────────────────────────────────────── */}
-      {activeTab === "top-picks" && <TopPicks />}
+      {activeTab === "top-picks" && <TopPicksForm defaultRegion="CHILE" />}
     </div>
   );
 }

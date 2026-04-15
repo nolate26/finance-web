@@ -94,14 +94,16 @@ function EmptyState() {
 
 function fmtPct(v: number | null): string {
   if (v == null) return "—";
-  return (v >= 0 ? "+" : "") + v.toFixed(1) + "%";
+  const pct = Number(v) * 100;
+  return (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%";
 }
 
 function owColor(v: number | null): { text: string; bg: string; border: string } {
-  if (v == null || v === 0) return { text: "#475569", bg: "rgba(100,116,139,0.07)", border: "rgba(100,116,139,0.20)" };
-  return v > 0
-    ? { text: "#15803D", bg: "rgba(22,163,74,0.07)",  border: "rgba(22,163,74,0.22)"  }
-    : { text: "#B91C1C", bg: "rgba(220,38,38,0.07)",  border: "rgba(220,38,38,0.22)"  };
+  const n = v == null ? null : Number(v);
+  if (n == null || n === 0) return { text: "#475569", bg: "rgba(100,116,139,0.10)", border: "rgba(100,116,139,0.22)" };
+  return n > 0
+    ? { text: "#15803D", bg: "rgba(22,163,74,0.10)",  border: "rgba(22,163,74,0.25)"  }
+    : { text: "#B91C1C", bg: "rgba(220,38,38,0.10)",  border: "rgba(220,38,38,0.25)"  };
 }
 
 function ActiveWeightBadge({ weights }: { weights: PortfolioWeightSnap[] }) {
@@ -134,7 +136,7 @@ function ActiveWeightBadge({ weights }: { weights: PortfolioWeightSnap[] }) {
         {/* Header row — fund names */}
         <div style={{ fontSize: 9, color: "#94A3B8" }} />
         {weights.map((w) => (
-          <div key={w.fundName} style={{ fontSize: 11, fontWeight: 700, color: "#64748B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          <div key={w.fundName} style={{ fontSize: 10, fontWeight: 700, color: "#64748B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textAlign: "center" }}>
             {shortName(w.fundName)}
           </div>
         ))}
@@ -142,7 +144,7 @@ function ActiveWeightBadge({ weights }: { weights: PortfolioWeightSnap[] }) {
         {/* Benchmark weight row */}
         <div style={{ fontSize: 11, color: "#94A3B8", whiteSpace: "nowrap" }}>Bmk Weight</div>
         {weights.map((w) => (
-          <div key={w.fundName} style={{ fontSize: 10, color: "#475569", fontWeight: 600 }}>
+          <div key={w.fundName} style={{ fontSize: 10, color: "#475569", fontWeight: 600, textAlign: "center" }}>
             {fmtPct(w.benchmarkWeight)}
           </div>
         ))}
@@ -153,17 +155,18 @@ function ActiveWeightBadge({ weights }: { weights: PortfolioWeightSnap[] }) {
           const c = owColor(w.overweight);
           return (
             <div key={w.fundName} style={{
-              display:      "inline-flex",
-              alignItems:   "center",
+              display:        "flex",
+              alignItems:     "center",
               justifyContent: "center",
-              fontSize:     10,
-              fontWeight:   800,
-              color:        c.text,
-              background:   c.bg,
-              border:       `1px solid ${c.border}`,
-              borderRadius: 4,
-              padding:      "1px 5px",
-              whiteSpace:   "nowrap",
+              fontSize:       10,
+              fontWeight:     800,
+              color:          c.text,
+              background:     c.bg,
+              border:         `1px solid ${c.border}`,
+              borderRadius:   4,
+              padding:        "2px 6px",
+              whiteSpace:     "nowrap",
+              textAlign:      "center",
             }}>
               {fmtPct(w.overweight)}
             </div>
@@ -300,11 +303,13 @@ export default function CompaniesPage() {
           {deepDive && !diveLoading && (
             <>
               {/* Company header */}
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, marginBottom: 20, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 24, marginBottom: 20, width: "100%" }}>
 
-                {/* ── Left: ticker, price, name ── */}
-                <div>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 16, flexWrap: "wrap" }}>
+                {/* ── Left column: ticker row + name + description ── */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0, flex: 1, maxWidth: "56rem" }}>
+
+                  {/* Ticker + price + date row */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
                     {/* Ticker */}
                     <h1
                       style={{
@@ -314,6 +319,7 @@ export default function CompaniesPage() {
                         letterSpacing: "-0.03em",
                         fontFamily: "JetBrains Mono, monospace",
                         lineHeight: 1,
+                        margin: 0,
                       }}
                     >
                       {deepDive.ticker}
@@ -331,7 +337,7 @@ export default function CompaniesPage() {
                           borderRadius: 10,
                           padding: "5px 14px 5px 10px",
                           boxShadow: "0 2px 12px rgba(15,23,42,0.18), inset 0 1px 0 rgba(255,255,255,0.05)",
-                          alignSelf: "center",
+                          flexShrink: 0,
                         }}
                       >
                         <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981", boxShadow: "0 0 6px #10B981", flexShrink: 0 }} />
@@ -349,7 +355,7 @@ export default function CompaniesPage() {
                           background: "#F1F5F9", border: "1px solid #E2E8F0",
                           borderRadius: 6, padding: "4px 10px",
                           fontFamily: "Inter, sans-serif", letterSpacing: "0.01em",
-                          alignSelf: "center", whiteSpace: "nowrap",
+                          whiteSpace: "nowrap", flexShrink: 0,
                         }}
                       >
                         As of {fmtHeaderDate(latestPriceDate)}
@@ -357,16 +363,26 @@ export default function CompaniesPage() {
                     )}
                   </div>
 
+                  {/* Company name */}
                   {selectedItem?.nombre && (
-                    <p style={{ fontSize: 16, color: "#64748B", marginTop: 5 }}>
+                    <p style={{ fontSize: 16, color: "#64748B", margin: 0 }}>
                       {selectedItem.nombre}
+                    </p>
+                  )}
+
+                  {/* Description */}
+                  {deepDive.companyDescription && (
+                    <p style={{ fontSize: 13, color: "#64748B", margin: 0, lineHeight: 1.65, marginTop: 4 }}>
+                      {deepDive.companyDescription}
                     </p>
                   )}
                 </div>
 
-                {/* ── Right: portfolio positioning ── */}
+                {/* ── Right column: portfolio positioning (anchored top-right) ── */}
                 {deepDive.portfolioWeights.length > 0 && (
-                  <ActiveWeightBadge weights={deepDive.portfolioWeights} />
+                  <div style={{ flexShrink: 0 }}>
+                    <ActiveWeightBadge weights={deepDive.portfolioWeights} />
+                  </div>
                 )}
               </div>
 

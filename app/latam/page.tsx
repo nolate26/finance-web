@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { RefreshCw } from "lucide-react";
 import LatamTable, { type LatamCompany } from "@/components/latam/LatamTable";
+import TopPicksForm from "@/components/top-picks/TopPicksForm";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -50,30 +51,6 @@ function sortCompanies(
         : String(av).localeCompare(String(bv));
     return order === "asc" ? diff : -diff;
   });
-}
-
-// ── Coming Soon placeholder ───────────────────────────────────────────────────
-
-function ComingSoon({ label }: { label: string }) {
-  return (
-    <div className="flex items-center justify-center" style={{ minHeight: 340 }}>
-      <div
-        style={{
-          textAlign:    "center",
-          padding:      "40px 56px",
-          borderRadius: 14,
-          background:   "rgba(43,92,224,0.04)",
-          border:       "1px solid rgba(43,92,224,0.12)",
-        }}
-      >
-        <div style={{ fontSize: 36, marginBottom: 16, opacity: 0.35 }}>🌎</div>
-        <p style={{ fontSize: 15, fontWeight: 600, color: "#1E3A8A", marginBottom: 6 }}>
-          {label}
-        </p>
-        <p style={{ fontSize: 13, color: "#64748B" }}>Module coming soon</p>
-      </div>
-    </div>
-  );
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -454,7 +431,7 @@ export default function LatAmPage() {
       )}
 
       {/* ── Top Picks ────────────────────────────────────────────────────────── */}
-      {activeTab === "top-picks" && <ComingSoon label="LatAm Top Picks" />}
+      {activeTab === "top-picks" && <TopPicksForm defaultRegion="LATAM" />}
     </div>
   );
 }
