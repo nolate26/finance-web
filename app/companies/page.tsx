@@ -326,7 +326,7 @@ export default function CompaniesPage() {
                     lineHeight: 1,
                     margin: 0,
                   }}>
-                    {deepDive.ticker}
+                    {selectedItem.nombre}
                   </h1>
 
                   {/* Price chip */}
@@ -375,7 +375,7 @@ export default function CompaniesPage() {
                       letterSpacing: "-0.01em",
                       fontFamily: "Inter, sans-serif",
                     }}>
-                      {selectedItem.nombre}
+                      {deepDive.ticker}
                     </span>
                   )}
                 </div>

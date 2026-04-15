@@ -119,7 +119,7 @@ export default function CompanySidebar({ companies, selectedTicker, onSelect, lo
                     letterSpacing: "0.02em",
                   }}
                 >
-                  {c.ticker}
+                  {c.nombre}
                 </span>
                 <span
                   style={{
@@ -132,7 +132,8 @@ export default function CompanySidebar({ companies, selectedTicker, onSelect, lo
                     maxWidth: "100%",
                   }}
                 >
-                  {c.nombre}
+                  {c.ticker}
+                  
                 </span>
               </button>
             );
