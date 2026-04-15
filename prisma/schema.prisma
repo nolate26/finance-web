@@ -507,3 +507,29 @@ model LastRun {
   @@unique([ticker, module])
   @@map("last_run")
 }
+
+
+model SignalRaw {
+  signalDate DateTime @map("signal_date") @db.Date
+  ticker String @db.VarChar(100) // ticker Bloomberg, ej "PETR4 BS Equity"
+  side String @db.VarChar(10) // 'LONG' o 'SHORT'
+  rank Int?
+  modeloVeredicto String? @map("modelo_veredicto") @db.Text
+  pxSignal Float? @map("px_signal") // cierre del viernes
+  nLongs Int? @map("n_longs") // para equal weight
+  nShorts Int? @map("n_shorts")
+ 
+  // relación opcional con tu maestro (si quieres)
+ 
+  @@id([signalDate, ticker])
+  @@index([signalDate])
+  @@index([ticker])
+  @@map("signals_raw")
+}
+ 
+model BenchmarkMxla {
+  date DateTime @id @map("date") @db.Date
+  pxClose Float? @map("px_close") // MXLA Index PX_LAST
+ 
+  @@map("benchmark_mxla")
+}

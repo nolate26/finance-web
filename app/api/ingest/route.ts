@@ -125,6 +125,8 @@ export async function POST(request: Request) {
 
 
 
+
+
       // --- NUEVAS TABLAS: COMPANY DEEP DIVE ---
       case 'ValuationHistory':
         await prisma.valuationHistory.createMany({ data: rows, skipDuplicates: true });
@@ -151,6 +153,36 @@ export async function POST(request: Request) {
       // --- VISTA: SS LATAM ---
       case 'LatamEquitySnapshot':
         await prisma.latamEquitySnapshot.createMany({ data: rows });
+        break;
+
+      // --- NUEVAS TABLAS: SIGNALS Y BENCHMARK ---
+      case 'SignalRaw':
+        // mapeamos para aceptar snake_case desde Python
+        const signalRows = rows.map((r: any) => ({
+          signalDate: new Date(r.signalDate ?? r.signal_date),
+          ticker: r.ticker,
+          side: r.side,
+          rank: r.rank ?? null,
+          modeloVeredicto: r.modeloVeredicto ?? r.modelo_veredicto ?? null,
+          pxSignal: r.pxSignal ?? r.px_signal ?? null,
+          nLongs: r.nLongs ?? r.n_longs ?? null,
+          nShorts: r.nShorts ?? r.n_shorts ?? null,
+        }));
+        await prisma.signalRaw.createMany({ 
+          data: signalRows, 
+          skipDuplicates: true // evita error si reenvías el mismo viernes
+        });
+        break;
+
+      case 'BenchmarkMxla':
+        const benchRows = rows.map((r: any) => ({
+          date: new Date(r.date),
+          pxClose: r.pxClose ?? r.px_close ?? null,
+        }));
+        await prisma.benchmarkMxla.createMany({ 
+          data: benchRows, 
+          skipDuplicates: true 
+        });
         break;
         
       default:
