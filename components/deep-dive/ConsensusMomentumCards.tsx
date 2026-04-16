@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
-import type { ConsensusPoint, TotalReturnSnap } from "@/app/api/companies/[ticker]/route";
+import type { ConsensusPoint, TotalReturnSnap , PriceRange52wSnap} from "@/app/api/companies/[ticker]/route";
+
 
 // ── Card config ───────────────────────────────────────────────────────────────
 
@@ -147,9 +148,10 @@ function computeTrend(
 interface Props {
   data:        ConsensusPoint[];
   totalReturn: TotalReturnSnap | null;
+  priceRange: PriceRange52wSnap | null;
 }
 
-export default function ConsensusMomentumCards({ data, totalReturn }: Props) {
+export default function ConsensusMomentumCards({ data, totalReturn, priceRange }: Props) {
 
   // Extract available calendar years from the data (e.g. "2026", "2027")
   const availableYears = useMemo(() => {
@@ -212,15 +214,8 @@ export default function ConsensusMomentumCards({ data, totalReturn }: Props) {
     availableYears.some((y) => cardData[c.label]?.[y]?.current !== null)
   );
 
-  if (!hasAnyData) {
-    return (
-      <div className="flex items-center justify-center h-full text-xs text-gray-300">
-        No consensus data available
-      </div>
-    );
-  }
-
   // ── Trend summary — first available year across all 3 metrics ──────────────
+  // Must be before any early return to satisfy Rules of Hooks
   const trendYear = availableYears[0] ?? null;
 
   const trends = useMemo(() => {
@@ -230,6 +225,14 @@ export default function ConsensusMomentumCards({ data, totalReturn }: Props) {
       trend: computeTrend(data, card.aliases, trendYear),
     }));
   }, [data, trendYear]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!hasAnyData) {
+    return (
+      <div className="flex items-center justify-center h-full text-xs text-gray-300">
+        No consensus data available
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full gap-3">
@@ -315,13 +318,13 @@ export default function ConsensusMomentumCards({ data, totalReturn }: Props) {
                   )}
 
                   {/* Total Return row — only in Net Income card */}
-                  {card.label === "Net Income" && totalReturn && (
+                  {card.label === "Net Income" && totalReturn && priceRange && (
                     <tr style={{ borderTop: "1px solid rgba(124,58,237,0.15)" }}>
                       <td className="text-[10px] font-mono font-semibold text-slate-400 py-2 pr-2">
-                        TRI
+                        TRLC 
                       </td>
                       <td className="text-[10px] font-mono font-bold text-right py-2 pr-2" style={{ color: fmtTriPrice(totalReturn.triToday).color }}>
-                        {fmtTriPrice(totalReturn.triToday).text}
+                        {fmtTriPrice(priceRange.pxLast).text}
                       </td>
                       {([totalReturn.tri1m, totalReturn.tri3m, totalReturn.tri1y, totalReturn.tri2y] as (number | null)[]).map((v, i) => {
                         const { text, color } = fmtTriPct(totalReturn.triToday, v);

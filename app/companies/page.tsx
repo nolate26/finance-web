@@ -9,6 +9,7 @@ import PriceEarningsChart from "@/components/deep-dive/PriceEarningsChart";
 import AnalystDonut from "@/components/deep-dive/AnalystDonut";
 import ConsensusMomentumCards from "@/components/deep-dive/ConsensusMomentumCards";
 import RelatedReports from "@/components/deep-dive/RelatedReports";
+import ScorecardGrid from "@/components/deep-dive/ScorecardGrid";
 import type { CompanyListItem } from "@/app/api/companies/list/route";
 import type { DeepDivePayload, PortfolioWeightSnap } from "@/app/api/companies/[ticker]/route";
 
@@ -92,10 +93,27 @@ function EmptyState() {
 
 // ── Active Weight Badge ───────────────────────────────────────────────────────
 
+const FUND_DISPLAY_NAMES: Record<string, string> = {
+  Moneda_Renta_Variable:                   "MRV",
+  "Moneda_Latin_America_Equities_(LX)":    "LA Equities (LX)",
+  "Moneda_Latin_America_Small_Cap_(LX)":   "LA Small Cap (LX)",
+  Pionero:                                 "Pionero",
+  Orange:                                  "Orange",
+  Glory:                                   "Glory",
+  Mercer:                                  "Mercer",
+};
+
 function fmtPct(v: number | null): string {
   if (v == null) return "—";
   const pct = Number(v) * 100;
   return (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%";
+}
+
+function fmtFundPct(v: number | null): string {
+  if (v == null) return "—";
+  // portfolioWeight is stored as a decimal (e.g. 0.035 → 3.50%)
+  const pct = Number(v) * 100;
+  return pct.toFixed(2) + "%";
 }
 
 function owColor(v: number | null): { text: string; bg: string; border: string } {
@@ -108,10 +126,6 @@ function owColor(v: number | null): { text: string; bg: string; border: string }
 
 function ActiveWeightBadge({ weights }: { weights: PortfolioWeightSnap[] }) {
   if (weights.length === 0) return null;
-
-  // Short display name: strip common suffixes for compact columns
-  const shortName = (name: string) =>
-    name.replace(/\s*(fund|fondo|equity|latam)\s*/gi, "").trim() || name;
 
   return (
     <div style={{
@@ -133,24 +147,24 @@ function ActiveWeightBadge({ weights }: { weights: PortfolioWeightSnap[] }) {
       {/* Table */}
       <div style={{ display: "grid", gridTemplateColumns: `80px repeat(${weights.length}, 1fr)`, gap: "3px 10px", alignItems: "center" }}>
 
-        {/* Header row — fund names */}
+        {/* Header row — fund display names */}
         <div style={{ fontSize: 9, color: "#94A3B8" }} />
         {weights.map((w) => (
           <div key={w.fundName} style={{ fontSize: 10, fontWeight: 700, color: "#64748B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textAlign: "center" }}>
-            {shortName(w.fundName)}
+            {FUND_DISPLAY_NAMES[w.fundName] ?? w.fundName.replace(/_/g, " ")}
           </div>
         ))}
 
-        {/* Benchmark weight row */}
-        <div style={{ fontSize: 11, color: "#94A3B8", whiteSpace: "nowrap" }}>Bmk Weight</div>
+        {/* Fund weight row */}
+        <div style={{ fontSize: 11, color: "#94A3B8", whiteSpace: "nowrap" }}>Fund %</div>
         {weights.map((w) => (
           <div key={w.fundName} style={{ fontSize: 10, color: "#475569", fontWeight: 600, textAlign: "center" }}>
-            {fmtPct(w.benchmarkWeight)}
+            {fmtFundPct(w.portfolioWeight)}
           </div>
         ))}
 
         {/* Active weight row */}
-        <div style={{ fontSize: 11, color: "#94A3B8", whiteSpace: "nowrap" }}>Active Wgt</div>
+        <div style={{ fontSize: 11, color: "#94A3B8", whiteSpace: "nowrap" }}>OW/UW</div>
         {weights.map((w) => {
           const c = owColor(w.overweight);
           return (
@@ -187,6 +201,7 @@ export default function CompaniesPage() {
   const [deepDive, setDeepDive] = useState<DeepDivePayload | null>(null);
   const [diveLoading, setDiveLoading] = useState(false);
   const [diveError, setDiveError] = useState<string | null>(null);
+  const [view, setView] = useState<"scorecard" | "detail">("scorecard");
 
   // Fetch company list once, then auto-select CCU (or first company)
   useEffect(() => {
@@ -212,6 +227,7 @@ export default function CompaniesPage() {
     setDiveLoading(true);
     setDiveError(null);
     setDeepDive(null);
+    setView("scorecard");
 
     fetch(`/api/companies/${item.ticker}`)
       .then((r) => {
@@ -303,6 +319,32 @@ export default function CompaniesPage() {
           {deepDive && !diveLoading && (
             <>
               {/* ══ Company header ══════════════════════════════════════════════ */}
+              {/* View toggle — only in detail view */}
+              {view === "detail" && (
+                <div style={{ marginBottom: 16 }}>
+                  <button
+                    onClick={() => setView("scorecard")}
+                    style={{
+                      display:      "inline-flex",
+                      alignItems:   "center",
+                      gap:          6,
+                      background:   "transparent",
+                      border:       "1px solid rgba(15,23,42,0.12)",
+                      borderRadius: 8,
+                      padding:      "6px 14px",
+                      fontSize:     12,
+                      fontWeight:   600,
+                      color:        "#64748B",
+                      cursor:       "pointer",
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                      <path d="M11 7H3M7 11L3 7l4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    Back to Scorecard
+                  </button>
+                </div>
+              )}
               <div style={{ marginBottom: 20 }}>
 
                 {/* ── Band 1: Identifiers row ── */}
@@ -405,6 +447,18 @@ export default function CompaniesPage() {
                 </div>
               </div>
 
+              {/* ══ SCORECARD VIEW ══════════════════════════════════════════════ */}
+              {view === "scorecard" && (
+                <ScorecardGrid
+                  deepDive={deepDive}
+                  latestPrice={latestPrice}
+                  onViewDetail={() => setView("detail")}
+                />
+              )}
+
+              {/* ══ DETAIL VIEW ═════════════════════════════════════════════════ */}
+              {view === "detail" && (
+                <>
               {/* ── ROW 1: Historical Valuation (3/4) + Market Snapshot (1/4) ── */}
               <div className="grid lg:grid-cols-4 gap-6 mb-4">
                 <div className="lg:col-span-3" style={{ ...CARD, minHeight: 320 }}>
@@ -440,7 +494,7 @@ export default function CompaniesPage() {
 
                 <div className="lg:col-span-3 flex flex-col" style={{ ...CARD }}>
                   <SectionLabel>Estimate Momentum — Consensus Revisions</SectionLabel>
-                  <ConsensusMomentumCards data={deepDive.consensusEstimates} totalReturn={deepDive.totalReturn} />
+                  <ConsensusMomentumCards data={deepDive.consensusEstimates} totalReturn={deepDive.totalReturn} priceRange={latestPriceRange} />
                 </div>
               </div>
 
@@ -467,6 +521,8 @@ export default function CompaniesPage() {
               <div style={{ ...CARD, marginBottom: 24 }}>
                 <RelatedReports />
               </div>
+                </>
+              )}
             </>
           )}
         </div>

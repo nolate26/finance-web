@@ -48,7 +48,8 @@ export interface ShortInterestSnap {
 }
 
 export interface PortfolioWeightSnap {
-  fundName:       string;
+  fundName:        string;
+  portfolioWeight: number | null;   // % in fund (portfolioPct)
   benchmarkWeight: number | null;
   overweight:      number | null;
 }
@@ -142,7 +143,7 @@ export async function GET(
           ? prisma.fundPortfolioWeight.findMany({
               where: { company: empresa.nombreLatam },
               orderBy: { reportDate: "desc" },
-              select: { fundName: true, reportDate: true, benchmarkWeight: true, overweight: true },
+              select: { fundName: true, reportDate: true, portfolioWeight: true, benchmarkWeight: true, overweight: true },
             })
           : Promise.resolve([]),
 
@@ -164,6 +165,7 @@ export async function GET(
       })
       .map((w) => ({
         fundName:        w.fundName,
+        portfolioWeight: w.portfolioWeight ?? null,
         benchmarkWeight: w.benchmarkWeight ?? null,
         overweight:      w.overweight      ?? null,
       }));
