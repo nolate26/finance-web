@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import { Plus, Trash2, CheckCircle2, Loader2, Search, Pencil, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Trash2, CheckCircle2, Loader2, Search, Pencil, ChevronLeft, ChevronRight, Table2 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -204,8 +204,8 @@ function ViewMode({
   // Hook must be at top — before any early returns
   const [selectedIndustry, setSelectedIndustry] = useState<string>("All");
 
-  // Unique industries for filter pills (stable even when picks is empty)
-  const allIndustries = Array.from(new Set(picks.map((p) => p.industry_group || "Other")));
+  // Unique industries for filter — sorted alphabetically
+  const allIndustries = Array.from(new Set(picks.map((p) => p.industry_group || "Other"))).sort();
 
   if (loading) {
     return (
@@ -405,16 +405,177 @@ function ViewMode({
   );
 }
 
+// ── Summary view (matrix: industry × period) ─────────────────────────────────
+
+function SummaryView({
+  region,
+  periods,
+  isChile,
+}: {
+  region: Region;
+  periods: string[];
+  isChile: boolean;
+}) {
+  const [allData, setAllData] = useState<Record<string, SavedPick[]>>({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (periods.length === 0) { setLoading(false); return; }
+    setLoading(true);
+    Promise.all(
+      periods.map((p) =>
+        fetch(`/api/top-picks?region=${region}&period_date=${monthValueToISO(p)}`)
+          .then((r) => r.json())
+          .then((d: { picks?: SavedPick[] }) => [p, d.picks ?? []] as [string, SavedPick[]])
+          .catch(() => [p, []] as [string, SavedPick[]])
+      )
+    ).then((results) => {
+      setAllData(Object.fromEntries(results));
+      setLoading(false);
+    });
+  }, [region, periods]);
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "48px 24px", gap: 10, color: "#94A3B8" }}>
+        <Loader2 size={16} style={{ animation: "spin 0.8s linear infinite" }} />
+        <span style={{ fontSize: 13 }}>Loading summary…</span>
+      </div>
+    );
+  }
+
+  // Only columns that have at least one pick
+  const activePeriods = periods.filter((p) => (allData[p] ?? []).length > 0);
+
+  if (activePeriods.length === 0) {
+    return (
+      <div style={{ padding: "48px 24px", textAlign: "center", color: "#94A3B8", fontSize: 13 }}>
+        No data to summarize yet.
+      </div>
+    );
+  }
+
+  // All unique industries across all periods, sorted alpha
+  const industries = Array.from(
+    new Set(Object.values(allData).flat().map((p) => p.industry_group || "Other"))
+  ).sort();
+
+  return (
+    <div style={{ overflowX: "auto", padding: "20px 24px 28px" }}>
+      <table style={{ borderCollapse: "collapse", fontSize: 12, tableLayout: "auto" }}>
+        <thead>
+          <tr>
+            <th style={{
+              position: "sticky", left: 0, zIndex: 2,
+              background: "#F8FAFF",
+              padding: "8px 20px 8px 12px",
+              borderBottom: "2px solid rgba(15,23,42,0.10)",
+              borderRight: "1px solid rgba(15,23,42,0.08)",
+              textAlign: "left",
+              fontSize: 10, fontWeight: 700, letterSpacing: "0.09em",
+              color: "#94A3B8", textTransform: "uppercase",
+              whiteSpace: "nowrap", minWidth: 170,
+            }}>
+              Industry
+            </th>
+            {activePeriods.map((p) => (
+              <th key={p} style={{
+                padding: "8px 16px",
+                borderBottom: "2px solid rgba(15,23,42,0.10)",
+                borderLeft: "1px solid rgba(15,23,42,0.06)",
+                textAlign: "center",
+                fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+                color: "#475569", textTransform: "uppercase",
+                whiteSpace: "nowrap", minWidth: 150,
+                background: "#F8FAFF",
+              }}>
+                {periodLabel(p, isChile)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {industries.map((industry, rowIdx) => {
+            const color = INDUSTRY_PALETTE[rowIdx % INDUSTRY_PALETTE.length];
+            const rowBg = rowIdx % 2 === 1 ? "rgba(15,23,42,0.013)" : "transparent";
+            return (
+              <tr key={industry}>
+                {/* Industry label — sticky */}
+                <td style={{
+                  position: "sticky", left: 0, zIndex: 1,
+                  background: rowIdx % 2 === 1 ? "#F9FAFB" : "#fff",
+                  padding: "11px 20px 11px 0",
+                  borderBottom: "1px solid rgba(15,23,42,0.06)",
+                  borderRight: "1px solid rgba(15,23,42,0.08)",
+                  borderLeft: `3px solid ${color.accent}`,
+                  paddingLeft: 10,
+                  verticalAlign: "top",
+                }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: color.accent, whiteSpace: "nowrap" }}>
+                    {industry}
+                  </span>
+                </td>
+
+                {activePeriods.map((period) => {
+                  const cellPicks = (allData[period] ?? []).filter(
+                    (p) => (p.industry_group || "Other") === industry
+                  );
+                  return (
+                    <td key={period} style={{
+                      padding: "11px 16px",
+                      borderBottom: "1px solid rgba(15,23,42,0.06)",
+                      borderLeft: "1px solid rgba(15,23,42,0.05)",
+                      verticalAlign: "top",
+                      background: rowBg,
+                    }}>
+                      {cellPicks.length === 0 ? (
+                        <span style={{ color: "#E2E8F0", fontSize: 12 }}>—</span>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          {cellPicks.map((pick) => (
+                            <div key={pick.id} style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: "#0F172A", lineHeight: 1.2, whiteSpace: "nowrap" }}>
+                                {pick.nombre_latam}
+                              </span>
+                              {isChile && pick.target_price != null && (
+                                <span style={{
+                                  fontSize: 10, fontWeight: 700,
+                                  fontFamily: "JetBrains Mono, monospace",
+                                  color: color.accent,
+                                  background: color.bg,
+                                  border: `1px solid ${color.border}`,
+                                  borderRadius: 4, padding: "1px 6px",
+                                  whiteSpace: "nowrap",
+                                }}>
+                                  {pick.target_price.toLocaleString("en-US", { minimumFractionDigits: 0 })}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ── Edit form ─────────────────────────────────────────────────────────────────
 
 function savedPickToRow(p: SavedPick): PickRow {
   return {
-    _key:          p.id,
-    nombreLatam:   p.nombre_latam,
-    displayName:   p.nombre_latam,
-    industryGroup: p.industry_group,
-    comment:       p.comment,
-    targetPrice:   p.target_price != null ? String(p.target_price) : "",
+    _key:           p.id,
+    nombreLatam:    p.nombre_latam,
+    displayName:    p.nombre_latam,
+    industryGroup:  p.industry_group,
+    comment:        p.comment,
+    targetPrice:    p.target_price != null ? String(p.target_price) : "",
   };
 }
 
@@ -438,6 +599,62 @@ function EditForm({
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState<string | null>(null);
   const isChile = region === "CHILE";
+
+  // Existing coverage groups for autocomplete + rename
+  const [existingGroups, setExistingGroups] = useState<string[]>([]);
+  const [renamePanel, setRenamePanel]       = useState(false);
+  const [renameFrom, setRenameFrom]         = useState("");
+  const [renameTo, setRenameTo]             = useState("");
+  const [renaming, setRenaming]             = useState(false);
+  const [renameMsg, setRenameMsg]           = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/top-picks/groups?region=${region}`)
+      .then((r) => r.json())
+      .then((d: { groups?: string[] }) => setExistingGroups(d.groups ?? []))
+      .catch(() => {});
+  }, [region]);
+
+  const handleRenameLocal = () => {
+    const next = renameTo.trim();
+    if (!renameFrom || !next) return;
+    setRows((prev) => prev.map((r) =>
+      r.industryGroup === renameFrom ? { ...r, industryGroup: next } : r
+    ));
+    setExistingGroups((prev) =>
+      Array.from(new Set(prev.map((g) => (g === renameFrom ? next : g)))).sort()
+    );
+    setRenameMsg("Renamed in this report");
+    setRenameFrom(next);
+  };
+
+  const handleRenameAll = async () => {
+    const next = renameTo.trim();
+    if (!renameFrom || !next) return;
+    setRenaming(true);
+    setRenameMsg(null);
+    try {
+      const res = await fetch("/api/top-picks/groups", {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ region, oldGroup: renameFrom, newGroup: next }),
+      });
+      const d = await res.json() as { updated?: number; error?: string };
+      if (d.error) throw new Error(d.error);
+      setRows((prev) => prev.map((r) =>
+        r.industryGroup === renameFrom ? { ...r, industryGroup: next } : r
+      ));
+      setExistingGroups((prev) =>
+        Array.from(new Set(prev.map((g) => (g === renameFrom ? next : g)))).sort()
+      );
+      setRenameMsg(`Updated ${d.updated} pick${d.updated === 1 ? "" : "s"} across all periods`);
+      setRenameFrom(next);
+    } catch (e) {
+      setRenameMsg(`Error: ${String(e)}`);
+    } finally {
+      setRenaming(false);
+    }
+  };
 
   const updateRow = useCallback((key: string, patch: Partial<PickRow>) => {
     setRows((prev) => prev.map((r) => r._key === key ? { ...r, ...patch } : r));
@@ -474,10 +691,10 @@ function EditForm({
           region,
           period_date: monthValueToISO(formPeriod),   // ← uses the form's own period
           picks: valid.map((r) => ({
-            nombreLatam:   r.nombreLatam,
+            nombreLatam:    r.nombreLatam,
             industryGroup: r.industryGroup,
             comment:       r.comment,
-            targetPrice:   r.targetPrice ? parseFloat(r.targetPrice) : null,
+            targetPrice:    r.targetPrice ? parseFloat(r.targetPrice) : null,
           })),
         }),
       });
@@ -596,6 +813,7 @@ function EditForm({
 
             <input
               type="text"
+              list={`ig-list-${region}`}
               value={row.industryGroup}
               onChange={(e) => updateRow(row._key, { industryGroup: e.target.value })}
               placeholder="Auto-filled on select"
@@ -676,6 +894,99 @@ function EditForm({
         ))}
       </div>
 
+      {/* Datalist for industry group autocomplete */}
+      <datalist id={`ig-list-${region}`}>
+        {existingGroups.map((g) => <option key={g} value={g} />)}
+      </datalist>
+
+      {/* Rename coverage group panel */}
+      {renamePanel && (
+        <div style={{
+          margin: "4px 24px 2px",
+          padding: "12px 16px",
+          borderRadius: 8,
+          background: "rgba(124,58,237,0.03)",
+          border: "1px solid rgba(124,58,237,0.18)",
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", color: "#6D28D9", textTransform: "uppercase", marginBottom: 10 }}>
+            Rename Coverage Group
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <select
+              value={renameFrom}
+              onChange={(e) => { setRenameFrom(e.target.value); setRenameMsg(null); }}
+              style={{
+                padding: "6px 10px", borderRadius: 7,
+                background: "#F8FAFF", border: "1px solid rgba(15,23,42,0.12)",
+                color: renameFrom ? "#0F172A" : "#94A3B8",
+                fontSize: 12, outline: "none", cursor: "pointer",
+                fontFamily: "Inter, sans-serif", minWidth: 160,
+              }}
+            >
+              <option value="">Select group…</option>
+              {existingGroups.map((g) => <option key={g} value={g}>{g}</option>)}
+            </select>
+
+            <span style={{ color: "#CBD5E1", fontSize: 14, flexShrink: 0 }}>→</span>
+
+            <input
+              type="text"
+              value={renameTo}
+              onChange={(e) => { setRenameTo(e.target.value); setRenameMsg(null); }}
+              placeholder="New name…"
+              style={{
+                padding: "6px 10px", borderRadius: 7,
+                background: "#F8FAFF", border: "1px solid rgba(15,23,42,0.12)",
+                color: "#0F172A", fontSize: 12, outline: "none",
+                fontFamily: "Inter, sans-serif", minWidth: 140,
+              }}
+              onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(124,58,237,0.45)"; }}
+              onBlur={(e)  => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(15,23,42,0.12)"; }}
+            />
+
+            <button
+              onClick={handleRenameLocal}
+              disabled={!renameFrom || !renameTo.trim()}
+              style={{
+                padding: "6px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600,
+                background: "transparent",
+                border: "1px solid rgba(124,58,237,0.25)",
+                color: (!renameFrom || !renameTo.trim()) ? "#C4B5FD" : "#6D28D9",
+                cursor: (!renameFrom || !renameTo.trim()) ? "default" : "pointer",
+                transition: "all 0.12s",
+              }}
+            >
+              This report
+            </button>
+
+            <button
+              onClick={handleRenameAll}
+              disabled={!renameFrom || !renameTo.trim() || renaming}
+              style={{
+                padding: "6px 14px", borderRadius: 7, fontSize: 12, fontWeight: 700,
+                background: (!renameFrom || !renameTo.trim() || renaming) ? "rgba(124,58,237,0.25)" : "#7C3AED",
+                border: "none",
+                color: "#fff",
+                cursor: (!renameFrom || !renameTo.trim() || renaming) ? "default" : "pointer",
+                transition: "all 0.12s",
+              }}
+            >
+              {renaming ? "Saving…" : "All periods"}
+            </button>
+
+            {renameMsg && (
+              <span style={{
+                fontSize: 11,
+                color: renameMsg.startsWith("Error") ? "#DC2626" : "#15803D",
+                fontFamily: "Inter, sans-serif",
+              }}>
+                {renameMsg}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Footer */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -709,6 +1020,20 @@ function EditForm({
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(15,23,42,0.12)"; }}
           >
             <ChevronLeft size={13} /> Cancel
+          </button>
+
+          <button
+            onClick={() => { setRenamePanel((v) => !v); setRenameMsg(null); }}
+            style={{
+              display: "flex", alignItems: "center", gap: 5,
+              padding: "7px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600,
+              background: renamePanel ? "rgba(124,58,237,0.07)" : "transparent",
+              border: renamePanel ? "1px solid rgba(124,58,237,0.28)" : "1px solid rgba(15,23,42,0.10)",
+              color: renamePanel ? "#6D28D9" : "#64748B",
+              cursor: "pointer", transition: "all 0.12s",
+            }}
+          >
+            ⟳ Rename Group
           </button>
         </div>
 
@@ -748,7 +1073,7 @@ export default function TopPicksForm({ region: regionProp, defaultRegion }: Prop
   const region  = regionProp ?? defaultRegion ?? "LATAM";
   const isChile = region === "CHILE";
 
-  const [mode, setMode]     = useState<"view" | "edit">("view");
+  const [mode, setMode]     = useState<"view" | "edit" | "summary">("view");
   const [period, setPeriod] = useState<string | null>(null); // null = loading
   const [periods, setPeriods] = useState<string[]>([]);
 
@@ -831,8 +1156,8 @@ export default function TopPicksForm({ region: regionProp, defaultRegion }: Prop
               {region} Top Picks
             </div>
 
-            {/* Timeline navigator */}
-            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            {/* Timeline navigator — hidden in summary mode */}
+            <div style={{ display: mode === "summary" ? "none" : "flex", alignItems: "center", gap: 4 }}>
               {/* Older */}
               <button
                 onClick={goOlder}
@@ -901,12 +1226,42 @@ export default function TopPicksForm({ region: regionProp, defaultRegion }: Prop
             </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             {/* Success toast */}
             {successMsg && (
               <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#15803D" }}>
                 <CheckCircle2 size={14} /> Saved successfully
               </span>
+            )}
+
+            {/* Summary toggle — visible when not editing */}
+            {mode !== "edit" && (
+              <button
+                onClick={() => setMode(mode === "summary" ? "view" : "summary")}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "7px 14px", borderRadius: 8,
+                  background: mode === "summary" ? "rgba(43,92,224,0.10)" : "transparent",
+                  border: mode === "summary" ? "1px solid rgba(43,92,224,0.28)" : "1px solid rgba(15,23,42,0.12)",
+                  color: mode === "summary" ? "#1E3A8A" : "#475569",
+                  fontSize: 12, fontWeight: 600,
+                  cursor: "pointer", transition: "all 0.15s",
+                }}
+                onMouseEnter={(e) => {
+                  if (mode !== "summary") {
+                    (e.currentTarget as HTMLElement).style.background = "rgba(15,23,42,0.04)";
+                    (e.currentTarget as HTMLElement).style.borderColor = "rgba(15,23,42,0.20)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (mode !== "summary") {
+                    (e.currentTarget as HTMLElement).style.background = "transparent";
+                    (e.currentTarget as HTMLElement).style.borderColor = "rgba(15,23,42,0.12)";
+                  }
+                }}
+              >
+                <Table2 size={13} /> Summary Table
+              </button>
             )}
 
             {/* Edit button — only in view mode */}
@@ -931,9 +1286,13 @@ export default function TopPicksForm({ region: regionProp, defaultRegion }: Prop
         </div>
 
         {/* ── Body ──────────────────────────────────────────────────────────── */}
-        {mode === "view" ? (
+        {mode === "view" && (
           <ViewMode picks={picks} loading={picksLoading} isChile={isChile} />
-        ) : (
+        )}
+        {mode === "summary" && (
+          <SummaryView region={region} periods={periods} isChile={isChile} />
+        )}
+        {mode === "edit" && (
           <EditForm
             region={region}
             period={activePeriod}
