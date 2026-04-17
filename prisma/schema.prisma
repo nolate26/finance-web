@@ -542,6 +542,7 @@ model Presentation {
   category     String   // ej: 'Investment Cases', 'Client Presentations'
   region       String   // ej: 'Chile', 'LATAM'
   company_name String?  // Opcional: para vincularlo a un ticker o empresa
+  is_sell_side Boolean  @default(false) // <--- NUEVO CAMPO AÑADIDO
   created_at   DateTime @default(now())
 
   @@map("presentations") // (Opcional) para que la tabla en Postgres se llame en minúsculas y plural

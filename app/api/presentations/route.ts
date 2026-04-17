@@ -1,27 +1,54 @@
 import { NextResponse } from "next/server";
-import path from "path";
-import fs from "fs";
+import { prisma } from "@/lib/prisma";
 
-const PRES_DIR = path.join(process.cwd(), "data", "Presentations");
+export const dynamic = "force-dynamic";
 
+// ── GET: list all presentations ordered by newest first ───────────────────────
 export async function GET() {
   try {
-    if (!fs.existsSync(PRES_DIR)) {
-      return NextResponse.json({ files: [] });
-    }
+    const presentations = await prisma.presentation.findMany({
+      orderBy: { created_at: "desc" },
+    });
+    return NextResponse.json({ presentations });
+  } catch (err) {
+    console.error("[api/presentations] GET error:", err);
+    return NextResponse.json({ error: "Failed to fetch presentations" }, { status: 500 });
+  }
+}
 
-    const files = fs
-      .readdirSync(PRES_DIR)
-      .filter((f) => f.toLowerCase().endsWith(".pdf"))
-      .map((name) => {
-        const stat = fs.statSync(path.join(PRES_DIR, name));
-        return { name, modifiedAt: stat.mtime.toISOString() };
-      })
-      .sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
+// ── POST: save metadata for a file already uploaded to R2 ─────────────────────
+export async function POST(request: Request) {
+  try {
+    const body = await request.json() as {
+      title?: string;
+      description?: string;
+      file_url?: string;
+      category?: string;
+      region?: string;
+      company_name?: string;
+    };
 
-    return NextResponse.json({ files });
-  } catch (error) {
-    console.error("Presentations API error:", error);
-    return NextResponse.json({ files: [] });
+    const { title, description, file_url, category, region, company_name } = body;
+
+    if (!title?.trim())    return NextResponse.json({ error: "title is required" },    { status: 400 });
+    if (!file_url?.trim()) return NextResponse.json({ error: "file_url is required" }, { status: 400 });
+    if (!category?.trim()) return NextResponse.json({ error: "category is required" }, { status: 400 });
+    if (!region?.trim())   return NextResponse.json({ error: "region is required" },   { status: 400 });
+
+    const presentation = await prisma.presentation.create({
+      data: {
+        title:        title.trim(),
+        description:  description?.trim() || null,
+        file_url:     file_url.trim(),
+        category:     category.trim(),
+        region:       region.trim(),
+        company_name: company_name?.trim() || null,
+      },
+    });
+
+    return NextResponse.json({ presentation }, { status: 201 });
+  } catch (err) {
+    console.error("[api/presentations] POST error:", err);
+    return NextResponse.json({ error: "Failed to create presentation" }, { status: 500 });
   }
 }
