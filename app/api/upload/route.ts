@@ -35,6 +35,14 @@ export async function POST(request: Request) {
     const bucket = process.env.R2_BUCKET_NAME;
     const publicBase = process.env.R2_PUBLIC_URL?.replace(/\/$/, "");
 
+    console.log("DEBUG R2 ENV VARS:", {
+      hasAccountId: !!process.env.R2_ACCOUNT_ID,
+      hasAccessKey: !!process.env.R2_ACCESS_KEY_ID,
+      hasSecret: !!process.env.R2_SECRET_ACCESS_KEY,
+      hasBucket: !!process.env.R2_BUCKET_NAME,
+      hasPublicUrl: !!process.env.R2_PUBLIC_URL,
+    });
+
     if (!bucket || !publicBase) {
       return NextResponse.json({ error: "R2 bucket not configured" }, { status: 500 });
     }

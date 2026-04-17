@@ -533,3 +533,16 @@ model BenchmarkMxla {
  
   @@map("benchmark_mxla")
 }
+
+model Presentation {
+  id           String   @id @default(uuid())
+  title        String
+  description  String?
+  file_url     String
+  category     String   // ej: 'Investment Cases', 'Client Presentations'
+  region       String   // ej: 'Chile', 'LATAM'
+  company_name String?  // Opcional: para vincularlo a un ticker o empresa
+  created_at   DateTime @default(now())
+
+  @@map("presentations") // (Opcional) para que la tabla en Postgres se llame en minúsculas y plural
+}

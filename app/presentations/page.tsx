@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { FileText, ExternalLink, Download } from "lucide-react";
+import PptUploader from "@/components/PptUploader";
 
 interface PdfFile {
   name: string;
@@ -175,6 +176,7 @@ function FileRow({ file }: { file: MockFile | PdfFile & { category?: string } })
 export default function PresentationsPage() {
   const [liveFiles, setLiveFiles] = useState<PdfFile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [localUploads, setLocalUploads] = useState<MockFile[]>([]);
 
   const [mainCategory, setMainCategory] = useState<"investment_cases" | "client_presentations">(
     "investment_cases"
@@ -202,13 +204,32 @@ export default function PresentationsPage() {
     setFundFilter("All");
   }
 
-  // Filter mock files
+  function handleUploadSuccess(fileUrl: string, _key: string, fileName: string) {
+    const today = new Date().toISOString().slice(0, 10);
+    const newFile: MockFile = {
+      title:       fileName.replace(/\.[^.]+$/, "").replace(/[_-]/g, " "),
+      description: "",
+      date:        today,
+      region,
+      category:    mainCategory,
+      url:         fileUrl,
+    };
+    setLocalUploads((prev) => [newFile, ...prev]);
+  }
+
+  // Filter mock + local files
   const filteredMock = MOCK_FILES.filter((f) => {
     if (f.category !== mainCategory) return false;
     if (f.region !== region) return false;
     if (mainCategory === "client_presentations" && fundFilter !== "All") {
       return f.fund === fundFilter;
     }
+    return true;
+  });
+
+  const filteredLocal = localUploads.filter((f) => {
+    if (f.category !== mainCategory) return false;
+    if (f.region !== region) return false;
     return true;
   });
 
@@ -240,8 +261,8 @@ export default function PresentationsPage() {
     url: `/api/presentations/download?file=${encodeURIComponent(f.name)}`,
   }));
 
-  const displayFiles =
-    filteredMock.length > 0 ? filteredMock : liveFiles.length > 0 ? liveMapped : [];
+  const baseFiles = filteredMock.length > 0 ? filteredMock : liveFiles.length > 0 ? liveMapped : [];
+  const displayFiles = [...filteredLocal, ...baseFiles];
 
   return (
     <div className="max-w-[1200px] mx-auto px-6 py-6">
@@ -255,12 +276,23 @@ export default function PresentationsPage() {
             Research reports and investor presentations
           </p>
         </div>
-        <span
-          className="text-xs font-mono px-2 py-1 rounded"
-          style={{ background: "rgba(43,92,224,0.08)", color: "#2B5CE0" }}
-        >
-          {displayFiles.length} document{displayFiles.length !== 1 ? "s" : ""}
-        </span>
+        <div className="flex items-center gap-3">
+          <PptUploader
+            folder={`presentations/${mainCategory}/${region}`}
+            label="Upload"
+            accept=".pdf,.ppt,.pptx"
+            onSuccess={(fileUrl, key) => {
+              const name = key.split("/").pop() ?? key;
+              handleUploadSuccess(fileUrl, key, name);
+            }}
+          />
+          <span
+            className="text-xs font-mono px-2 py-1 rounded"
+            style={{ background: "rgba(43,92,224,0.08)", color: "#2B5CE0" }}
+          >
+            {displayFiles.length} document{displayFiles.length !== 1 ? "s" : ""}
+          </span>
+        </div>
       </div>
 
       {/* Level 1 — Main category tabs */}

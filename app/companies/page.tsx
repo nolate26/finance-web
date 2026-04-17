@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import PptUploader from "@/components/PptUploader";
 import CompanySidebar from "@/components/deep-dive/CompanySidebar";
 import ValuationChart from "@/components/deep-dive/ValuationChart";
 import KPICards from "@/components/deep-dive/KPICards";
@@ -202,6 +203,8 @@ export default function CompaniesPage() {
   const [diveLoading, setDiveLoading] = useState(false);
   const [diveError, setDiveError] = useState<string | null>(null);
   const [view, setView] = useState<"scorecard" | "detail">("scorecard");
+  // Uploaded docs keyed by ticker → array of {url, label}
+  const [companyDocs, setCompanyDocs] = useState<Record<string, { url: string; label: string }[]>>({});
 
   // Fetch company list once, then auto-select CCU (or first company)
   useEffect(() => {
@@ -420,6 +423,23 @@ export default function CompaniesPage() {
                       {deepDive.ticker}
                     </span>
                   )}
+
+                  {/* Upload report — pushes to the right */}
+                  <div style={{ marginLeft: "auto" }}>
+                    <PptUploader
+                      folder={`companies/${selectedItem?.ticker?.replace(/\s+/g, "_")}`}
+                      label="Attach Report"
+                      accept=".pdf,.ppt,.pptx"
+                      onSuccess={(fileUrl, key) => {
+                        const label = key.split("/").pop()?.replace(/^[0-9a-f-]{36}_/, "").replace(/\.[^.]+$/, "") ?? key;
+                        const ticker = selectedItem?.ticker ?? "__unknown__";
+                        setCompanyDocs((prev) => ({
+                          ...prev,
+                          [ticker]: [{ url: fileUrl, label }, ...(prev[ticker] ?? [])],
+                        }));
+                      }}
+                    />
+                  </div>
                 </div>
 
                 {/* ── Band 2: Description + Portfolio grid ── */}
@@ -445,6 +465,35 @@ export default function CompaniesPage() {
                     </div>
                   )}
                 </div>
+
+                {/* Attached reports */}
+                {(companyDocs[selectedItem?.ticker ?? ""] ?? []).length > 0 && (
+                  <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.10em", color: "#94A3B8", textTransform: "uppercase" }}>
+                      Attached
+                    </span>
+                    {(companyDocs[selectedItem?.ticker ?? ""] ?? []).map((doc) => (
+                      <a
+                        key={doc.url}
+                        href={doc.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: "inline-flex", alignItems: "center", gap: 5,
+                          fontSize: 11, fontWeight: 600, color: "#2B5CE0",
+                          background: "rgba(43,92,224,0.07)", border: "1px solid rgba(43,92,224,0.18)",
+                          borderRadius: 6, padding: "3px 10px", textDecoration: "none",
+                          maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        }}
+                      >
+                        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0 }}>
+                          <path d="M2 10h8M6 2v6M3 5l3-3 3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        {doc.label}
+                      </a>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* ══ SCORECARD VIEW ══════════════════════════════════════════════ */}
