@@ -424,22 +424,6 @@ export default function CompaniesPage() {
                     </span>
                   )}
 
-                  {/* Upload report — pushes to the right */}
-                  <div style={{ marginLeft: "auto" }}>
-                    <PptUploader
-                      folder={`companies/${selectedItem?.ticker?.replace(/\s+/g, "_")}`}
-                      label="Attach Report"
-                      accept=".pdf,.ppt,.pptx"
-                      onSuccess={(fileUrl, key) => {
-                        const label = key.split("/").pop()?.replace(/^[0-9a-f-]{36}_/, "").replace(/\.[^.]+$/, "") ?? key;
-                        const ticker = selectedItem?.ticker ?? "__unknown__";
-                        setCompanyDocs((prev) => ({
-                          ...prev,
-                          [ticker]: [{ url: fileUrl, label }, ...(prev[ticker] ?? [])],
-                        }));
-                      }}
-                    />
-                  </div>
                 </div>
 
                 {/* ── Band 2: Description + Portfolio grid ── */}
@@ -568,7 +552,7 @@ export default function CompaniesPage() {
 
               {/* ── ROW 4: Related Reports — full width ──────────────────────── */}
               <div style={{ ...CARD, marginBottom: 24 }}>
-                <RelatedReports />
+                <RelatedReports ticker={selectedItem?.ticker ?? null} />
               </div>
                 </>
               )}
