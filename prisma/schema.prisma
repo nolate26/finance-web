@@ -547,3 +547,34 @@ model Presentation {
 
   @@map("presentations") // (Opcional) para que la tabla en Postgres se llame en minúsculas y plural
 }
+
+// ==========================================
+// SECCIÓN: EARNINGS SURPRISE & GROWTH
+// ==========================================
+
+model EarningsSurprise {
+  id               Int      @id @default(autoincrement())
+  tickerBloomberg  String   @map("ticker_bloomberg") @db.VarChar(100)
+  quarter          String   @db.VarChar(10) // ej: '1Q26', '4Q25'
+  reportDate       DateTime @map("report_date") @db.Date
+
+  // --- REVENUE (Ventas) ---
+  revBeatMiss      Float?   @map("rev_beat_miss") // % de sorpresa vs Consenso
+  revYoy           Float?   @map("rev_yoy")       // Crecimiento Year-over-Year
+  revQoq           Float?   @map("rev_qoq")       // Crecimiento Quarter-over-Quarter
+
+  // --- EBITDA ---
+  ebitdaBeatMiss   Float?   @map("ebitda_beat_miss")
+  ebitdaYoy        Float?   @map("ebitda_yoy")
+  ebitdaQoq        Float?   @map("ebitda_qoq")
+
+  // --- NET INCOME (Utilidades) ---
+  niBeatMiss       Float?   @map("ni_beat_miss")
+  niYoy            Float?   @map("ni_yoy")
+  niQoq            Float?   @map("ni_qoq")
+
+  // Evita que se ingrese dos veces el mismo reporte trimestral para la misma empresa
+  @@unique([tickerBloomberg, quarter])
+  @@index([tickerBloomberg])
+  @@map("earnings_surprise")
+}

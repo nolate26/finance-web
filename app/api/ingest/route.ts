@@ -146,6 +146,20 @@ export async function POST(request: Request) {
       case 'AnalystRecommendation':
         await prisma.analystRecommendation.createMany({ data: rows, skipDuplicates: true });
         break;
+
+      // 👇 AGREGA ESTO AQUÍ 👇
+      case 'EarningsSurprise':
+        // Mapeamos explícitamente la fecha para evitar errores de parseo de ISO strings
+        const earningsRows = rows.map((r: any) => ({
+          ...r,
+          reportDate: new Date(r.reportDate)
+        }));
+        await prisma.earningsSurprise.createMany({ 
+          data: earningsRows, 
+          skipDuplicates: true 
+        });
+        break;
+      // 👆 HASTA AQUÍ 👆
       case 'LastRun':
         await prisma.lastRun.createMany({ data: rows, skipDuplicates: true });
         break;
