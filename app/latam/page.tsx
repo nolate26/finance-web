@@ -4,10 +4,13 @@ import { useEffect, useState, useCallback } from "react";
 import { RefreshCw } from "lucide-react";
 import LatamTable, { type LatamCompany } from "@/components/latam/LatamTable";
 import TopPicksForm from "@/components/top-picks/TopPicksForm";
+import FlatAttributionPanel from "@/components/attribution/FlatAttributionPanel";
+import SectorAttributionPanel from "@/components/attribution/SectorAttributionPanel";
+import MatrixAttributionPanel from "@/components/attribution/MatrixAttributionPanel";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type ActiveTab = "stock-selection" | "top-picks";
+type ActiveTab = "stock-selection" | "top-picks" | "attribution";
 type FundFilter = "all" | "MLE" | "MSC" | "others";
 
 interface SortOption {
@@ -54,6 +57,56 @@ function sortCompanies(
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
+
+// ── Attribution section with sub-tabs ────────────────────────────────────────
+type AttrMode = "flat" | "sector" | "matrix";
+
+function AttributionSection() {
+  const [mode, setMode] = useState<AttrMode>("flat");
+  return (
+    <div>
+      {/* Sub-tab bar */}
+      <div
+        style={{
+          display: "flex", gap: 4, marginBottom: 16,
+          padding: 4, borderRadius: 9,
+          background: "rgba(15,23,42,0.03)",
+          border: "1px solid rgba(15,23,42,0.07)",
+          width: "fit-content",
+        }}
+      >
+        {(
+          [
+            { key: "flat",   label: "By Asset (Flat Universe)"    },
+            { key: "sector", label: "By Sector (GICS Multi-Layer)" },
+            { key: "matrix", label: "Attribution Matrix"           },
+          ] as { key: AttrMode; label: string }[]
+        ).map(({ key, label }) => {
+          const active = mode === key;
+          return (
+            <button
+              key={key}
+              onClick={() => setMode(key)}
+              style={{
+                padding: "5px 16px", borderRadius: 7, fontSize: 12, fontWeight: 600,
+                cursor: "pointer", transition: "all 0.1s",
+                background: active ? "rgba(37,99,235,0.10)" : "transparent",
+                color:      active ? "#1E3A8A"              : "#64748B",
+                border:     active ? "1px solid rgba(37,99,235,0.25)" : "1px solid transparent",
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      {mode === "flat"   && <FlatAttributionPanel />}
+      {mode === "sector" && <SectorAttributionPanel />}
+      {mode === "matrix" && <MatrixAttributionPanel />}
+    </div>
+  );
+}
 
 export default function LatAmPage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("stock-selection");
@@ -256,18 +309,24 @@ export default function LatAmPage() {
           width:      "fit-content",
         }}
       >
-        {(["stock-selection", "top-picks"] as ActiveTab[]).map((tab) => (
+        {(
+          [
+            { key: "stock-selection", label: "Stock Selection"    },
+            { key: "top-picks",       label: "Top Picks"          },
+            { key: "attribution",     label: "Perf. Attribution"  },
+          ] as { key: ActiveTab; label: string }[]
+        ).map(({ key, label }) => (
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
+            key={key}
+            onClick={() => setActiveTab(key)}
             className="px-5 py-1.5 rounded-md text-sm font-semibold transition-all"
             style={{
-              background: activeTab === tab ? "rgba(43,92,224,0.10)" : "transparent",
-              color:      activeTab === tab ? "#1E3A8A" : "#64748B",
-              border:     activeTab === tab ? "1px solid rgba(43,92,224,0.25)" : "1px solid transparent",
+              background: activeTab === key ? "rgba(43,92,224,0.10)" : "transparent",
+              color:      activeTab === key ? "#1E3A8A" : "#64748B",
+              border:     activeTab === key ? "1px solid rgba(43,92,224,0.25)" : "1px solid transparent",
             }}
           >
-            {tab === "stock-selection" ? "Stock Selection" : "Top Picks"}
+            {label}
           </button>
         ))}
       </div>
@@ -432,6 +491,9 @@ export default function LatAmPage() {
 
       {/* ── Top Picks ────────────────────────────────────────────────────────── */}
       {activeTab === "top-picks" && <TopPicksForm defaultRegion="LATAM" />}
+
+      {/* ── Performance Attribution ──────────────────────────────────────────── */}
+      {activeTab === "attribution" && <AttributionSection />}
     </div>
   );
 }
