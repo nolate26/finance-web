@@ -51,6 +51,16 @@ interface Props {
 }
 
 type Tab = "historical" | "projections";
+type Range = "1W" | "1M" | "6M" | "1Y" | "3Y" | "5Y";
+
+const RANGE_DAYS: Record<Range, number> = {
+  "1W": 7,
+  "1M": 30,
+  "6M": 182,
+  "1Y": 365,
+  "3Y": 1095,
+  "5Y": 1825,
+};
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -152,11 +162,21 @@ function HistoricalPanel({
 }) {
   const [selected, setSelected] = useState<string>(meta[0]?.name ?? "");
   const [query, setQuery] = useState<string>("");
+  const [range, setRange] = useState<Range>("5Y");
 
-  const chartData = series.map((row) => ({
+  const allChartData = series.map((row) => ({
     date: row.date as string,
     value: row[selected] as number | null,
   }));
+
+  const chartData = (() => {
+    if (allChartData.length === 0) return [];
+    const lastDateStr = allChartData[allChartData.length - 1].date;
+    const lastDate = new Date(lastDateStr);
+    const cutoff = new Date(lastDate);
+    cutoff.setDate(cutoff.getDate() - RANGE_DAYS[range]);
+    return allChartData.filter((r) => new Date(r.date) >= cutoff);
+  })();
 
   const selectedMeta = meta.find((m) => m.name === selected);
   const dec = smartDec(selectedMeta?.spot ?? null);
@@ -333,8 +353,29 @@ function HistoricalPanel({
               )}
             </div>
             <p className="text-xs mt-0.5" style={{ color: "#64748B" }}>
-              5-year daily history · Spot: <span className="font-mono font-semibold" style={{ color: "#2B5CE0" }}>{fmtNum(selectedMeta?.spot ?? null, dec)}</span>
+              Daily history · Spot: <span className="font-mono font-semibold" style={{ color: "#2B5CE0" }}>{fmtNum(selectedMeta?.spot ?? null, dec)}</span>
             </p>
+          </div>
+          <div className="flex items-center gap-0.5">
+            {(["1W","1M","6M","1Y","3Y","5Y"] as Range[]).map((r) => (
+              <button
+                key={r}
+                onClick={() => setRange(r)}
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  padding: "3px 7px",
+                  borderRadius: 5,
+                  border: range === r ? "1px solid rgba(43,92,224,0.30)" : "1px solid transparent",
+                  background: range === r ? "rgba(43,92,224,0.10)" : "transparent",
+                  color: range === r ? "#1E3A8A" : "#94A3B8",
+                  cursor: "pointer",
+                  transition: "all 0.1s",
+                }}
+              >
+                {r}
+              </button>
+            ))}
           </div>
         </div>
         <div className="px-2 py-4 flex-1" style={{ minHeight: 280 }}>
