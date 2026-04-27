@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import PptUploader from "@/components/PptUploader";
 import CompanySidebar from "@/components/deep-dive/CompanySidebar";
 import ValuationChart from "@/components/deep-dive/ValuationChart";
 import KPICards from "@/components/deep-dive/KPICards";
@@ -256,6 +255,9 @@ export default function CompaniesPage() {
     const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
     return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
   }
+
+  // Suppress unused warning — setCompanyDocs kept for future upload feature
+  void setCompanyDocs;
 
   return (
     <>
