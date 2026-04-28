@@ -7,10 +7,11 @@ import TopPicksForm from "@/components/top-picks/TopPicksForm";
 import FlatAttributionPanel from "@/components/attribution/FlatAttributionPanel";
 import SectorAttributionPanel from "@/components/attribution/SectorAttributionPanel";
 import MatrixAttributionPanel from "@/components/attribution/MatrixAttributionPanel";
+import EarningsDashboard from "@/components/earnings/EarningsDashboard";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type ActiveTab = "stock-selection" | "top-picks" | "attribution";
+type ActiveTab = "stock-selection" | "top-picks" | "attribution" | "earnings";
 type FundFilter = "all" | "MLE" | "MSC" | "others";
 
 interface SortOption {
@@ -311,9 +312,10 @@ export default function LatAmPage() {
       >
         {(
           [
-            { key: "stock-selection", label: "Stock Selection"    },
-            { key: "top-picks",       label: "Top Picks"          },
-            { key: "attribution",     label: "Perf. Attribution"  },
+            { key: "stock-selection", label: "Stock Selection"     },
+            { key: "top-picks",       label: "Top Picks"           },
+            { key: "attribution",     label: "Perf. Attribution"   },
+            { key: "earnings",        label: "Earnings Surprises"  },
           ] as { key: ActiveTab; label: string }[]
         ).map(({ key, label }) => (
           <button
@@ -494,6 +496,9 @@ export default function LatAmPage() {
 
       {/* ── Performance Attribution ──────────────────────────────────────────── */}
       {activeTab === "attribution" && <AttributionSection />}
+
+      {/* ── Earnings Surprises ───────────────────────────────────────────────── */}
+      {activeTab === "earnings" && <EarningsDashboard />}
     </div>
   );
 }

@@ -1,0 +1,383 @@
+"use client";
+
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
+import type { EarningsRow, EarningsPayload } from "@/app/api/earnings/route";
+
+// ── Design tokens ─────────────────────────────────────────────────────────────
+const BLUE    = "#1D4ED8";
+const BLUE_BG = "rgba(29,78,216,0.09)";
+const BLUE_BD = "rgba(29,78,216,0.25)";
+const NEG     = "#1E293B";
+const NEG_BG  = "rgba(15,23,42,0.08)";
+const NEG_BD  = "rgba(15,23,42,0.20)";
+const TEXT1   = "#0F172A";
+const TEXT2   = "#64748B";
+const BORDER  = "rgba(15,23,42,0.08)";
+
+const selectStyle: React.CSSProperties = {
+  background: "#FFFFFF",
+  border: "1px solid rgba(15,23,42,0.12)",
+  borderRadius: 8,
+  padding: "5px 10px",
+  color: TEXT1,
+  fontSize: 12,
+  fontFamily: "JetBrains Mono, monospace",
+  cursor: "pointer",
+  outline: "none",
+};
+
+const FUND_OPTIONS = [
+  { value: "ALL", label: "Todos los Tickers" },
+  { value: "MLE", label: "Cartera MLE"       },
+  { value: "MSC", label: "Cartera MSC"       },
+];
+
+type SortKey =
+  | "revBeatMiss" | "revYoy" | "revQoq"
+  | "ebitdaBeatMiss" | "ebitdaYoy" | "ebitdaQoq"
+  | "niBeatMiss" | "niYoy" | "niQoq";
+
+type SortDir = "asc" | "desc";
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function PctBadge({ v }: { v: number | null }) {
+  if (v === null) return <span style={{ color: "#CBD5E1", fontSize: 10, fontStyle: "italic" }}>NR</span>;
+  const pct    = v * 100;
+  const pos    = pct >  0.05;
+  const neg    = pct < -0.05;
+  const color  = pos ? BLUE : neg ? NEG  : TEXT2;
+  const bg     = pos ? BLUE_BG : neg ? NEG_BG  : "transparent";
+  const border = pos ? BLUE_BD : neg ? NEG_BD  : "transparent";
+  return (
+    <span style={{ color, background: bg, border: `1px solid ${border}`, borderRadius: 4, padding: "2px 6px", fontWeight: 800, fontSize: 11, whiteSpace: "nowrap" }}>
+      {pos ? "+" : ""}{pct.toFixed(1)}%
+    </span>
+  );
+}
+
+function GrowthVal({ v }: { v: number | null }) {
+  if (v === null) return <span style={{ color: "#CBD5E1", fontSize: 10, fontStyle: "italic" }}>NR</span>;
+  const pct   = v * 100;
+  const color = pct > 0.05 ? BLUE : pct < -0.05 ? NEG : TEXT2;
+  return (
+    <span style={{ color, fontWeight: 700, fontSize: 11 }}>
+      {pct > 0 ? "+" : ""}{pct.toFixed(1)}%
+    </span>
+  );
+}
+
+function AvgCell({ vals }: { vals: (number | null)[] }) {
+  const valid = vals.filter((v): v is number => v !== null);
+  if (!valid.length) return <span style={{ color: TEXT2 }}>—</span>;
+  const mean  = valid.reduce((a, b) => a + b, 0) / valid.length;
+  const pct   = mean * 100;
+  const color = pct > 0.05 ? BLUE : pct < -0.05 ? NEG : TEXT2;
+  return (
+    <span style={{ color, fontWeight: 700, fontSize: 11 }}>
+      {pct > 0 ? "+" : ""}{pct.toFixed(1)}%
+    </span>
+  );
+}
+
+function SortTh({
+  label, sortKey, sort, onSort, extraStyle,
+}: {
+  label:       string;
+  sortKey:     SortKey;
+  sort:        { key: SortKey | null; dir: SortDir };
+  onSort:      (k: SortKey) => void;
+  extraStyle?: React.CSSProperties;
+}) {
+  const active = sort.key === sortKey;
+  return (
+    <th
+      onClick={() => onSort(sortKey)}
+      style={{
+        padding: "5px 10px",
+        textAlign: "center",
+        fontSize: 9,
+        fontWeight: 600,
+        letterSpacing: "0.07em",
+        textTransform: "uppercase",
+        color: active ? BLUE : "#94A3B8",
+        background: active ? "rgba(29,78,216,0.05)" : "#F8FAFC",
+        borderBottom: `1px solid ${BORDER}`,
+        whiteSpace: "nowrap",
+        cursor: "pointer",
+        userSelect: "none",
+        transition: "color 0.1s, background 0.1s",
+        ...extraStyle,
+      }}
+    >
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+        {label}
+        {active
+          ? sort.dir === "asc" ? <ChevronUp size={10} /> : <ChevronDown size={10} />
+          : <ChevronsUpDown size={10} style={{ opacity: 0.3 }} />
+        }
+      </span>
+    </th>
+  );
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+
+export default function EarningsDashboard() {
+  const [allData,    setAllData]    = useState<EarningsRow[]>([]);
+  const [quarters,   setQuarters]   = useState<string[]>([]);
+  const [dates,      setDates]      = useState<string[]>([]);
+  const [selQuarter, setSelQuarter] = useState("");
+  const [selDate,    setSelDate]    = useState("");
+  const [selFund,    setSelFund]    = useState("ALL");
+  const [query,      setQuery]      = useState("");
+  const [loading,    setLoading]    = useState(true);
+  const [sort, setSort] = useState<{ key: SortKey | null; dir: SortDir }>({ key: null, dir: "desc" });
+
+  const fetchData = useCallback(() => {
+    setLoading(true);
+    const params = new URLSearchParams();
+    if (selQuarter) params.set("quarter", selQuarter);
+    if (selDate)    params.set("date",    selDate);
+    if (selFund !== "ALL") params.set("fund", selFund);
+
+    fetch(`/api/earnings?${params.toString()}`)
+      .then((r) => r.json())
+      .then((d: EarningsPayload) => {
+        setAllData(d.data     ?? []);
+        setQuarters(d.quarters ?? []);
+        setDates(d.dates      ?? []);
+      })
+      .finally(() => setLoading(false));
+  }, [selQuarter, selDate, selFund]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const handleSort = useCallback((key: SortKey) => {
+    setSort((s) =>
+      s.key === key
+        ? { key, dir: s.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: "desc" }
+    );
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = query.toLowerCase().trim();
+    if (!q) return allData;
+    return allData.filter(
+      (r) =>
+        r.tickerBloomberg.toLowerCase().includes(q) ||
+        (r.sector ?? "").toLowerCase().includes(q) ||
+        r.quarter.toLowerCase().includes(q)
+    );
+  }, [allData, query]);
+
+  const displayed = useMemo(() => {
+    if (!sort.key) return filtered;
+    const key = sort.key;
+    return [...filtered].sort((a, b) => {
+      const av = a[key];
+      const bv = b[key];
+      if (av === null && bv === null) return 0;
+      if (av === null) return 1;
+      if (bv === null) return -1;
+      return sort.dir === "asc" ? av - bv : bv - av;
+    });
+  }, [filtered, sort]);
+
+  const avgs = useMemo(() => ({
+    revBeatMiss:    displayed.map((r) => r.revBeatMiss),
+    revYoy:         displayed.map((r) => r.revYoy),
+    revQoq:         displayed.map((r) => r.revQoq),
+    ebitdaBeatMiss: displayed.map((r) => r.ebitdaBeatMiss),
+    ebitdaYoy:      displayed.map((r) => r.ebitdaYoy),
+    ebitdaQoq:      displayed.map((r) => r.ebitdaQoq),
+    niBeatMiss:     displayed.map((r) => r.niBeatMiss),
+    niYoy:          displayed.map((r) => r.niYoy),
+    niQoq:          displayed.map((r) => r.niQoq),
+  }), [displayed]);
+
+  const sep: React.CSSProperties  = { borderRight: `1px solid ${BORDER}` };
+  const thBase: React.CSSProperties = {
+    padding: "5px 10px",
+    fontSize: 9,
+    fontWeight: 600,
+    letterSpacing: "0.07em",
+    textTransform: "uppercase",
+    color: "#94A3B8",
+    background: "#F8FAFC",
+    borderBottom: `1px solid ${BORDER}`,
+    whiteSpace: "nowrap",
+  };
+
+  return (
+    <>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+
+      {/* ── Controls bar ──────────────────────────────────────────────────── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
+        {/* Search */}
+        <input
+          type="text"
+          placeholder="Buscar ticker o sector…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          style={{
+            fontSize: 11, padding: "6px 10px", borderRadius: 7,
+            border: "1px solid rgba(15,23,42,0.12)", background: "#F8FAFC",
+            color: TEXT1, outline: "none", width: 190,
+            fontFamily: "JetBrains Mono, monospace",
+          }}
+        />
+
+        {/* Quarter */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 11, color: TEXT2, fontFamily: "JetBrains Mono, monospace" }}>Quarter</span>
+          <select value={selQuarter} onChange={(e) => setSelQuarter(e.target.value)} style={selectStyle}>
+            <option value="">Todos</option>
+            {quarters.map((q) => <option key={q} value={q}>{q}</option>)}
+          </select>
+        </div>
+
+        {/* Report date */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 11, color: TEXT2, fontFamily: "JetBrains Mono, monospace" }}>Fecha reporte</span>
+          <select value={selDate} onChange={(e) => setSelDate(e.target.value)} style={selectStyle}>
+            <option value="">Todas</option>
+            {dates.map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
+        </div>
+
+        {/* Fund */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 11, color: TEXT2, fontFamily: "JetBrains Mono, monospace" }}>Fondo</span>
+          <select value={selFund} onChange={(e) => setSelFund(e.target.value)} style={selectStyle}>
+            {FUND_OPTIONS.map(({ value, label }) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+        </div>
+
+        <span style={{ fontSize: 11, color: TEXT2, fontFamily: "JetBrains Mono, monospace", marginLeft: "auto" }}>
+          {displayed.length} {displayed.length === 1 ? "empresa" : "empresas"}
+        </span>
+      </div>
+
+      {/* ── Table card ──────────────────────────────────────────────────────── */}
+      <div style={{ background: "#FFFFFF", border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 1px 4px rgba(15,23,42,0.06)", overflow: "hidden" }}>
+        {loading ? (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "80px 0", gap: 12 }}>
+            <div style={{ width: 24, height: 24, borderRadius: "50%", border: "2px solid rgba(29,78,216,0.2)", borderTopColor: BLUE, animation: "spin 0.8s linear infinite" }} />
+            <span style={{ fontSize: 12, color: TEXT2, fontFamily: "JetBrains Mono, monospace" }}>Cargando resultados…</span>
+          </div>
+        ) : displayed.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "80px 0", color: TEXT2, fontSize: 13 }}>
+            Sin datos{selQuarter ? ` para ${selQuarter}` : ""}
+            {selDate ? ` del ${selDate}` : ""}
+            {query ? ` que coincidan con "${query}"` : ""}.
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead>
+                {/* Group row */}
+                <tr>
+                  <th colSpan={4} style={{ ...thBase, textAlign: "left", ...sep }} />
+                  <th colSpan={3} style={{ ...thBase, textAlign: "center", color: "#1E3A8A", background: "rgba(30,58,138,0.07)", borderBottom: "2px solid rgba(30,58,138,0.22)", ...sep, fontWeight: 800, letterSpacing: "0.10em" }}>
+                    Revenue
+                  </th>
+                  <th colSpan={3} style={{ ...thBase, textAlign: "center", color: "#1D4ED8", background: "rgba(29,78,216,0.07)", borderBottom: "2px solid rgba(29,78,216,0.22)", ...sep, fontWeight: 800, letterSpacing: "0.10em" }}>
+                    EBITDA
+                  </th>
+                  <th colSpan={3} style={{ ...thBase, textAlign: "center", color: "#2563EB", background: "rgba(37,99,235,0.07)", borderBottom: "2px solid rgba(37,99,235,0.22)", fontWeight: 800, letterSpacing: "0.10em" }}>
+                    Net Income
+                  </th>
+                </tr>
+                {/* Sub-header */}
+                <tr>
+                  <th style={{ ...thBase, textAlign: "left", padding: "5px 14px" }}>Ticker</th>
+                  <th style={{ ...thBase, textAlign: "left", padding: "5px 12px" }}>Sector</th>
+                  <th style={{ ...thBase, textAlign: "center" }}>Quarter</th>
+                  <th style={{ ...thBase, textAlign: "left", padding: "5px 14px", ...sep }}>Report Date</th>
+                  <SortTh label="Beat/Miss" sortKey="revBeatMiss"    sort={sort} onSort={handleSort} />
+                  <SortTh label="YoY"       sortKey="revYoy"         sort={sort} onSort={handleSort} />
+                  <SortTh label="QoQ"       sortKey="revQoq"         sort={sort} onSort={handleSort} extraStyle={sep} />
+                  <SortTh label="Beat/Miss" sortKey="ebitdaBeatMiss" sort={sort} onSort={handleSort} />
+                  <SortTh label="YoY"       sortKey="ebitdaYoy"      sort={sort} onSort={handleSort} />
+                  <SortTh label="QoQ"       sortKey="ebitdaQoq"      sort={sort} onSort={handleSort} extraStyle={sep} />
+                  <SortTh label="Beat/Miss" sortKey="niBeatMiss"     sort={sort} onSort={handleSort} />
+                  <SortTh label="YoY"       sortKey="niYoy"          sort={sort} onSort={handleSort} />
+                  <SortTh label="QoQ"       sortKey="niQoq"          sort={sort} onSort={handleSort} />
+                </tr>
+              </thead>
+
+              <tbody>
+                {displayed.map((row, i) => (
+                  <tr
+                    key={`${row.tickerBloomberg}-${row.quarter}`}
+                    style={{ background: i % 2 === 0 ? "#FFFFFF" : "rgba(15,23,42,0.018)", borderBottom: "1px solid rgba(15,23,42,0.05)", transition: "background 0.1s" }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(29,78,216,0.04)"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = i % 2 === 0 ? "#FFFFFF" : "rgba(15,23,42,0.018)"; }}
+                  >
+                    <td style={{ padding: "8px 14px", fontFamily: "JetBrains Mono, monospace", fontWeight: 700, color: BLUE, whiteSpace: "nowrap", fontSize: 11 }}>{row.tickerBloomberg}</td>
+                    <td style={{ padding: "8px 12px", fontSize: 11, color: TEXT2, whiteSpace: "nowrap", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{row.sector ?? "—"}</td>
+                    <td style={{ padding: "8px 10px", textAlign: "center" }}>
+                      <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, fontWeight: 800, color: TEXT1, background: "rgba(15,23,42,0.05)", borderRadius: 4, padding: "2px 7px" }}>
+                        {row.quarter}
+                      </span>
+                    </td>
+                    <td style={{ padding: "8px 14px", fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: TEXT2, whiteSpace: "nowrap", ...sep }}>{row.reportDate}</td>
+                    <td style={{ padding: "8px 10px", textAlign: "center" }}><PctBadge v={row.revBeatMiss} /></td>
+                    <td style={{ padding: "8px 10px", textAlign: "center" }}><GrowthVal v={row.revYoy} /></td>
+                    <td style={{ padding: "8px 10px", textAlign: "center", ...sep }}><GrowthVal v={row.revQoq} /></td>
+                    <td style={{ padding: "8px 10px", textAlign: "center" }}><PctBadge v={row.ebitdaBeatMiss} /></td>
+                    <td style={{ padding: "8px 10px", textAlign: "center" }}><GrowthVal v={row.ebitdaYoy} /></td>
+                    <td style={{ padding: "8px 10px", textAlign: "center", ...sep }}><GrowthVal v={row.ebitdaQoq} /></td>
+                    <td style={{ padding: "8px 10px", textAlign: "center" }}><PctBadge v={row.niBeatMiss} /></td>
+                    <td style={{ padding: "8px 10px", textAlign: "center" }}><GrowthVal v={row.niYoy} /></td>
+                    <td style={{ padding: "8px 10px", textAlign: "center" }}><GrowthVal v={row.niQoq} /></td>
+                  </tr>
+                ))}
+              </tbody>
+
+              {/* Totals row */}
+              <tfoot>
+                <tr style={{ background: "#EFF6FF", borderTop: "2px solid #1E3A8A" }}>
+                  <td colSpan={4} style={{ padding: "9px 14px", fontSize: 10, fontWeight: 800, color: "#1E3A8A", letterSpacing: "0.08em", textTransform: "uppercase", ...sep }}>
+                    Promedio simple ({displayed.length})
+                  </td>
+                  <td style={{ padding: "9px 10px", textAlign: "center" }}><AvgCell vals={avgs.revBeatMiss} /></td>
+                  <td style={{ padding: "9px 10px", textAlign: "center" }}><AvgCell vals={avgs.revYoy} /></td>
+                  <td style={{ padding: "9px 10px", textAlign: "center", ...sep }}><AvgCell vals={avgs.revQoq} /></td>
+                  <td style={{ padding: "9px 10px", textAlign: "center" }}><AvgCell vals={avgs.ebitdaBeatMiss} /></td>
+                  <td style={{ padding: "9px 10px", textAlign: "center" }}><AvgCell vals={avgs.ebitdaYoy} /></td>
+                  <td style={{ padding: "9px 10px", textAlign: "center", ...sep }}><AvgCell vals={avgs.ebitdaQoq} /></td>
+                  <td style={{ padding: "9px 10px", textAlign: "center" }}><AvgCell vals={avgs.niBeatMiss} /></td>
+                  <td style={{ padding: "9px 10px", textAlign: "center" }}><AvgCell vals={avgs.niYoy} /></td>
+                  <td style={{ padding: "9px 10px", textAlign: "center" }}><AvgCell vals={avgs.niQoq} /></td>
+                </tr>
+              </tfoot>
+            </table>
+
+            {/* Legend */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", borderTop: `1px solid ${BORDER}` }}>
+              <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: BLUE, opacity: 0.85, display: "inline-block" }} />
+                  <span style={{ fontSize: 10, color: TEXT2 }}>Beat / Positivo</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: NEG, opacity: 0.75, display: "inline-block" }} />
+                  <span style={{ fontSize: 10, color: TEXT2 }}>Miss / Negativo</span>
+                </div>
+                <span style={{ fontSize: 10, color: "#CBD5E1", fontStyle: "italic" }}>NR = Not Reported</span>
+              </div>
+              <span style={{ fontSize: 10, color: "#CBD5E1" }}>Fuente: Bloomberg</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
