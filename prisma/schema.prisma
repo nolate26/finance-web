@@ -548,6 +548,7 @@ model Presentation {
   @@map("presentations") // (Opcional) para que la tabla en Postgres se llame en minúsculas y plural
 }
 
+
 // ==========================================
 // SECCIÓN: EARNINGS SURPRISE & GROWTH
 // ==========================================
@@ -558,23 +559,40 @@ model EarningsSurprise {
   quarter          String   @db.VarChar(10) // ej: '1Q26', '4Q25'
   reportDate       DateTime @map("report_date") @db.Date
 
+  // --- NUEVOS CAMPOS: Moneda y Valores Reales (Absolutos) ---
+  currency         String?  @db.VarChar(10) // ej: 'BRL', 'MXN', 'CLP'
+  
   // --- REVENUE (Ventas) ---
+  revActual        Float?   @map("rev_actual")    // Valor absoluto reportado
   revBeatMiss      Float?   @map("rev_beat_miss") // % de sorpresa vs Consenso
   revYoy           Float?   @map("rev_yoy")       // Crecimiento Year-over-Year
   revQoq           Float?   @map("rev_qoq")       // Crecimiento Quarter-over-Quarter
 
   // --- EBITDA ---
+  ebitdaActual     Float?   @map("ebitda_actual")
   ebitdaBeatMiss   Float?   @map("ebitda_beat_miss")
   ebitdaYoy        Float?   @map("ebitda_yoy")
   ebitdaQoq        Float?   @map("ebitda_qoq")
 
   // --- NET INCOME (Utilidades) ---
+  niActual         Float?   @map("ni_actual")
   niBeatMiss       Float?   @map("ni_beat_miss")
   niYoy            Float?   @map("ni_yoy")
   niQoq            Float?   @map("ni_qoq")
 
-  // Evita que se ingrese dos veces el mismo reporte trimestral para la misma empresa
   @@unique([tickerBloomberg, quarter])
   @@index([tickerBloomberg])
   @@map("earnings_surprise")
+}
+
+// --- NUEVA TABLA: Tipo de Cambio Promedio Trimestral ---
+model QuarterlyFxRate {
+  id          Int      @id @default(autoincrement())
+  country     String   @db.VarChar(50) // ej: 'Brazil', 'Mexico', 'Chile'
+  quarter     String   @db.VarChar(10) // ej: '1Q26'
+  currency    String   @db.VarChar(10) // ej: 'BRL', 'MXN'
+  avgRate     Float?   @map("avg_rate") // Tipo de cambio promedio del trimestre vs USD
+
+  @@unique([country, quarter, currency])
+  @@map("quarterly_fx_rates")
 }

@@ -159,6 +159,20 @@ export async function POST(request: Request) {
           skipDuplicates: true 
         });
         break;
+        // 👇 NUEVO CASO PARA TIPOS DE CAMBIO 👇
+      case 'QuarterlyFxRate':
+        const fxRows = rows.map((r: any) => ({
+          country: r.country,
+          quarter: r.quarter,
+          currency: r.currency,
+          avgRate: r.avgRate ?? r.avg_rate ?? null,
+        }));
+        await prisma.quarterlyFxRate.createMany({
+          data: fxRows,
+          skipDuplicates: true // Esto garantiza que se llene una sola vez por quarter/país
+        });
+        break;
+      // 👆 HASTA AQUÍ 👆
       // 👆 HASTA AQUÍ 👆
       case 'LastRun':
         await prisma.lastRun.createMany({ data: rows, skipDuplicates: true });
