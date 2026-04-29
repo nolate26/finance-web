@@ -173,6 +173,70 @@ export async function POST(request: Request) {
         });
         break;
       // 👆 HASTA AQUÍ 👆
+      case 'AnalystModel':
+        const { header, financials } = data;
+        
+        if (!header || !financials) {
+          return NextResponse.json({ error: 'Payload inválido: Faltan datos del modelo' }, { status: 400 });
+        }
+
+        const modelDate = new Date(header.updateDate);
+
+        // 1. Guardar/Actualizar la Cabecera (Header) por TICKER + FECHA
+        await prisma.modelHeader.upsert({
+          where: { 
+            ticker_updateDate: { // Usa el nombre compuesto generado por Prisma
+              ticker: header.ticker,
+              updateDate: modelDate
+            }
+          },
+          update: {
+            recc: header.recc,
+            tp: header.tp,
+            analyst: header.analyst,
+            link: header.link
+          },
+          create: {
+            ticker: header.ticker,
+            updateDate: modelDate,
+            recc: header.recc,
+            tp: header.tp,
+            analyst: header.analyst,
+            link: header.link
+          }
+        });
+
+        // 2. Guardar/Actualizar los años financieros (Snapshot atado a la fecha)
+        const modelUpserts = financials.map((f: any) => {
+          const { year, ...metricas } = f;
+          
+          return prisma.modelFinancials.upsert({
+            where: {
+              ticker_updateDate_year: { // Llave única compuesta
+                ticker: header.ticker,
+                updateDate: modelDate,
+                year: year
+              }
+            },
+            update: metricas, 
+            create: {
+              ticker: header.ticker,
+              updateDate: modelDate,
+              year: year,
+              ...metricas 
+            }
+          });
+        });
+
+        await prisma.$transaction(modelUpserts);
+        
+        return NextResponse.json({ 
+          success: true, 
+          message: `Snapshot de ${header.ticker} (${header.updateDate}) guardado con ${financials.length} años proyectados.` 
+        });
+
+
+
       // 👆 HASTA AQUÍ 👆
       case 'LastRun':
         await prisma.lastRun.createMany({ data: rows, skipDuplicates: true });

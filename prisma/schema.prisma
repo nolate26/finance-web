@@ -596,3 +596,62 @@ model QuarterlyFxRate {
   @@unique([country, quarter, currency])
   @@map("quarterly_fx_rates")
 }
+model ModelHeader {
+  ticker     String   @db.VarChar(100)
+  updateDate DateTime @map("update_date") @db.Date // Ahora es parte de la llave primaria
+  recc       String?  @db.VarChar(10)
+  tp         Float?
+  analyst    String?  @db.VarChar(100)
+  link       String?  @db.VarChar(255)
+  
+  financials ModelFinancials[]
+
+  // LLAVE COMPUESTA: Cada vez que cambie la fecha, es un registro nuevo
+  @@id([ticker, updateDate])
+  @@map("model_headers")
+}
+
+model ModelFinancials {
+  id               Int      @id @default(autoincrement())
+  ticker           String   @db.VarChar(100)
+  updateDate       DateTime @map("update_date") @db.Date // Necesario para amarrarlo a su Header
+  year             Int
+  
+  // Income Statement
+  revenue          Float?
+  ebit             Float?
+  taxRate          Float?   @map("tax_rate")
+  da               Float?   @map("d_a")
+  ebitda           Float?
+  netFinExp        Float?   @map("net_fin_expenses")
+  netIncome        Float?   @map("net_income")
+  eps              Float?
+  sharesOut        Float?   @map("shares_out")
+
+  // Balance Sheet
+  netDebt          Float?   @map("net_debt")
+  minorities       Float?
+  controllingEq    Float?   @map("controlling_equity")
+  tangibleEq       Float?   @map("tangible_equity")
+  ppe              Float?
+  workingCapital   Float?   @map("working_capital")
+
+  // Cash Flow
+  fcf              Float?
+  capex            Float?
+  assetSales       Float?   @map("asset_sales")
+  fcfe             Float?
+  dividend         Float?
+  payout           Float?
+  buybacks         Float?
+  dps              Float?
+  sharePrice       Float?   @map("share_price")
+  marketCap        Float?   @map("market_cap")
+
+  // La relación ahora requiere ambas llaves
+  header           ModelHeader @relation(fields: [ticker, updateDate], references: [ticker, updateDate], onDelete: Cascade)
+
+  // LLAVE COMPUESTA: Para un mismo ticker, en una misma fecha, solo hay un año 2026.
+  @@unique([ticker, updateDate, year])
+  @@map("model_financials")
+}

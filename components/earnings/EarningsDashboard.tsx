@@ -33,15 +33,95 @@ const FUND_OPTIONS = [
   { value: "MSC", label: "Cartera MSC"       },
 ];
 
-type SortKey =
-  | "revBeatMiss" | "revYoy" | "revQoq"
+// ── Sort types ────────────────────────────────────────────────────────────────
+type TextSortKey    = "tickerBloomberg" | "sector" | "reportDate";
+type NumericSortKey =
+  | "revBeatMiss"    | "revYoy"    | "revQoq"
   | "ebitdaBeatMiss" | "ebitdaYoy" | "ebitdaQoq"
-  | "niBeatMiss" | "niYoy" | "niQoq";
+  | "niBeatMiss"     | "niYoy"     | "niQoq";
 
+type SortKey = TextSortKey | NumericSortKey;
 type SortDir = "asc" | "desc";
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+const NUMERIC_SORT_KEYS = new Set<SortKey>([
+  "revBeatMiss", "revYoy", "revQoq",
+  "ebitdaBeatMiss", "ebitdaYoy", "ebitdaQoq",
+  "niBeatMiss", "niYoy", "niQoq",
+]);
 
+// ── Formatters ────────────────────────────────────────────────────────────────
+function fmtActual(v: number | null): string {
+  if (v === null) return "—";
+  const abs = Math.abs(v);
+  if (abs >= 1_000_000_000) return (v / 1_000_000_000).toFixed(1) + "B";
+  if (abs >= 1_000_000)     return (v / 1_000_000).toFixed(1) + "M";
+  if (abs >= 1_000)         return (v / 1_000).toFixed(1) + "K";
+  return v.toFixed(0);
+}
+
+function fmtWt(v: number | null): string {
+  if (v === null) return "—";
+  return (v * 100).toFixed(2) + "%";
+}
+
+// ── Weighted totals ───────────────────────────────────────────────────────────
+interface WeightedTotals {
+  revActualUSD:    number | null;
+  ebitdaActualUSD: number | null;
+  niActualUSD:     number | null;
+  revBeatMiss:     number | null;
+  revYoy:          number | null;
+  revQoq:          number | null;
+  ebitdaBeatMiss:  number | null;
+  ebitdaYoy:       number | null;
+  ebitdaQoq:       number | null;
+  niBeatMiss:      number | null;
+  niYoy:           number | null;
+  niQoq:           number | null;
+}
+
+function computeWeightedTotals(
+  rows: EarningsRow[],
+  getWeight: (r: EarningsRow) => number | null,
+): WeightedTotals {
+  function wtdActualUSD(getActual: (r: EarningsRow) => number | null): number | null {
+    let sum = 0, hasAny = false;
+    for (const r of rows) {
+      const w = getWeight(r), a = getActual(r), rate = r.avgRate;
+      if (w !== null && a !== null && rate !== null && rate !== 0) {
+        sum += (a / rate) * w;
+        hasAny = true;
+      }
+    }
+    return hasAny ? sum : null;
+  }
+
+  function wtdPct(getMetric: (r: EarningsRow) => number | null): number | null {
+    let num = 0, den = 0;
+    for (const r of rows) {
+      const w = getWeight(r), m = getMetric(r);
+      if (w !== null && m !== null) { num += m * w; den += w; }
+    }
+    return den > 0 ? num / den : null;
+  }
+
+  return {
+    revActualUSD:    wtdActualUSD((r) => r.revActual),
+    ebitdaActualUSD: wtdActualUSD((r) => r.ebitdaActual),
+    niActualUSD:     wtdActualUSD((r) => r.niActual),
+    revBeatMiss:     wtdPct((r) => r.revBeatMiss),
+    revYoy:          wtdPct((r) => r.revYoy),
+    revQoq:          wtdPct((r) => r.revQoq),
+    ebitdaBeatMiss:  wtdPct((r) => r.ebitdaBeatMiss),
+    ebitdaYoy:       wtdPct((r) => r.ebitdaYoy),
+    ebitdaQoq:       wtdPct((r) => r.ebitdaQoq),
+    niBeatMiss:      wtdPct((r) => r.niBeatMiss),
+    niYoy:           wtdPct((r) => r.niYoy),
+    niQoq:           wtdPct((r) => r.niQoq),
+  };
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
 function PctBadge({ v }: { v: number | null }) {
   if (v === null) return <span style={{ color: "#CBD5E1", fontSize: 10, fontStyle: "italic" }}>NR</span>;
   const pct    = v * 100;
@@ -81,22 +161,57 @@ function AvgCell({ vals }: { vals: (number | null)[] }) {
   );
 }
 
+function OWCell({ v }: { v: number | null }) {
+  if (v === null) return <span style={{ color: "#CBD5E1", fontSize: 10 }}>—</span>;
+  const pct = v * 100;
+  const pos = pct > 0.05;
+  const neg = pct < -0.05;
+  const color = pos ? BLUE : neg ? NEG : TEXT2;
+  return (
+    <span style={{ color, fontWeight: 700, fontSize: 11, fontFamily: "JetBrains Mono, monospace" }}>
+      {pos ? "+" : ""}{pct.toFixed(2)}%
+    </span>
+  );
+}
+
+function WtdPctCell({ v }: { v: number | null }) {
+  if (v === null) return <span style={{ color: TEXT2 }}>—</span>;
+  const pct   = v * 100;
+  const color = pct > 0.05 ? BLUE : pct < -0.05 ? NEG : TEXT2;
+  return (
+    <span style={{ color, fontWeight: 700, fontSize: 11 }}>
+      {pct > 0 ? "+" : ""}{pct.toFixed(1)}%
+    </span>
+  );
+}
+
+function WtdActualCell({ v }: { v: number | null }) {
+  if (v === null) return <span style={{ color: TEXT2 }}>—</span>;
+  return (
+    <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: TEXT1, fontWeight: 600, whiteSpace: "nowrap" }}>
+      <span style={{ fontSize: 9, color: TEXT2, marginRight: 3 }}>USD</span>
+      {fmtActual(v)}
+    </span>
+  );
+}
+
 function SortTh({
-  label, sortKey, sort, onSort, extraStyle,
+  label, sortKey, sort, onSort, extraStyle, align = "center",
 }: {
   label:       string;
   sortKey:     SortKey;
   sort:        { key: SortKey | null; dir: SortDir };
   onSort:      (k: SortKey) => void;
   extraStyle?: React.CSSProperties;
+  align?:      "left" | "center";
 }) {
   const active = sort.key === sortKey;
   return (
     <th
       onClick={() => onSort(sortKey)}
       style={{
-        padding: "5px 10px",
-        textAlign: "center",
+        padding: align === "left" ? "5px 14px" : "5px 10px",
+        textAlign: align,
         fontSize: 9,
         fontWeight: 600,
         letterSpacing: "0.07em",
@@ -123,7 +238,6 @@ function SortTh({
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
-
 export default function EarningsDashboard() {
   const [allData,    setAllData]    = useState<EarningsRow[]>([]);
   const [quarters,   setQuarters]   = useState<string[]>([]);
@@ -138,16 +252,16 @@ export default function EarningsDashboard() {
   const fetchData = useCallback(() => {
     setLoading(true);
     const params = new URLSearchParams();
-    if (selQuarter) params.set("quarter", selQuarter);
-    if (selDate)    params.set("date",    selDate);
-    if (selFund !== "ALL") params.set("fund", selFund);
+    if (selQuarter)        params.set("quarter", selQuarter);
+    if (selDate)           params.set("date",    selDate);
+    if (selFund !== "ALL") params.set("fund",    selFund);
 
     fetch(`/api/earnings?${params.toString()}`)
       .then((r) => r.json())
       .then((d: EarningsPayload) => {
-        setAllData(d.data     ?? []);
+        setAllData(d.data      ?? []);
         setQuarters(d.quarters ?? []);
-        setDates(d.dates      ?? []);
+        setDates(d.dates       ?? []);
       })
       .finally(() => setLoading(false));
   }, [selQuarter, selDate, selFund]);
@@ -176,13 +290,17 @@ export default function EarningsDashboard() {
   const displayed = useMemo(() => {
     if (!sort.key) return filtered;
     const key = sort.key;
+    const isNumeric = NUMERIC_SORT_KEYS.has(key);
     return [...filtered].sort((a, b) => {
-      const av = a[key];
-      const bv = b[key];
+      const av = a[key as keyof EarningsRow];
+      const bv = b[key as keyof EarningsRow];
       if (av === null && bv === null) return 0;
       if (av === null) return 1;
       if (bv === null) return -1;
-      return sort.dir === "asc" ? av - bv : bv - av;
+      const diff = isNumeric
+        ? (av as number) - (bv as number)
+        : String(av).localeCompare(String(bv), undefined, { sensitivity: "base" });
+      return sort.dir === "asc" ? diff : -diff;
     });
   }, [filtered, sort]);
 
@@ -198,8 +316,23 @@ export default function EarningsDashboard() {
     niQoq:          displayed.map((r) => r.niQoq),
   }), [displayed]);
 
-  const sep: React.CSSProperties  = { borderRight: `1px solid ${BORDER}` };
-  const thBase: React.CSSProperties = {
+  const portfolioTotals = useMemo(
+    () => selFund === "ALL" ? null : computeWeightedTotals(displayed, (r) => r.portfolioWeight),
+    [displayed, selFund],
+  );
+
+  const benchmarkTotals = useMemo(
+    () => selFund === "ALL" ? null : computeWeightedTotals(displayed, (r) => r.benchmarkWeight),
+    [displayed, selFund],
+  );
+
+  const showWeights  = selFund !== "ALL";
+  // Ticker + Sector + Quarter + ReportDate + CCY [+ Wp + Wb + OW]
+  const infoColSpan  = showWeights ? 8 : 5;
+
+  // ── Shared styles ─────────────────────────────────────────────────────────
+  const sep: React.CSSProperties      = { borderRight: `1px solid ${BORDER}` };
+  const thBase: React.CSSProperties   = {
     padding: "5px 10px",
     fontSize: 9,
     fontWeight: 600,
@@ -210,6 +343,8 @@ export default function EarningsDashboard() {
     borderBottom: `1px solid ${BORDER}`,
     whiteSpace: "nowrap",
   };
+  const tdNum: React.CSSProperties    = { padding: "8px 10px", textAlign: "center" };
+  const tdSepNum: React.CSSProperties = { ...tdNum, ...sep };
 
   return (
     <>
@@ -217,7 +352,6 @@ export default function EarningsDashboard() {
 
       {/* ── Controls bar ──────────────────────────────────────────────────── */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
-        {/* Search */}
         <input
           type="text"
           placeholder="Buscar ticker o sector…"
@@ -231,7 +365,6 @@ export default function EarningsDashboard() {
           }}
         />
 
-        {/* Quarter */}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ fontSize: 11, color: TEXT2, fontFamily: "JetBrains Mono, monospace" }}>Quarter</span>
           <select value={selQuarter} onChange={(e) => setSelQuarter(e.target.value)} style={selectStyle}>
@@ -240,16 +373,14 @@ export default function EarningsDashboard() {
           </select>
         </div>
 
-        {/* Report date */}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ fontSize: 11, color: TEXT2, fontFamily: "JetBrains Mono, monospace" }}>Fecha reporte</span>
+          <span style={{ fontSize: 11, color: TEXT2, fontFamily: "JetBrains Mono, monospace" }}>Fecha</span>
           <select value={selDate} onChange={(e) => setSelDate(e.target.value)} style={selectStyle}>
             <option value="">Todas</option>
             {dates.map((d) => <option key={d} value={d}>{d}</option>)}
           </select>
         </div>
 
-        {/* Fund */}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ fontSize: 11, color: TEXT2, fontFamily: "JetBrains Mono, monospace" }}>Fondo</span>
           <select value={selFund} onChange={(e) => setSelFund(e.target.value)} style={selectStyle}>
@@ -281,31 +412,45 @@ export default function EarningsDashboard() {
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
-                {/* Group row */}
+                {/* ── Group row ─── */}
                 <tr>
-                  <th colSpan={4} style={{ ...thBase, textAlign: "left", ...sep }} />
-                  <th colSpan={3} style={{ ...thBase, textAlign: "center", color: "#1E3A8A", background: "rgba(30,58,138,0.07)", borderBottom: "2px solid rgba(30,58,138,0.22)", ...sep, fontWeight: 800, letterSpacing: "0.10em" }}>
+                  <th colSpan={infoColSpan} style={{ ...thBase, textAlign: "left", ...sep }} />
+                  <th colSpan={4} style={{ ...thBase, textAlign: "center", color: "#1E3A8A", background: "rgba(30,58,138,0.07)", borderBottom: "2px solid rgba(30,58,138,0.22)", ...sep, fontWeight: 800, letterSpacing: "0.10em" }}>
                     Revenue
                   </th>
-                  <th colSpan={3} style={{ ...thBase, textAlign: "center", color: "#1D4ED8", background: "rgba(29,78,216,0.07)", borderBottom: "2px solid rgba(29,78,216,0.22)", ...sep, fontWeight: 800, letterSpacing: "0.10em" }}>
+                  <th colSpan={4} style={{ ...thBase, textAlign: "center", color: "#1D4ED8", background: "rgba(29,78,216,0.07)", borderBottom: "2px solid rgba(29,78,216,0.22)", ...sep, fontWeight: 800, letterSpacing: "0.10em" }}>
                     EBITDA
                   </th>
-                  <th colSpan={3} style={{ ...thBase, textAlign: "center", color: "#2563EB", background: "rgba(37,99,235,0.07)", borderBottom: "2px solid rgba(37,99,235,0.22)", fontWeight: 800, letterSpacing: "0.10em" }}>
+                  <th colSpan={4} style={{ ...thBase, textAlign: "center", color: "#2563EB", background: "rgba(37,99,235,0.07)", borderBottom: "2px solid rgba(37,99,235,0.22)", fontWeight: 800, letterSpacing: "0.10em" }}>
                     Net Income
                   </th>
                 </tr>
-                {/* Sub-header */}
+                {/* ── Sub-header ─── */}
                 <tr>
-                  <th style={{ ...thBase, textAlign: "left", padding: "5px 14px" }}>Ticker</th>
-                  <th style={{ ...thBase, textAlign: "left", padding: "5px 12px" }}>Sector</th>
+                  <SortTh label="Ticker"      sortKey="tickerBloomberg" sort={sort} onSort={handleSort} align="left" />
+                  <SortTh label="Sector"      sortKey="sector"          sort={sort} onSort={handleSort} align="left" />
                   <th style={{ ...thBase, textAlign: "center" }}>Quarter</th>
-                  <th style={{ ...thBase, textAlign: "left", padding: "5px 14px", ...sep }}>Report Date</th>
+                  <SortTh label="Report Date" sortKey="reportDate"      sort={sort} onSort={handleSort} align="left" />
+                  <th style={{ ...thBase, textAlign: "center", ...(showWeights ? {} : sep) }}>CCY</th>
+                  {showWeights && (
+                    <>
+                      <th style={{ ...thBase, textAlign: "center" }}>W_p</th>
+                      <th style={{ ...thBase, textAlign: "center" }}>W_b</th>
+                      <th style={{ ...thBase, textAlign: "center", ...sep }}>OW</th>
+                    </>
+                  )}
+                  {/* Revenue */}
+                  <th style={{ ...thBase, textAlign: "right", padding: "5px 12px" }}>Actual</th>
                   <SortTh label="Beat/Miss" sortKey="revBeatMiss"    sort={sort} onSort={handleSort} />
                   <SortTh label="YoY"       sortKey="revYoy"         sort={sort} onSort={handleSort} />
                   <SortTh label="QoQ"       sortKey="revQoq"         sort={sort} onSort={handleSort} extraStyle={sep} />
+                  {/* EBITDA */}
+                  <th style={{ ...thBase, textAlign: "right", padding: "5px 12px" }}>Actual</th>
                   <SortTh label="Beat/Miss" sortKey="ebitdaBeatMiss" sort={sort} onSort={handleSort} />
                   <SortTh label="YoY"       sortKey="ebitdaYoy"      sort={sort} onSort={handleSort} />
                   <SortTh label="QoQ"       sortKey="ebitdaQoq"      sort={sort} onSort={handleSort} extraStyle={sep} />
+                  {/* Net Income */}
+                  <th style={{ ...thBase, textAlign: "right", padding: "5px 12px" }}>Actual</th>
                   <SortTh label="Beat/Miss" sortKey="niBeatMiss"     sort={sort} onSort={handleSort} />
                   <SortTh label="YoY"       sortKey="niYoy"          sort={sort} onSort={handleSort} />
                   <SortTh label="QoQ"       sortKey="niQoq"          sort={sort} onSort={handleSort} />
@@ -320,43 +465,129 @@ export default function EarningsDashboard() {
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(29,78,216,0.04)"; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = i % 2 === 0 ? "#FFFFFF" : "rgba(15,23,42,0.018)"; }}
                   >
-                    <td style={{ padding: "8px 14px", fontFamily: "JetBrains Mono, monospace", fontWeight: 700, color: BLUE, whiteSpace: "nowrap", fontSize: 11 }}>{row.tickerBloomberg}</td>
-                    <td style={{ padding: "8px 12px", fontSize: 11, color: TEXT2, whiteSpace: "nowrap", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{row.sector ?? "—"}</td>
+                    {/* Info */}
+                    <td style={{ padding: "8px 14px", fontFamily: "JetBrains Mono, monospace", fontWeight: 700, color: BLUE, whiteSpace: "nowrap", fontSize: 11 }}>
+                      {row.tickerBloomberg}
+                    </td>
+                    <td style={{ padding: "8px 12px", fontSize: 11, color: TEXT2, whiteSpace: "nowrap", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {row.sector ?? "—"}
+                    </td>
                     <td style={{ padding: "8px 10px", textAlign: "center" }}>
                       <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, fontWeight: 800, color: TEXT1, background: "rgba(15,23,42,0.05)", borderRadius: 4, padding: "2px 7px" }}>
                         {row.quarter}
                       </span>
                     </td>
-                    <td style={{ padding: "8px 14px", fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: TEXT2, whiteSpace: "nowrap", ...sep }}>{row.reportDate}</td>
-                    <td style={{ padding: "8px 10px", textAlign: "center" }}><PctBadge v={row.revBeatMiss} /></td>
-                    <td style={{ padding: "8px 10px", textAlign: "center" }}><GrowthVal v={row.revYoy} /></td>
-                    <td style={{ padding: "8px 10px", textAlign: "center", ...sep }}><GrowthVal v={row.revQoq} /></td>
-                    <td style={{ padding: "8px 10px", textAlign: "center" }}><PctBadge v={row.ebitdaBeatMiss} /></td>
-                    <td style={{ padding: "8px 10px", textAlign: "center" }}><GrowthVal v={row.ebitdaYoy} /></td>
-                    <td style={{ padding: "8px 10px", textAlign: "center", ...sep }}><GrowthVal v={row.ebitdaQoq} /></td>
-                    <td style={{ padding: "8px 10px", textAlign: "center" }}><PctBadge v={row.niBeatMiss} /></td>
-                    <td style={{ padding: "8px 10px", textAlign: "center" }}><GrowthVal v={row.niYoy} /></td>
-                    <td style={{ padding: "8px 10px", textAlign: "center" }}><GrowthVal v={row.niQoq} /></td>
+                    <td style={{ padding: "8px 14px", fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: TEXT2, whiteSpace: "nowrap" }}>
+                      {row.reportDate}
+                    </td>
+                    <td style={{ padding: "8px 10px", textAlign: "center", ...(showWeights ? {} : sep) }}>
+                      {row.currency
+                        ? <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 10, fontWeight: 700, color: TEXT2, background: "rgba(15,23,42,0.04)", border: `1px solid ${BORDER}`, borderRadius: 4, padding: "1px 5px" }}>{row.currency}</span>
+                        : <span style={{ color: "#CBD5E1", fontSize: 10 }}>—</span>
+                      }
+                    </td>
+                    {showWeights && (
+                      <>
+                        <td style={{ ...tdNum }}>
+                          <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: TEXT2, fontWeight: 600 }}>
+                            {fmtWt(row.portfolioWeight)}
+                          </span>
+                        </td>
+                        <td style={{ ...tdNum }}>
+                          <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: TEXT2, fontWeight: 600 }}>
+                            {fmtWt(row.benchmarkWeight)}
+                          </span>
+                        </td>
+                        <td style={{ ...tdNum, ...sep }}>
+                          <OWCell v={row.overweight} />
+                        </td>
+                      </>
+                    )}
+                    {/* Revenue */}
+                    <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: TEXT1, fontWeight: 600 }}>
+                      {fmtActual(row.revActual)}
+                    </td>
+                    <td style={tdNum}><PctBadge v={row.revBeatMiss} /></td>
+                    <td style={tdNum}><GrowthVal v={row.revYoy} /></td>
+                    <td style={tdSepNum}><GrowthVal v={row.revQoq} /></td>
+                    {/* EBITDA */}
+                    <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: TEXT1, fontWeight: 600 }}>
+                      {fmtActual(row.ebitdaActual)}
+                    </td>
+                    <td style={tdNum}><PctBadge v={row.ebitdaBeatMiss} /></td>
+                    <td style={tdNum}><GrowthVal v={row.ebitdaYoy} /></td>
+                    <td style={tdSepNum}><GrowthVal v={row.ebitdaQoq} /></td>
+                    {/* Net Income */}
+                    <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: TEXT1, fontWeight: 600 }}>
+                      {fmtActual(row.niActual)}
+                    </td>
+                    <td style={tdNum}><PctBadge v={row.niBeatMiss} /></td>
+                    <td style={tdNum}><GrowthVal v={row.niYoy} /></td>
+                    <td style={tdNum}><GrowthVal v={row.niQoq} /></td>
                   </tr>
                 ))}
               </tbody>
 
-              {/* Totals row */}
+              {/* ── Footer ───────────────────────────────────────────────── */}
               <tfoot>
-                <tr style={{ background: "#EFF6FF", borderTop: "2px solid #1E3A8A" }}>
-                  <td colSpan={4} style={{ padding: "9px 14px", fontSize: 10, fontWeight: 800, color: "#1E3A8A", letterSpacing: "0.08em", textTransform: "uppercase", ...sep }}>
-                    Promedio simple ({displayed.length})
-                  </td>
-                  <td style={{ padding: "9px 10px", textAlign: "center" }}><AvgCell vals={avgs.revBeatMiss} /></td>
-                  <td style={{ padding: "9px 10px", textAlign: "center" }}><AvgCell vals={avgs.revYoy} /></td>
-                  <td style={{ padding: "9px 10px", textAlign: "center", ...sep }}><AvgCell vals={avgs.revQoq} /></td>
-                  <td style={{ padding: "9px 10px", textAlign: "center" }}><AvgCell vals={avgs.ebitdaBeatMiss} /></td>
-                  <td style={{ padding: "9px 10px", textAlign: "center" }}><AvgCell vals={avgs.ebitdaYoy} /></td>
-                  <td style={{ padding: "9px 10px", textAlign: "center", ...sep }}><AvgCell vals={avgs.ebitdaQoq} /></td>
-                  <td style={{ padding: "9px 10px", textAlign: "center" }}><AvgCell vals={avgs.niBeatMiss} /></td>
-                  <td style={{ padding: "9px 10px", textAlign: "center" }}><AvgCell vals={avgs.niYoy} /></td>
-                  <td style={{ padding: "9px 10px", textAlign: "center" }}><AvgCell vals={avgs.niQoq} /></td>
-                </tr>
+                {!showWeights ? (
+                  /* Simple unweighted average when fund = ALL */
+                  <tr style={{ background: "#EFF6FF", borderTop: "2px solid #1E3A8A" }}>
+                    <td colSpan={5} style={{ padding: "9px 14px", fontSize: 10, fontWeight: 800, color: "#1E3A8A", letterSpacing: "0.08em", textTransform: "uppercase", ...sep }}>
+                      Promedio simple ({displayed.length})
+                    </td>
+                    <td style={{ padding: "9px 12px" }} />
+                    <td style={tdNum}><AvgCell vals={avgs.revBeatMiss} /></td>
+                    <td style={tdNum}><AvgCell vals={avgs.revYoy} /></td>
+                    <td style={tdSepNum}><AvgCell vals={avgs.revQoq} /></td>
+                    <td style={{ padding: "9px 12px" }} />
+                    <td style={tdNum}><AvgCell vals={avgs.ebitdaBeatMiss} /></td>
+                    <td style={tdNum}><AvgCell vals={avgs.ebitdaYoy} /></td>
+                    <td style={tdSepNum}><AvgCell vals={avgs.ebitdaQoq} /></td>
+                    <td style={{ padding: "9px 12px" }} />
+                    <td style={tdNum}><AvgCell vals={avgs.niBeatMiss} /></td>
+                    <td style={tdNum}><AvgCell vals={avgs.niYoy} /></td>
+                    <td style={tdNum}><AvgCell vals={avgs.niQoq} /></td>
+                  </tr>
+                ) : (
+                  /* Weighted Portfolio + Benchmark rows */
+                  <>
+                    <tr style={{ background: "#EFF6FF", borderTop: "2px solid #1E3A8A" }}>
+                      <td colSpan={infoColSpan} style={{ padding: "9px 14px", fontSize: 10, fontWeight: 800, color: "#1E3A8A", letterSpacing: "0.08em", textTransform: "uppercase", ...sep }}>
+                        Total Portfolio
+                      </td>
+                      <td style={{ padding: "9px 12px", textAlign: "right" }}><WtdActualCell v={portfolioTotals?.revActualUSD ?? null} /></td>
+                      <td style={tdNum}><WtdPctCell v={portfolioTotals?.revBeatMiss    ?? null} /></td>
+                      <td style={tdNum}><WtdPctCell v={portfolioTotals?.revYoy         ?? null} /></td>
+                      <td style={tdSepNum}><WtdPctCell v={portfolioTotals?.revQoq      ?? null} /></td>
+                      <td style={{ padding: "9px 12px", textAlign: "right" }}><WtdActualCell v={portfolioTotals?.ebitdaActualUSD ?? null} /></td>
+                      <td style={tdNum}><WtdPctCell v={portfolioTotals?.ebitdaBeatMiss ?? null} /></td>
+                      <td style={tdNum}><WtdPctCell v={portfolioTotals?.ebitdaYoy      ?? null} /></td>
+                      <td style={tdSepNum}><WtdPctCell v={portfolioTotals?.ebitdaQoq   ?? null} /></td>
+                      <td style={{ padding: "9px 12px", textAlign: "right" }}><WtdActualCell v={portfolioTotals?.niActualUSD ?? null} /></td>
+                      <td style={tdNum}><WtdPctCell v={portfolioTotals?.niBeatMiss     ?? null} /></td>
+                      <td style={tdNum}><WtdPctCell v={portfolioTotals?.niYoy          ?? null} /></td>
+                      <td style={tdNum}><WtdPctCell v={portfolioTotals?.niQoq          ?? null} /></td>
+                    </tr>
+                    <tr style={{ background: "rgba(241,245,249,0.9)", borderTop: `1px solid ${BORDER}` }}>
+                      <td colSpan={infoColSpan} style={{ padding: "9px 14px", fontSize: 10, fontWeight: 800, color: "#334155", letterSpacing: "0.08em", textTransform: "uppercase", ...sep }}>
+                        Total Benchmark
+                      </td>
+                      <td style={{ padding: "9px 12px", textAlign: "right" }}><WtdActualCell v={benchmarkTotals?.revActualUSD ?? null} /></td>
+                      <td style={tdNum}><WtdPctCell v={benchmarkTotals?.revBeatMiss    ?? null} /></td>
+                      <td style={tdNum}><WtdPctCell v={benchmarkTotals?.revYoy         ?? null} /></td>
+                      <td style={tdSepNum}><WtdPctCell v={benchmarkTotals?.revQoq      ?? null} /></td>
+                      <td style={{ padding: "9px 12px", textAlign: "right" }}><WtdActualCell v={benchmarkTotals?.ebitdaActualUSD ?? null} /></td>
+                      <td style={tdNum}><WtdPctCell v={benchmarkTotals?.ebitdaBeatMiss ?? null} /></td>
+                      <td style={tdNum}><WtdPctCell v={benchmarkTotals?.ebitdaYoy      ?? null} /></td>
+                      <td style={tdSepNum}><WtdPctCell v={benchmarkTotals?.ebitdaQoq   ?? null} /></td>
+                      <td style={{ padding: "9px 12px", textAlign: "right" }}><WtdActualCell v={benchmarkTotals?.niActualUSD ?? null} /></td>
+                      <td style={tdNum}><WtdPctCell v={benchmarkTotals?.niBeatMiss     ?? null} /></td>
+                      <td style={tdNum}><WtdPctCell v={benchmarkTotals?.niYoy          ?? null} /></td>
+                      <td style={tdNum}><WtdPctCell v={benchmarkTotals?.niQoq          ?? null} /></td>
+                    </tr>
+                  </>
+                )}
               </tfoot>
             </table>
 
@@ -365,13 +596,16 @@ export default function EarningsDashboard() {
               <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                   <span style={{ width: 8, height: 8, borderRadius: 2, background: BLUE, opacity: 0.85, display: "inline-block" }} />
-                  <span style={{ fontSize: 10, color: TEXT2 }}>Beat / Positivo</span>
+                  <span style={{ fontSize: 10, color: TEXT2 }}>Beat / Positivo / OW</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                   <span style={{ width: 8, height: 8, borderRadius: 2, background: NEG, opacity: 0.75, display: "inline-block" }} />
-                  <span style={{ fontSize: 10, color: TEXT2 }}>Miss / Negativo</span>
+                  <span style={{ fontSize: 10, color: TEXT2 }}>Miss / Negativo / UW</span>
                 </div>
                 <span style={{ fontSize: 10, color: "#CBD5E1", fontStyle: "italic" }}>NR = Not Reported</span>
+                {showWeights && (
+                  <span style={{ fontSize: 10, color: TEXT2 }}>Actuals en USD ponderados por peso</span>
+                )}
               </div>
               <span style={{ fontSize: 10, color: "#CBD5E1" }}>Fuente: Bloomberg</span>
             </div>
