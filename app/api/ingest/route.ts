@@ -10,8 +10,14 @@ export async function POST(request: Request) {
     const data = await request.json();
     const { table, rows } = data;
 
-    if (!table || !rows || !Array.isArray(rows)) {
-      return NextResponse.json({ error: 'Payload inválido' }, { status: 400 });
+    // 1. Validamos que al menos venga el nombre de la tabla
+    if (!table) {
+      return NextResponse.json({ error: 'Payload inválido: Falta la tabla' }, { status: 400 });
+    }
+
+    // 2. Hacemos la excepción para nuestro modelo de Excel
+    if (table !== 'AnalystModel' && (!rows || !Array.isArray(rows))) {
+      return NextResponse.json({ error: 'Payload inválido: Faltan las rows' }, { status: 400 });
     }
 
     // Guardamos el nombre real para el log
