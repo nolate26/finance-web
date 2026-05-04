@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import type { ModelPayload, ModelFinancialRow } from "@/app/api/companies/[ticker]/model/route";
+import type { ModelHistoryPayload, ModelFinancialRow } from "@/app/api/companies/[ticker]/model/route";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const BLUE   = "#1D4ED8";
@@ -285,7 +285,7 @@ function ReccBadge({ recc }: { recc: string | null }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function ModelTable({ ticker }: { ticker: string }) {
-  const [payload,  setPayload]  = useState<ModelPayload | null>(null);
+  const [payload,  setPayload]  = useState<ModelHistoryPayload | null>(null);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState<string | null>(null);
 
@@ -297,14 +297,15 @@ export default function ModelTable({ ticker }: { ticker: string }) {
 
     fetch(`/api/companies/${encodeURIComponent(ticker)}/model`)
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then((d: ModelPayload) => setPayload(d))
+      .then((d: ModelHistoryPayload) => setPayload(d))
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
   }, [ticker]);
 
+  const latest = payload?.snapshots[0] ?? null;
   const { years, rows } = useMemo(
-    () => (payload?.financials.length ? buildTableRows(payload.financials) : { years: [], rows: [] }),
-    [payload],
+    () => (latest?.financials.length ? buildTableRows(latest.financials) : { years: [], rows: [] }),
+    [latest],
   );
 
   // ── Shared cell styles ───────────────────────────────────────────────────
@@ -339,7 +340,7 @@ export default function ModelTable({ ticker }: { ticker: string }) {
     );
   }
 
-  if (!payload?.header) {
+  if (!latest?.header) {
     return (
       <div style={{ textAlign: "center", padding: "80px 0", color: TEXT2, fontSize: 13 }}>
         <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.3 }}>📊</div>
@@ -348,7 +349,7 @@ export default function ModelTable({ ticker }: { ticker: string }) {
     );
   }
 
-  const { header } = payload;
+  const { header } = latest;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>

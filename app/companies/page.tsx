@@ -10,7 +10,7 @@ import AnalystDonut from "@/components/deep-dive/AnalystDonut";
 import ConsensusMomentumCards from "@/components/deep-dive/ConsensusMomentumCards";
 import RelatedReports from "@/components/deep-dive/RelatedReports";
 import ScorecardGrid from "@/components/deep-dive/ScorecardGrid";
-import ModelTable from "@/components/deep-dive/ModelTable";
+import ModelExplorer from "@/components/deep-dive/ModelExplorer";
 import type { CompanyListItem } from "@/app/api/companies/list/route";
 import type { DeepDivePayload, PortfolioWeightSnap } from "@/app/api/companies/[ticker]/route";
 
@@ -495,7 +495,10 @@ export default function CompaniesPage() {
 
               {/* ══ Analyst Models tab ══════════════════════════════════════════ */}
               {analysisTab === "model" && (
-                <ModelTable ticker={selectedItem!.ticker} />
+                <ModelExplorer
+                  ticker={selectedItem!.ticker}
+                  consensusEstimates={deepDive.consensusEstimates}
+                />
               )}
 
               {/* ══ Consensus Estimates tab ═════════════════════════════════════ */}
