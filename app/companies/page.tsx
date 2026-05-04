@@ -10,6 +10,7 @@ import AnalystDonut from "@/components/deep-dive/AnalystDonut";
 import ConsensusMomentumCards from "@/components/deep-dive/ConsensusMomentumCards";
 import RelatedReports from "@/components/deep-dive/RelatedReports";
 import ScorecardGrid from "@/components/deep-dive/ScorecardGrid";
+import ModelTable from "@/components/deep-dive/ModelTable";
 import type { CompanyListItem } from "@/app/api/companies/list/route";
 import type { DeepDivePayload, PortfolioWeightSnap } from "@/app/api/companies/[ticker]/route";
 
@@ -201,7 +202,8 @@ export default function CompaniesPage() {
   const [deepDive, setDeepDive] = useState<DeepDivePayload | null>(null);
   const [diveLoading, setDiveLoading] = useState(false);
   const [diveError, setDiveError] = useState<string | null>(null);
-  const [view, setView] = useState<"scorecard" | "detail">("scorecard");
+  const [view,        setView]        = useState<"scorecard" | "detail">("scorecard");
+  const [analysisTab, setAnalysisTab] = useState<"model" | "consensus">("consensus");
   // Uploaded docs keyed by ticker → array of {url, label}
   const [companyDocs, setCompanyDocs] = useState<Record<string, { url: string; label: string }[]>>({});
 
@@ -230,6 +232,7 @@ export default function CompaniesPage() {
     setDiveError(null);
     setDeepDive(null);
     setView("scorecard");
+    setAnalysisTab("consensus");
 
     fetch(`/api/companies/${item.ticker}`)
       .then((r) => {
@@ -324,32 +327,6 @@ export default function CompaniesPage() {
           {deepDive && !diveLoading && (
             <>
               {/* ══ Company header ══════════════════════════════════════════════ */}
-              {/* View toggle — only in detail view */}
-              {view === "detail" && (
-                <div style={{ marginBottom: 16 }}>
-                  <button
-                    onClick={() => setView("scorecard")}
-                    style={{
-                      display:      "inline-flex",
-                      alignItems:   "center",
-                      gap:          6,
-                      background:   "transparent",
-                      border:       "1px solid rgba(15,23,42,0.12)",
-                      borderRadius: 8,
-                      padding:      "6px 14px",
-                      fontSize:     12,
-                      fontWeight:   600,
-                      color:        "#64748B",
-                      cursor:       "pointer",
-                    }}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                      <path d="M11 7H3M7 11L3 7l4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                    Back to Scorecard
-                  </button>
-                </div>
-              )}
               <div style={{ marginBottom: 20 }}>
 
                 {/* ── Band 1: Identifiers row ── */}
@@ -482,6 +459,75 @@ export default function CompaniesPage() {
                 )}
               </div>
 
+              {/* ══ Analysis tab bar ════════════════════════════════════════════ */}
+              <div style={{
+                display:      "flex",
+                gap:          0,
+                borderBottom: "1px solid rgba(15,23,42,0.08)",
+                marginBottom: 20,
+              }}>
+                {(["model", "consensus"] as const).map((tab) => {
+                  const active = analysisTab === tab;
+                  return (
+                    <button
+                      key={tab}
+                      onClick={() => setAnalysisTab(tab)}
+                      style={{
+                        padding:         "9px 20px",
+                        fontSize:        12,
+                        fontWeight:      active ? 700 : 500,
+                        color:           active ? "#1D4ED8" : "#64748B",
+                        background:      "transparent",
+                        border:          "none",
+                        borderBottom:    active ? "2px solid #1D4ED8" : "2px solid transparent",
+                        cursor:          "pointer",
+                        outline:         "none",
+                        transition:      "all 0.12s",
+                        letterSpacing:   "0.01em",
+                        whiteSpace:      "nowrap",
+                      }}
+                    >
+                      {tab === "model" ? "Analyst Models" : "Consensus Estimates"}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* ══ Analyst Models tab ══════════════════════════════════════════ */}
+              {analysisTab === "model" && (
+                <ModelTable ticker={selectedItem!.ticker} />
+              )}
+
+              {/* ══ Consensus Estimates tab ═════════════════════════════════════ */}
+              {analysisTab === "consensus" && (
+                <>
+                  {/* View toggle — only in detail view */}
+                  {view === "detail" && (
+                    <div style={{ marginBottom: 16 }}>
+                      <button
+                        onClick={() => setView("scorecard")}
+                        style={{
+                          display:      "inline-flex",
+                          alignItems:   "center",
+                          gap:          6,
+                          background:   "transparent",
+                          border:       "1px solid rgba(15,23,42,0.12)",
+                          borderRadius: 8,
+                          padding:      "6px 14px",
+                          fontSize:     12,
+                          fontWeight:   600,
+                          color:        "#64748B",
+                          cursor:       "pointer",
+                        }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                          <path d="M11 7H3M7 11L3 7l4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        Back to Scorecard
+                      </button>
+                    </div>
+                  )}
+
               {/* ══ SCORECARD VIEW ══════════════════════════════════════════════ */}
               {view === "scorecard" && (
                 <ScorecardGrid
@@ -558,6 +604,8 @@ export default function CompaniesPage() {
               </div>
                 </>
               )}
+                </>
+              )} {/* end consensus tab */}
             </>
           )}
         </div>
