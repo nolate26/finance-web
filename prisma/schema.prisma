@@ -596,25 +596,31 @@ model QuarterlyFxRate {
   @@unique([country, quarter, currency])
   @@map("quarterly_fx_rates")
 }
+// ==========================================
+// MODELO ACTUALIZADO - ModelHeader
+// ==========================================
 model ModelHeader {
   ticker     String   @db.VarChar(100)
-  updateDate DateTime @map("update_date") @db.Date // Ahora es parte de la llave primaria
+  updateDate DateTime @map("update_date") @db.Date
   recc       String?  @db.VarChar(10)
   tp         Float?
   analyst    String?  @db.VarChar(100)
-  link       String?  @db.VarChar(255)
+  currency   String?  @db.VarChar(50)    // ← NUEVO
+  thesis     String?  @db.Text           // ← NUEVO (Text para textos largos)
+  link       String?  @db.VarChar(500)
   
   financials ModelFinancials[]
-
-  // LLAVE COMPUESTA: Cada vez que cambie la fecha, es un registro nuevo
+  kpis       ModelKPI[]                  // ← NUEVA RELACIÓN
   @@id([ticker, updateDate])
   @@map("model_headers")
 }
-
+// ==========================================
+// MODELO ACTUALIZADO - ModelFinancials
+// ==========================================
 model ModelFinancials {
   id               Int      @id @default(autoincrement())
   ticker           String   @db.VarChar(100)
-  updateDate       DateTime @map("update_date") @db.Date // Necesario para amarrarlo a su Header
+  updateDate       DateTime @map("update_date") @db.Date
   year             Int
   
   // Income Statement
@@ -624,10 +630,10 @@ model ModelFinancials {
   da               Float?   @map("d_a")
   ebitda           Float?
   netFinExp        Float?   @map("net_fin_expenses")
+  taxes            Float?                // ← NUEVO (fila 18)
   netIncome        Float?   @map("net_income")
   eps              Float?
   sharesOut        Float?   @map("shares_out")
-
   // Balance Sheet
   netDebt          Float?   @map("net_debt")
   minorities       Float?
@@ -635,7 +641,6 @@ model ModelFinancials {
   tangibleEq       Float?   @map("tangible_equity")
   ppe              Float?
   workingCapital   Float?   @map("working_capital")
-
   // Cash Flow
   fcf              Float?
   capex            Float?
@@ -647,11 +652,29 @@ model ModelFinancials {
   dps              Float?
   sharePrice       Float?   @map("share_price")
   marketCap        Float?   @map("market_cap")
-
-  // La relación ahora requiere ambas llaves
   header           ModelHeader @relation(fields: [ticker, updateDate], references: [ticker, updateDate], onDelete: Cascade)
-
-  // LLAVE COMPUESTA: Para un mismo ticker, en una misma fecha, solo hay un año 2026.
   @@unique([ticker, updateDate, year])
   @@map("model_financials")
 }
+// ==========================================
+// NUEVO MODELO - ModelKPI (Company Specific)
+// ==========================================
+model ModelKPI {
+  id           Int      @id @default(autoincrement())
+  ticker       String   @db.VarChar(100)
+  updateDate   DateTime @map("update_date") @db.Date
+  year         Int
+  
+  // Identificadores de la sección/KPI
+  sectionName  String   @map("section_name") @db.VarChar(100)  // Ej: "Argentina", "Brazil Beer"
+  kpiName      String   @map("kpi_name") @db.VarChar(100)      // Ej: "Volumes", "Prices", "Revenue", "EBITDA"
+  kpiOrder     Int      @map("kpi_order")                      // Orden de visualización
+  
+  // Valor del KPI
+  value        Float?
+  
+  header       ModelHeader @relation(fields: [ticker, updateDate], references: [ticker, updateDate], onDelete: Cascade)
+  @@unique([ticker, updateDate, year, sectionName, kpiName])
+  @@map("model_kpis")
+}
+ 

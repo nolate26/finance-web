@@ -180,69 +180,104 @@ export async function POST(request: Request) {
         break;
       // 👆 HASTA AQUÍ 👆
       case 'AnalystModel':
-        const { header, financials } = data;
+        const { header, financials, kpis } = data;
         
         if (!header || !financials) {
-          return NextResponse.json({ error: 'Payload inválido: Faltan datos del modelo' }, { status: 400 });
+          return NextResponse.json(
+            { error: 'Payload inválido: Faltan datos del modelo' }, 
+            { status: 400 }
+          );
         }
 
         const modelDate = new Date(header.updateDate);
 
-        // 1. Guardar/Actualizar la Cabecera (Header) por TICKER + FECHA
+        // 1. Header — ahora incluye currency y thesis
         await prisma.modelHeader.upsert({
           where: { 
-            ticker_updateDate: { // Usa el nombre compuesto generado por Prisma
+            ticker_updateDate: {
               ticker: header.ticker,
               updateDate: modelDate
             }
           },
           update: {
-            recc: header.recc,
-            tp: header.tp,
-            analyst: header.analyst,
-            link: header.link
+            recc:     header.recc,
+            tp:       header.tp,
+            analyst:  header.analyst,
+            currency: header.currency,  // ← NUEVO
+            thesis:   header.thesis,    // ← NUEVO
+            link:     header.link
           },
           create: {
-            ticker: header.ticker,
+            ticker:     header.ticker,
             updateDate: modelDate,
-            recc: header.recc,
-            tp: header.tp,
-            analyst: header.analyst,
-            link: header.link
+            recc:       header.recc,
+            tp:         header.tp,
+            analyst:    header.analyst,
+            currency:   header.currency,  // ← NUEVO
+            thesis:     header.thesis,    // ← NUEVO
+            link:       header.link
           }
         });
 
-        // 2. Guardar/Actualizar los años financieros (Snapshot atado a la fecha)
+        // 2. Financials — igual que antes
         const modelUpserts = financials.map((f: any) => {
           const { year, ...metricas } = f;
-          
           return prisma.modelFinancials.upsert({
             where: {
-              ticker_updateDate_year: { // Llave única compuesta
-                ticker: header.ticker,
+              ticker_updateDate_year: {
+                ticker:     header.ticker,
                 updateDate: modelDate,
-                year: year
+                year:       year
               }
             },
-            update: metricas, 
+            update: metricas,
             create: {
-              ticker: header.ticker,
+              ticker:     header.ticker,
               updateDate: modelDate,
-              year: year,
-              ...metricas 
+              year:       year,
+              ...metricas
             }
           });
         });
 
         await prisma.$transaction(modelUpserts);
-        
+
+        // 3. KPIs — ESTO ES LO QUE FALTABA
+        if (kpis && Array.isArray(kpis) && kpis.length > 0) {
+          const kpiUpserts = kpis.map((k: any) => {
+            return prisma.modelKPI.upsert({
+              where: {
+                ticker_updateDate_year_sectionName_kpiName: {
+                  ticker:      header.ticker,
+                  updateDate:  modelDate,
+                  year:        k.year,
+                  sectionName: k.sectionName,
+                  kpiName:     k.kpiName
+                }
+              },
+              update: {
+                value:    k.value,
+                kpiOrder: k.kpiOrder
+              },
+              create: {
+                ticker:      header.ticker,
+                updateDate:  modelDate,
+                year:        k.year,
+                sectionName: k.sectionName,
+                kpiName:     k.kpiName,
+                kpiOrder:    k.kpiOrder,
+                value:       k.value
+              }
+            });
+          });
+
+          await prisma.$transaction(kpiUpserts);
+        }
+
         return NextResponse.json({ 
           success: true, 
-          message: `Snapshot de ${header.ticker} (${header.updateDate}) guardado con ${financials.length} años proyectados.` 
+          message: `Snapshot de ${header.ticker} guardado: ${financials.length} años + ${kpis?.length ?? 0} KPIs.`
         });
-
-
-
       // 👆 HASTA AQUÍ 👆
       case 'LastRun':
         await prisma.lastRun.createMany({ data: rows, skipDuplicates: true });
