@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-// ── Shared row & header types ──────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────────
 export interface ModelFinancialRow {
   year:          number;
   revenue:       number | null;
@@ -12,6 +12,7 @@ export interface ModelFinancialRow {
   da:            number | null;
   ebitda:        number | null;
   netFinExp:     number | null;
+  taxes:         number | null;
   netIncome:     number | null;
   eps:           number | null;
   sharesOut:     number | null;
@@ -40,28 +41,39 @@ export interface ModelHeaderSnap {
   tp:         number | null;
   analyst:    string | null;
   link:       string | null;
+  currency:   string | null;
+  thesis:     string | null;
+}
+
+export interface ModelKpiRow {
+  year:        number;
+  sectionName: string;
+  kpiName:     string;
+  kpiOrder:    number;
+  value:       number | null;
 }
 
 export interface ModelSnapshot {
   header:     ModelHeaderSnap;
   financials: ModelFinancialRow[];
+  kpis:       ModelKpiRow[];
 }
 
-// ModelHistoryPayload — returned by the endpoint (all snapshots, latest first)
 export interface ModelHistoryPayload {
   snapshots: ModelSnapshot[];
 }
 
-// Keep the old single-snapshot type for backward compat with ModelTable
+// Keep backward compat alias
 export interface ModelPayload {
   header:     ModelHeaderSnap | null;
   financials: ModelFinancialRow[];
 }
 
-// ── Helper to map a DB row ─────────────────────────────────────────────────────
+// ── Helper ─────────────────────────────────────────────────────────────────────
 function mapRow(r: {
   year: number; revenue: number | null; ebit: number | null; taxRate: number | null;
-  da: number | null; ebitda: number | null; netFinExp: number | null; netIncome: number | null;
+  da: number | null; ebitda: number | null; netFinExp: number | null;
+  taxes: number | null; netIncome: number | null;
   eps: number | null; sharesOut: number | null; netDebt: number | null; minorities: number | null;
   controllingEq: number | null; tangibleEq: number | null; ppe: number | null;
   workingCapital: number | null; fcf: number | null; capex: number | null;
@@ -77,6 +89,7 @@ function mapRow(r: {
     da:             r.da             ?? null,
     ebitda:         r.ebitda         ?? null,
     netFinExp:      r.netFinExp      ?? null,
+    taxes:          r.taxes          ?? null,
     netIncome:      r.netIncome      ?? null,
     eps:            r.eps            ?? null,
     sharesOut:      r.sharesOut      ?? null,
@@ -107,7 +120,6 @@ export async function GET(
   const ticker = decodeURIComponent(rawTicker);
 
   try {
-    // Fetch all model snapshots for the ticker, latest first, up to 12 versions
     const headers = await prisma.modelHeader.findMany({
       where:   { ticker },
       orderBy: { updateDate: "desc" },
@@ -119,15 +131,23 @@ export async function GET(
         tp:         true,
         analyst:    true,
         link:       true,
+        currency:   true,
+        thesis:     true,
         financials: {
           orderBy: { year: "asc" },
           select: {
             year: true, revenue: true, ebit: true, taxRate: true, da: true,
-            ebitda: true, netFinExp: true, netIncome: true, eps: true, sharesOut: true,
-            netDebt: true, minorities: true, controllingEq: true, tangibleEq: true,
-            ppe: true, workingCapital: true, fcf: true, capex: true, assetSales: true,
-            fcfe: true, dividend: true, payout: true, buybacks: true, dps: true,
-            sharePrice: true, marketCap: true,
+            ebitda: true, netFinExp: true, taxes: true, netIncome: true, eps: true,
+            sharesOut: true, netDebt: true, minorities: true, controllingEq: true,
+            tangibleEq: true, ppe: true, workingCapital: true, fcf: true, capex: true,
+            assetSales: true, fcfe: true, dividend: true, payout: true, buybacks: true,
+            dps: true, sharePrice: true, marketCap: true,
+          },
+        },
+        kpis: {
+          orderBy: [{ sectionName: "asc" }, { kpiOrder: "asc" }, { year: "asc" }],
+          select: {
+            year: true, sectionName: true, kpiName: true, kpiOrder: true, value: true,
           },
         },
       },
@@ -137,12 +157,21 @@ export async function GET(
       header: {
         ticker:     h.ticker,
         updateDate: h.updateDate.toISOString().slice(0, 10),
-        recc:       h.recc    ?? null,
-        tp:         h.tp      ?? null,
-        analyst:    h.analyst ?? null,
-        link:       h.link    ?? null,
+        recc:       h.recc     ?? null,
+        tp:         h.tp       ?? null,
+        analyst:    h.analyst  ?? null,
+        link:       h.link     ?? null,
+        currency:   h.currency ?? null,
+        thesis:     h.thesis   ?? null,
       },
       financials: h.financials.map(mapRow),
+      kpis: h.kpis.map(k => ({
+        year:        k.year,
+        sectionName: k.sectionName,
+        kpiName:     k.kpiName,
+        kpiOrder:    k.kpiOrder,
+        value:       k.value ?? null,
+      })),
     }));
 
     return NextResponse.json({ snapshots } satisfies ModelHistoryPayload);
