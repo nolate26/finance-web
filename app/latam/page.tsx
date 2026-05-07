@@ -8,10 +8,11 @@ import FlatAttributionPanel from "@/components/attribution/FlatAttributionPanel"
 import SectorAttributionPanel from "@/components/attribution/SectorAttributionPanel";
 import MatrixAttributionPanel from "@/components/attribution/MatrixAttributionPanel";
 import EarningsDashboard from "@/components/earnings/EarningsDashboard";
+import ConsensusCheckTable from "@/components/latam/ConsensusCheckTable";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type ActiveTab = "stock-selection" | "top-picks" | "attribution" | "earnings";
+type ActiveTab = "stock-selection" | "top-picks" | "attribution" | "earnings" | "consensus-check";
 type FundFilter = "all" | "MLE" | "MSC" | "others";
 
 interface SortOption {
@@ -312,10 +313,11 @@ export default function LatAmPage() {
       >
         {(
           [
-            { key: "stock-selection", label: "Stock Selection"     },
-            { key: "top-picks",       label: "Top Picks"           },
-            { key: "attribution",     label: "Perf. Attribution"   },
-            { key: "earnings",        label: "Earnings Surprises"  },
+            { key: "stock-selection",  label: "Stock Selection"       },
+            { key: "top-picks",        label: "Top Picks"             },
+            { key: "attribution",      label: "Perf. Attribution"     },
+            { key: "earnings",         label: "Earnings Surprises"    },
+            { key: "consensus-check",  label: "Estimates vs Consensus" },
           ] as { key: ActiveTab; label: string }[]
         ).map(({ key, label }) => (
           <button
@@ -499,6 +501,17 @@ export default function LatAmPage() {
 
       {/* ── Earnings Surprises ───────────────────────────────────────────────── */}
       {activeTab === "earnings" && <EarningsDashboard />}
+
+      {/* ── Estimates vs Consensus ───────────────────────────────────────────── */}
+      {activeTab === "consensus-check" && (
+        <div>
+          <p style={{ fontSize: 12, color: "#64748B", marginBottom: 14, fontFamily: "Inter, sans-serif" }}>
+            Moneda analyst estimates vs Bloomberg consensus — latest model snapshot per company.
+            Click a row to open the full model.
+          </p>
+          <ConsensusCheckTable />
+        </div>
+      )}
     </div>
   );
 }

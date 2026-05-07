@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import CompanySidebar from "@/components/deep-dive/CompanySidebar";
 import ValuationChart from "@/components/deep-dive/ValuationChart";
 import KPICards from "@/components/deep-dive/KPICards";
@@ -195,6 +196,7 @@ function ActiveWeightBadge({ weights }: { weights: PortfolioWeightSnap[] }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function CompaniesPage() {
+  const searchParams = useSearchParams();
   const [companies, setCompanies] = useState<CompanyListItem[]>([]);
   const [listLoading, setListLoading] = useState(true);
 
@@ -207,8 +209,10 @@ export default function CompaniesPage() {
   // Uploaded docs keyed by ticker → array of {url, label}
   const [companyDocs, setCompanyDocs] = useState<Record<string, { url: string; label: string }[]>>({});
 
-  // Fetch company list once, then auto-select CCU (or first company)
+  // Fetch company list once, then auto-select from ?ticker= param, CCU, or first
   useEffect(() => {
+    const tickerParam = searchParams.get("ticker");
+    const tabParam    = searchParams.get("tab");
     fetch("/api/companies/list")
       .then((r) => r.json())
       .then((d: { companies?: CompanyListItem[] }) => {
@@ -216,8 +220,13 @@ export default function CompaniesPage() {
         setCompanies(list);
         if (list.length > 0) {
           const defaultItem =
-            list.find((c) => c.ticker === "CCU CI Equity") ?? list[0];
+            (tickerParam ? list.find((c) => c.ticker === tickerParam) : null) ??
+            list.find((c) => c.ticker === "CCU CI Equity") ??
+            list[0];
           handleSelect(defaultItem);
+          if (tabParam === "model" || tabParam === "consensus") {
+            setAnalysisTab(tabParam);
+          }
         }
       })
       .catch(() => setCompanies([]))

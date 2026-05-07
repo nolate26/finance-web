@@ -403,13 +403,10 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
   }, [consensusEstimates]);
 
   const getConsensus = (keys: string[], year: number): number | null => {
-    const now    = new Date().getFullYear();
-    const offset = year - now + 1;
-    if (offset < 1) return null;
-    const period = `${offset}FY`;
+    const period = String(year);
     for (const [dbMetric, periods] of latestConsensus) {
       const lc = dbMetric.toLowerCase();
-      if (keys.some(k => lc.includes(k) || k.includes(lc))) {
+      if (keys.some(k => lc === k || lc.replace(/_/g, "") === k.replace(/\s/g, ""))) {
         return periods.get(period) ?? null;
       }
     }
@@ -458,7 +455,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
   const MONO: React.CSSProperties = { fontFamily: "JetBrains Mono, monospace" };
   const labelSticky: React.CSSProperties = {
     position: "sticky", left: 0, zIndex: 1,
-    minWidth: 128, maxWidth: 128,
+    width: 160, minWidth: 160, maxWidth: 160,
     borderRight: `1px solid ${C.BDR}`,
     whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
   };
@@ -674,12 +671,11 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
       </div>
 
       {/* ── TABLE ─────────────────────────────────────────────────────────── */}
+      <div style={{ overflow: "clip", borderRadius: 10 }}>
       <div style={{
         background: C.WHITE,
-        border: `1px solid ${C.BDR}`,
-        borderRadius: 10,
-        boxShadow: "0 1px 4px rgba(15,23,42,0.06)",
         overflowX: "auto",
+        padding: "0 12px 12px",
       }}>
         <table style={{ borderCollapse: "collapse", fontSize: 11, tableLayout: "fixed", width: "100%" }}>
 
@@ -933,11 +929,12 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
           </tbody>
         </table>
       </div>
+      </div>
 
       {/* ── Footer ───────────────────────────────────────────────────────── */}
       <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 2px" }}>
         <span style={{ fontSize: 10, color: "#9CA3AF", fontStyle: "italic" }}>
-          {snapshot.financials.length} years · Updated {header.updateDate}
+           Updated {header.updateDate}
           {!isLatest && " · Viewing historical version"}
         </span>
         <span style={{ fontSize: 10, color: "#9CA3AF" }}>Bloomberg / Internal</span>

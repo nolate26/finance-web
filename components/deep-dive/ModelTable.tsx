@@ -283,17 +283,57 @@ function ReccBadge({ recc }: { recc: string | null }) {
   );
 }
 
+// ── Consensus row builder ─────────────────────────────────────────────────────
+function buildConsensusRows(
+  years: number[],
+  modelRows: TableRow[],
+  conMap: Map<string, number>,
+): TableRow[] {
+  const getCon = (metric: string, year: number): number | null =>
+    conMap.get(`${metric}::${String(year)}`) ?? null;
+
+  const getModel = (key: string, idx: number): number | null =>
+    modelRows.find((r) => r.key === key)?.values[idx] ?? null;
+
+  const varRow = (modKey: string, conMetric: string, rowKey: string): TableRow => ({
+    key:       rowKey,
+    label:     "vs Consensus (%)",
+    isSection: false,
+    isDerived: true,
+    format:    "pct" as Format,
+    colorize:  true,
+    values:    years.map((y, i) => {
+      const con = getCon(conMetric, y);
+      const mod = getModel(modKey, i);
+      if (con === null || mod === null || con === 0) return null;
+      return (mod - con) / Math.abs(con);
+    }),
+  });
+
+  return [
+    { key: "s_bbg", label: "Bloomberg Consensus", isSection: true,  isDerived: false, format: "abs", colorize: false, values: [] },
+    { key: "bbg_rev",    label: "Revenue ($)",               isSection: false, isDerived: false, format: "abs", colorize: false, values: years.map((y) => getCon("REVENUE",   y)) },
+    varRow("revenue", "REVENUE",   "bbg_rev_var"),
+    { key: "bbg_ebitda", label: "EBITDA ($)",                isSection: false, isDerived: false, format: "abs", colorize: false, values: years.map((y) => getCon("EBITDA",    y)) },
+    varRow("ebitda",  "EBITDA",    "bbg_ebitda_var"),
+    { key: "bbg_ni",     label: "Controlling Net Income ($)", isSection: false, isDerived: false, format: "abs", colorize: false, values: years.map((y) => getCon("NET_INCOME", y)) },
+    varRow("ni",      "NET_INCOME","bbg_ni_var"),
+  ];
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function ModelTable({ ticker }: { ticker: string }) {
-  const [payload,  setPayload]  = useState<ModelHistoryPayload | null>(null);
-  const [loading,  setLoading]  = useState(true);
-  const [error,    setError]    = useState<string | null>(null);
+  const [payload,      setPayload]      = useState<ModelHistoryPayload | null>(null);
+  const [loading,      setLoading]      = useState(true);
+  const [error,        setError]        = useState<string | null>(null);
+  const [consensusData, setConsensusData] = useState<{ metric: string; period: string; value: number }[]>([]);
 
   useEffect(() => {
     if (!ticker) return;
     setLoading(true);
     setError(null);
     setPayload(null);
+    setConsensusData([]);
 
     fetch(`/api/companies/${encodeURIComponent(ticker)}/model`)
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
@@ -302,10 +342,30 @@ export default function ModelTable({ ticker }: { ticker: string }) {
       .finally(() => setLoading(false));
   }, [ticker]);
 
+  useEffect(() => {
+    if (!ticker) return;
+    fetch(`/api/companies/${encodeURIComponent(ticker)}/consensus`)
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((d: { rows?: { metric: string; period: string; value: number }[] }) =>
+        setConsensusData(d.rows ?? []))
+      .catch(() => setConsensusData([]));
+  }, [ticker]);
+
   const latest = payload?.snapshots[0] ?? null;
   const { years, rows } = useMemo(
     () => (latest?.financials.length ? buildTableRows(latest.financials) : { years: [], rows: [] }),
     [latest],
+  );
+
+  const consensusMap = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of consensusData) m.set(`${r.metric}::${r.period}`, r.value);
+    return m;
+  }, [consensusData]);
+
+  const allRows = useMemo(
+    () => [...rows, ...buildConsensusRows(years, rows, consensusMap)],
+    [years, rows, consensusMap],
   );
 
   // ── Shared cell styles ───────────────────────────────────────────────────
@@ -468,7 +528,7 @@ export default function ModelTable({ ticker }: { ticker: string }) {
           </thead>
 
           <tbody>
-            {rows.map((row, rowIdx) => {
+            {allRows.map((row, rowIdx) => {
               if (row.isSection) {
                 return (
                   <tr key={row.key}>
