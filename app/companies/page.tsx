@@ -1,5 +1,6 @@
 "use client";
-
+// Agrega esta línea justo debajo de tus imports
+export const dynamic = 'force-dynamic';
 import { useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import CompanySidebar from "@/components/deep-dive/CompanySidebar";
