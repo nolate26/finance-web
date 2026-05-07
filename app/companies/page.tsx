@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, Suspense } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import CompanySidebar from "@/components/deep-dive/CompanySidebar";
 import ValuationChart from "@/components/deep-dive/ValuationChart";
@@ -193,8 +193,9 @@ function ActiveWeightBadge({ weights }: { weights: PortfolioWeightSnap[] }) {
   );
 }
 
-// ── Componente Interno (El contenido real) ────────────────────────────────────
-function CompaniesContent() {
+// ── Main page ─────────────────────────────────────────────────────────────────
+
+export default function CompaniesPage() {
   const searchParams = useSearchParams();
   const [companies, setCompanies] = useState<CompanyListItem[]>([]);
   const [listLoading, setListLoading] = useState(true);
@@ -254,3 +255,373 @@ function CompaniesContent() {
 
   // Derived values for analyst donut + header
   // Price and date come from priceRange52w — it holds the real market snapshot date
+  const latestPriceRange = deepDive?.priceRange52w ?? null;
+  const latestPrice      = latestPriceRange?.pxLast ?? deepDive?.priceVsEarnings.at(-1)?.pxLast ?? null;
+  const latestPriceDate  = latestPriceRange?.date   ?? null;
+
+  function fmtHeaderPrice(v: number): string {
+    return v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function fmtHeaderDate(iso: string): string {
+    const d = new Date(iso + "T12:00:00");
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+  }
+
+  // Suppress unused warning — setCompanyDocs kept for future upload feature
+  void setCompanyDocs;
+
+  return (
+    <>
+      {/* Spin keyframe — injected once */}
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+
+      <div style={{ display: "flex", height: "calc(100vh - 64px)", overflow: "hidden" }}>
+        {/* ── Sidebar ───────────────────────────────────────────────────────── */}
+        <div style={{ width: 220, flexShrink: 0, overflow: "hidden" }}>
+          <CompanySidebar
+            companies={companies}
+            selectedTicker={selectedItem?.ticker ?? null}
+            onSelect={handleSelect}
+            loading={listLoading}
+          />
+        </div>
+
+        {/* ── Main content ──────────────────────────────────────────────────── */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", display: "flex", flexDirection: "column", gap: 0 }}>
+
+          {/* No selection */}
+          {!selectedItem && !diveLoading && <EmptyState />}
+
+          {/* Loading */}
+          {diveLoading && (
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+                <Spinner />
+                <span style={{ fontSize: 12, color: "#94A3B8", fontFamily: "JetBrains Mono, monospace" }}>
+                  Loading {selectedItem?.ticker}...
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Error */}
+          {diveError && (
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <div
+                style={{
+                  background: "rgba(220,38,38,0.06)",
+                  border: "1px solid rgba(220,38,38,0.15)",
+                  borderRadius: 10,
+                  padding: "20px 28px",
+                  textAlign: "center",
+                }}
+              >
+                <div style={{ color: "#DC2626", fontSize: 13, marginBottom: 8 }}>
+                  Failed to load data for {selectedItem?.ticker}
+                </div>
+                <div style={{ color: "#94A3B8", fontSize: 11 }}>{diveError}</div>
+              </div>
+            </div>
+          )}
+
+          {/* Dashboard — only when data is ready */}
+          {deepDive && !diveLoading && (
+            <>
+              {/* ══ Company header ══════════════════════════════════════════════ */}
+              <div style={{ marginBottom: 20 }}>
+
+                {/* ── Band 1: Identifiers row ── */}
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 16,
+                  flexWrap: "wrap",
+                  paddingBottom: 16,
+                  marginBottom: 16,
+                  borderBottom: "1px solid rgba(15,23,42,0.07)",
+                }}>
+
+                  {/* Ticker */}
+                  <h1 style={{
+                    fontSize: 28,
+                    fontWeight: 800,
+                    color: "#0F172A",
+                    letterSpacing: "-0.03em",
+                    fontFamily: "JetBrains Mono, monospace",
+                    lineHeight: 1,
+                    margin: 0,
+                  }}>
+                    {selectedItem?.nombre}
+                  </h1>
+
+                  {/* Price chip */}
+                  {latestPrice != null && (
+                    <span style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 7,
+                      background: "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)",
+                      border: "1px solid rgba(255,255,255,0.07)",
+                      borderRadius: 9,
+                      padding: "4px 12px 4px 9px",
+                      boxShadow: "0 2px 10px rgba(15,23,42,0.16), inset 0 1px 0 rgba(255,255,255,0.05)",
+                    }}>
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981", boxShadow: "0 0 6px #10B981", flexShrink: 0 }} />
+                      <span style={{ fontSize: 22, fontWeight: 700, fontFamily: "JetBrains Mono, monospace", color: "#F1F5F9", lineHeight: 1, letterSpacing: "-0.02em" }}>
+                        {fmtHeaderPrice(latestPrice)}
+                      </span>
+                    </span>
+                  )}
+
+                  {/* "As of" badge */}
+                  {latestPriceDate && (
+                    <span style={{
+                      fontSize: 11, fontWeight: 600, color: "#64748B",
+                      background: "#F1F5F9", border: "1px solid #E2E8F0",
+                      borderRadius: 6, padding: "3px 9px",
+                      fontFamily: "Inter, sans-serif", letterSpacing: "0.01em",
+                      whiteSpace: "nowrap",
+                    }}>
+                      As of {fmtHeaderDate(latestPriceDate)}
+                    </span>
+                  )}
+
+                  {/* Separator dot */}
+                  {selectedItem?.nombre && (
+                    <span style={{ width: 4, height: 4, borderRadius: "50%", background: "#CBD5E1", flexShrink: 0 }} />
+                  )}
+
+                  {/* Company full name */}
+                  {selectedItem?.nombre && (
+                    <span style={{
+                      fontSize: 18,
+                      fontWeight: 600,
+                      color: "#334155",
+                      letterSpacing: "-0.01em",
+                      fontFamily: "Inter, sans-serif",
+                    }}>
+                      {deepDive.ticker}
+                    </span>
+                  )}
+
+                </div>
+
+                {/* ── Band 2: Description + Portfolio grid ── */}
+                <div className="grid grid-cols-12 gap-6 items-start">
+
+                  {/* Description — 7 cols */}
+                  <div className={deepDive.portfolioWeights.length > 0 ? "col-span-7" : "col-span-12"}>
+                    {deepDive.companyDescription ? (
+                      <p style={{ fontSize: 14, color: "#475569", margin: 0, lineHeight: 1.8 }}>
+                        {deepDive.companyDescription}
+                      </p>
+                    ) : (
+                      <p style={{ fontSize: 13, color: "#CBD5E1", margin: 0, fontStyle: "italic" }}>
+                        No description available.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Portfolio Positioning — 5 cols */}
+                  {deepDive.portfolioWeights.length > 0 && (
+                    <div className="col-span-5">
+                      <ActiveWeightBadge weights={deepDive.portfolioWeights} />
+                    </div>
+                  )}
+                </div>
+
+                {/* Attached reports */}
+                {(companyDocs[selectedItem?.ticker ?? ""] ?? []).length > 0 && (
+                  <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.10em", color: "#94A3B8", textTransform: "uppercase" }}>
+                      Attached
+                    </span>
+                    {(companyDocs[selectedItem?.ticker ?? ""] ?? []).map((doc) => (
+                      <a
+                        key={doc.url}
+                        href={doc.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: "inline-flex", alignItems: "center", gap: 5,
+                          fontSize: 11, fontWeight: 600, color: "#2B5CE0",
+                          background: "rgba(43,92,224,0.07)", border: "1px solid rgba(43,92,224,0.18)",
+                          borderRadius: 6, padding: "3px 10px", textDecoration: "none",
+                          maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        }}
+                      >
+                        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0 }}>
+                          <path d="M2 10h8M6 2v6M3 5l3-3 3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        {doc.label}
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* ══ Analysis tab bar ════════════════════════════════════════════ */}
+              <div style={{
+                display:      "flex",
+                gap:          0,
+                borderBottom: "1px solid rgba(15,23,42,0.08)",
+                marginBottom: 20,
+              }}>
+                {(["model", "consensus"] as const).map((tab) => {
+                  const active = analysisTab === tab;
+                  return (
+                    <button
+                      key={tab}
+                      onClick={() => setAnalysisTab(tab)}
+                      style={{
+                        padding:         "9px 20px",
+                        fontSize:        12,
+                        fontWeight:      active ? 700 : 500,
+                        color:           active ? "#1D4ED8" : "#64748B",
+                        background:      "transparent",
+                        border:          "none",
+                        borderBottom:    active ? "2px solid #1D4ED8" : "2px solid transparent",
+                        cursor:          "pointer",
+                        outline:         "none",
+                        transition:      "all 0.12s",
+                        letterSpacing:   "0.01em",
+                        whiteSpace:      "nowrap",
+                      }}
+                    >
+                      {tab === "model" ? "Analyst Models" : "Consensus Estimates"}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* ══ Analyst Models tab ══════════════════════════════════════════ */}
+              {analysisTab === "model" && (
+                <ModelExplorer
+                  ticker={selectedItem!.ticker}
+                  consensusEstimates={deepDive.consensusEstimates}
+                />
+              )}
+
+              {/* ══ Consensus Estimates tab ═════════════════════════════════════ */}
+              {analysisTab === "consensus" && (
+                <>
+                  {/* View toggle — only in detail view */}
+                  {view === "detail" && (
+                    <div style={{ marginBottom: 16 }}>
+                      <button
+                        onClick={() => setView("scorecard")}
+                        style={{
+                          display:      "inline-flex",
+                          alignItems:   "center",
+                          gap:          6,
+                          background:   "transparent",
+                          border:       "1px solid rgba(15,23,42,0.12)",
+                          borderRadius: 8,
+                          padding:      "6px 14px",
+                          fontSize:     12,
+                          fontWeight:   600,
+                          color:        "#64748B",
+                          cursor:       "pointer",
+                        }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                          <path d="M11 7H3M7 11L3 7l4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        Back to Scorecard
+                      </button>
+                    </div>
+                  )}
+
+              {/* ══ SCORECARD VIEW ══════════════════════════════════════════════ */}
+              {view === "scorecard" && (
+                <ScorecardGrid
+                  deepDive={deepDive}
+                  latestPrice={latestPrice}
+                  onViewDetail={() => setView("detail")}
+                />
+              )}
+
+              {/* ══ DETAIL VIEW ═════════════════════════════════════════════════ */}
+              {view === "detail" && (
+                <>
+              {/* ── ROW 1: Historical Valuation (3/4) + Market Snapshot (1/4) ── */}
+              <div className="grid lg:grid-cols-4 gap-6 mb-4">
+                <div className="lg:col-span-3" style={{ ...CARD, minHeight: 320 }}>
+                  <SectionLabel>Historical Valuation</SectionLabel>
+                  {deepDive.valuationHistory.length > 0 ? (
+                    <div style={{ height: 260 }}>
+                      <ValuationChart data={deepDive.valuationHistory} />
+                    </div>
+                  ) : (
+                    <div style={{ height: 260, display: "flex", alignItems: "center", justifyContent: "center", color: "#CBD5E1", fontSize: 12 }}>
+                      No valuation history data
+                    </div>
+                  )}
+                </div>
+
+                <div className="lg:col-span-1" style={{ ...CARD }}>
+                  <SectionLabel>Market Snapshot</SectionLabel>
+                  <KPICards
+                    priceRange={latestPriceRange}
+                    shortInterest={deepDive.shortInterest}
+                  />
+                </div>
+              </div>
+
+              {/* ── ROW 2: Consensus Evolution (2/5) + Estimate Momentum (3/5) ── */}
+              <div className="grid lg:grid-cols-5 items-stretch gap-4 mb-4">
+                <div className="lg:col-span-2 flex flex-col" style={{ ...CARD }}>
+                  <SectionLabel>Consensus Evolution</SectionLabel>
+                  <div style={{ flex: 1, minHeight: 0 }}>
+                    <ConsensusChart data={deepDive.consensusEstimates} />
+                  </div>
+                </div>
+
+                <div className="lg:col-span-3 flex flex-col" style={{ ...CARD }}>
+                  <SectionLabel>Estimate Momentum — Consensus Revisions</SectionLabel>
+                  <ConsensusMomentumCards data={deepDive.consensusEstimates} totalReturn={deepDive.totalReturn} priceRange={latestPriceRange} />
+                </div>
+              </div>
+
+              {/* ── ROW 3: Sell Side Sentiment (1/3) + Price vs Earnings (2/3) ─── */}
+              <div className="grid lg:grid-cols-3 gap-6 mb-4">
+                <div className="lg:col-span-1" style={{ ...CARD }}>
+                  <SectionLabel>Sell Side Sentiment</SectionLabel>
+                  <AnalystDonut
+                    analystRec={deepDive.analystRec}
+                    targetPrice={deepDive.analystRec?.targetPrice ?? null}
+                    currentPrice={latestPrice}
+                  />
+                </div>
+
+                <div className="lg:col-span-2" style={{ ...CARD }}>
+                  <SectionLabel>Price vs Earnings Estimates</SectionLabel>
+                  <div style={{ height: 220 }}>
+                    <PriceEarningsChart data={deepDive.priceVsEarnings} consensus={deepDive.consensusEstimates} />
+                  </div>
+                </div>
+              </div>
+
+              {/* ── ROW 4: Related Reports — full width ──────────────────────── */}
+              <div style={{ ...CARD, marginBottom: 24 }}>
+                <RelatedReports ticker={selectedItem?.ticker ?? null} />
+              </div>
+                </>
+              )}
+                </>
+              )} {/* end consensus tab */}
+            </>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
