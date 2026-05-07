@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import CompanySidebar from "@/components/deep-dive/CompanySidebar";
 import ValuationChart from "@/components/deep-dive/ValuationChart";
@@ -195,7 +195,7 @@ function ActiveWeightBadge({ weights }: { weights: PortfolioWeightSnap[] }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-export default function CompaniesPage() {
+function CompaniesPageContent() {
   const searchParams = useSearchParams();
   const [companies, setCompanies] = useState<CompanyListItem[]>([]);
   const [listLoading, setListLoading] = useState(true);
@@ -623,5 +623,13 @@ export default function CompaniesPage() {
         </div>
       </div>
     </>
+  );
+}
+
+export default function CompaniesPage() {
+  return (
+    <Suspense>
+      <CompaniesPageContent />
+    </Suspense>
   );
 }
