@@ -60,7 +60,7 @@ function recBadge(rec: unknown) {
   return { label: r, color: "#475569", bg: "transparent", border: "transparent" };
 }
 
-const CENTER_FROM = 2; // Company + Industry are left-aligned; rest centered
+const CENTER_FROM = 2; // Company + Industry are left-aligned; rest centered (Thesis handled separately)
 
 export default function CompanyTable({
   companies,
@@ -74,9 +74,9 @@ export default function CompanyTable({
   const yr1e = new Date().getFullYear();
   const yr2e = yr1e + 1;
 
-  const COLUMNS: { key: string; label: string }[] = [
-    { key: "company",          label: "Company"                 },
-    { key: "industria",        label: "Industry"                },
+  const COLUMNS: { key: string; label: string; leftAlign?: boolean }[] = [
+    { key: "company",          label: "Company",                leftAlign: true  },
+    { key: "industria",        label: "Industry",               leftAlign: true  },
     { key: "price",            label: "Price"                   },
     { key: "ret_ytd",          label: "YTD Ret"                 },
     { key: "mkt_cap_bn",       label: "Mkt Cap"                 },
@@ -89,6 +89,8 @@ export default function CompanyTable({
     { key: "div_yield",        label: "Div Yield"               },
     { key: "recommendation",   label: "Rec"                     },
     { key: "target_price",     label: "Target"                  },
+    { key: "upside",           label: "Upside"                  },
+    { key: "thesis",           label: "Thesis",                 leftAlign: true  },
   ];
 
   function handleSort(key: string) {
@@ -119,13 +121,13 @@ export default function CompanyTable({
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
           <thead className="sticky top-0 z-10">
             <tr style={{ background: "#F0F4FA" }}>
-              {COLUMNS.map((col, ci) => (
+              {COLUMNS.map((col) => (
                 <th
                   key={col.key}
                   onClick={() => handleSort(col.key)}
                   style={{
                     padding: "10px 10px",
-                    textAlign: ci >= CENTER_FROM ? "center" : "left",
+                    textAlign: col.leftAlign ? "left" : "center",
                     fontSize: 11,
                     fontWeight: 600,
                     color: sortBy === col.key ? "#2B5CE0" : "#64748B",
@@ -235,6 +237,33 @@ export default function CompanyTable({
                   {/* Target */}
                   <td style={{ ...cell(), color: "#64748B" }}>
                     {fmtPrice(c.target_price) === "—" ? dash : fmtPrice(c.target_price)}
+                  </td>
+
+                  {/* Upside */}
+                  {(() => {
+                    const up = fmtPct(c.upside);
+                    return (
+                      <td style={{ ...cell(), fontWeight: 600, color: up.color }}>
+                        {up.text}
+                      </td>
+                    );
+                  })()}
+
+                  {/* Thesis */}
+                  <td style={{
+                    padding: "9px 10px",
+                    textAlign: "left",
+                    fontSize: 11,
+                    fontFamily: "Inter, sans-serif",
+                    color: c.thesis ? "#374151" : "#CBD5E1",
+                    maxWidth: 260,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                    title={typeof c.thesis === "string" ? c.thesis : undefined}
+                  >
+                    {c.thesis ? (c.thesis as string) : "—"}
                   </td>
                 </tr>
               );

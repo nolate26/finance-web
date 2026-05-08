@@ -15,9 +15,10 @@ type ActiveTab = "stock-selection" | "projections" | "top-picks";
 const SORT_OPTIONS = [
   { value: "mkt_cap_bn_desc",      label: "Mkt Cap ↓",       key: "mkt_cap_bn",      order: "desc" as const },
   { value: "ret_ytd_desc",         label: "YTD Return ↓",    key: "ret_ytd",         order: "desc" as const },
-  { value: "Fv_ebitda_2026e_asc",  label: "FV/EBITDA 26E ↑", key: "Fv_ebitda_2026e", order: "asc"  as const },
-  { value: "pe_2026e_asc",         label: "P/E 26E ↑",       key: "pe_2026e",        order: "asc"  as const },
-  { value: "div_yield_2026e_desc", label: "Div Yield ↓",     key: "div_yield_2026e", order: "desc" as const },
+  { value: "upside_desc",          label: "Upside ↓",        key: "upside",          order: "desc" as const },
+  { value: "fv_ebitda_yr1e_asc",   label: "FV/EBITDA 26E ↑", key: "fv_ebitda_yr1e",  order: "asc"  as const },
+  { value: "pe_yr1e_asc",          label: "P/E 26E ↑",       key: "pe_yr1e",         order: "asc"  as const },
+  { value: "div_yield_desc",       label: "Div Yield ↓",     key: "div_yield",       order: "desc" as const },
 ];
 
 function sortCompanies(list: Company[], sortBy: string, sortOrder: "asc" | "desc"): Company[] {

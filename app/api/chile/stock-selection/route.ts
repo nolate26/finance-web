@@ -99,16 +99,27 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // ── Build industry lookups ────────────────────────────────────────────────
+    // ── Build industry + ticker lookups ──────────────────────────────────────
     const chileByChile = new Map<string, string>(); // nombre_chile.lower → industria_chile
     const chileByLatam = new Map<string, string>(); // nombre_latam.lower → industria_chile
+    const tickerByChile = new Map<string, string>(); // nombre_chile.lower → ticker_bloomberg
+    const tickerByLatam = new Map<string, string>(); // nombre_latam.lower → ticker_bloomberg
     for (const ind of allIndustries) {
       const latamKey = ind.nombreLatam.toLowerCase().trim();
       if (ind.industriaChile) {
         if (ind.nombreChile) chileByChile.set(ind.nombreChile.toLowerCase().trim(), ind.industriaChile);
         chileByLatam.set(latamKey, ind.industriaChile);
       }
+      if (ind.tickerBloomberg) {
+        if (ind.nombreChile) tickerByChile.set(ind.nombreChile.toLowerCase().trim(), ind.tickerBloomberg);
+        tickerByLatam.set(latamKey, ind.tickerBloomberg);
+      }
     }
+
+    const resolveTickerForName = (name: string) => {
+      const key = name.toLowerCase().trim();
+      return tickerByChile.get(key) ?? tickerByLatam.get(key) ?? null;
+    };
 
     const latestDate = latest.cierreCartera;
 
@@ -137,6 +148,30 @@ export async function GET(request: NextRequest) {
 
     const indices = indicesRaw.map((r) => addIndustry(toFrontendRow(r)));
     let companies = companiesRaw.map((r) => addIndustry(toFrontendRow(r)));
+
+    // ── Enrich companies with upside + thesis ─────────────────────────────────
+    const validTickers = [...new Set(
+      companies.map(c => resolveTickerForName(String(c.company ?? ""))).filter(Boolean) as string[]
+    )];
+
+    const modelHeaders = validTickers.length > 0
+      ? await prisma.modelHeader.findMany({
+          where:    { ticker: { in: validTickers } },
+          orderBy:  { updateDate: "desc" },
+          distinct: ["ticker"],
+          select:   { ticker: true, thesis: true },
+        })
+      : [];
+    const thesisByTicker = new Map(modelHeaders.map(h => [h.ticker, h.thesis]));
+
+    companies = companies.map(c => {
+      const ticker  = resolveTickerForName(String(c.company ?? ""));
+      const price   = typeof c.price        === "number" ? c.price        : null;
+      const target  = typeof c.target_price === "number" ? c.target_price : null;
+      const upside  = price && target ? target / price - 1 : null;
+      const thesis  = ticker ? (thesisByTicker.get(ticker) ?? null) : null;
+      return { ...c, upside, thesis };
+    });
 
     // ── Server-side filters ───────────────────────────────────────────────────
     // NOTA: Como eliminamos la columna "sector" de la BDD, ahora el filtro

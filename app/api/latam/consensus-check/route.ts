@@ -7,6 +7,9 @@ export interface ConsensusCheckRow {
   ticker:     string;
   updateDate: string;
   analyst:    string | null;
+  tp:         number | null;
+  upside:     number | null;
+  thesis:     string | null;
   moneda: {
     rev1FY:    number | null;
     rev2FY:    number | null;
@@ -40,7 +43,7 @@ export async function GET() {
     const latestHeaders = await prisma.modelHeader.findMany({
       distinct: ["ticker"],
       orderBy:  { updateDate: "desc" },
-      select:   { ticker: true, updateDate: true, analyst: true },
+      select:   { ticker: true, updateDate: true, analyst: true, tp: true, thesis: true },
     });
 
     if (latestHeaders.length === 0) {
@@ -58,7 +61,7 @@ export async function GET() {
           year:       { in: [year1FY, year2FY] },
         })),
       },
-      select: { ticker: true, year: true, revenue: true, ebitda: true, netIncome: true },
+      select: { ticker: true, year: true, revenue: true, ebitda: true, netIncome: true, sharePrice: true },
     });
 
     // Latest consensus per (ticker, metric, period) — ordered desc, take first
@@ -75,12 +78,13 @@ export async function GET() {
 
     // Build maps
     // financials: (ticker, year) → { revenue, ebitda, netIncome }
-    const finMap = new Map<string, { revenue: number | null; ebitda: number | null; netIncome: number | null }>();
+    const finMap = new Map<string, { revenue: number | null; ebitda: number | null; netIncome: number | null; sharePrice: number | null }>();
     for (const f of financials) {
       finMap.set(`${f.ticker}::${f.year}`, {
-        revenue:   f.revenue   ?? null,
-        ebitda:    f.ebitda    ?? null,
-        netIncome: f.netIncome ?? null,
+        revenue:    f.revenue    ?? null,
+        ebitda:     f.ebitda     ?? null,
+        netIncome:  f.netIncome  ?? null,
+        sharePrice: f.sharePrice ?? null,
       });
     }
 
@@ -102,10 +106,17 @@ export async function GET() {
       const getCon = (metric: string, period: string) =>
         conMap.get(`${h.ticker}::${metric}::${period}`) ?? null;
 
+      const price  = fin1?.sharePrice ?? fin2?.sharePrice ?? null;
+      const tp     = h.tp ?? null;
+      const upside = tp && price ? tp / price - 1 : null;
+
       return {
         ticker:     h.ticker,
         updateDate: h.updateDate.toISOString().slice(0, 10),
         analyst:    h.analyst ?? null,
+        tp,
+        upside,
+        thesis:     h.thesis ?? null,
         moneda: {
           rev1FY:    fin1?.revenue   ?? null,
           rev2FY:    fin2?.revenue   ?? null,
