@@ -23,10 +23,12 @@ const C = {
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function fmtNum(v: number | null): string {
   if (v == null) return "—";
-  const abs = Math.abs(v);
-  if (abs >= 1_000_000) return (v / 1_000_000).toFixed(1) + "M";
-  if (abs >= 1_000)     return (v / 1_000).toFixed(1) + "K";
-  return v.toFixed(1);
+  return v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+
+function fmtConNum(v: number | null): string {
+  if (v == null) return "—";
+  return (v / 1_000).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 
 function fmtPct(v: number | null): string {
@@ -34,8 +36,9 @@ function fmtPct(v: number | null): string {
   return (v >= 0 ? "+" : "") + v.toFixed(1) + "%";
 }
 
-function varPct(moneda: number | null, consensus: number | null): number | null {
-  if (moneda == null || consensus == null || consensus === 0) return null;
+function varPct(moneda: number | null, consensusRaw: number | null): number | null {
+  if (moneda == null || consensusRaw == null || consensusRaw === 0) return null;
+  const consensus = consensusRaw / 1_000;
   return ((moneda - consensus) / Math.abs(consensus)) * 100;
 }
 
@@ -64,6 +67,22 @@ function NumCell({ v }: { v: number | null }) {
       whiteSpace: "nowrap",
     }}>
       {fmtNum(v)}
+    </td>
+  );
+}
+
+function ConNumCell({ v }: { v: number | null }) {
+  return (
+    <td style={{
+      textAlign:  "right",
+      padding:    "5px 10px",
+      fontSize:   12,
+      fontFamily: "JetBrains Mono, monospace",
+      color:      v == null ? C.NIL_TXT : "#0F172A",
+      borderRight: `1px solid ${C.BDR}`,
+      whiteSpace: "nowrap",
+    }}>
+      {fmtConNum(v)}
     </td>
   );
 }
@@ -331,12 +350,12 @@ export default function ConsensusCheckTable() {
               <NumCell v={row.moneda.ni2FY}     />
 
               {/* Consensus */}
-              <NumCell v={row.consensus.rev1FY}    />
-              <NumCell v={row.consensus.rev2FY}    />
-              <NumCell v={row.consensus.ebitda1FY} />
-              <NumCell v={row.consensus.ebitda2FY} />
-              <NumCell v={row.consensus.ni1FY}     />
-              <NumCell v={row.consensus.ni2FY}     />
+              <ConNumCell v={row.consensus.rev1FY}    />
+              <ConNumCell v={row.consensus.rev2FY}    />
+              <ConNumCell v={row.consensus.ebitda1FY} />
+              <ConNumCell v={row.consensus.ebitda2FY} />
+              <ConNumCell v={row.consensus.ni1FY}     />
+              <ConNumCell v={row.consensus.ni2FY}     />
 
               {/* Var % */}
               <VarCell moneda={row.moneda.rev1FY}    consensus={row.consensus.rev1FY}    />

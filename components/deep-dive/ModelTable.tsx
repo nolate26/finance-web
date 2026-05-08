@@ -289,8 +289,10 @@ function buildConsensusRows(
   modelRows: TableRow[],
   conMap: Map<string, number>,
 ): TableRow[] {
-  const getCon = (metric: string, year: number): number | null =>
-    conMap.get(`${metric}::${String(year)}`) ?? null;
+  const getCon = (metric: string, year: number): number | null => {
+    const v = conMap.get(`${metric}::${String(year)}`);
+    return v != null ? v / 1_000 : null;
+  };
 
   const getModel = (key: string, idx: number): number | null =>
     modelRows.find((r) => r.key === key)?.values[idx] ?? null;

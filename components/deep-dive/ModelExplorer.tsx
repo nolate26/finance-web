@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 import type {
   ModelHistoryPayload,
   ModelFinancialRow,
@@ -407,7 +407,8 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
     for (const [dbMetric, periods] of latestConsensus) {
       const lc = dbMetric.toLowerCase();
       if (keys.some(k => lc === k || lc.replace(/_/g, "") === k.replace(/\s/g, ""))) {
-        return periods.get(period) ?? null;
+        const v = periods.get(period);
+        return v != null ? v / 1_000 : null;
       }
     }
     return null;
@@ -470,71 +471,214 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
 
   // ── Excel export ──────────────────────────────────────────────────────────
   function exportToExcel() {
-    const aoa: (string | number | null)[][] = [];
+    // ── Style helpers ──────────────────────────────────────────────────────
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    type XCell = Record<string, any>;
+    type XRow  = (XCell | null)[];
+
+    const fill = (rgb: string) => ({ patternType: "solid", fgColor: { rgb } });
+    const F_HDR    = fill("1E3A8A");
+    const F_SUB    = fill("374151");
+    const F_EST    = fill("FFFDE7");
+    const F_DRV    = fill("DBEAFE");
+    const F_WHITE  = fill("FFFFFF");
+    const F_GRAY   = fill("F0F4FA");
+    const F_POS    = fill("DCFCE7");
+    const F_NEG    = fill("FEE2E2");
+
+    const bdr = (rgb = "9CA3AF") => ({
+      top:    { style: "thin", color: { rgb } },
+      bottom: { style: "thin", color: { rgb } },
+      left:   { style: "thin", color: { rgb } },
+      right:  { style: "thin", color: { rgb } },
+    });
+
+    function xc(v: string | number | null, s: object = {}): XCell {
+      const val = v ?? "";
+      return { v: val, t: typeof val === "number" ? "n" : "s", s };
+    }
+
+    // ── Build rows ─────────────────────────────────────────────────────────
+    const rows: XRow[] = [];
 
     // Metadata block
-    aoa.push(["Ticker Bloomberg", header.ticker]);
-    aoa.push(["Recommendation",  header.recc ?? ""]);
-    aoa.push(["Actual Price",    actualPrice ?? ""]);
-    aoa.push(["TP",              header.tp ?? ""]);
-    aoa.push(["Upside",          upside !== null ? fmtPct(upside) : ""]);
-    aoa.push(["Thesis",          header.thesis ?? ""]);
-    aoa.push(["Analyst",         header.analyst ?? ""]);
-    aoa.push(["Updated",         header.updateDate]);
-    aoa.push([]);
+    const metaItems: [string, string][] = [
+      ["Ticker Bloomberg", header.ticker],
+      ["Recommendation",   header.recc ?? "—"],
+      ["Actual Price",     actualPrice !== null ? fmtSmall(actualPrice) : "—"],
+      ["TP",               header.tp   !== null ? fmtSmall(header.tp)   : "—"],
+      ["Upside",           upside !== null ? fmtPct(upside) : "—"],
+      ["Thesis",           header.thesis ?? "—"],
+      ["Analyst",          header.analyst ?? "—"],
+      ["Updated",          header.updateDate],
+    ];
+    for (const [lbl, val] of metaItems) {
+      rows.push([
+        xc(lbl, { font: { bold: true, sz: 10 }, fill: F_GRAY, alignment: { horizontal: "left" } }),
+        xc(val, { font: { sz: 10 }, fill: F_GRAY, alignment: { horizontal: "left" } }),
+        ...Array.from({ length: years.length - 1 }, () => xc("", { fill: F_GRAY })),
+      ]);
+    }
+
+    // Blank separator
+    rows.push(Array.from({ length: 1 + years.length }, () => null));
 
     // Year header row
-    aoa.push(["", ...years.map(yr => `${yr}${yr >= now ? "E" : ""}`)]);
+    rows.push([
+      xc(`CCY${header.currency ? ` : ${header.currency}` : ""}`, {
+        font: { bold: true, sz: 10, color: { rgb: "FFFFFF" } },
+        fill: F_HDR,
+        alignment: { horizontal: "left", vertical: "center" },
+      }),
+      ...years.map(yr => {
+        const isEst = yr >= now;
+        return xc(`${yr}${isEst ? "E" : ""}`, {
+          font: { bold: true, sz: 11, name: "Courier New", color: { rgb: isEst ? "FDE68A" : "FFFFFF" } },
+          fill: F_HDR,
+          alignment: { horizontal: "center", vertical: "center" },
+        });
+      }),
+    ]);
 
     // Standard sections
     for (const section of SECTIONS) {
-      aoa.push([section.title]);
+      rows.push([
+        xc(section.title.toUpperCase(), {
+          font: { bold: true, sz: 10, color: { rgb: "FFFFFF" } },
+          fill: F_HDR,
+          alignment: { horizontal: "left" },
+        }),
+        ...Array.from({ length: years.length }, () => xc("", { fill: F_HDR })),
+      ]);
+
       for (const row of section.rows) {
-        if (row.kind === "vs_consensus") {
-          const vals = years.map(yr => {
-            if (!row.bbgKeys || !row.modelFn) return null;
-            const bbg   = getConsensus(row.bbgKeys, yr);
-            const model = row.modelFn(byYear.get(yr)!);
-            if (bbg === null || model === null || bbg === 0) return null;
-            return (model - bbg) / Math.abs(bbg);
-          });
-          aoa.push([row.label, ...vals.map(v => v !== null ? fmtPct(v) : "—")]);
-        } else if (row.kind === "consensus") {
-          const vals = years.map(yr => row.bbgKeys ? getConsensus(row.bbgKeys, yr) : null);
-          aoa.push([row.label, ...vals.map(v => v ?? "—")]);
-        } else if (row.fn) {
-          const vals = years.map(yr => {
+        const isDerived   = row.kind === "derived";
+        const isConsensus = row.kind === "consensus";
+        const isVsCons    = row.kind === "vs_consensus";
+        const indent = "  ".repeat(row.indent ?? 0);
+
+        rows.push([
+          xc(`${indent}${row.label}`, {
+            font: {
+              bold:   !isDerived && !isVsCons,
+              italic: isDerived,
+              sz:     10,
+              color:  { rgb: isDerived || isVsCons ? "374151" : "111827" },
+            },
+            fill:      isDerived ? F_DRV : F_WHITE,
+            alignment: { horizontal: "left" },
+          }),
+          ...years.map(yr => {
             const d    = byYear.get(yr)!;
             const prev = byYear.get(yr - 1) ?? null;
-            return row.fn!(d, prev);
-          });
-          aoa.push([row.label, ...vals.map(v => v ?? "—")]);
-        }
+            const isEst = d.isEst;
+
+            let text   = "—";
+            let fColor = "111827";
+            let fFill  = isDerived ? F_DRV : isEst ? F_EST : F_WHITE;
+
+            if (isVsCons && row.bbgKeys && row.modelFn) {
+              const bbg   = getConsensus(row.bbgKeys, yr);
+              const model = row.modelFn(d);
+              if (bbg !== null && model !== null && bbg !== 0) {
+                const v = (model - bbg) / Math.abs(bbg);
+                text   = fmtPct(v, false);
+                fColor = v > 0.001 ? "15803D" : v < -0.001 ? "DC2626" : "374151";
+                fFill  = v > 0.001 ? F_POS : v < -0.001 ? F_NEG : F_WHITE;
+              }
+            } else if (isConsensus && row.bbgKeys) {
+              const v = getConsensus(row.bbgKeys, yr);
+              if (v !== null) text = fmtAbs(v);
+              fFill = isEst ? F_EST : F_WHITE;
+            } else if (row.fn) {
+              const v = row.fn(d, prev);
+              if (v !== null) {
+                const r = renderCell(v, row.fmt, !!row.colorize);
+                text = r.text;
+                if (row.colorize) fColor = r.color === C.BLUE ? "1D4ED8" : r.color === C.RED ? "DC2626" : "111827";
+              }
+            }
+
+            return xc(text, {
+              font:      { name: "Courier New", sz: 10, bold: !isDerived && !isVsCons, italic: isDerived, color: { rgb: fColor } },
+              fill:      fFill,
+              alignment: { horizontal: "center" },
+              border:    bdr(),
+            });
+          }),
+        ]);
       }
     }
 
     // KPI sections
     if (kpiSections.length > 0) {
-      aoa.push(["KPI"]);
+      rows.push([
+        xc("KPI", { font: { bold: true, sz: 10, color: { rgb: "FFFFFF" } }, fill: F_HDR }),
+        ...Array.from({ length: years.length }, () => xc("", { fill: F_HDR })),
+      ]);
+
       for (const { sectionName, kpis } of kpiSections) {
-        aoa.push([sectionName]);
+        rows.push([
+          xc(sectionName.toUpperCase(), {
+            font: { bold: true, sz: 9, color: { rgb: "E5E7EB" } },
+            fill: F_SUB,
+          }),
+          ...Array.from({ length: years.length }, () => xc("", { fill: F_SUB })),
+        ]);
+
         for (const { kpiName, byYear: kByYear } of kpis) {
-          const vals = years.map(yr => kByYear.get(yr) ?? null);
-          aoa.push([kpiName, ...vals.map(v => v ?? "—")]);
-          if (!isMarginMetric(kpiName)) {
-            const varVals = years.map((yr, i) => {
-              const curr = kByYear.get(yr) ?? null;
-              const prev = i > 0 ? (kByYear.get(years[i - 1]) ?? null) : null;
-              const g    = sgrow(curr, prev);
-              return g !== null ? fmtPct(g) : "—";
-            });
-            aoa.push(["  Var %", ...varVals]);
+          const isMgn = isMarginMetric(kpiName);
+          const fmt: Fmt = isMgn ? "pct_plain" : "abs";
+
+          rows.push([
+            xc(kpiName, { font: { bold: true, sz: 10 }, fill: F_WHITE, alignment: { horizontal: "left" } }),
+            ...years.map(yr => {
+              const v    = kByYear.get(yr) ?? null;
+              const isEst = (byYear.get(yr)?.isEst) ?? false;
+              const { text } = renderCell(v, fmt, false);
+              return xc(text, {
+                font:      { name: "Courier New", sz: 10, bold: true },
+                fill:      isEst ? F_EST : F_WHITE,
+                alignment: { horizontal: "center" },
+                border:    bdr(),
+              });
+            }),
+          ]);
+
+          if (!isMgn) {
+            rows.push([
+              xc("  Var %", { font: { italic: true, sz: 10 }, fill: F_DRV, alignment: { horizontal: "left" } }),
+              ...years.map((yr, i) => {
+                const curr = kByYear.get(yr) ?? null;
+                const prev = i > 0 ? (kByYear.get(years[i - 1]) ?? null) : null;
+                const v    = sgrow(curr, prev);
+                const { text } = renderCell(v, "pct", true);
+                const fColor = v !== null ? (v > 0.0005 ? "1D4ED8" : v < -0.0005 ? "DC2626" : "374151") : "9CA3AF";
+                return xc(text, {
+                  font:      { name: "Courier New", sz: 10, italic: true, color: { rgb: fColor } },
+                  fill:      F_DRV,
+                  alignment: { horizontal: "center" },
+                  border:    bdr(),
+                });
+              }),
+            ]);
           }
         }
       }
     }
 
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    // ── Write worksheet ────────────────────────────────────────────────────
+    const ws: Record<string, unknown> = {};
+    for (let r = 0; r < rows.length; r++) {
+      for (let c = 0; c < rows[r].length; c++) {
+        const cd = rows[r][c];
+        if (cd !== null) ws[XLSX.utils.encode_cell({ r, c })] = cd;
+      }
+    }
+    ws["!ref"]  = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length - 1, c: years.length } });
+    ws["!cols"] = [{ wch: 30 }, ...years.map(() => ({ wch: 12 }))];
+    ws["!views"] = [{ state: "frozen", xSplit: 1, ySplit: metaItems.length + 2 }];
+
     const wb = XLSX.utils.book_new();
     const sheetName = header.ticker.replace(/[\\/:*?[\]]/g, "").slice(0, 31);
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
