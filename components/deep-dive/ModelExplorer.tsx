@@ -305,7 +305,7 @@ function ReccBadge({ recc }: { recc: string | null }) {
 // ── KPI section helpers ────────────────────────────────────────────────────────
 function isMarginMetric(name: string): boolean {
   const lc = name.toLowerCase();
-  return lc.includes("margin") || lc.includes("yield") || lc.includes("rate") || lc.includes("%");
+  return /\b(margin|yield|rate)\b/.test(lc) || lc.includes("%");
 }
 
 interface KpiSection {
