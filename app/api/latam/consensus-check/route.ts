@@ -7,6 +7,7 @@ export interface ConsensusCheckRow {
   ticker:     string;
   updateDate: string;
   analyst:    string | null;
+  recc:       string | null;
   tp:         number | null;
   upside:     number | null;
   thesis:     string | null;
@@ -43,7 +44,7 @@ export async function GET() {
     const latestHeaders = await prisma.modelHeader.findMany({
       distinct: ["ticker"],
       orderBy:  { updateDate: "desc" },
-      select:   { ticker: true, updateDate: true, analyst: true, tp: true, thesis: true },
+      select:   { ticker: true, updateDate: true, analyst: true, recc: true, tp: true, thesis: true },
     });
 
     if (latestHeaders.length === 0) {
@@ -114,6 +115,7 @@ export async function GET() {
         ticker:     h.ticker,
         updateDate: h.updateDate.toISOString().slice(0, 10),
         analyst:    h.analyst ?? null,
+        recc:       h.recc   ?? null,
         tp,
         upside,
         thesis:     h.thesis ?? null,

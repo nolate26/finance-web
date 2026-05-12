@@ -63,6 +63,22 @@ function fmtDate(iso: string): string {
   return `${dd}/${mm}/${yy}`;
 }
 
+// ── Recommendation badge ───────────────────────────────────────────────────────
+function ReccBadge({ recc }: { recc: string | null }) {
+  if (!recc) return <span style={{ color: C.NIL_TXT, fontSize: 11 }}>—</span>;
+  const u     = recc.toUpperCase();
+  const isBuy  = u.includes("BUY") || u === "OW";
+  const isSell = u.includes("SELL") || u === "UW";
+  const color  = isBuy ? "#1D4ED8" : isSell ? "#B91C1C" : "#64748B";
+  const bg     = isBuy ? "rgba(29,78,216,0.10)" : isSell ? "rgba(185,28,28,0.10)" : "rgba(100,116,139,0.10)";
+  const border = isBuy ? "rgba(29,78,216,0.25)" : isSell ? "rgba(185,28,28,0.25)" : "rgba(100,116,139,0.22)";
+  return (
+    <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.06em", padding: "2px 7px", borderRadius: 4, background: bg, color, border: `1px solid ${border}` }}>
+      {u}
+    </span>
+  );
+}
+
 // ── Cell components ────────────────────────────────────────────────────────────
 function NumCell({ v }: { v: number | null }) {
   return (
@@ -169,25 +185,26 @@ function Th({
 }
 
 // ── Sorting ────────────────────────────────────────────────────────────────────
+// Removed Revenue sort keys — only EBITDA and NI remain
 type SortKey =
   | "ticker" | "updateDate" | "upside"
-  | "varRev1" | "varRev2" | "varEbitda1" | "varEbitda2" | "varNi1" | "varNi2";
+  | "varEbitda1" | "varEbitda2" | "varNi1" | "varNi2";
 
-// Maps row-3 column index (0-17) to its SortKey for the Var% section (indices 12-17)
+// 12 data columns: Moneda(4) + Consensus(4) + Var%(4)
+// Indices 0-3: Moneda EBITDA1/2, NI1/2  → not sortable
+// Indices 4-7: Consensus EBITDA1/2, NI1/2 → not sortable
+// Indices 8-11: Var EBITDA1/2, NI1/2 → sortable
 const VAR_YEAR_SORT: (SortKey | null)[] = [
-  null, null, null, null, null, null,   // Moneda (0-5)
-  null, null, null, null, null, null,   // Consensus (6-11)
-  "varRev1", "varRev2",                 // Var Rev (12-13)
-  "varEbitda1", "varEbitda2",           // Var EBITDA (14-15)
-  "varNi1", "varNi2",                   // Var NI (16-17)
+  null, null, null, null,          // Moneda (0-3)
+  null, null, null, null,          // Consensus (4-7)
+  "varEbitda1", "varEbitda2",      // Var EBITDA (8-9)
+  "varNi1",     "varNi2",          // Var NI (10-11)
 ];
 
-const VAR_SORT_KEYS = new Set<SortKey>(["varRev1","varRev2","varEbitda1","varEbitda2","varNi1","varNi2"]);
+const VAR_SORT_KEYS = new Set<SortKey>(["varEbitda1","varEbitda2","varNi1","varNi2"]);
 
 function getVarValue(row: ConsensusCheckRow, key: SortKey): number | null {
   switch (key) {
-    case "varRev1":    return varPct(row.moneda.rev1FY,    row.consensus.rev1FY);
-    case "varRev2":    return varPct(row.moneda.rev2FY,    row.consensus.rev2FY);
     case "varEbitda1": return varPct(row.moneda.ebitda1FY, row.consensus.ebitda1FY);
     case "varEbitda2": return varPct(row.moneda.ebitda2FY, row.consensus.ebitda2FY);
     case "varNi1":     return varPct(row.moneda.ni1FY,     row.consensus.ni1FY);
@@ -226,12 +243,12 @@ function sortRows(rows: ConsensusCheckRow[], by: SortKey, dir: "asc" | "desc"): 
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function ConsensusCheckTable() {
   const router = useRouter();
-  const [data,           setData]           = useState<ConsensusCheckPayload | null>(null);
-  const [loading,        setLoading]        = useState(true);
-  const [error,          setError]          = useState(false);
-  const [sortBy,         setSortBy]         = useState<SortKey>("ticker");
-  const [sortDir,        setSortDir]        = useState<"asc" | "desc">("asc");
-  const [analystFilter,  setAnalystFilter]  = useState("");
+  const [data,          setData]          = useState<ConsensusCheckPayload | null>(null);
+  const [loading,       setLoading]       = useState(true);
+  const [error,         setError]         = useState(false);
+  const [sortBy,        setSortBy]        = useState<SortKey>("ticker");
+  const [sortDir,       setSortDir]       = useState<"asc" | "desc">("asc");
+  const [analystFilter, setAnalystFilter] = useState("");
 
   useEffect(() => {
     fetch("/api/latam/consensus-check")
@@ -284,6 +301,7 @@ export default function ConsensusCheckTable() {
 
   const thProps = { sortBy, sortDir, onSort: handleSort };
 
+  // 3 sections × colSpan 4 (EBITDA + NI only)
   const sections: { label: string; bg: string }[] = [
     { label: "Moneda",    bg: C.HDR_BG  },
     { label: "Consensus", bg: "#1D4ED8" },
@@ -325,21 +343,22 @@ export default function ConsensusCheckTable() {
 
       {/* ── Table ── */}
       <div style={{ overflowX: "auto", borderRadius: 10, border: `1px solid ${C.BDR}`, boxShadow: "0 1px 6px rgba(15,23,42,0.07)" }}>
-        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 1200, tableLayout: "auto" }}>
+        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 900, tableLayout: "auto" }}>
           <thead>
             {/* ── Row 1: section headers ── */}
             <tr>
               <Th level={0} rowSpan={3} sticky stickyLeft={0} sortKey="ticker" {...thProps}>
                 Company
               </Th>
-              <Th level={0} rowSpan={3} sortKey="updateDate" {...thProps}>Update</Th>
+              <Th level={0} rowSpan={3} sortKey="updateDate" {...thProps}>Update As Of</Th>
               <Th level={0} rowSpan={3}>Analyst</Th>
+              <Th level={0} rowSpan={3}>Rec</Th>
               <Th level={0} rowSpan={3} sortKey="upside" {...thProps}>Upside</Th>
 
               {sections.map((s) => (
                 <th
                   key={s.label}
-                  colSpan={6}
+                  colSpan={4}
                   style={{
                     background:    s.bg,
                     color:         "#FFFFFF",
@@ -356,14 +375,12 @@ export default function ConsensusCheckTable() {
                   {s.label}
                 </th>
               ))}
-
-              <Th level={0} rowSpan={3}>Thesis</Th>
             </tr>
 
-            {/* ── Row 2: metric labels ── */}
+            {/* ── Row 2: EBITDA / NI per section ── */}
             <tr>
               {(["moneda", "consensus", "var"] as const).map((k) =>
-                (["Revenue", "EBITDA", "NI"] as const).map((m) => (
+                (["EBITDA", "NI"] as const).map((m) => (
                   <th
                     key={`${k}_${m}`}
                     colSpan={2}
@@ -387,28 +404,28 @@ export default function ConsensusCheckTable() {
               )}
             </tr>
 
-            {/* ── Row 3: year labels (Var% cells 12-17 are sortable) ── */}
+            {/* ── Row 3: year labels (Var% cols 8-11 are sortable) ── */}
             <tr>
-              {Array.from({ length: 18 }).map((_, i) => {
-                const varKey = VAR_YEAR_SORT[i];
+              {Array.from({ length: 12 }).map((_, i) => {
+                const varKey  = VAR_YEAR_SORT[i];
                 const isSorted = varKey != null && sortBy === varKey;
                 return (
                   <th
                     key={i}
                     onClick={varKey ? () => handleSort(varKey) : undefined}
                     style={{
-                      background:  "#F1F5F9",
-                      color:       isSorted ? "#4338CA" : "#374151",
-                      textAlign:   "center",
-                      padding:     "4px 8px",
-                      fontWeight:  isSorted ? 700 : 600,
-                      fontSize:    10,
-                      borderRight: `1px solid ${C.BDR}`,
+                      background:   "#F1F5F9",
+                      color:        isSorted ? "#4338CA" : "#374151",
+                      textAlign:    "center",
+                      padding:      "4px 8px",
+                      fontWeight:   isSorted ? 700 : 600,
+                      fontSize:     10,
+                      borderRight:  `1px solid ${C.BDR}`,
                       borderBottom: `1px solid ${C.BDR}`,
-                      whiteSpace:  "nowrap",
-                      fontFamily:  "JetBrains Mono, monospace",
-                      cursor:      varKey ? "pointer" : undefined,
-                      userSelect:  varKey ? "none" : undefined,
+                      whiteSpace:   "nowrap",
+                      fontFamily:   "JetBrains Mono, monospace",
+                      cursor:       varKey ? "pointer" : undefined,
+                      userSelect:   varKey ? "none" : undefined,
                     }}
                   >
                     {i % 2 === 0 ? y1 : y2}
@@ -466,7 +483,7 @@ export default function ConsensusCheckTable() {
                     </span>
                   </td>
 
-                  {/* Update */}
+                  {/* Update As Of */}
                   <td style={{
                     padding:     "6px 10px",
                     fontSize:    11,
@@ -493,6 +510,16 @@ export default function ConsensusCheckTable() {
                     {row.analyst ?? "—"}
                   </td>
 
+                  {/* Rec */}
+                  <td style={{
+                    padding:     "6px 10px",
+                    textAlign:   "center",
+                    borderRight: `1px solid ${C.BDR}`,
+                    whiteSpace:  "nowrap",
+                  }}>
+                    <ReccBadge recc={row.recc} />
+                  </td>
+
                   {/* Upside */}
                   <td style={{
                     padding:     "6px 10px",
@@ -507,53 +534,30 @@ export default function ConsensusCheckTable() {
                     {upside.text}
                   </td>
 
-                  {/* Moneda */}
-                  <NumCell v={row.moneda.rev1FY}    />
-                  <NumCell v={row.moneda.rev2FY}    />
+                  {/* Moneda: EBITDA, NI */}
                   <NumCell v={row.moneda.ebitda1FY} />
                   <NumCell v={row.moneda.ebitda2FY} />
                   <NumCell v={row.moneda.ni1FY}     />
                   <NumCell v={row.moneda.ni2FY}     />
 
-                  {/* Consensus */}
-                  <ConNumCell v={row.consensus.rev1FY}    />
-                  <ConNumCell v={row.consensus.rev2FY}    />
+                  {/* Consensus: EBITDA, NI */}
                   <ConNumCell v={row.consensus.ebitda1FY} />
                   <ConNumCell v={row.consensus.ebitda2FY} />
                   <ConNumCell v={row.consensus.ni1FY}     />
                   <ConNumCell v={row.consensus.ni2FY}     />
 
                   {/* Var % */}
-                  <VarCell moneda={row.moneda.rev1FY}    consensus={row.consensus.rev1FY}    />
-                  <VarCell moneda={row.moneda.rev2FY}    consensus={row.consensus.rev2FY}    />
                   <VarCell moneda={row.moneda.ebitda1FY} consensus={row.consensus.ebitda1FY} />
                   <VarCell moneda={row.moneda.ebitda2FY} consensus={row.consensus.ebitda2FY} />
                   <VarCell moneda={row.moneda.ni1FY}     consensus={row.consensus.ni1FY}     />
                   <VarCell moneda={row.moneda.ni2FY}     consensus={row.consensus.ni2FY}     />
-
-                  {/* Thesis */}
-                  <td style={{
-                    padding:      "6px 10px",
-                    fontSize:     11,
-                    fontFamily:   "Inter, sans-serif",
-                    color:        row.thesis ? "#374151" : C.NIL_TXT,
-                    borderRight:  `1px solid ${C.BDR}`,
-                    maxWidth:     220,
-                    overflow:     "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace:   "nowrap",
-                  }}
-                    title={row.thesis ?? undefined}
-                  >
-                    {row.thesis ?? "—"}
-                  </td>
                 </tr>
               );
             })}
 
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={23} style={{ textAlign: "center", padding: 32, color: "#94A3B8", fontSize: 13 }}>
+                <td colSpan={17} style={{ textAlign: "center", padding: 32, color: "#94A3B8", fontSize: 13 }}>
                   No model data available.
                 </td>
               </tr>

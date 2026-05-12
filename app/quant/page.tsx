@@ -1,721 +1,685 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, ResponsiveContainer, ReferenceLine,
+  ComposedChart, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, Legend, ResponsiveContainer,
+  ReferenceLine, ReferenceArea,
 } from "recharts";
-import type { NavPayload } from "@/app/api/quant/nav/route";
-import type { SignalsPayload, HoldingRow, MoveRow } from "@/app/api/quant/signals/route";
-import type { TickerHistoryPayload } from "@/app/api/quant/ticker-history/route";
+import type { DeepDivePayload } from "@/app/api/companies/[ticker]/route";
+import type { UniverseItem } from "@/app/api/analysis/universe/route";
+import { computeBands } from "@/lib/stats";
 
-// ── Theme tokens ──────────────────────────────────────────────────────────────
-const CARD     = "#FFFFFF";
-const BORDER   = "rgba(15,23,42,0.08)";
+// ── Design tokens ─────────────────────────────────────────────────────────────
+const PALETTE  = ["#2563EB", "#DC2626", "#16A34A", "#D97706", "#7C3AED", "#0891B2"];
 const TEXT1    = "#0F172A";
 const TEXT2    = "#64748B";
-const GREEN    = "#059669";
-const RED      = "#DC2626";
+const TEXT3    = "#94A3B8";
 const BLUE     = "#2563EB";
-const AMBER    = "#D97706";
-
-const cardStyle: React.CSSProperties = {
-  background: CARD,
-  border: `1px solid ${BORDER}`,
+const BORDER   = "rgba(15,23,42,0.08)";
+const CARD: React.CSSProperties = {
+  background:   "#FFFFFF",
+  border:       `1px solid ${BORDER}`,
   borderRadius: 12,
-  boxShadow: "0 1px 4px rgba(15,23,42,0.06)",
+  boxShadow:    "0 1px 4px rgba(15,23,42,0.06)",
 };
 
-// ── Formatters ────────────────────────────────────────────────────────────────
-function fmtRet(v: number | null, decimals = 1): string {
-  if (v == null) return "—";
-  return (v >= 0 ? "+" : "") + v.toFixed(decimals) + "%";
-}
-function retColor(v: number | null): string {
-  if (v == null) return TEXT2;
-  return v > 0.05 ? GREEN : v < -0.05 ? RED : TEXT2;
-}
-function fmtPx(v: number | null): string {
-  if (v == null) return "—";
-  return v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-function fmtDate(iso: string): string {
-  const d = new Date(iso + "T12:00:00");
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
-}
-function fmtDateShort(iso: string): string {
-  const d = new Date(iso + "T12:00:00");
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  return `${months[d.getMonth()]} '${String(d.getFullYear()).slice(2)}`;
+const MAX_COMPANIES = 5;
+
+// ── Metric config ─────────────────────────────────────────────────────────────
+type MetricKey = "evEbitda" | "pe" | "pbv" | "price" | "conEbitda" | "conNI";
+
+interface MetricCfg {
+  key:   MetricKey;
+  label: string;
+  fmt:   (v: number) => string;
+  note?: string;
 }
 
-// ── KPI Card ──────────────────────────────────────────────────────────────────
-function KpiCard({
-  label, value, valueColor, sub,
-}: { label: string; value: string; valueColor?: string; sub?: string }) {
-  return (
-    <div style={{ ...cardStyle, padding: "14px 18px", display: "flex", flexDirection: "column", gap: 4 }}>
-      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.10em", color: TEXT2, textTransform: "uppercase" }}>
-        {label}
-      </span>
-      <span style={{ fontSize: 22, fontWeight: 800, fontFamily: "JetBrains Mono, monospace", color: valueColor ?? TEXT1, letterSpacing: "-0.02em" }}>
-        {value}
-      </span>
-      {sub && <span style={{ fontSize: 10, color: TEXT2 }}>{sub}</span>}
-    </div>
-  );
+const METRICS: MetricCfg[] = [
+  { key: "evEbitda",  label: "EV / EBITDA",   fmt: v => v.toFixed(1) + "x" },
+  { key: "pe",        label: "P / E",          fmt: v => v.toFixed(1) + "x" },
+  { key: "pbv",       label: "P / BV",         fmt: v => v.toFixed(2) + "x" },
+  { key: "price",     label: "Price",          fmt: v => v.toFixed(1), note: "Base 100 at first data point" },
+  { key: "conEbitda", label: "EBITDA Est",     fmt: v => v.toLocaleString("en-US", { maximumFractionDigits: 0 }), note: "Bloomberg 1FY consensus — local currency thousands" },
+  { key: "conNI",     label: "NI Est",         fmt: v => v.toLocaleString("en-US", { maximumFractionDigits: 0 }), note: "Bloomberg 1FY consensus — local currency thousands" },
+];
+
+// ── Time period filter ────────────────────────────────────────────────────────
+type TimePeriod = "all" | "10y" | "5y" | "3y" | "1y" | "6m" | "3m";
+
+const TIME_PERIODS: { key: TimePeriod; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "10y", label: "10Y" },
+  { key: "5y",  label: "5Y"  },
+  { key: "3y",  label: "3Y"  },
+  { key: "1y",  label: "1Y"  },
+  { key: "6m",  label: "6M"  },
+  { key: "3m",  label: "3M"  },
+];
+
+const PERIOD_MONTHS: Record<Exclude<TimePeriod, "all">, number> = {
+  "10y": 120, "5y": 60, "3y": 36, "1y": 12, "6m": 6, "3m": 3,
+};
+
+function getCutoff(period: TimePeriod): string | null {
+  if (period === "all") return null;
+  const d = new Date();
+  d.setMonth(d.getMonth() - PERIOD_MONTHS[period]);
+  return d.toISOString().slice(0, 10);
 }
 
-// ── Chart Tooltip ─────────────────────────────────────────────────────────────
-function NavTooltip({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number; color: string }[]; label?: string }) {
+// ── Data extraction ───────────────────────────────────────────────────────────
+function getPoints(payload: DeepDivePayload, metric: MetricKey): { date: string; v: number | null }[] {
+  switch (metric) {
+    case "evEbitda": return payload.valuationHistory.map(p => ({ date: p.date, v: p.evEbitdaFwd }));
+    case "pe":       return payload.valuationHistory.map(p => ({ date: p.date, v: p.peFwd }));
+    case "pbv":      return payload.valuationHistory.map(p => ({ date: p.date, v: p.pbv }));
+    case "price": {
+      const pts = payload.priceVsEarnings;
+      if (!pts.length) return [];
+      const base = pts[0].pxLast;
+      return pts.map(p => ({ date: p.date, v: base > 0 ? (p.pxLast / base) * 100 : null }));
+    }
+    case "conEbitda": {
+      const all = payload.consensusEstimates
+        .filter(c => c.metric === "EBITDA")
+        .sort((a, b) => a.date.localeCompare(b.date));
+      const byDate = new Map<string, number>();
+      for (const c of all) {
+        if (!byDate.has(c.date) || c.period === "1FY") byDate.set(c.date, c.value);
+      }
+      return Array.from(byDate.entries()).map(([date, v]) => ({ date, v: v / 1_000 }));
+    }
+    case "conNI": {
+      const all = payload.consensusEstimates
+        .filter(c => c.metric === "NET_INCOME")
+        .sort((a, b) => a.date.localeCompare(b.date));
+      const byDate = new Map<string, number>();
+      for (const c of all) {
+        if (!byDate.has(c.date) || c.period === "1FY") byDate.set(c.date, c.value);
+      }
+      return Array.from(byDate.entries()).map(([date, v]) => ({ date, v: v / 1_000 }));
+    }
+  }
+}
+
+function buildChartData(
+  companies: CompanyState[],
+  metric:    MetricKey,
+  cutoff:    string | null,
+): Record<string, unknown>[] {
+  const allDates = new Set<string>();
+  const datasets: { ticker: string; pts: Map<string, number | null> }[] = [];
+
+  for (const c of companies) {
+    if (!c.data) continue;
+    const pts = getPoints(c.data, metric);
+    const m   = new Map<string, number | null>();
+    for (const p of pts) {
+      if (!cutoff || p.date >= cutoff) { m.set(p.date, p.v); allDates.add(p.date); }
+    }
+    datasets.push({ ticker: c.ticker, pts: m });
+  }
+
+  const months  = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const fmtDate = (iso: string) => {
+    const d = new Date(iso + "T12:00:00");
+    return `${months[d.getMonth()]} '${String(d.getFullYear()).slice(2)}`;
+  };
+
+  return Array.from(allDates).sort().map(date => {
+    const row: Record<string, unknown> = { date, label: fmtDate(date) };
+    for (const ds of datasets) row[ds.ticker] = ds.pts.get(date) ?? null;
+    return row;
+  });
+}
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface CompanyState {
+  ticker:  string;
+  name:    string;
+  data:    DeepDivePayload | null;
+  loading: boolean;
+}
+
+// ── Chart tooltip ─────────────────────────────────────────────────────────────
+function ChartTooltip({
+  active, payload, label, fmt,
+}: {
+  active?:  boolean;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  payload?: any[];
+  label?:   string;
+  fmt:      (v: number) => string;
+}) {
   if (!active || !payload?.length) return null;
+  const items = payload.filter((p: { value: number | null }) => p.value != null);
+  if (!items.length) return null;
   return (
-    <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "10px 14px", boxShadow: "0 4px 16px rgba(15,23,42,0.12)" }}>
-      <p style={{ color: TEXT2, fontSize: 11, marginBottom: 6, fontFamily: "JetBrains Mono, monospace" }}>{label}</p>
-      {payload.map((p) => (
-        <p key={p.name} style={{ color: p.color, fontSize: 12, fontFamily: "JetBrains Mono, monospace", marginBottom: 2 }}>
-          {p.name}: {p.value?.toFixed(1)}
+    <div style={{
+      background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 8,
+      padding: "10px 14px", boxShadow: "0 4px 16px rgba(15,23,42,0.10)", minWidth: 160,
+    }}>
+      <p style={{ fontSize: 11, color: TEXT2, marginBottom: 8, fontFamily: "JetBrains Mono, monospace" }}>
+        {label}
+      </p>
+      {items.map((p: { name: string; value: number; color: string }) => (
+        <p key={p.name} style={{ fontSize: 12, color: p.color, fontFamily: "JetBrains Mono, monospace", marginBottom: 3 }}>
+          <span style={{ fontWeight: 700 }}>
+            {p.name.replace(/ Equity$/i, "").replace(/ MM$/i, "").trim()}
+          </span>
+          {"  "}{fmt(p.value)}
         </p>
       ))}
     </div>
   );
 }
 
-// ── Ticker Modal ──────────────────────────────────────────────────────────────
-function TickerModal({ ticker, onClose }: { ticker: string; onClose: () => void }) {
-  const [data, setData] = useState<TickerHistoryPayload | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    setLoading(true);
-    fetch(`/api/quant/ticker-history?ticker=${encodeURIComponent(ticker)}`)
-      .then((r) => r.json())
-      .then(setData)
-      .finally(() => setLoading(false));
-  }, [ticker]);
-
-  // Close on ESC
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [onClose]);
-
-  return (
-    <div
-      style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}
-      onClick={onClose}
-    >
-      <div
-        style={{ ...cardStyle, padding: 24, width: 640, maxHeight: "80vh", overflowY: "auto" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-          <div>
-            <h2 style={{ fontSize: 16, fontWeight: 800, color: TEXT1, fontFamily: "JetBrains Mono, monospace", margin: 0 }}>
-              {ticker}
-            </h2>
-            <p style={{ fontSize: 11, color: TEXT2, margin: "2px 0 0" }}>
-              Signal price history
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            style={{ background: "transparent", border: "none", color: TEXT2, fontSize: 18, cursor: "pointer", lineHeight: 1 }}
-          >
-            ×
-          </button>
-        </div>
-
-        {loading && (
-          <div style={{ display: "flex", justifyContent: "center", padding: 32 }}>
-            <div style={{ width: 24, height: 24, borderRadius: "50%", border: `2px solid rgba(59,130,246,0.2)`, borderTopColor: BLUE, animation: "spin 0.8s linear infinite" }} />
-          </div>
-        )}
-
-        {data && !loading && (
-          <>
-            {/* Mini chart */}
-            <div style={{ height: 160, marginBottom: 16 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data.history} margin={{ top: 4, right: 4, bottom: 4, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.06)" />
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fill: TEXT2, fontSize: 9 }}
-                    tickFormatter={fmtDateShort}
-                    tickLine={false}
-                    axisLine={false}
-                    interval="preserveStartEnd"
-                  />
-                  <YAxis
-                    tick={{ fill: TEXT2, fontSize: 9 }}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(v) => v.toFixed(0)}
-                    width={48}
-                  />
-                  <Tooltip content={<NavTooltip />} />
-                  <Line
-                    type="monotone"
-                    dataKey="pxSignal"
-                    name="px_signal"
-                    stroke={BLUE}
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* History table */}
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: "#F1F5F9" }}>
-                  {["Date", "Side", "Rank", "px_signal"].map((h) => (
-                    <th key={h} style={{ padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: TEXT2, letterSpacing: "0.08em", textTransform: "uppercase" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {[...data.history].reverse().map((row, i) => (
-                  <tr key={row.date} style={{ background: i % 2 === 0 ? "transparent" : "rgba(15,23,42,0.025)" }}>
-                    <td style={{ padding: "6px 10px", fontSize: 11, color: TEXT2, fontFamily: "JetBrains Mono, monospace" }}>{row.date}</td>
-                    <td style={{ padding: "6px 10px", fontSize: 11, fontWeight: 700, color: row.side === "LONG" ? GREEN : RED }}>{row.side}</td>
-                    <td style={{ padding: "6px 10px", fontSize: 11, color: TEXT2 }}>{row.rank ?? "—"}</td>
-                    <td style={{ padding: "6px 10px", fontSize: 11, color: TEXT1, fontFamily: "JetBrains Mono, monospace" }}>{fmtPx(row.pxSignal)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </>
-        )}
-      </div>
-    </div>
-  );
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function shortName(ticker: string) {
+  return ticker.replace(/ Equity$/i, "").replace(/ MM$/i, "").trim();
 }
 
-// ── Section Label ─────────────────────────────────────────────────────────────
-function SLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.10em", color: TEXT2, textTransform: "uppercase", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
-      <span style={{ display: "inline-block", width: 3, height: 12, borderRadius: 2, background: BLUE }} />
-      {children}
-    </div>
-  );
-}
+// ── Main page ─────────────────────────────────────────────────────────────────
+export default function AnalysisPage() {
+  const [universe,     setUniverse]     = useState<UniverseItem[]>([]);
+  const [univLoading,  setUnivLoading]  = useState(true);
+  const [search,       setSearch]       = useState("");
+  const [companies,    setCompanies]    = useState<CompanyState[]>([]);
+  const [activeMetric, setActiveMetric] = useState<MetricKey>("evEbitda");
+  const [timePeriod,   setTimePeriod]   = useState<TimePeriod>("5y");
+  const [bandsFor,     setBandsFor]     = useState<string | null>(null);
 
-// ── Momentum Dashboard ────────────────────────────────────────────────────────
-function MomentumDashboard() {
-  const [navData, setNavData]       = useState<NavPayload | null>(null);
-  const [signals, setSignals]       = useState<SignalsPayload | null>(null);
-  const [selectedDate, setSelectedDate] = useState<string>("");
-  const [modalTicker, setModalTicker] = useState<string | null>(null);
-  const [navLoading, setNavLoading] = useState(true);
-  const [sigsLoading, setSigsLoading] = useState(false);
-  const [navError, setNavError]     = useState<string | null>(null);
-
-  // Fetch NAV series on mount
+  // Load universe
   useEffect(() => {
-    setNavLoading(true);
-    fetch("/api/quant/nav")
-      .then((r) => r.json())
-      .then((d: NavPayload) => {
-        setNavData(d);
-        if (d.signalDates.length > 0) {
-          const latest = d.signalDates[d.signalDates.length - 1];
-          setSelectedDate(latest);
-        }
-      })
-      .catch((e) => setNavError(String(e)))
-      .finally(() => setNavLoading(false));
+    fetch("/api/analysis/universe")
+      .then(r => r.json())
+      .then((d: { companies?: UniverseItem[] }) => setUniverse(d.companies ?? []))
+      .catch(() => {})
+      .finally(() => setUnivLoading(false));
   }, []);
 
-  // Fetch signals whenever selectedDate changes
-  const fetchSignals = useCallback((date: string) => {
-    if (!date) return;
-    setSigsLoading(true);
-    fetch(`/api/quant/signals?date=${date}`)
-      .then((r) => r.json())
-      .then((d: SignalsPayload) => setSignals(d))
-      .finally(() => setSigsLoading(false));
-  }, []);
+  // Filtered list
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    if (!q) return universe;
+    return universe.filter(c =>
+      c.ticker.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)
+    );
+  }, [universe, search]);
 
-  useEffect(() => {
-    if (selectedDate) fetchSignals(selectedDate);
-  }, [selectedDate, fetchSignals]);
+  const selectedSet = useMemo(() => new Set(companies.map(c => c.ticker)), [companies]);
 
-  // ── Derived KPIs ────────────────────────────────────────────────────────
-  const kpis = useMemo(() => {
-    if (!navData || !selectedDate || !signals) return null;
-
-    const dateIdx = navData.signalDates.indexOf(selectedDate);
-    if (dateIdx < 0) return null;
-
-    const current = navData.navSeries[dateIdx];
-    if (!current) return null;
-
-    const cumReturn  = current.portfolio - 100;
-    const mxlaCum    = current.mxla != null ? current.mxla - 100 : null;
-    const alpha      = mxlaCum != null ? cumReturn - mxlaCum : null;
-
-    // YTD: last nav point before Jan 1 of selected year
-    const year = selectedDate.slice(0, 4);
-    let ytdStartNAV = 100;
-    for (let i = dateIdx - 1; i >= 0; i--) {
-      if (navData.signalDates[i] < `${year}-01-01`) {
-        ytdStartNAV = navData.navSeries[i].portfolio;
-        break;
+  const toggleCompany = useCallback((item: UniverseItem) => {
+    setCompanies(prev => {
+      if (prev.find(c => c.ticker === item.ticker)) {
+        return prev.filter(c => c.ticker !== item.ticker);
       }
-    }
-    const ytdReturn = (current.portfolio / ytdStartNAV - 1) * 100;
+      if (prev.length >= MAX_COMPANIES) return prev;
 
-    // Weekly return from weeklyPeriods
-    const weekPeriod = navData.weeklyPeriods.find((p) => p.date === selectedDate);
-    const weeklyReturn = weekPeriod?.portfolioReturn ?? null;
+      fetch(`/api/companies/${encodeURIComponent(item.ticker)}`)
+        .then(r => r.json())
+        .then((d: DeepDivePayload) =>
+          setCompanies(cur =>
+            cur.map(c => c.ticker === item.ticker ? { ...c, data: d, loading: false } : c)
+          )
+        )
+        .catch(() =>
+          setCompanies(cur =>
+            cur.map(c => c.ticker === item.ticker ? { ...c, loading: false } : c)
+          )
+        );
 
-    // Turnover
-    const prevSize = signals.prevTickers.length;
-    const turnover = prevSize > 0
-      ? Math.round((signals.moves.length / prevSize) * 1000) / 10
-      : null;
+      return [...prev, { ticker: item.ticker, name: item.name, data: null, loading: true }];
+    });
+  }, []);
 
-    return { cumReturn, ytdReturn, weeklyReturn, alpha, turnover };
-  }, [navData, selectedDate, signals]);
+  const removeCompany = useCallback((ticker: string) => {
+    setCompanies(prev => prev.filter(c => c.ticker !== ticker));
+    setBandsFor(prev => prev === ticker ? null : prev);
+  }, []);
 
-  // History table (last 5 periods up to and including selectedDate)
-  const historyRows = useMemo(() => {
-    if (!navData || !selectedDate) return [];
-    const dateIdx = navData.signalDates.indexOf(selectedDate);
-    if (dateIdx < 0) return [];
-    // weeklyPeriods[j].date = signalDates[j]  (keyed by T0, the signal formation date)
-    // The entry at dateIdx is the period STARTING on selectedDate; the last entry
-    // (the open period) has portfolioReturn = null and shows "—" naturally.
-    const endJ   = dateIdx;
-    const startJ = Math.max(0, endJ - 4);
-    return navData.weeklyPeriods
-      .slice(startJ, endJ + 1)
-      .reverse()
-      .map((p) => ({ ...p }));
-  }, [navData, selectedDate]);
-
-  // Chart data: thin down to ~80 points for performance
-  const chartData = useMemo(() => {
-    if (!navData) return [];
-    const series = navData.navSeries;
-    if (series.length <= 80) return series.map((p) => ({ ...p, date: fmtDateShort(p.date) }));
-    const step = Math.ceil(series.length / 80);
-    return series
-      .filter((_, i) => i % step === 0 || i === series.length - 1)
-      .map((p) => ({ ...p, date: fmtDateShort(p.date) }));
-  }, [navData]);
-
-  // ── Loading / Error states ────────────────────────────────────────────────
-  if (navLoading) {
-    return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 400 }}>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 32, height: 32, borderRadius: "50%", border: `2px solid rgba(59,130,246,0.2)`, borderTopColor: BLUE, animation: "spin 0.8s linear infinite" }} />
-          <span style={{ fontSize: 12, color: TEXT2, fontFamily: "JetBrains Mono, monospace" }}>Loading signal data...</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (navError) {
-    return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 400 }}>
-        <p style={{ color: RED, fontSize: 13 }}>{navError}</p>
-      </div>
-    );
-  }
-
-  if (!navData || navData.signalDates.length === 0) {
-    return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 400 }}>
-        <p style={{ color: TEXT2, fontSize: 13 }}>No signal data available.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-
-      {/* ── Top bar: title + date picker ────────────────────────────────── */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <h2 style={{ fontSize: 18, fontWeight: 800, color: TEXT1, letterSpacing: "-0.02em", margin: 0, fontFamily: "JetBrains Mono, monospace" }}>
-            Momentum Americas L/S
-          </h2>
-          <p style={{ fontSize: 11, color: TEXT2, marginTop: 3 }}>
-            Weekly equal-weight long/short · Americas universe
-          </p>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 11, color: TEXT2, fontFamily: "JetBrains Mono, monospace" }}>Signal date</span>
-          <select
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            style={{
-              background: CARD, border: `1px solid ${BORDER}`,
-              borderRadius: 8, padding: "6px 10px",
-              color: TEXT1, fontSize: 12, fontFamily: "JetBrains Mono, monospace",
-              cursor: "pointer", outline: "none",
-            }}
-          >
-            {[...navData.signalDates].reverse().map((d) => (
-              <option key={d} value={d}>{d}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* ── KPI cards ────────────────────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 12 }}>
-        <KpiCard
-          label="Cumulative Return"
-          value={kpis ? fmtRet(kpis.cumReturn) : "—"}
-          valueColor={kpis ? retColor(kpis.cumReturn) : TEXT2}
-          sub="Since inception"
-        />
-        <KpiCard
-          label="YTD Return"
-          value={kpis ? fmtRet(kpis.ytdReturn) : "—"}
-          valueColor={kpis ? retColor(kpis.ytdReturn) : TEXT2}
-          sub={selectedDate.slice(0, 4)}
-        />
-        <KpiCard
-          label="Weekly Return"
-          value={kpis?.weeklyReturn != null ? fmtRet(kpis.weeklyReturn) : "Open"}
-          valueColor={kpis?.weeklyReturn != null ? retColor(kpis.weeklyReturn) : AMBER}
-          sub={kpis?.weeklyReturn != null ? "Last closed period" : "Period in progress"}
-        />
-        <KpiCard
-          label="Alpha vs MXLA"
-          value={kpis?.alpha != null ? fmtRet(kpis.alpha) : "—"}
-          valueColor={kpis?.alpha != null ? retColor(kpis.alpha) : TEXT2}
-          sub="Cumulative"
-        />
-        <KpiCard
-          label="Longs / Shorts"
-          value={signals ? `${signals.nLongs} / ${signals.nShorts}` : "—"}
-          valueColor={TEXT1}
-          sub="Active positions"
-        />
-        <KpiCard
-          label="Turnover"
-          value={kpis?.turnover != null ? `${kpis.turnover.toFixed(0)}%` : "—"}
-          valueColor={TEXT1}
-          sub="vs prior week"
-        />
-      </div>
-
-      {/* ── NAV Chart ────────────────────────────────────────────────────── */}
-      <div style={{ ...cardStyle, padding: "18px 20px" }}>
-        <SLabel>Portfolio NAV vs MXLA (Base 100)</SLabel>
-        <div style={{ height: 280 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.06)" />
-              <XAxis
-                dataKey="date"
-                tick={{ fill: TEXT2, fontSize: 10 }}
-                tickLine={false}
-                axisLine={false}
-                interval="preserveStartEnd"
-              />
-              <YAxis
-                tick={{ fill: TEXT2, fontSize: 10 }}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(v) => v.toFixed(0)}
-                width={48}
-              />
-              <ReferenceLine y={100} stroke="rgba(15,23,42,0.15)" strokeDasharray="4 4" />
-              <Tooltip content={<NavTooltip />} />
-              <Legend
-                wrapperStyle={{ fontSize: 11, color: TEXT2 }}
-                formatter={(value) => <span style={{ color: TEXT2 }}>{value}</span>}
-              />
-              <Line
-                type="monotone"
-                dataKey="portfolio"
-                name="Portfolio"
-                stroke={BLUE}
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4, fill: BLUE }}
-              />
-              <Line
-                type="monotone"
-                dataKey="mxla"
-                name="MXLA"
-                stroke={AMBER}
-                strokeWidth={1.5}
-                dot={false}
-                strokeDasharray="4 4"
-                activeDot={{ r: 3, fill: AMBER }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* ── Holdings + Moves ─────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-        {/* Current Holdings */}
-        <div style={{ ...cardStyle, padding: "18px 20px", height: 1000, display: "flex", flexDirection: "column" }}>
-          <SLabel>
-            Current Holdings
-            {selectedDate && <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}> — {fmtDate(selectedDate)}</span>}
-          </SLabel>
-
-          {sigsLoading ? (
-            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <div style={{ width: 20, height: 20, borderRadius: "50%", border: `2px solid rgba(59,130,246,0.2)`, borderTopColor: BLUE, animation: "spin 0.8s linear infinite" }} />
-            </div>
-          ) : (
-            <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-                <thead style={{ position: "sticky", top: 0, zIndex: 1, background: "#F1F5F9" }}>
-                  <tr>
-                    {["Ticker", "Side", "Rank", "Px Signal", "Weight", "Ret. Entry"].map((h) => (
-                      <th key={h} style={{ padding: "6px 8px", textAlign: "left", fontSize: 9, fontWeight: 700, color: TEXT2, letterSpacing: "0.08em", textTransform: "uppercase", whiteSpace: "nowrap" }}>
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {(signals?.holdings ?? []).map((h: HoldingRow, i: number) => {
-                    const isNeutral = h.side !== "LONG" && h.side !== "SHORT";
-                    const sideColor = h.side === "LONG" ? GREEN : h.side === "SHORT" ? RED : TEXT2;
-                    const retColor = h.entryReturn == null || isNeutral ? TEXT2
-                      : h.side === "LONG"
-                        ? (h.entryReturn >= 0 ? GREEN : RED)
-                        : (h.entryReturn <= 0 ? GREEN : RED);
-                    return (
-                      <tr
-                        key={h.ticker}
-                        style={{ background: i % 2 === 0 ? "transparent" : "rgba(15,23,42,0.025)", cursor: "pointer" }}
-                        onClick={() => setModalTicker(h.ticker)}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(59,130,246,0.08)")}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = i % 2 === 0 ? "transparent" : "rgba(15,23,42,0.025)")}
-                      >
-                        <td style={{ padding: "5px 8px", color: BLUE, fontFamily: "JetBrains Mono, monospace", fontWeight: 600 }}>{h.ticker}</td>
-                        <td style={{ padding: "5px 8px", fontWeight: 700, color: sideColor }}>{h.side}</td>
-                        <td style={{ padding: "5px 8px", color: TEXT2 }}>{h.rank ?? "—"}</td>
-                        <td style={{ padding: "5px 8px", color: TEXT1, fontFamily: "JetBrains Mono, monospace" }}>{fmtPx(h.pxSignal)}</td>
-                        <td style={{ padding: "5px 8px", color: TEXT2, fontFamily: "JetBrains Mono, monospace" }}>
-                          {h.weight != null ? h.weight.toFixed(1) + "%" : "—"}
-                        </td>
-                        <td style={{ padding: "5px 8px", fontFamily: "JetBrains Mono, monospace", fontWeight: 700 }}>
-                          {h.entryReturn != null ? (
-                            <span style={{ color: retColor }}>
-                              {h.entryReturn >= 0 ? "+" : ""}{h.entryReturn.toFixed(1)}%
-                            </span>
-                          ) : (
-                            <span style={{ color: TEXT2 }}>—</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {!sigsLoading && (signals?.holdings ?? []).length === 0 && (
-                    <tr><td colSpan={6} style={{ padding: "16px 8px", color: TEXT2, textAlign: "center" }}>No holdings</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {/* Last Rebalance Moves */}
-        <div style={{ ...cardStyle, padding: "18px 20px", height: 1000, display: "flex", flexDirection: "column" }}>
-          <SLabel>Last Rebalance Moves</SLabel>
-
-          {sigsLoading ? (
-            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <div style={{ width: 20, height: 20, borderRadius: "50%", border: `2px solid rgba(59,130,246,0.2)`, borderTopColor: BLUE, animation: "spin 0.8s linear infinite" }} />
-            </div>
-          ) : (
-            <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-                <thead style={{ position: "sticky", top: 0, zIndex: 1, background: "#F1F5F9" }}>
-                  <tr>
-                    {["Ticker", "Action", "Px Signal"].map((h) => (
-                      <th key={h} style={{ padding: "6px 8px", textAlign: "left", fontSize: 9, fontWeight: 700, color: TEXT2, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {(signals?.moves ?? []).map((m: MoveRow, i: number) => {
-                    const isNeutralAction = m.action.includes("NEUTRAL");
-                    const isBuy = !isNeutralAction && (m.action.includes("BUY") || m.action.includes("LONG"));
-                    const isSell = !isNeutralAction && (m.action.includes("SELL") || m.action.includes("SHORT") || m.action.includes("CLOSE") || m.action.includes("COVER"));
-                    const actionColor = isNeutralAction ? TEXT2 : isBuy && !isSell ? GREEN : isSell && !isBuy ? RED : AMBER;
-                    return (
-                      <tr
-                        key={`${m.ticker}-${i}`}
-                        style={{ background: i % 2 === 0 ? "transparent" : "rgba(15,23,42,0.025)" }}
-                      >
-                        <td style={{ padding: "5px 8px", color: BLUE, fontFamily: "JetBrains Mono, monospace", fontWeight: 600 }}>{m.ticker}</td>
-                        <td style={{ padding: "5px 8px" }}>
-                          <span style={{
-                            fontSize: 10, fontWeight: 700, color: actionColor,
-                            background: `${actionColor}18`, border: `1px solid ${actionColor}33`,
-                            borderRadius: 4, padding: "2px 6px",
-                          }}>
-                            {m.action}
-                          </span>
-                        </td>
-                        <td style={{ padding: "5px 8px", color: TEXT1, fontFamily: "JetBrains Mono, monospace" }}>{fmtPx(m.pxSignal)}</td>
-                      </tr>
-                    );
-                  })}
-                  {!sigsLoading && (signals?.moves ?? []).length === 0 && (
-                    <tr><td colSpan={3} style={{ padding: "16px 8px", color: TEXT2, textAlign: "center" }}>No changes vs prior week</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Holdings History ─────────────────────────────────────────────── */}
-      <div style={{ ...cardStyle, padding: "18px 20px" }}>
-        <SLabel>Holdings History — Last 5 Periods</SLabel>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-          <thead>
-            <tr style={{ background: "#F1F5F9" }}>
-              {["Signal Date", "Longs", "Shorts", "Weekly Return", "MXLA Return", "Alpha"].map((h) => (
-                <th key={h} style={{ padding: "6px 10px", textAlign: "left", fontSize: 9, fontWeight: 700, color: TEXT2, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {historyRows.map((row, i) => (
-              <tr key={row.date} style={{ background: i % 2 === 0 ? "transparent" : "rgba(15,23,42,0.025)" }}>
-                <td style={{ padding: "6px 10px", color: TEXT2, fontFamily: "JetBrains Mono, monospace" }}>{row.date}</td>
-                <td style={{ padding: "6px 10px", color: GREEN }}>{row.nLongs}</td>
-                <td style={{ padding: "6px 10px", color: RED }}>{row.nShorts}</td>
-                <td style={{ padding: "6px 10px", color: retColor(row.portfolioReturn), fontFamily: "JetBrains Mono, monospace", fontWeight: 600 }}>
-                  {fmtRet(row.portfolioReturn)}
-                </td>
-                <td style={{ padding: "6px 10px", color: retColor(row.mxlaReturn), fontFamily: "JetBrains Mono, monospace" }}>
-                  {row.mxlaReturn != null ? fmtRet(row.mxlaReturn) : "—"}
-                </td>
-                <td style={{ padding: "6px 10px", fontFamily: "JetBrains Mono, monospace", fontWeight: 700 }}>
-                  {(() => {
-                    const a = row.portfolioReturn != null && row.mxlaReturn != null
-                      ? row.portfolioReturn - row.mxlaReturn
-                      : null;
-                    return <span style={{ color: retColor(a) }}>{a != null ? fmtRet(a) : "—"}</span>;
-                  })()}
-                </td>
-              </tr>
-            ))}
-            {historyRows.length === 0 && (
-              <tr>
-                <td colSpan={6} style={{ padding: "16px 10px", color: TEXT2, textAlign: "center" }}>
-                  No historical data
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Ticker modal */}
-      {modalTicker && <TickerModal ticker={modalTicker} onClose={() => setModalTicker(null)} />}
-    </div>
+  const cutoff     = useMemo(() => getCutoff(timePeriod), [timePeriod]);
+  const chartData  = useMemo(
+    () => buildChartData(companies.filter(c => !c.loading && c.data), activeMetric, cutoff),
+    [companies, activeMetric, cutoff],
   );
-}
+  const activeCfg   = METRICS.find(m => m.key === activeMetric)!;
+  const someLoading = companies.some(c => c.loading);
 
-// ── Tab nav ───────────────────────────────────────────────────────────────────
-type QuantTab = "momentum" | "kpi" | "resources";
+  // ── Median ± 1σ bands — computed from a single company's own time series ──
+  const bandsColorIdx = bandsFor ? companies.findIndex(c => c.ticker === bandsFor) : -1;
+  const bandsColor    = bandsColorIdx >= 0 ? PALETTE[bandsColorIdx] : "#64748B";
 
-const TABS: { key: QuantTab; label: string }[] = [
-  { key: "momentum",  label: "Momentum Model" },
-  { key: "kpi",       label: "KPI Matrix"      },
-  { key: "resources", label: "Resources"       },
-];
-
-// ── Page ──────────────────────────────────────────────────────────────────────
-export default function QuantPage() {
-  const [activeTab, setActiveTab] = useState<QuantTab>("momentum");
+  const bands = useMemo(() => {
+    if (!bandsFor || chartData.length === 0) return null;
+    const raw = chartData
+      .map(row => row[bandsFor])
+      .filter((v): v is number => typeof v === "number" && isFinite(v));
+    if (raw.length < 3) return null;
+    return computeBands(raw);
+  }, [bandsFor, chartData]);
 
   return (
     <>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-
+      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
       <div className="max-w-[1600px] mx-auto px-6 py-6">
-        {/* Header */}
+
+        {/* ── Page header ─────────────────────────────────────────────────── */}
         <div style={{ marginBottom: 20 }}>
-          <h1 style={{ fontSize: 20, fontWeight: 700, color: "#0F172A", letterSpacing: "-0.02em" }}>
-            Quant &amp; Signals
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: TEXT1, letterSpacing: "-0.02em", margin: 0 }}>
+            Analysis
           </h1>
-          <p style={{ fontSize: 12, marginTop: 4, color: "#64748B" }}>
-            Quantitative models, factor signals, and systematic research tools
+          <p style={{ fontSize: 12, color: TEXT2, marginTop: 4 }}>
+            Multi-company comparison — valuation multiples, price performance, and consensus revisions
           </p>
         </div>
 
-        {/* Tab nav */}
-        <div
-          className="flex items-center gap-1 mb-6 p-1 rounded-lg"
-          style={{ background: "rgba(15,23,42,0.04)", border: "1px solid rgba(15,23,42,0.08)", width: "fit-content" }}
-        >
-          {TABS.map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setActiveTab(key)}
-              className="px-5 py-1.5 rounded-md text-sm font-semibold transition-all"
-              style={{
-                background: activeTab === key ? "rgba(43,92,224,0.10)" : "transparent",
-                color:      activeTab === key ? "#1E3A8A" : "#64748B",
-                border:     activeTab === key ? "1px solid rgba(43,92,224,0.25)" : "1px solid transparent",
-              }}
-            >
-              {label}
-            </button>
-          ))}
+        {/* ── Two-column layout ────────────────────────────────────────────── */}
+        <div style={{ display: "flex", gap: 18, alignItems: "flex-start" }}>
+
+          {/* ── LEFT: Company list ─────────────────────────────────────────── */}
+          <div style={{ width: 252, flexShrink: 0 }}>
+            <div style={{
+              ...CARD,
+              display:       "flex",
+              flexDirection: "column",
+              overflow:      "hidden",
+              height:        "calc(100vh - 170px)",
+              maxHeight:     720,
+            }}>
+
+              {/* List header */}
+              <div style={{ padding: "14px 16px 12px", borderBottom: `1px solid ${BORDER}` }}>
+                <p style={{ fontSize: 10, fontWeight: 700, color: TEXT2, letterSpacing: "0.08em", textTransform: "uppercase", margin: "0 0 10px" }}>
+                  Companies
+                  {companies.length > 0 && (
+                    <span style={{ marginLeft: 8, fontWeight: 500, color: TEXT3, textTransform: "none", letterSpacing: 0 }}>
+                      {companies.length}/{MAX_COMPANIES}
+                    </span>
+                  )}
+                </p>
+                {/* Search */}
+                <div style={{ position: "relative" }}>
+                  <svg width="13" height="13" viewBox="0 0 14 14" fill="none" style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: TEXT3 }}>
+                    <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.3" />
+                    <path d="M10 10l2.5 2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                  </svg>
+                  <input
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    placeholder="Search…"
+                    style={{
+                      width:        "100%",
+                      padding:      "6px 10px 6px 28px",
+                      borderRadius: 7,
+                      border:       `1px solid ${BORDER}`,
+                      outline:      "none",
+                      fontSize:     12,
+                      color:        TEXT1,
+                      background:   "#F8FAFF",
+                      boxSizing:    "border-box",
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Scrollable company list */}
+              <div style={{ flex: 1, overflowY: "auto" }}>
+                {univLoading ? (
+                  <div style={{ display: "flex", justifyContent: "center", padding: 24 }}>
+                    <div style={{ width: 18, height: 18, borderRadius: "50%", border: "2px solid rgba(37,99,235,0.15)", borderTopColor: BLUE, animation: "spin 0.8s linear infinite" }} />
+                  </div>
+                ) : filtered.length === 0 ? (
+                  <p style={{ textAlign: "center", padding: 24, color: TEXT3, fontSize: 12 }}>No results</p>
+                ) : (
+                  filtered.map(item => {
+                    const idx     = companies.findIndex(c => c.ticker === item.ticker);
+                    const isSel   = idx >= 0;
+                    const color   = isSel ? PALETTE[idx] : undefined;
+                    const disabled = !isSel && companies.length >= MAX_COMPANIES;
+                    return (
+                      <button
+                        key={item.ticker}
+                        onClick={() => !disabled && toggleCompany(item)}
+                        style={{
+                          width:       "100%",
+                          padding:     "9px 16px",
+                          border:      "none",
+                          borderBottom: `1px solid ${BORDER}`,
+                          borderLeft:   `3px solid ${isSel ? (color ?? BLUE) : "transparent"}`,
+                          background:   isSel ? `${color ?? BLUE}09` : "transparent",
+                          textAlign:    "left",
+                          cursor:       disabled ? "not-allowed" : "pointer",
+                          opacity:      disabled ? 0.38 : 1,
+                          display:      "flex",
+                          alignItems:   "center",
+                          gap:          10,
+                          transition:   "background 0.08s",
+                        }}
+                        onMouseEnter={e => {
+                          if (!isSel && !disabled) (e.currentTarget as HTMLElement).style.background = "rgba(15,23,42,0.03)";
+                        }}
+                        onMouseLeave={e => {
+                          if (!isSel) (e.currentTarget as HTMLElement).style.background = "transparent";
+                        }}
+                      >
+                        {/* Color dot */}
+                        <div style={{
+                          width:    8,
+                          height:   8,
+                          borderRadius: "50%",
+                          flexShrink: 0,
+                          background:  isSel ? (color ?? BLUE) : "rgba(15,23,42,0.10)",
+                        }} />
+
+                        {/* Text */}
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{
+                            fontSize:   12,
+                            fontWeight: 700,
+                            color:      isSel ? (color ?? BLUE) : TEXT1,
+                            fontFamily: "JetBrains Mono, monospace",
+                            lineHeight: 1.2,
+                          }}>
+                            {shortName(item.ticker)}
+                          </div>
+                          <div style={{
+                            fontSize:     10,
+                            color:        TEXT3,
+                            lineHeight:   1.2,
+                            marginTop:    2,
+                            overflow:     "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace:   "nowrap",
+                          }}>
+                            {item.name}
+                          </div>
+                        </div>
+
+                        {/* Loading spinner when selected + loading */}
+                        {isSel && companies[idx]?.loading && (
+                          <div style={{ marginLeft: "auto", width: 12, height: 12, borderRadius: "50%", border: `1.5px solid ${color}30`, borderTopColor: color, animation: "spin 0.8s linear infinite", flexShrink: 0 }} />
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* ── RIGHT: Charts ──────────────────────────────────────────────── */}
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 14 }}>
+
+            {/* Empty state */}
+            {companies.length === 0 && (
+              <div style={{
+                ...CARD,
+                display:         "flex",
+                flexDirection:   "column",
+                alignItems:      "center",
+                justifyContent:  "center",
+                padding:         "72px 24px",
+                gap:             14,
+                height:          "calc(100vh - 170px)",
+                maxHeight:       720,
+              }}>
+                <div style={{
+                  width: 52, height: 52, borderRadius: 14,
+                  background: "rgba(37,99,235,0.07)", border: `1px solid rgba(37,99,235,0.13)`,
+                  display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24,
+                }}>
+                  📈
+                </div>
+                <p style={{ fontSize: 15, fontWeight: 600, color: TEXT1, margin: 0 }}>Select companies to compare</p>
+                <p style={{ fontSize: 12, color: TEXT2, textAlign: "center", maxWidth: 380, margin: 0, lineHeight: 1.65 }}>
+                  Pick up to {MAX_COMPANIES} companies from the list to visualize their EV/EBITDA,
+                  P/E, P/BV, price performance, and Bloomberg consensus estimate revisions over time.
+                </p>
+              </div>
+            )}
+
+            {/* Chart card — only shown when at least one company is selected */}
+            {companies.length > 0 && (
+              <div style={{ ...CARD, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 18 }}>
+
+                {/* Selected chips */}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                  {companies.map((c, i) => {
+                    const isBands = bandsFor === c.ticker;
+                    return (
+                      <div key={c.ticker} style={{
+                        display:    "flex",
+                        alignItems: "center",
+                        gap:        6,
+                        padding:    "4px 10px",
+                        borderRadius: 7,
+                        background: `${PALETTE[i]}11`,
+                        border:     `1.5px solid ${isBands ? PALETTE[i] : `${PALETTE[i]}45`}`,
+                      }}>
+                        {c.loading
+                          ? <div style={{ width: 8, height: 8, borderRadius: "50%", border: `1.5px solid ${PALETTE[i]}40`, borderTopColor: PALETTE[i], animation: "spin 0.8s linear infinite", flexShrink: 0 }} />
+                          : <div style={{ width: 8, height: 8, borderRadius: "50%", background: PALETTE[i], flexShrink: 0 }} />
+                        }
+                        <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 12, fontWeight: 700, color: PALETTE[i] }}>
+                          {shortName(c.ticker)}
+                        </span>
+                        {/* Per-company σ bands toggle */}
+                        {!c.loading && c.data && (
+                          <button
+                            onClick={() => setBandsFor(prev => prev === c.ticker ? null : c.ticker)}
+                            title="Show historical median ± 1σ"
+                            style={{
+                              background:   isBands ? `${PALETTE[i]}22` : "none",
+                              border:       `1px solid ${isBands ? `${PALETTE[i]}70` : "transparent"}`,
+                              color:        isBands ? PALETTE[i] : `${PALETTE[i]}80`,
+                              fontSize:     10,
+                              fontWeight:   700,
+                              fontFamily:   "JetBrains Mono, monospace",
+                              padding:      "1px 5px",
+                              borderRadius: 4,
+                              cursor:       "pointer",
+                              lineHeight:   1.4,
+                            }}
+                          >
+                            σ
+                          </button>
+                        )}
+                        <button
+                          onClick={() => removeCompany(c.ticker)}
+                          style={{ background: "none", border: "none", color: PALETTE[i], fontSize: 15, lineHeight: 1, padding: 0, cursor: "pointer", opacity: 0.6 }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Metric tabs */}
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                  {METRICS.map(m => (
+                    <button
+                      key={m.key}
+                      onClick={() => setActiveMetric(m.key)}
+                      style={{
+                        padding:      "5px 14px",
+                        borderRadius: 7,
+                        border:       "1px solid",
+                        borderColor:  activeMetric === m.key ? BLUE : BORDER,
+                        background:   activeMetric === m.key ? "rgba(37,99,235,0.09)" : "transparent",
+                        color:        activeMetric === m.key ? BLUE : TEXT2,
+                        fontSize:     12,
+                        fontWeight:   activeMetric === m.key ? 700 : 500,
+                        cursor:       "pointer",
+                        whiteSpace:   "nowrap",
+                      }}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Time filter */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+
+                  {/* Time period segmented control */}
+                  <div style={{
+                    display:      "flex",
+                    gap:          2,
+                    background:   "rgba(15,23,42,0.04)",
+                    borderRadius: 8,
+                    padding:      3,
+                    border:       `1px solid ${BORDER}`,
+                  }}>
+                    {TIME_PERIODS.map(tp => (
+                      <button
+                        key={tp.key}
+                        onClick={() => setTimePeriod(tp.key)}
+                        style={{
+                          padding:      "4px 10px",
+                          borderRadius: 6,
+                          border:       "none",
+                          background:   timePeriod === tp.key ? "#FFFFFF" : "transparent",
+                          color:        timePeriod === tp.key ? TEXT1    : TEXT3,
+                          fontWeight:   timePeriod === tp.key ? 700      : 500,
+                          fontSize:     11,
+                          cursor:       "pointer",
+                          boxShadow:    timePeriod === tp.key ? "0 1px 3px rgba(15,23,42,0.10)" : "none",
+                          transition:   "all 0.12s",
+                        }}
+                      >
+                        {tp.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Note line */}
+                {activeCfg.note && (
+                  <p style={{ fontSize: 10, color: TEXT3, fontStyle: "italic", margin: "-10px 0 -4px" }}>
+                    {activeCfg.note}
+                  </p>
+                )}
+
+                {/* Chart */}
+                {chartData.length === 0 ? (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 300 }}>
+                    {someLoading ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, color: TEXT2, fontSize: 13 }}>
+                        <div style={{ width: 20, height: 20, borderRadius: "50%", border: "2px solid rgba(37,99,235,0.18)", borderTopColor: BLUE, animation: "spin 0.8s linear infinite" }} />
+                        Loading data…
+                      </div>
+                    ) : (
+                      <span style={{ color: TEXT3, fontSize: 13 }}>No data available for this metric</span>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ height: 340, position: "relative" }}>
+
+                    {/* Discount / Premium badge when bands active */}
+                    {bands && (() => {
+                      const lastRow = chartData.at(-1);
+                      const cur = lastRow ? (lastRow[bandsFor!] as number | null) ?? null : null;
+                      if (cur == null || !isFinite(bands.median) || bands.median === 0) return null;
+                      const pct = (cur / bands.median - 1) * 100;
+                      const isDiscount = pct < 0;
+                      return (
+                        <div style={{ position: "absolute", top: 0, right: 0, zIndex: 10, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2, pointerEvents: "none" }}>
+                          <div style={{
+                            padding: "3px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700,
+                            fontFamily: "JetBrains Mono, monospace",
+                            background: isDiscount ? "rgba(5,150,105,0.10)" : "rgba(220,38,38,0.10)",
+                            color:      isDiscount ? "#059669" : "#DC2626",
+                            border: `1px solid ${isDiscount ? "rgba(5,150,105,0.20)" : "rgba(220,38,38,0.20)"}`,
+                          }}>
+                            {isDiscount ? "Discount" : "Premium"}: {pct >= 0 ? "+" : ""}{pct.toFixed(1)}%
+                          </div>
+                          <div style={{ fontSize: 11, color: "#94A3B8", fontFamily: "JetBrains Mono, monospace" }}>
+                            vs. {timePeriod === "all" ? "all-time" : timePeriod} median
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={chartData} margin={{ top: 6, right: 52, bottom: 0, left: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.05)" vertical={false} />
+                        <XAxis
+                          dataKey="label"
+                          tick={{ fill: TEXT3, fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}
+                          tickLine={false}
+                          axisLine={false}
+                          interval="preserveStartEnd"
+                        />
+                        <YAxis
+                          domain={["auto", "auto"]}
+                          tick={{ fill: TEXT3, fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}
+                          tickLine={false}
+                          axisLine={false}
+                          tickFormatter={v => activeCfg.fmt(v)}
+                          width={56}
+                        />
+                        <Tooltip content={(props) => <ChartTooltip {...props} fmt={activeCfg.fmt} />} />
+                        <Legend
+                          wrapperStyle={{ fontSize: 11, paddingTop: 10 }}
+                          formatter={v => <span style={{ color: TEXT2, fontFamily: "JetBrains Mono, monospace" }}>{shortName(String(v))}</span>}
+                        />
+
+                        {/* ±1 SD band — must come before Line elements */}
+                        {bands && (
+                          <ReferenceArea
+                            y1={bands.lower}
+                            y2={bands.upper}
+                            fill={`${bandsColor}18`}
+                            stroke={`${bandsColor}35`}
+                            strokeDasharray="4 4"
+                          />
+                        )}
+
+                        {/* Median reference line */}
+                        {bands && (
+                          <ReferenceLine
+                            y={bands.median}
+                            stroke="#94A3B8"
+                            strokeDasharray="5 3"
+                            label={{
+                              value: `Md ${activeCfg.fmt(bands.median)}`,
+                              position: "insideTopRight",
+                              fontSize: 11,
+                              fill: "#94A3B8",
+                              fontFamily: "JetBrains Mono, monospace",
+                              fontWeight: 600,
+                            }}
+                          />
+                        )}
+
+                        {companies
+                          .filter(c => !c.loading && c.data)
+                          .map((c, i) => (
+                            <Line
+                              key={c.ticker}
+                              type="monotone"
+                              dataKey={c.ticker}
+                              name={c.ticker}
+                              stroke={PALETTE[i]}
+                              strokeWidth={2.5}
+                              dot={false}
+                              activeDot={{ r: 4, fill: PALETTE[i] }}
+                              connectNulls={false}
+                              isAnimationActive={false}
+                            />
+                          ))}
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
-
-        {/* Content */}
-        {activeTab === "momentum" && <MomentumDashboard />}
-
-        {activeTab === "kpi" && (
-          <div className="card flex flex-col items-center justify-center gap-3" style={{ minHeight: 320 }}>
-            <div style={{ width: 48, height: 48, borderRadius: 12, background: "rgba(43,92,224,0.08)", border: "1px solid rgba(43,92,224,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>
-              🧮
-            </div>
-            <p style={{ fontSize: 14, fontWeight: 600, color: "#0F172A" }}>KPI Matrix</p>
-            <p style={{ fontSize: 12, color: "#94A3B8", textAlign: "center", maxWidth: 360 }}>
-              Aggregated financial KPIs across sectors — revenue growth, margin trends, and consensus estimate revisions. Data pipeline coming soon.
-            </p>
-          </div>
-        )}
-
-        {activeTab === "resources" && (
-          <div className="card flex flex-col items-center justify-center gap-3" style={{ minHeight: 320 }}>
-            <div style={{ width: 48, height: 48, borderRadius: 12, background: "rgba(43,92,224,0.08)", border: "1px solid rgba(43,92,224,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>
-              📚
-            </div>
-            <p style={{ fontSize: 14, fontWeight: 600, color: "#0F172A" }}>Resources</p>
-            <p style={{ fontSize: 12, color: "#94A3B8", textAlign: "center", maxWidth: 360 }}>
-              Research papers, methodology documentation, and model calibration notes. Coming soon.
-            </p>
-          </div>
-        )}
       </div>
     </>
   );

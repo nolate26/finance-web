@@ -9,7 +9,7 @@ const tabs = [
   { href: "/fondos",        label: "Funds",            icon: BarChart3  },
   { href: "/chile",         label: "Chile",            icon: Building2  },
   { href: "/latam",         label: "LatAm",            icon: Globe2     },
-  { href: "/quant",         label: "Quant & Signals",  icon: Activity   },
+  { href: "/quant",         label: "Analysis",          icon: Activity   },
   { href: "/companies",     label: "Company Profiles", icon: BookOpen   },
   { href: "/presentations", label: "Presentations",    icon: FileText   },
 ];
