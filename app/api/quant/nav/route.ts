@@ -48,7 +48,7 @@ export async function GET() {
   const [signalsResult, mxlaResult, pveResult, triResult] = await Promise.allSettled([
     prisma.signalRaw.findMany({
       orderBy: [{ signalDate: "asc" }, { ticker: "asc" }],
-      select: { signalDate: true, ticker: true, side: true, pxSignal: true },
+      select: { signalDate: true, ticker: true, top20: true, price: true },
     }),
 
     prisma.benchmarkMxla.findMany({
@@ -193,21 +193,21 @@ export async function GET() {
     // silently produces NaN without this coercion.
     const t1PxMap = new Map<string, number>();
     for (const h of holdingsT1) {
-      const px = Number(h.pxSignal);
+      const px = Number(h.price);
       if (isFinite(px) && px > 0) t1PxMap.set(h.ticker, px);
     }
 
     if (t1PxMap.size === 0) {
-      console.warn(`[nav] t1PxMap empty for T1=${T1} — pxSignal may be null in SignalRaw for this date`);
+      console.warn(`[nav] t1PxMap empty for T1=${T1} — price may be null in SignalRaw for this date`);
     }
 
-    const longs  = holdingsT0.filter((h) => h.side === "LONG");
-    const shorts = holdingsT0.filter((h) => h.side === "SHORT");
+    const longs  = holdingsT0.filter((h) => h.top20 === true);
+    const shorts = holdingsT0.filter((h) => h.top20 !== true);
 
     // ── Ret_Longs (decimal) ─────────────────────────────────────────────────
     let sumRetLongs = 0, coveredLongs = 0;
     for (const h of longs) {
-      const pxEntry = Number(h.pxSignal);            // coerce: Decimal → number
+      const pxEntry = Number(h.price);            // coerce: Decimal → number
       if (!isFinite(pxEntry) || pxEntry <= 0) continue;
       const pxExit = t1PxMap.get(h.ticker) ?? getExitPx(h.ticker, T1);
       if (pxExit != null && isFinite(pxExit) && pxExit > 0) {
@@ -220,7 +220,7 @@ export async function GET() {
     // ── Ret_Shorts (decimal) ────────────────────────────────────────────────
     let sumRetShorts = 0, coveredShorts = 0;
     for (const h of shorts) {
-      const pxEntry = Number(h.pxSignal);
+      const pxEntry = Number(h.price);
       if (!isFinite(pxEntry) || pxEntry <= 0) continue;
       const pxExit = t1PxMap.get(h.ticker) ?? getExitPx(h.ticker, T1);
       if (pxExit != null && isFinite(pxExit) && pxExit > 0) {
@@ -279,8 +279,8 @@ export async function GET() {
     date:            lastDate,    // T0 of the open period — no duplicate with loop
     portfolioReturn: null,
     mxlaReturn:      null,
-    nLongs:          lastHoldings.filter((h) => h.side === "LONG").length,
-    nShorts:         lastHoldings.filter((h) => h.side === "SHORT").length,
+    nLongs:          lastHoldings.filter((h) => h.top20 === true).length,
+    nShorts:         lastHoldings.filter((h) => h.top20 !== true).length,
     coveredLongs:    0,
     coveredShorts:   0,
   });

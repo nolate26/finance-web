@@ -22,16 +22,16 @@ export async function GET(request: NextRequest) {
   const rows = await prisma.signalRaw.findMany({
     where: { ticker },
     orderBy: { signalDate: "asc" },
-    select: { signalDate: true, pxSignal: true, side: true, rank: true },
+    select: { signalDate: true, price: true, top20: true, score: true },
   });
 
   return NextResponse.json({
     ticker,
     history: rows.map((r) => ({
       date: r.signalDate.toISOString().split("T")[0],
-      pxSignal: r.pxSignal,
-      side: r.side,
-      rank: r.rank,
+      pxSignal: r.price,
+      side: r.top20 === true ? "LONG" : "SHORT",
+      rank: r.score != null ? Math.round(r.score * 1000) / 1000 : null,
     })),
   } satisfies TickerHistoryPayload);
 }

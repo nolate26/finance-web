@@ -511,19 +511,19 @@ model LastRun {
 model SignalRaw {
   signalDate DateTime @map("signal_date") @db.Date
   ticker     String   @db.VarChar(100) // Ticker Bloomberg
-  
+
   // Factores y Scores
   score      Float?
   value      Float?
   quality    Float?
-  
+
   // Métricas
   pe         Float?
   dy         Float?
   roe        Float?
   deltaRoe   Float?   @map("delta_roe") // Para tu ΔROE
   price      Float?
-  
+
   // Flags
   top20      Boolean? // True si la empresa entró al Top 20 esa semana
 
