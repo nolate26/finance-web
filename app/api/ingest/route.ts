@@ -289,24 +289,34 @@ export async function POST(request: Request) {
         break;
 
       // --- NUEVAS TABLAS: SIGNALS Y BENCHMARK ---
+      // --- NUEVAS TABLAS: SIGNALS Y BENCHMARK ---
       case 'SignalRaw':
-        // mapeamos para aceptar snake_case desde Python
         const signalRows = rows.map((r: any) => ({
-          signalDate: new Date(r.signalDate ?? r.signal_date),
-          ticker: r.ticker,
-          side: r.side,
-          rank: r.rank ?? null,
-          modeloVeredicto: r.modeloVeredicto ?? r.modelo_veredicto ?? null,
-          pxSignal: r.pxSignal ?? r.px_signal ?? null,
-          nLongs: r.nLongs ?? r.n_longs ?? null,
-          nShorts: r.nShorts ?? r.n_shorts ?? null,
+          // Mantenemos la fecha para no perder la historia
+          signalDate: new Date(r.signalDate ?? r.signal_date ?? r.date),
+          ticker:     r.ticker ?? r.Ticker,
+          
+          score:      r.score ?? r.Score ?? null,
+          value:      r.value ?? r.Value ?? null,
+          quality:    r.quality ?? r.Quality ?? null,
+          
+          pe:         r.pe ?? r.PE ?? null,
+          dy:         r.dy ?? r.DY ?? null,
+          roe:        r.roe ?? r.ROE ?? null,
+          
+          // Captura ΔROE ya sea que Python lo envíe como delta_roe, dRoe o literal ΔROE
+          deltaRoe:   r.deltaRoe ?? r.delta_roe ?? r.dRoe ?? r['ΔROE'] ?? null,
+          price:      r.price ?? r.Price ?? null,
+          
+          // Convertimos a booleano de forma segura
+          top20:      r.top20 !== undefined ? Boolean(r.top20) : (r.Top20 !== undefined ? Boolean(r.Top20) : null),
         }));
+
         await prisma.signalRaw.createMany({ 
           data: signalRows, 
-          skipDuplicates: true // evita error si reenvías el mismo viernes
+          skipDuplicates: true // Evita duplicados si corres el script 2 veces el mismo día
         });
         break;
-
       case 'BenchmarkMxla':
         const benchRows = rows.map((r: any) => ({
           date: new Date(r.date),
