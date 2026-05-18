@@ -683,5 +683,25 @@ model ModelKPI {
   @@unique([ticker, updateDate, year, sectionName, kpiName])
   @@map("model_kpis")
 }
+
+
+model EmailResearch {
+  id          Int       @id @default(autoincrement())
+  schemaVersion String? @map("schema_version") @db.VarChar(10)
+  company     String    @db.VarChar(100) // Reemplaza al 'ticker' del ejemplo anterior
+  date        DateTime  @db.Date
+  category    String    @db.VarChar(100)
+  title       String?   @db.VarChar(255)
+  subject     String?   @db.Text
+  html        String    @db.Text         // El cuerpo final procesado
+  
+  // Metadatos del origen
+  from        String?   @db.VarChar(255)
+  receivedAt  DateTime? @map("received_at")
+  messageId   String?   @map("message_id") @db.VarChar(255)
+
+  @@index([company, date])
+  @@map("email_research")
+}
  
 
