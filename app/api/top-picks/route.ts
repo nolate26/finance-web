@@ -69,34 +69,21 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const results = await Promise.all(
-      picks.map((pick) =>
-        prisma.top_picks.upsert({
-          where: {
-            region_period_date_nombre_latam: {
-              region,
-              period_date: periodDate,
-              nombre_latam: pick.nombreLatam,
-            },
-          },
-          update: {
-            industry_group: pick.industryGroup,
-            comment:        pick.comment,
-            target_price:   pick.targetPrice ?? null,
-          },
-          create: {
-            region,
-            period_date:    periodDate,
-            nombre_latam:   pick.nombreLatam,
-            industry_group: pick.industryGroup,
-            comment:        pick.comment,
-            target_price:   pick.targetPrice ?? null,
-          },
-        })
-      )
-    );
+    const [, inserted] = await prisma.$transaction([
+      prisma.top_picks.deleteMany({ where: { region, period_date: periodDate } }),
+      prisma.top_picks.createMany({
+        data: picks.map((pick) => ({
+          region,
+          period_date:    periodDate,
+          nombre_latam:   pick.nombreLatam,
+          industry_group: pick.industryGroup,
+          comment:        pick.comment,
+          target_price:   pick.targetPrice ?? null,
+        })),
+      }),
+    ]);
 
-    return NextResponse.json({ saved: results.length });
+    return NextResponse.json({ saved: inserted.count });
   } catch (err) {
     console.error("Top picks save error:", err);
     return NextResponse.json({ error: "Failed to save picks" }, { status: 500 });

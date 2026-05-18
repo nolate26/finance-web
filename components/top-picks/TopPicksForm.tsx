@@ -672,14 +672,21 @@ function EditForm({
 
   const handleSave = async () => {
     setError(null);
-    const valid = rows.filter((r) => r.nombreLatam.trim() && r.industryGroup.trim() && r.comment.trim());
+    const valid   = rows.filter((r) => r.nombreLatam.trim() && r.industryGroup.trim() && r.comment.trim());
+    const skipped = rows.length - valid.length;
     if (valid.length === 0) {
-      setError("At least one complete pick is required (company, industry, comment).");
+      setError("At least one complete pick is required. Make sure to select the company from the dropdown, then fill in industry and comment.");
       return;
     }
     if (isChile && valid.some((r) => !r.targetPrice.trim())) {
       setError("Target Price is required for all Chile picks.");
       return;
+    }
+    if (skipped > 0) {
+      const ok = window.confirm(
+        `${skipped} row${skipped > 1 ? "s" : ""} will be skipped because they are incomplete (company must be selected from the dropdown). Continue saving ${valid.length} pick${valid.length > 1 ? "s" : ""}?`
+      );
+      if (!ok) return;
     }
 
     setSaving(true);
