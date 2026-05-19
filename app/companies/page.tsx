@@ -10,6 +10,7 @@ import PriceEarningsChart from "@/components/deep-dive/PriceEarningsChart";
 import AnalystDonut from "@/components/deep-dive/AnalystDonut";
 import ConsensusMomentumCards from "@/components/deep-dive/ConsensusMomentumCards";
 import RelatedReports from "@/components/deep-dive/RelatedReports";
+import ResearchNotesPanel from "@/components/deep-dive/ResearchNotesPanel";
 import ScorecardGrid from "@/components/deep-dive/ScorecardGrid";
 import ModelExplorer from "@/components/deep-dive/ModelExplorer";
 import type { CompanyListItem } from "@/app/api/companies/list/route";
@@ -204,8 +205,7 @@ function CompaniesPageContent() {
   const [deepDive, setDeepDive] = useState<DeepDivePayload | null>(null);
   const [diveLoading, setDiveLoading] = useState(false);
   const [diveError, setDiveError] = useState<string | null>(null);
-  const [view,        setView]        = useState<"scorecard" | "detail">("scorecard");
-  const [analysisTab, setAnalysisTab] = useState<"model" | "consensus">("consensus");
+  const [analysisTab, setAnalysisTab] = useState<"scorecard" | "model" | "consensus" | "reports" | "research">("scorecard");
   // Uploaded docs keyed by ticker → array of {url, label}
   const [companyDocs, setCompanyDocs] = useState<Record<string, { url: string; label: string }[]>>({});
 
@@ -240,8 +240,7 @@ function CompaniesPageContent() {
     setDiveLoading(true);
     setDiveError(null);
     setDeepDive(null);
-    setView("scorecard");
-    setAnalysisTab("consensus");
+    setAnalysisTab("scorecard");
 
     fetch(`/api/companies/${item.ticker}`)
       .then((r) => {
@@ -475,8 +474,10 @@ function CompaniesPageContent() {
                 borderBottom: "1px solid rgba(15,23,42,0.08)",
                 marginBottom: 20,
               }}>
-                {(["model", "consensus"] as const).map((tab) => {
+                {(["scorecard", "model", "consensus", "reports", "research"] as const).map((tab) => {
                   const active = analysisTab === tab;
+                  const LABELS = { scorecard: "Scorecard", model: "Analyst Models", consensus: "Consensus Estimates", reports: "Related Reports", research: "Research Notes" };
+                  const label  = LABELS[tab];
                   return (
                     <button
                       key={tab}
@@ -496,7 +497,7 @@ function CompaniesPageContent() {
                         whiteSpace:      "nowrap",
                       }}
                     >
-                      {tab === "model" ? "Analyst Models" : "Consensus Estimates"}
+                      {label}
                     </button>
                   );
                 })}
@@ -510,47 +511,17 @@ function CompaniesPageContent() {
                 />
               )}
 
-              {/* ══ Consensus Estimates tab ═════════════════════════════════════ */}
-              {analysisTab === "consensus" && (
-                <>
-                  {/* View toggle — only in detail view */}
-                  {view === "detail" && (
-                    <div style={{ marginBottom: 16 }}>
-                      <button
-                        onClick={() => setView("scorecard")}
-                        style={{
-                          display:      "inline-flex",
-                          alignItems:   "center",
-                          gap:          6,
-                          background:   "transparent",
-                          border:       "1px solid rgba(15,23,42,0.12)",
-                          borderRadius: 8,
-                          padding:      "6px 14px",
-                          fontSize:     12,
-                          fontWeight:   600,
-                          color:        "#64748B",
-                          cursor:       "pointer",
-                        }}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                          <path d="M11 7H3M7 11L3 7l4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                        Back to Scorecard
-                      </button>
-                    </div>
-                  )}
-
-              {/* ══ SCORECARD VIEW ══════════════════════════════════════════════ */}
-              {view === "scorecard" && (
+              {/* ══ Scorecard tab ═══════════════════════════════════════════════ */}
+              {analysisTab === "scorecard" && (
                 <ScorecardGrid
                   deepDive={deepDive}
                   latestPrice={latestPrice}
-                  onViewDetail={() => setView("detail")}
+                  onViewDetail={() => setAnalysisTab("consensus")}
                 />
               )}
 
-              {/* ══ DETAIL VIEW ═════════════════════════════════════════════════ */}
-              {view === "detail" && (
+              {/* ══ Consensus Estimates tab ═════════════════════════════════════ */}
+              {analysisTab === "consensus" && (
                 <>
               {/* ── ROW 1: Historical Valuation (3/4) + Market Snapshot (1/4) ── */}
               <div className="grid lg:grid-cols-4 gap-6 mb-4">
@@ -610,14 +581,20 @@ function CompaniesPageContent() {
                 </div>
               </div>
 
-              {/* ── ROW 4: Related Reports — full width ──────────────────────── */}
-              <div style={{ ...CARD, marginBottom: 24 }}>
-                <RelatedReports ticker={selectedItem?.ticker ?? null} />
-              </div>
-                </>
-              )}
                 </>
               )} {/* end consensus tab */}
+
+              {/* ══ Related Reports tab ══════════════════════════════════════════ */}
+              {analysisTab === "reports" && (
+                <div style={{ ...CARD, marginBottom: 24 }}>
+                  <RelatedReports ticker={selectedItem?.ticker ?? null} />
+                </div>
+              )}
+
+              {/* ══ Research Notes tab ═══════════════════════════════════════════ */}
+              {analysisTab === "research" && (
+                <ResearchNotesPanel ticker={selectedItem?.ticker ?? null} />
+              )}
             </>
           )}
         </div>

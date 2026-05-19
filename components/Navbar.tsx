@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart3, TrendingUp, Building2, Globe2, FileText, Activity, BookOpen, Sigma } from "lucide-react";
+import { BarChart3, TrendingUp, Building2, Globe2, FileText, Activity, BookOpen, Sigma, Newspaper } from "lucide-react";
 
 const tabs = [
   { href: "/economia",       label: "Market",          icon: TrendingUp },
@@ -11,8 +11,9 @@ const tabs = [
   { href: "/latam",          label: "LatAm",           icon: Globe2     },
   { href: "/quant",          label: "Analysis",        icon: Activity   },
   { href: "/quant-analysis", label: "Quant Analysis",  icon: Sigma      },
-  { href: "/companies",      label: "Company Profiles",icon: BookOpen   },
-  { href: "/presentations",  label: "Presentations",   icon: FileText   },
+  { href: "/companies",      label: "Company Profiles", icon: BookOpen   },
+  { href: "/research",       label: "Research Notes",   icon: Newspaper  },
+  { href: "/presentations",  label: "Presentations",    icon: FileText   },
 ];
 
 export default function Navbar() {
