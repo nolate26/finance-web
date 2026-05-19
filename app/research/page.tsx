@@ -449,7 +449,7 @@ export default function ResearchPage() {
 
                 {/* Company + industry */}
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", truncate: "true", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {r.company}
                   </div>
                   <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
