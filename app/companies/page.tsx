@@ -206,6 +206,7 @@ function CompaniesPageContent() {
   const [diveLoading, setDiveLoading] = useState(false);
   const [diveError, setDiveError] = useState<string | null>(null);
   const [analysisTab, setAnalysisTab] = useState<"scorecard" | "model" | "consensus" | "reports" | "research">("scorecard");
+  const [tickerNotFound, setTickerNotFound] = useState<string | null>(null);
   // Uploaded docs keyed by ticker → array of {url, label}
   const [companyDocs, setCompanyDocs] = useState<Record<string, { url: string; label: string }[]>>({});
 
@@ -219,11 +220,14 @@ function CompaniesPageContent() {
         const list = d.companies ?? [];
         setCompanies(list);
         if (list.length > 0) {
-          const defaultItem =
-            (tickerParam ? list.find((c) => c.ticker === tickerParam) : null) ??
-            list.find((c) => c.ticker === "CCU CI Equity") ??
-            list[0];
-          handleSelect(defaultItem);
+          const found = tickerParam ? list.find((c) => c.ticker === tickerParam) : null;
+          if (tickerParam && !found) {
+            setTickerNotFound(tickerParam);
+            // Don't navigate — leave page in empty state
+          } else {
+            const defaultItem = found ?? list.find((c) => c.ticker === "CCU CI Equity") ?? list[0];
+            handleSelect(defaultItem);
+          }
           if (tabParam === "model" || tabParam === "consensus") {
             setAnalysisTab(tabParam);
           }
@@ -328,6 +332,25 @@ function CompaniesPageContent() {
                 </div>
                 <div style={{ color: "#94A3B8", fontSize: 11 }}>{diveError}</div>
               </div>
+            </div>
+          )}
+
+          {/* Ticker not found banner */}
+          {tickerNotFound && (
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              gap: 12, marginBottom: 16, padding: "10px 16px", borderRadius: 9,
+              background: "rgba(217,119,6,0.07)", border: "1px solid rgba(217,119,6,0.28)",
+            }}>
+              <span style={{ fontSize: 12, color: "#78350F" }}>
+                Ticker <strong style={{ fontFamily: "JetBrains Mono, monospace" }}>{tickerNotFound}</strong> was not found in Company Profiles — no deep dive data available.
+              </span>
+              <button
+                onClick={() => setTickerNotFound(null)}
+                style={{ background: "transparent", border: "none", cursor: "pointer", color: "#92400E", fontSize: 16, lineHeight: 1, padding: "0 4px" }}
+              >
+                ×
+              </button>
             </div>
           )}
 

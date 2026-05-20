@@ -249,15 +249,18 @@ export default function ConsensusCheckTable() {
   const [sortBy,        setSortBy]        = useState<SortKey>("ticker");
   const [sortDir,       setSortDir]       = useState<"asc" | "desc">("asc");
   const [analystFilter, setAnalystFilter] = useState("");
+  const [validTickers,  setValidTickers]  = useState<Set<string>>(new Set());
+  const [notFoundMsg,   setNotFoundMsg]   = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/latam/consensus-check")
-      .then((r) => r.json())
-      .then((d: ConsensusCheckPayload & { error?: string }) => {
-        if (d.error) { setError(true); } else { setData(d); }
-        setLoading(false);
-      })
-      .catch(() => { setError(true); setLoading(false); });
+    Promise.all([
+      fetch("/api/latam/consensus-check").then((r) => r.json()),
+      fetch("/api/companies/list").then((r) => r.json()),
+    ]).then(([consensus, companies]: [ConsensusCheckPayload & { error?: string }, { companies?: { ticker: string }[] }]) => {
+      if (consensus.error) { setError(true); } else { setData(consensus); }
+      setValidTickers(new Set((companies.companies ?? []).map((c) => c.ticker)));
+      setLoading(false);
+    }).catch(() => { setError(true); setLoading(false); });
   }, []);
 
   if (loading) {
@@ -296,6 +299,11 @@ export default function ConsensusCheckTable() {
   }
 
   function handleTickerClick(ticker: string) {
+    if (!validTickers.has(ticker)) {
+      setNotFoundMsg(ticker);
+      return;
+    }
+    setNotFoundMsg(null);
     router.push(`/companies?ticker=${encodeURIComponent(ticker)}&tab=model`);
   }
 
@@ -310,6 +318,25 @@ export default function ConsensusCheckTable() {
 
   return (
     <>
+      {/* ── Ticker not found warning ── */}
+      {notFoundMsg && (
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          gap: 12, marginBottom: 10, padding: "9px 14px", borderRadius: 8,
+          background: "rgba(217,119,6,0.07)", border: "1px solid rgba(217,119,6,0.28)",
+        }}>
+          <span style={{ fontSize: 12, color: "#78350F" }}>
+            Ticker <strong style={{ fontFamily: "JetBrains Mono, monospace" }}>{notFoundMsg}</strong> was not found in Company Profiles — no deep dive data available.
+          </span>
+          <button
+            onClick={() => setNotFoundMsg(null)}
+            style={{ background: "transparent", border: "none", cursor: "pointer", color: "#92400E", fontSize: 16, lineHeight: 1, padding: "0 2px" }}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* ── Analyst filter ── */}
       <div style={{ marginBottom: 10 }}>
         <select

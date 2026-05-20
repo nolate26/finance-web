@@ -15,25 +15,25 @@ export interface CompanyListItem {
  */
 export async function GET() {
   try {
-    // Raw query to get distinct ticker + nombre_latam pairs
+    // Raw query: fund portfolio companies UNION model_headers companies
     const rows = await prisma.$queryRaw<{ ticker_bloomberg: string; nombre_latam: string }[]>`
-      SELECT DISTINCT 
-          ei.ticker_bloomberg,
-          fpw.company AS nombre_latam
+      SELECT DISTINCT ei.ticker_bloomberg, fpw.company AS nombre_latam
       FROM fund_portfolio_weights fpw
-      JOIN empresas_industrias ei 
-        ON fpw.company = ei.nombre_latam
+      JOIN empresas_industrias ei ON fpw.company = ei.nombre_latam
       WHERE fpw.fund_name IN (
-        'Moneda_Renta_Variable',
-        'Pionero',
-        'Orange',		
-        'Glory', 
-          'Mercer', 
-          'Moneda_Latin_America_Equities_(LX)', 
-          'Moneda_Latin_America_Small_Cap_(LX)'
+        'Moneda_Renta_Variable', 'Pionero', 'Orange', 'Glory', 'Mercer',
+        'Moneda_Latin_America_Equities_(LX)', 'Moneda_Latin_America_Small_Cap_(LX)'
       )
       AND ei.ticker_bloomberg IS NOT NULL
-      ORDER BY ei.ticker_bloomberg ASC;
+
+      UNION
+
+      SELECT DISTINCT ei.ticker_bloomberg, ei.nombre_latam
+      FROM empresas_industrias ei
+      JOIN model_headers mh ON mh.ticker = ei.ticker_bloomberg
+      WHERE ei.ticker_bloomberg IS NOT NULL
+
+      ORDER BY ticker_bloomberg ASC;
     `;
 
     const companies: CompanyListItem[] = rows.map((r) => ({
