@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Download } from "lucide-react";
 import type { ConsensusCheckPayload, ConsensusCheckRow } from "@/app/api/latam/consensus-check/route";
+import { downloadExcel } from "@/lib/exportExcel";
 
 // ── Palette ────────────────────────────────────────────────────────────────────
 const C = {
@@ -337,8 +339,8 @@ export default function ConsensusCheckTable() {
         </div>
       )}
 
-      {/* ── Analyst filter ── */}
-      <div style={{ marginBottom: 10 }}>
+      {/* ── Toolbar: analyst filter + download ── */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
         <select
           value={analystFilter}
           onChange={(e) => setAnalystFilter(e.target.value)}
@@ -366,6 +368,36 @@ export default function ConsensusCheckTable() {
             {filtered.length} of {sorted.length}
           </span>
         )}
+
+        {/* Download */}
+        <button
+          onClick={() => {
+            const headers = [
+              "Ticker", "Update Date", "Analyst", "Rec", "Upside",
+              `Moneda EBITDA ${y1}`, `Moneda EBITDA ${y2}`, `Moneda NI ${y1}`, `Moneda NI ${y2}`,
+              `BBG EBITDA ${y1}`,    `BBG EBITDA ${y2}`,    `BBG NI ${y1}`,    `BBG NI ${y2}`,
+              `Var EBITDA ${y1}`,    `Var EBITDA ${y2}`,    `Var NI ${y1}`,    `Var NI ${y2}`,
+            ];
+            const rows = filtered.map((r) => [
+              shortTicker(r.ticker), r.updateDate, r.analyst ?? "", r.recc ?? "", r.upside != null ? +(r.upside * 100).toFixed(2) : null,
+              r.moneda.ebitda1FY, r.moneda.ebitda2FY, r.moneda.ni1FY, r.moneda.ni2FY,
+              r.consensus.ebitda1FY != null ? +(r.consensus.ebitda1FY / 1000).toFixed(1) : null,
+              r.consensus.ebitda2FY != null ? +(r.consensus.ebitda2FY / 1000).toFixed(1) : null,
+              r.consensus.ni1FY    != null ? +(r.consensus.ni1FY     / 1000).toFixed(1) : null,
+              r.consensus.ni2FY    != null ? +(r.consensus.ni2FY     / 1000).toFixed(1) : null,
+              varPct(r.moneda.ebitda1FY, r.consensus.ebitda1FY) != null ? +varPct(r.moneda.ebitda1FY, r.consensus.ebitda1FY)!.toFixed(1) : null,
+              varPct(r.moneda.ebitda2FY, r.consensus.ebitda2FY) != null ? +varPct(r.moneda.ebitda2FY, r.consensus.ebitda2FY)!.toFixed(1) : null,
+              varPct(r.moneda.ni1FY,     r.consensus.ni1FY)     != null ? +varPct(r.moneda.ni1FY,     r.consensus.ni1FY)!.toFixed(1)     : null,
+              varPct(r.moneda.ni2FY,     r.consensus.ni2FY)     != null ? +varPct(r.moneda.ni2FY,     r.consensus.ni2FY)!.toFixed(1)     : null,
+            ]);
+            downloadExcel([{ name: "Estimates vs Consensus", headers, rows }], "latam_estimates_consensus");
+          }}
+          style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: "#059669", background: "rgba(5,150,105,0.07)", border: "1px solid rgba(5,150,105,0.22)", borderRadius: 7, padding: "5px 14px", cursor: "pointer", transition: "all 0.12s" }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(5,150,105,0.13)"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(5,150,105,0.07)"; }}
+        >
+          <Download size={12} /> Download Excel ({filtered.length})
+        </button>
       </div>
 
       {/* ── Table ── */}

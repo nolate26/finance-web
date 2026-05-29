@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Download } from "lucide-react";
+import { downloadExcel } from "@/lib/exportExcel";
 import LatamTable, { type LatamCompany } from "@/components/latam/LatamTable";
 import TopPicksForm from "@/components/top-picks/TopPicksForm";
 import FlatAttributionPanel from "@/components/attribution/FlatAttributionPanel";
@@ -480,6 +481,22 @@ export default function LatAmPage() {
                 )}
               </span>
             )}
+          </div>
+
+          {/* Download Excel */}
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+            <button
+              onClick={() => {
+                const headers = ["Ticker", "Company", "Sector", "Funds", "Price USD", "Mkt Cap (USD M)", "Ret 1W", "Ret 1M", "Ret YTD", "Ret 1Y", "Ret 5Y", "PE Cur Yr", "PE Nxt Yr", "EV/EBITDA Cur", "EV/EBITDA Nxt", "P/BV", "Leverage", "ROE Est", "Div Yield", "Target Price", "TP Upside"];
+                const rows = filtered.map((c) => [c.ticker, c.company, c.sector ?? "", c.funds.join(", "), c.priceUsd, c.mktCapUsd, c.ret1W, c.ret1M, c.retYtd, c.ret1Y, c.ret5Y, c.peCurYr, c.peNxtYr, c.evEbitdaCurYr, c.evEbitdaNxtYr, c.pBv, c.leverage, c.roeEst, c.divYield, c.targetPrice, c.tpUpside]);
+                downloadExcel([{ name: "Stock Selection", headers, rows }], "latam_stock_selection");
+              }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: "#059669", background: "rgba(5,150,105,0.07)", border: "1px solid rgba(5,150,105,0.22)", borderRadius: 7, padding: "5px 14px", cursor: "pointer", transition: "all 0.12s" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(5,150,105,0.13)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(5,150,105,0.07)"; }}
+            >
+              <Download size={12} /> Download Excel ({filtered.length})
+            </button>
           </div>
 
           {/* Bloomberg-style table */}

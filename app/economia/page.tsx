@@ -6,7 +6,8 @@ import PerformanceTable from "@/components/economia/PerformanceTable";
 import PEHistoryChart from "@/components/economia/PEHistoryChart";
 import MacroPanel from "@/components/economia/MacroPanel";
 import CommoditiesPanel from "@/components/economia/CommoditiesPanel";
-import { Calendar } from "lucide-react";
+import { Calendar, Download } from "lucide-react";
+import { downloadExcel } from "@/lib/exportExcel";
 
 interface EconomiaData {
   resumenPE: Record<string, unknown>[];
@@ -155,6 +156,28 @@ export default function EconomiaPage() {
       {/* ── VALUATIONS ──────────────────────────────────────────────────────── */}
       {view === "valuations" && (
         <>
+          {/* Download button */}
+          <div className="flex justify-end mb-3">
+            <button
+              onClick={() => {
+                type PE = { Index: string; "Today (P/E)": number | null; median: number | null; max: number | null; min: number | null; stdDev: number | null; discount: number | null };
+                const summaryRows = (data.resumenPE as PE[]).map((r) => [r.Index, r["Today (P/E)"] ?? null, r.median ?? null, r.max ?? null, r.min ?? null, r.stdDev ?? null, r.discount ?? null]);
+                const hist = data.allHistoriaPE as Record<string, unknown>[];
+                const indices = Object.keys(hist[0] ?? {}).filter((k) => k !== "date");
+                const histRows = hist.map((r) => [String(r.date), ...indices.map((idx) => (r[idx] as number | null) ?? null)]);
+                downloadExcel([
+                  { name: "PE Summary",  headers: ["Index", "Today P/E", "Median", "Max", "Min", "Std Dev", "Discount %"], rows: summaryRows },
+                  { name: "PE History",  headers: ["Date", ...indices], rows: histRows },
+                ], "market_valuations");
+              }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: "#059669", background: "rgba(5,150,105,0.07)", border: "1px solid rgba(5,150,105,0.22)", borderRadius: 7, padding: "5px 14px", cursor: "pointer", transition: "all 0.12s" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(5,150,105,0.13)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(5,150,105,0.07)"; }}
+            >
+              <Download size={12} /> Download Excel
+            </button>
+          </div>
+
           {/* Table + 3 stacked charts */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 mb-5">
             <ValuationTable
@@ -220,12 +243,30 @@ export default function EconomiaPage() {
 
       {/* ── COMMODITIES ──────────────────────────────────────────────────────── */}
       {view === "commodities" && commoditiesData && (
-        <CommoditiesPanel
+        <>
+          <div className="flex justify-end mb-3">
+            <button
+              onClick={() => {
+                type SeriesRow = { date: string; [k: string]: string | number | null };
+                const series = commoditiesData.historical.series as SeriesRow[];
+                const cols = Object.keys(series[0] ?? {}).filter((k) => k !== "date");
+                const rows = series.map((r) => [r.date, ...cols.map((c) => (r[c] as number | null) ?? null)]);
+                downloadExcel([{ name: "Historical Prices", headers: ["Date", ...cols], rows }], "commodities_historical");
+              }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: "#059669", background: "rgba(5,150,105,0.07)", border: "1px solid rgba(5,150,105,0.22)", borderRadius: 7, padding: "5px 14px", cursor: "pointer", transition: "all 0.12s" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(5,150,105,0.13)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(5,150,105,0.07)"; }}
+            >
+              <Download size={12} /> Download Excel
+            </button>
+          </div>
+          <CommoditiesPanel
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           historical={commoditiesData.historical as any}
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           projections={commoditiesData.projections as any}
         />
+        </>
       )}
       {view === "commodities" && !commoditiesData && (
         <div className="flex items-center justify-center h-48">

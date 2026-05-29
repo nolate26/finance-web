@@ -58,9 +58,7 @@ export async function POST(request: Request) {
       case 'MonedaFundReturns':
         await prisma.monedaFundReturn.createMany({ data: rows, skipDuplicates: true }); 
         break;
-      case 'SsUniverse':
-        await prisma.ssUniverse.createMany({ data: rows, skipDuplicates: true });
-        break;
+  
       case 'PerformanceAttribution':
         await prisma.performanceAttribution.createMany({ data: rows, skipDuplicates: true });
         break;

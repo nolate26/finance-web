@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { Download } from "lucide-react";
 import type { ModelHistoryPayload, ModelFinancialRow } from "@/app/api/companies/[ticker]/model/route";
+import { downloadExcel } from "@/lib/exportExcel";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const BLUE   = "#1D4ED8";
@@ -324,6 +326,15 @@ function buildConsensusRows(
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
+function handleModelDownload(ticker: string, years: number[], allRows: { key: string; label: string; isSection: boolean; format: string; values: (number | null)[] }[]) {
+  const headers = ["Metric", ...years.map(String)];
+  const rows = allRows.map((r) => {
+    if (r.isSection) return [`${r.label}___section`, ...years.map(() => null)];
+    return [r.label, ...r.values.map((v) => v ?? null)];
+  });
+  downloadExcel([{ name: "Model", headers, rows }], `${ticker.replace(/ /g, "_")}_model`);
+}
+
 export default function ModelTable({ ticker }: { ticker: string }) {
   const [payload,      setPayload]      = useState<ModelHistoryPayload | null>(null);
   const [loading,      setLoading]      = useState(true);
@@ -449,6 +460,31 @@ export default function ModelTable({ ticker }: { ticker: string }) {
           <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", color: TEXT2, textTransform: "uppercase" }}>Updated</span>
           <span style={{ fontSize: 11, color: TEXT2, fontFamily: "JetBrains Mono, monospace" }}>{header.updateDate}</span>
         </div>
+
+        {/* Download Excel */}
+        <button
+          onClick={() => handleModelDownload(ticker, years, allRows)}
+          title="Download as Excel"
+          style={{
+            display:      "inline-flex",
+            alignItems:   "center",
+            gap:          5,
+            fontSize:     11,
+            fontWeight:   600,
+            color:        "#059669",
+            background:   "rgba(5,150,105,0.07)",
+            border:       "1px solid rgba(5,150,105,0.22)",
+            borderRadius: 6,
+            padding:      "4px 12px",
+            cursor:       "pointer",
+            transition:   "all 0.12s",
+            marginLeft:   header.link ? undefined : "auto",
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(5,150,105,0.12)"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(5,150,105,0.07)"; }}
+        >
+          <Download size={11} /> Excel
+        </button>
 
         {header.link && (
           <a
