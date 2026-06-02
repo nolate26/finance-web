@@ -705,3 +705,117 @@ model EmailResearch {
 }
  
 
+// ------------------------------------------
+// HEADER (cabecera) — un registro por (ticker, updateDate)
+// Mismos campos que el header de compañías, pero tabla aparte.
+// ------------------------------------------
+model BankHeader {
+  id          Int      @id @default(autoincrement())
+  ticker      String   @db.VarChar(100)
+  updateDate  DateTime @map("update_date") @db.Date
+
+  recc        String?  @db.VarChar(20)   // Buy / Hold / Sell
+  tp          Float?                      // Target Price
+  analyst     String?  @db.VarChar(100)
+  currency    String?  @db.VarChar(20)   // Ej: "CLP mm"
+  thesis      String?  @db.Text
+  link        String?  @db.Text
+
+  financials  BankFinancials[]
+  kpis        BankKPI[]
+
+  @@unique([ticker, updateDate])
+  @@map("bank_headers")
+}
+
+// ------------------------------------------
+// FINANCIALS — una fila por (ticker, updateDate, year)
+// Estructura específica de banco (filas 12–60 de la planilla).
+// ------------------------------------------
+model BankFinancials {
+  id          Int      @id @default(autoincrement())
+  ticker      String   @db.VarChar(100)
+  updateDate  DateTime @map("update_date") @db.Date
+  year        Int
+
+  // --- Income Statement (filas 12–31) ---
+  netInterestIncome  Float? @map("net_interest_income")  // 12 Net interest income ($)
+  netFeeIncome       Float? @map("net_fee_income")       // 13 Net fee income ($)
+  treasuryIncome     Float? @map("treasury_income")      // 14 Treasury income ($)
+  otherIncome        Float? @map("other_income")         // 15 Other income ($)
+  revenue            Float?                               // 16 Revenue ($)
+  nim                Float?                               // 17 NIM (%)
+  riskAdjustedNim    Float? @map("risk_adjusted_nim")    // 18 Risk adjusted NIM (%)
+  provisionExpenses  Float? @map("provision_expenses")   // 19 Provision expenses ($)
+  cor                Float?                               // 20 CoR (%)
+  nplRatio           Float? @map("npl_ratio")            // 21 NPL ratio (%)
+  totalCoverageRatio Float? @map("total_coverage_ratio") // 22 Total coverage ratio (%)
+  sga                Float?                               // 23 SG&A ($)
+  efficiency         Float?                               // 24 Efficiency (%)
+  costToAssets       Float? @map("cost_to_assets")       // 25 Cost to assets (%)
+  ebt                Float?                               // 26 EBT ($)
+  taxes              Float?                               // 27 Taxes ($)
+  minorityInterest   Float? @map("minority_interest")    // 28 Minority interest ($)
+  controllingNetIncome Float? @map("controlling_net_income") // 29 Controlling Net Income ($)
+  eps                Float?                               // 30 EPS ($)
+  shares             Float?                               // 31 # Shares (mn)
+
+  // --- Balance (filas 33–52) ---
+  grossLoans                 Float? @map("gross_loans")                  // 33
+  securities                 Float?                                       // 34
+  interestEarningAssets      Float? @map("interest_earning_assets")      // 35
+  avgInterestEarningAssets   Float? @map("avg_interest_earning_assets")  // 36
+  allowancesLoanLosses       Float? @map("allowances_loan_losses")       // 37
+  totalAssets                Float? @map("total_assets")                 // 38
+  avgTotalAssets             Float? @map("avg_total_assets")             // 39
+  demandDeposits             Float? @map("demand_deposits")              // 40
+  timeDeposits               Float? @map("time_deposits")                // 41
+  totalDeposits              Float? @map("total_deposits")               // 42
+  otherFunding               Float? @map("other_funding")                // 43
+  interestBearingLiabilities Float? @map("interest_bearing_liabilities") // 44
+  totalFunding               Float? @map("total_funding")                // 45
+  totalLiabilities           Float? @map("total_liabilities")            // 46
+  minorities                 Float?                                       // 47
+  controllingEquity          Float? @map("controlling_equity")           // 48
+  avgControllingEquity       Float? @map("avg_controlling_equity")       // 49
+  tangibleEquity             Float? @map("tangible_equity")              // 50
+  overdueLoans               Float? @map("overdue_loans")                // 51
+  voluntaryProvisions        Float? @map("voluntary_provisions")         // 52
+
+  // --- Cash Flow / Market (filas 54–60) ---
+  capex       Float?                          // 54
+  dividend    Float?                          // 55 Dividend ($) - negative
+  payout      Float?                          // 56 Payout - positive
+  buybacks    Float?                          // 57 Buybacks ($) - negative
+  dps         Float?                          // 58 DPS ($) - negative
+  sharePrice  Float? @map("share_price")      // 59 Share Price ($) - LCCY
+  marketCap   Float? @map("market_cap")       // 60 Market Cap ($) - LCCY
+
+  header      BankHeader @relation(fields: [ticker, updateDate], references: [ticker, updateDate], onDelete: Cascade)
+
+  @@unique([ticker, updateDate, year])
+  @@map("bank_financials")
+}
+
+// ------------------------------------------
+// KPI (Company Specific) — filas 62+ de la planilla
+// Unicidad por kpiOrder (no por kpiName) para permitir nombres
+// repetidos como "Var %" dentro de una misma sección.
+// ------------------------------------------
+model BankKPI {
+  id          Int      @id @default(autoincrement())
+  ticker      String   @db.VarChar(100)
+  updateDate  DateTime @map("update_date") @db.Date
+  year        Int
+
+  sectionName String   @map("section_name") @db.VarChar(100) // Ej: "Chile", "CNB"
+  kpiName     String   @map("kpi_name") @db.VarChar(100)     // Ej: "Commercial loans", "Var %"
+  kpiOrder    Int      @map("kpi_order")                      // Orden dentro de la sección
+
+  value       Float?
+
+  header      BankHeader @relation(fields: [ticker, updateDate], references: [ticker, updateDate], onDelete: Cascade)
+
+  @@unique([ticker, updateDate, year, sectionName, kpiOrder])
+  @@map("bank_kpis")
+}

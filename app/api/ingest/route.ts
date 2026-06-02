@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     }
 
     // 2. Hacemos la excepción para nuestro modelo de Excel
-    if (table !== 'AnalystModel' && (!rows || !Array.isArray(rows))) {
+  if (table !== 'AnalystModel' && table !== 'BankModel' && (!rows || !Array.isArray(rows))) {
       return NextResponse.json({ error: 'Payload inválido: Faltan las rows' }, { status: 400 });
     }
 
@@ -77,6 +77,106 @@ export async function POST(request: Request) {
           }
         }
         break;
+
+      case 'BankModel':
+        const { header: bHeader, financials: bFinancials, kpis: bKpis } = data;
+
+        if (!bHeader || !bFinancials) {
+          return NextResponse.json(
+            { error: 'Payload inválido: Faltan datos del modelo de banco' },
+            { status: 400 }
+          );
+        }
+
+        const bankDate = new Date(bHeader.updateDate);
+
+        // 1. Header
+        await prisma.bankHeader.upsert({
+          where: {
+            ticker_updateDate: {
+              ticker: bHeader.ticker,
+              updateDate: bankDate
+            }
+          },
+          update: {
+            recc:     bHeader.recc,
+            tp:       bHeader.tp,
+            analyst:  bHeader.analyst,
+            currency: bHeader.currency,
+            thesis:   bHeader.thesis,
+            link:     bHeader.link
+          },
+          create: {
+            ticker:     bHeader.ticker,
+            updateDate: bankDate,
+            recc:       bHeader.recc,
+            tp:         bHeader.tp,
+            analyst:    bHeader.analyst,
+            currency:   bHeader.currency,
+            thesis:     bHeader.thesis,
+            link:       bHeader.link
+          }
+        });
+
+        // 2. Financials
+        const bankFinUpserts = bFinancials.map((f: any) => {
+          const { year, ...metricas } = f;
+          return prisma.bankFinancials.upsert({
+            where: {
+              ticker_updateDate_year: {
+                ticker:     bHeader.ticker,
+                updateDate: bankDate,
+                year:       year
+              }
+            },
+            update: metricas,
+            create: {
+              ticker:     bHeader.ticker,
+              updateDate: bankDate,
+              year:       year,
+              ...metricas
+            }
+          });
+        });
+
+        await prisma.$transaction(bankFinUpserts);
+
+        // 3. KPIs — upsert por kpiOrder (permite nombres repetidos como "Var %")
+        if (bKpis && Array.isArray(bKpis) && bKpis.length > 0) {
+          const bankKpiUpserts = bKpis.map((k: any) => {
+            return prisma.bankKPI.upsert({
+              where: {
+                ticker_updateDate_year_sectionName_kpiOrder: {
+                  ticker:      bHeader.ticker,
+                  updateDate:  bankDate,
+                  year:        k.year,
+                  sectionName: k.sectionName,
+                  kpiOrder:    k.kpiOrder
+                }
+              },
+              update: {
+                value:   k.value,
+                kpiName: k.kpiName
+              },
+              create: {
+                ticker:      bHeader.ticker,
+                updateDate:  bankDate,
+                year:        k.year,
+                sectionName: k.sectionName,
+                kpiName:     k.kpiName,
+                kpiOrder:    k.kpiOrder,
+                value:       k.value
+              }
+            });
+          });
+
+          await prisma.$transaction(bankKpiUpserts);
+        }
+
+        return NextResponse.json({
+          success: true,
+          message: `Snapshot de banco ${bHeader.ticker} guardado: ${bFinancials.length} años + ${bKpis?.length ?? 0} KPIs.`
+        });
 
 
       // --- TABLA TOTAL RETURN INDEX (UPSERT) ---
