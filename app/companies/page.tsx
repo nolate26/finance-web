@@ -13,6 +13,7 @@ import RelatedReports from "@/components/deep-dive/RelatedReports";
 import ResearchNotesPanel from "@/components/deep-dive/ResearchNotesPanel";
 import ScorecardGrid from "@/components/deep-dive/ScorecardGrid";
 import ModelExplorer from "@/components/deep-dive/ModelExplorer";
+import BankModelExplorer from "@/components/deep-dive/BankModelExplorer";
 import type { CompanyListItem } from "@/app/api/companies/list/route";
 import type { DeepDivePayload, PortfolioWeightSnap } from "@/app/api/companies/[ticker]/route";
 
@@ -528,10 +529,17 @@ function CompaniesPageContent() {
 
               {/* ══ Analyst Models tab ══════════════════════════════════════════ */}
               {analysisTab === "model" && (
-                <ModelExplorer
-                  ticker={selectedItem!.ticker}
-                  consensusEstimates={deepDive.consensusEstimates}
-                />
+                selectedItem!.kind === "bank" ? (
+                  <BankModelExplorer
+                    ticker={selectedItem!.ticker}
+                    consensusEstimates={deepDive.consensusEstimates}
+                  />
+                ) : (
+                  <ModelExplorer
+                    ticker={selectedItem!.ticker}
+                    consensusEstimates={deepDive.consensusEstimates}
+                  />
+                )
               )}
 
               {/* ══ Scorecard tab ═══════════════════════════════════════════════ */}

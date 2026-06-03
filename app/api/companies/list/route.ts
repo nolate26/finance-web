@@ -6,39 +6,64 @@ export const dynamic = "force-dynamic";
 export interface CompanyListItem {
   ticker: string;
   nombre: string;
+  kind:   "company" | "bank";
 }
 
 /**
  * GET /api/companies/list
- * Returns all companies that have a Bloomberg ticker, joined from
- * fund_portfolio_weights → empresas_industrias.
+ * Returns all companies (fund_portfolio_weights ∪ model_headers, joined to
+ * empresas_industrias) plus all banks (bank_headers). Each item carries a `kind`
+ * so the deep-dive can route a ticker to the company or bank model view.
+ * Company takes precedence if a ticker exists in both sets.
  */
 export async function GET() {
   try {
-    // Raw query: fund portfolio companies UNION model_headers companies
-    const rows = await prisma.$queryRaw<{ ticker_bloomberg: string; nombre_latam: string }[]>`
-      SELECT DISTINCT ei.ticker_bloomberg, fpw.company AS nombre_latam
-      FROM fund_portfolio_weights fpw
-      JOIN empresas_industrias ei ON fpw.company = ei.nombre_latam
-      WHERE fpw.fund_name IN (
-        'Moneda_Renta_Variable', 'Pionero', 'Orange', 'Glory', 'Mercer',
-        'Moneda_Latin_America_Equities_(LX)', 'Moneda_Latin_America_Small_Cap_(LX)'
+    // Membership = fund holdings ∪ company models ∪ banks (so a bank ticker shows up
+    // even if it isn't a fund holding). `kind` follows the routing rule from the spec:
+    // a ticker is a BANK iff it's in bank_headers AND NOT in model_headers (ModelHeader
+    // takes precedence). A fund holding without any model still resolves to "company"
+    // (renders the existing "No analyst model available" state). One scan per table,
+    // no N+1; GROUP BY guarantees a single row per ticker.
+    const rows = await prisma.$queryRaw<{ ticker: string; nombre: string; kind: string }[]>`
+      WITH base AS (
+        SELECT ei.ticker_bloomberg AS ticker, fpw.company AS nombre
+        FROM fund_portfolio_weights fpw
+        JOIN empresas_industrias ei ON fpw.company = ei.nombre_latam
+        WHERE fpw.fund_name IN (
+          'Moneda_Renta_Variable', 'Pionero', 'Orange', 'Glory', 'Mercer',
+          'Moneda_Latin_America_Equities_(LX)', 'Moneda_Latin_America_Small_Cap_(LX)'
+        )
+        AND ei.ticker_bloomberg IS NOT NULL
+
+        UNION
+
+        SELECT ei.ticker_bloomberg AS ticker, ei.nombre_latam AS nombre
+        FROM empresas_industrias ei
+        JOIN model_headers mh ON mh.ticker = ei.ticker_bloomberg
+        WHERE ei.ticker_bloomberg IS NOT NULL
+
+        UNION
+
+        SELECT bh.ticker AS ticker, COALESCE(ei.nombre_latam, bh.ticker) AS nombre
+        FROM bank_headers bh
+        LEFT JOIN empresas_industrias ei ON ei.ticker_bloomberg = bh.ticker
       )
-      AND ei.ticker_bloomberg IS NOT NULL
-
-      UNION
-
-      SELECT DISTINCT ei.ticker_bloomberg, ei.nombre_latam
-      FROM empresas_industrias ei
-      JOIN model_headers mh ON mh.ticker = ei.ticker_bloomberg
-      WHERE ei.ticker_bloomberg IS NOT NULL
-
-      ORDER BY ticker_bloomberg ASC;
+      SELECT b.ticker AS ticker,
+             MIN(b.nombre) AS nombre,
+             CASE
+               WHEN EXISTS (SELECT 1 FROM bank_headers bh  WHERE bh.ticker = b.ticker)
+                AND NOT EXISTS (SELECT 1 FROM model_headers mh WHERE mh.ticker = b.ticker)
+               THEN 'bank' ELSE 'company'
+             END AS kind
+      FROM base b
+      GROUP BY b.ticker
+      ORDER BY b.ticker ASC;
     `;
 
     const companies: CompanyListItem[] = rows.map((r) => ({
-      ticker: r.ticker_bloomberg,   // $queryRaw returns the real column name, not an alias
-      nombre: r.nombre_latam,
+      ticker: r.ticker,
+      nombre: r.nombre,
+      kind:   r.kind === "bank" ? "bank" : "company",
     }));
 
     return NextResponse.json({ companies });
