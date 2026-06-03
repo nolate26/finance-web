@@ -248,8 +248,8 @@ export default function ConsensusCheckTable() {
   const [data,          setData]          = useState<ConsensusCheckPayload | null>(null);
   const [loading,       setLoading]       = useState(true);
   const [error,         setError]         = useState(false);
-  const [sortBy,        setSortBy]        = useState<SortKey>("ticker");
-  const [sortDir,       setSortDir]       = useState<"asc" | "desc">("asc");
+  const [sortBy,        setSortBy]        = useState<SortKey>("updateDate");
+  const [sortDir,       setSortDir]       = useState<"asc" | "desc">("desc");
   const [analystFilter, setAnalystFilter] = useState("");
   const [validTickers,  setValidTickers]  = useState<Set<string>>(new Set());
   const [notFoundMsg,   setNotFoundMsg]   = useState<string | null>(null);
