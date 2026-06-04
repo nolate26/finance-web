@@ -16,6 +16,31 @@ export interface ModelRow {
   deltaRoe: number | null;
   price:    number | null;
   top20:    boolean;
+  owMle:    number | null;   // active weight (overweight) in MLE fund
+  owMsc:    number | null;   // active weight (overweight) in MSC fund
+  funds:    string[];        // fund/index membership, subset of ["MLE","MSC"]
+}
+
+// ── Fund positioning (active weight per fund) ───────────────────────────────────
+const FUND_NAMES: Record<"MLE" | "MSC", string> = {
+  MLE: "Moneda_Latin_America_Equities_(LX)",
+  MSC: "Moneda_Latin_America_Small_Cap_(LX)",
+};
+
+// company (nombreLatam) → overweight, from the latest reportDate of the fund.
+// `has(company)` ⇒ the name is in the fund or its benchmark index.
+async function fundOverweights(fundName: string): Promise<Map<string, number | null>> {
+  const latest = await prisma.fundPortfolioWeight.findFirst({
+    where:   { fundName },
+    orderBy: { reportDate: "desc" },
+    select:  { reportDate: true },
+  });
+  if (!latest) return new Map();
+  const rows = await prisma.fundPortfolioWeight.findMany({
+    where:  { fundName, reportDate: latest.reportDate },
+    select: { company: true, overweight: true },
+  });
+  return new Map(rows.map((r) => [r.company, r.overweight ?? null]));
 }
 
 export interface ModelPayload {
@@ -65,8 +90,20 @@ export async function GET(request: NextRequest) {
 
   const coMap = new Map(companies.map((c) => [c.tickerBloomberg, c]));
 
+  // Fund positioning (latest reportDate per fund), keyed by nombreLatam
+  const [mleMap, mscMap] = await Promise.all([
+    fundOverweights(FUND_NAMES.MLE),
+    fundOverweights(FUND_NAMES.MSC),
+  ]);
+
   const rows: ModelRow[] = signals.map((s) => {
     const co = s.ticker ? coMap.get(s.ticker) : undefined;
+    const nl = co?.nombreLatam ?? null;
+    const inMle = nl != null && mleMap.has(nl);
+    const inMsc = nl != null && mscMap.has(nl);
+    const funds: string[] = [];
+    if (inMle) funds.push("MLE");
+    if (inMsc) funds.push("MSC");
     return {
       ticker:   s.ticker,
       name:     co?.nombreLatam  ?? null,
@@ -80,6 +117,9 @@ export async function GET(request: NextRequest) {
       deltaRoe: s.deltaRoe ?? null,
       price:    s.price    ?? null,
       top20:    s.top20    ?? false,
+      owMle:    nl != null ? (mleMap.get(nl) ?? null) : null,
+      owMsc:    nl != null ? (mscMap.get(nl) ?? null) : null,
+      funds,
     };
   });
 
