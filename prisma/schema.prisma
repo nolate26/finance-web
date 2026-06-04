@@ -821,7 +821,7 @@ model BankKPI {
 }
 
 
-model AnalystRecommendation_history {
+model AnalystRecommendationHistory {
   id             Int      @id @default(autoincrement())
   date           DateTime @db.Date
   type           String   @db.VarChar(100)
@@ -833,7 +833,7 @@ model AnalystRecommendation_history {
   recType        String   @map("rec_type") @db.VarChar(100)
 
   @@index([company, date])
-  @@map("analyst_recommendations_history")
+  @@map("AnalystRecommendationHistory")
 }
 
 model CompanyIsin {
