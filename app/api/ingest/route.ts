@@ -64,6 +64,14 @@ export async function POST(request: Request) {
         break;
 
 
+      case 'AnalystRecommendationHistory':
+        await prisma.analystRecommendationHistory.createMany({ data: rows, skipDuplicates: true });
+        break;
+      case 'CompanyIsin':
+        await prisma.companyIsin.createMany({ data: rows, skipDuplicates: true });
+        break;
+
+
       // --- ACTUALIZACIONES DE TABLAS EXISTENTES ---
       case 'EmpresasIndustrias_Description':
         // Como es una actualización, usamos un bucle con updateMany
@@ -425,6 +433,8 @@ export async function POST(request: Request) {
           skipDuplicates: true 
         });
         break;
+
+      
         
       default:
         return NextResponse.json({ error: `Tabla ${table} no reconocida` }, { status: 400 });

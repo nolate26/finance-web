@@ -819,3 +819,27 @@ model BankKPI {
   @@unique([ticker, updateDate, year, sectionName, kpiOrder])
   @@map("bank_kpis")
 }
+
+
+model AnalystRecommendation_history {
+  id             Int      @id @default(autoincrement())
+  date           DateTime @db.Date
+  type           String   @db.VarChar(100)
+  analyst        String   @db.VarChar(100)
+  company        String   @db.VarChar(100)
+  recommendation String   @db.VarChar(100)
+  currentPrice   Float
+  targetPrice    Float
+  recType        String   @map("rec_type") @db.VarChar(100)
+
+  @@index([company, date])
+  @@map("analyst_recommendations_history")
+}
+
+model CompanyIsin {
+  id          Int    @id @default(autoincrement())
+  companyName String @unique @map("company_name") @db.VarChar(255)
+  isin        String @unique @db.VarChar(50)
+
+  @@map("company_isins")
+}
