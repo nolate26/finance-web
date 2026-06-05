@@ -9,6 +9,7 @@ import {
 import type { DeepDivePayload } from "@/app/api/companies/[ticker]/route";
 import type { UniverseItem } from "@/app/api/analysis/universe/route";
 import { computeBands } from "@/lib/stats";
+import AnalystTrackRecord from "@/components/quant/AnalystTrackRecord";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const PALETTE  = ["#2563EB", "#DC2626", "#16A34A", "#D97706", "#7C3AED", "#0891B2"];
@@ -190,6 +191,7 @@ export default function AnalysisPage() {
   const [activeMetric, setActiveMetric] = useState<MetricKey>("evEbitda");
   const [timePeriod,   setTimePeriod]   = useState<TimePeriod>("5y");
   const [bandsFor,     setBandsFor]     = useState<string | null>(null);
+  const [view,         setView]         = useState<"analysis" | "trackRecord">("analysis");
 
   // Load universe
   useEffect(() => {
@@ -267,16 +269,46 @@ export default function AnalysisPage() {
       <div className="max-w-[1600px] mx-auto px-6 py-6">
 
         {/* ── Page header ─────────────────────────────────────────────────── */}
-        <div style={{ marginBottom: 20 }}>
+        <div style={{ marginBottom: 16 }}>
           <h1 style={{ fontSize: 20, fontWeight: 700, color: TEXT1, letterSpacing: "-0.02em", margin: 0 }}>
             Analysis
           </h1>
           <p style={{ fontSize: 12, color: TEXT2, marginTop: 4 }}>
-            Multi-company comparison — valuation multiples, price performance, and consensus revisions
+            {view === "analysis"
+              ? "Multi-company comparison — valuation multiples, price performance, and consensus revisions"
+              : "Analyst Track Record — backtested total return of historical analyst recommendations"}
           </p>
         </div>
 
-        {/* ── Two-column layout ────────────────────────────────────────────── */}
+        {/* ── Sub-tabs ────────────────────────────────────────────────────── */}
+        <div style={{ display: "flex", gap: 4, marginBottom: 20 }}>
+          {([
+            { key: "analysis",    label: "Analysis" },
+            { key: "trackRecord", label: "Analyst Track Record" },
+          ] as const).map(t => (
+            <button
+              key={t.key}
+              onClick={() => setView(t.key)}
+              style={{
+                padding:      "7px 16px",
+                borderRadius: 8,
+                border:       "1px solid",
+                borderColor:  view === t.key ? BLUE : BORDER,
+                background:   view === t.key ? "rgba(37,99,235,0.09)" : "transparent",
+                color:        view === t.key ? BLUE : TEXT2,
+                fontSize:     13,
+                fontWeight:   view === t.key ? 700 : 500,
+                cursor:       "pointer",
+                whiteSpace:   "nowrap",
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Two-column layout (Analysis sub-tab) ─────────────────────────── */}
+        {view === "analysis" && (
         <div style={{ display: "flex", gap: 18, alignItems: "flex-start" }}>
 
           {/* ── LEFT: Company list ─────────────────────────────────────────── */}
@@ -680,6 +712,9 @@ export default function AnalysisPage() {
             )}
           </div>
         </div>
+        )}
+
+        {view === "trackRecord" && <AnalystTrackRecord />}
 
       </div>
     </>

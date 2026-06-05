@@ -46,7 +46,7 @@ export default function Navbar() {
       {/* CENTER — navigation tabs */}
       <div className="flex items-center gap-0.5">
         {tabs.map(({ href, label, icon: Icon }) => {
-          const active = pathname.startsWith(href);
+          const active = pathname === href || pathname.startsWith(href + "/");
           return (
             <button
               key={href}

@@ -187,6 +187,7 @@ export default function QuantModelTable() {
   const [tab,          setTab]          = useState<Tab>("suggested");
   const [industry,     setIndustry]     = useState<string>("all");
   const [search,       setSearch]       = useState("");
+  const [onlyPortfolio, setOnlyPortfolio] = useState(false);
 
   // ── Fetch ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -217,6 +218,9 @@ export default function QuantModelTable() {
     if (tab === "funds")    rows = rows.filter(r => r.funds.length > 0);
     else if (tab === "off") rows = rows.filter(r => r.funds.length === 0);
 
+    // Show only the suggested portfolio (top20 names)
+    if (onlyPortfolio) rows = rows.filter(r => r.top20);
+
     if (industry !== "all") rows = rows.filter(r => r.industry === industry);
     if (search) {
       const q = search.toLowerCase();
@@ -242,7 +246,7 @@ export default function QuantModelTable() {
         : (av as number) - (bv as number);
       return sortDir === "desc" ? -cmp : cmp;
     });
-  }, [data, tab, industry, search, sortCol, sortDir]);
+  }, [data, tab, industry, search, sortCol, sortDir, onlyPortfolio]);
 
   const stats = useMemo(() => {
     if (!data) return { total: 0, inPortfolio: 0, avgScore: null as number | null };
@@ -366,6 +370,42 @@ export default function QuantModelTable() {
               );
             })}
           </div>
+
+          <div style={{ flex: 1 }} />
+
+          {/* Portfolio-only toggle */}
+          <button
+            type="button"
+            onClick={() => setOnlyPortfolio(v => !v)}
+            aria-pressed={onlyPortfolio}
+            style={{
+              display:      "inline-flex",
+              alignItems:   "center",
+              gap:          6,
+              padding:      "6px 13px",
+              fontSize:     11.5,
+              fontWeight:   onlyPortfolio ? 700 : 600,
+              color:        onlyPortfolio ? "#FFFFFF" : BLUE,
+              background:   onlyPortfolio ? BLUE : "rgba(43,92,224,0.07)",
+              border:       `1px solid ${onlyPortfolio ? BLUE : "rgba(43,92,224,0.25)"}`,
+              borderRadius: 8,
+              cursor:       "pointer",
+              whiteSpace:   "nowrap",
+              transition:   "all 0.12s",
+              boxShadow:    onlyPortfolio ? "0 1px 3px rgba(43,92,224,0.30)" : "none",
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+              <path
+                d="M7 1.5l1.6 3.3 3.6.5-2.6 2.5.6 3.6L7 9.7 3.8 11.4l.6-3.6L1.8 5.3l3.6-.5L7 1.5z"
+                fill={onlyPortfolio ? "#FFFFFF" : "none"}
+                stroke="currentColor"
+                strokeWidth="1.1"
+                strokeLinejoin="round"
+              />
+            </svg>
+            Portfolio only
+          </button>
         </div>
 
         {/* ── Controls + Stats bar ──────────────────────────────────────────── */}
