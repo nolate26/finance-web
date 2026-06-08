@@ -96,6 +96,14 @@ function lookupForward(series: Point[], targetT: number): number | null {
   return lo < series.length ? series[lo].v : null;
 }
 
+// Like lookupForward, but if the target is past the last data point (e.g. an exit
+// dated "today" before today's bar exists), fall back to the most recent close.
+function lookupOrLast(series: Point[], targetT: number): number | null {
+  const fwd = lookupForward(series, targetT);
+  if (fwd != null) return fwd;
+  return series.length ? series[series.length - 1].v : null;
+}
+
 function dateFilter(startDate?: string | null, endDate?: string | null): Prisma.DateTimeFilter | undefined {
   if (!startDate && !endDate) return undefined;
   const f: Prisma.DateTimeFilter = {};
@@ -229,7 +237,7 @@ export async function POST(request: NextRequest) {
     }
 
     function fxRate(series: Point[] | null, targetT: number): number | null {
-      return series === null ? 1 : lookupForward(series, targetT);
+      return series === null ? 1 : lookupOrLast(series, targetT);
     }
 
     // Convert a native-currency price at a given day to the target currency.
@@ -256,7 +264,7 @@ export async function POST(request: NextRequest) {
       const exitT   = dayT(exitRaw);
 
       const entryNat = lookupForward(priceSeries, entryT);
-      const exitNat  = lookupForward(priceSeries, exitT);
+      const exitNat  = lookupOrLast(priceSeries, exitT);   // mark-to-market if exit ≥ today
       const entry    = entryNat == null ? null : convert(entryNat, entryT);
       const exit     = exitNat  == null ? null : convert(exitNat, exitT);
 
