@@ -3,10 +3,14 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   ComposedChart, Bar, Line, Cell, XAxis, YAxis, CartesianGrid,
-  Tooltip, ReferenceLine, ResponsiveContainer,
+  Tooltip, ReferenceLine, ReferenceArea, ReferenceDot, ResponsiveContainer,
 } from "recharts";
 import type { TrackRecordOptions } from "@/app/api/analysis/track-record/options/route";
-import type { PreviewRow, CalcRow, PreviewPayload, CalcPayload } from "@/app/api/analysis/track-record/route";
+import type {
+  PreviewRow, CalcRow, PreviewPayload, CalcPayload,
+  EquityPoint, Marker, Summary,
+} from "@/app/api/analysis/track-record/route";
+import AddRecommendationModal from "./AddRecommendationModal";
 
 // ── Design tokens (match QuantModelTable) ───────────────────────────────────────
 const TEXT1   = "#0F172A";
@@ -90,21 +94,6 @@ function BarTooltip({ active, payload }: { active?: boolean; payload?: { payload
   );
 }
 
-function Stat({ label, value, accent, valueColor }: {
-  label: string; value: string | number; accent?: boolean; valueColor?: string;
-}) {
-  return (
-    <span style={{
-      display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 9px", borderRadius: 6,
-      background: accent ? "rgba(43,92,224,0.07)" : "rgba(15,23,42,0.04)",
-      border: `1px solid ${accent ? "rgba(43,92,224,0.15)" : BORDER}`,
-    }}>
-      <span style={{ fontSize: 9.5, color: accent ? BLUE : TEXT2, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase" }}>{label}</span>
-      <span style={{ fontSize: 11, fontWeight: 700, color: valueColor ?? (accent ? BLUE : TEXT1), fontFamily: "JetBrains Mono, monospace" }}>{value}</span>
-    </span>
-  );
-}
-
 function LegendDot({ color, label, line }: { color: string; label: string; line?: boolean }) {
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10.5, color: TEXT2 }}>
@@ -113,6 +102,244 @@ function LegendDot({ color, label, line }: { color: string; label: string; line?
     </span>
   );
 }
+
+// ── Methodology popover (ⓘ) ─────────────────────────────────────────────────────
+function Method({ what, how, value }: { what: string; how: string; value: string }) {
+  const Row = ({ k, v }: { k: string; v: string }) => (
+    <div style={{ marginBottom: 6 }}>
+      <span style={{ color: TEXT1, fontWeight: 700 }}>{k}:</span>{" "}
+      <span style={{ color: TEXT2 }}>{v}</span>
+    </div>
+  );
+  return (
+    <div style={{ fontSize: 11.5, lineHeight: 1.5 }}>
+      <Row k="Qué hace" v={what} />
+      <Row k="Metodología" v={how} />
+      <Row k="Valor" v={value} />
+      <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${BORDER}`, fontSize: 10.5, color: TEXT3, lineHeight: 1.45 }}>
+        <b style={{ color: TEXT2 }}>Datos:</b> recomendaciones históricas de analistas (BDD propia) + precios diarios de Yahoo Finance (adjclose, ajustado por dividendos/splits), convertidos a la moneda elegida con el FX de cada fecha.{" "}
+        <b style={{ color: TEXT2 }}>Base:</b> cada recomendación define una posición — Comprar = long, Vender = short, Mantener = fuera — desde su fecha hasta la siguiente (la última, hasta hoy).
+      </div>
+    </div>
+  );
+}
+
+function InfoTip({ content }: { content: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function onDoc(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+  return (
+    <div ref={ref} style={{ position: "relative", display: "inline-flex" }}>
+      <button onClick={() => setOpen(v => !v)} aria-label="Methodology" title="Metodología"
+        style={{
+          width: 17, height: 17, borderRadius: "50%", border: `1px solid ${open ? BLUE : BORDER}`,
+          background: open ? "rgba(43,92,224,0.10)" : "#fff", color: open ? BLUE : TEXT3,
+          fontSize: 10.5, fontWeight: 800, fontStyle: "italic", cursor: "pointer",
+          display: "inline-flex", alignItems: "center", justifyContent: "center", lineHeight: 1, padding: 0,
+        }}>
+        i
+      </button>
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 60, width: 330,
+          background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 10,
+          boxShadow: "0 8px 28px rgba(15,23,42,0.16)", padding: "12px 14px",
+        }}>
+          {content}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const epoch = (iso: string) => new Date(iso + "T00:00:00.000Z").getTime();
+const axisTick = { fill: TEXT3, fontSize: 10, fontFamily: "JetBrains Mono, monospace" };
+const tickDate = (t: number) => new Date(t).toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+
+// ── Equity curve (hero): strategy vs benchmark, cumulative % over time ──────────
+function EquityTooltip({ active, payload, label, benchLabel }: {
+  active?: boolean; payload?: { dataKey: string; value: number | null }[]; label?: number; benchLabel?: string;
+}) {
+  if (!active || !payload?.length) return null;
+  const get = (k: string) => payload.find(p => p.dataKey === k)?.value ?? null;
+  const strat = get("strat"), bench = get("bench");
+  const alpha = strat != null && bench != null ? strat - bench : null;
+  return (
+    <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "9px 12px", boxShadow: "0 4px 16px rgba(15,23,42,0.10)", minWidth: 170 }}>
+      <p style={{ ...MONO, color: TEXT2, marginBottom: 6 }}>{label ? tickDate(label) : ""}</p>
+      <p style={{ ...MONO, color: (strat ?? 0) >= 0 ? GREEN : RED, marginBottom: 2 }}>Strategy: {fmtPct(strat)}</p>
+      <p style={{ ...MONO, color: TEXT2, marginBottom: alpha != null ? 2 : 0 }}>{benchLabel ?? "Benchmark"}: {fmtPct(bench)}</p>
+      {alpha != null && <p style={{ ...MONO, color: alpha >= 0 ? GREEN : RED }}>Alpha: {fmtPct(alpha)}</p>}
+    </div>
+  );
+}
+
+function EquityChart({ data, benchLabel }: { data: EquityPoint[]; benchLabel: string }) {
+  const rows = useMemo(() => data.map(d => ({ t: epoch(d.date), strat: d.strat, bench: d.bench })), [data]);
+
+  // Contiguous time segments where the strategy is ahead of (or behind) the
+  // benchmark, so the background shows at a glance when it wins vs loses.
+  const segs = useMemo(() => {
+    const out: { x1: number; x2: number; win: boolean }[] = [];
+    let start: number | null = null, win: boolean | null = null, prev: number | null = null;
+    for (const r of rows) {
+      if (r.bench == null) {
+        if (start != null && win != null && prev != null) out.push({ x1: start, x2: prev, win });
+        start = null; win = null; prev = r.t; continue;
+      }
+      const w = r.strat >= r.bench;
+      if (win == null) { start = r.t; win = w; }
+      else if (w !== win) { out.push({ x1: start!, x2: r.t, win }); start = r.t; win = w; }
+      prev = r.t;
+    }
+    if (start != null && win != null && prev != null) out.push({ x1: start, x2: prev, win });
+    return out;
+  }, [rows]);
+
+  return (
+    <ResponsiveContainer width="100%" height={300}>
+      <ComposedChart data={rows} margin={{ top: 6, right: 8, bottom: 0, left: -6 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.05)" vertical={false} />
+        {/* Background: green where strategy beats benchmark, red where it lags */}
+        {segs.map((s, i) => (
+          <ReferenceArea key={i} x1={s.x1} x2={s.x2}
+            fill={s.win ? GREEN : RED} fillOpacity={0.16}
+            stroke={s.win ? GREEN : RED} strokeOpacity={0.25} />
+        ))}
+        <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} scale="time"
+          tick={axisTick} tickLine={false} axisLine={false} tickFormatter={tickDate} minTickGap={36} />
+        <YAxis tick={axisTick} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} width={46} />
+        <ReferenceLine y={0} stroke="rgba(15,23,42,0.25)" />
+        <Tooltip content={(p) => <EquityTooltip {...(p as object)} benchLabel={benchLabel} />} />
+        <Line type="monotone" dataKey="bench" stroke="#94A3B8" strokeWidth={1.6} strokeDasharray="5 3" dot={false} isAnimationActive={false} connectNulls />
+        <Line type="monotone" dataKey="strat" stroke={BLUE} strokeWidth={2.4} dot={false} isAnimationActive={false} />
+      </ComposedChart>
+    </ResponsiveContainer>
+  );
+}
+
+// ── Price line (native) with recommendation markers, targets and position ribbon ─
+function PriceChart({ priceLine, markers, rows, ccy }: {
+  priceLine: { date: string; price: number }[];
+  markers: Marker[];
+  rows: CalcRow[];
+  ccy: string;
+}) {
+  const data = useMemo(() => priceLine.map(p => ({ t: epoch(p.date), price: p.price })), [priceLine]);
+
+  // Zoom the Y-axis to the price range (+8% padding) so Buy/Sell dots, which sit on
+  // the price line, are clearly visible. Targets are clipped (ifOverflow="hidden")
+  // instead of stretching the scale.
+  const yDomain = useMemo<[number, number]>(() => {
+    const ps = data.map(d => d.price);
+    if (!ps.length) return [0, 1];
+    const lo = Math.min(...ps), hi = Math.max(...ps);
+    const pad = (hi - lo) * 0.08 || hi * 0.05 || 1;
+    return [Math.max(0, lo - pad), hi + pad];
+  }, [data]);
+
+  return (
+    <ResponsiveContainer width="100%" height={320}>
+      <ComposedChart data={data} margin={{ top: 6, right: 8, bottom: 0, left: -6 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.05)" vertical={false} />
+        <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} scale="time"
+          tick={axisTick} tickLine={false} axisLine={false} tickFormatter={tickDate} minTickGap={36} />
+        <YAxis domain={yDomain} allowDataOverflow tick={axisTick} tickLine={false} axisLine={false}
+          tickFormatter={(v) => v.toLocaleString("en-US", { maximumFractionDigits: 0 })} width={52} />
+        <Tooltip
+          labelFormatter={(t) => tickDate(t as number)}
+          formatter={(v: number) => [v.toLocaleString("en-US", { maximumFractionDigits: 2 }), `Price (${ccy})`]}
+        />
+
+        {/* Position ribbon: one shaded band per holding period */}
+        {rows.map((r, i) => r.entryDate && r.exitDate && r.direction !== "flat" ? (
+          <ReferenceArea key={`ra${i}`} x1={epoch(r.entryDate)} x2={epoch(r.exitDate)}
+            fill={r.direction === "long" ? GREEN : RED} fillOpacity={0.16}
+            stroke={r.direction === "long" ? GREEN : RED} strokeOpacity={0.25} />
+        ) : null)}
+
+        <Line type="monotone" dataKey="price" stroke={TEXT1} strokeWidth={2} dot={false} isAnimationActive={false} />
+
+        {/* Target price markers (hollow blue) — clipped to the zoomed range */}
+        {markers.map((m, i) => m.target != null ? (
+          <ReferenceDot key={`tg${i}`} x={epoch(m.date)} y={m.target} r={3.5}
+            fill="#fff" stroke={BLUE} strokeWidth={1.6} ifOverflow="hidden" />
+        ) : null)}
+
+        {/* Recommendation markers (colored by direction) */}
+        {markers.map((m, i) => m.price != null ? (
+          <ReferenceDot key={`mk${i}`} x={epoch(m.date)} y={m.price} r={5.5}
+            fill={DIR_META[m.direction].color} stroke="#fff" strokeWidth={1.8} ifOverflow="hidden" />
+        ) : null)}
+      </ComposedChart>
+    </ResponsiveContainer>
+  );
+}
+
+// ── Metrics rail (right side) ───────────────────────────────────────────────────
+function Metric({ label, value, color, sub }: { label: string; value: string; color?: string; sub?: string }) {
+  return (
+    <div style={{ padding: "9px 11px", borderRadius: 9, background: "rgba(15,23,42,0.025)", border: `1px solid ${BORDER}` }}>
+      <div style={{ fontSize: 9.5, fontWeight: 700, color: TEXT3, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: 15, fontWeight: 800, fontFamily: "JetBrains Mono, monospace", color: color ?? TEXT1, lineHeight: 1.1 }}>{value}</div>
+      {sub && <div style={{ fontSize: 10, color: TEXT3, marginTop: 2 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function MetricsRail({ s, ccy, benchLabel }: { s: Summary; ccy: string; benchLabel: string }) {
+  const sign = (v: number | null) => v == null ? TEXT3 : v >= 0 ? GREEN : RED;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {/* Hero: compound + alpha */}
+      <div style={{ padding: "12px 14px", borderRadius: 11, background: "rgba(43,92,224,0.06)", border: "1px solid rgba(43,92,224,0.15)" }}>
+        <div style={{ fontSize: 9.5, fontWeight: 700, color: BLUE, letterSpacing: "0.05em", textTransform: "uppercase" }}>Compound return ({ccy})</div>
+        <div style={{ fontSize: 26, fontWeight: 800, fontFamily: "JetBrains Mono, monospace", color: sign(s.compound), lineHeight: 1.15 }}>{fmtPct(s.compound)}</div>
+        <div style={{ fontSize: 11, color: TEXT2, marginTop: 2 }}>
+          Alpha vs {benchLabel}: <span style={{ fontWeight: 700, color: sign(s.alpha), fontFamily: "JetBrains Mono, monospace" }}>{fmtPct(s.alpha)}</span>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <Metric label="CAGR" value={fmtPct(s.cagr)} color={sign(s.cagr)} />
+        <Metric label="Hit rate" value={s.hitRate == null ? "—" : `${s.hitRate.toFixed(0)}%`} sub={`${s.positions} positions`} />
+        <Metric label="Best call" value={fmtPct(s.bestCall)} color={sign(s.bestCall)} />
+        <Metric label="Worst call" value={fmtPct(s.worstCall)} color={sign(s.worstCall)} />
+        <Metric label="Avg hold" value={s.avgHoldDays == null ? "—" : `${s.avgHoldDays}d`} />
+        <Metric label="Time in mkt" value={s.timeInMarketPct == null ? "—" : `${s.timeInMarketPct.toFixed(0)}%`} />
+      </div>
+
+      <Metric label="Positions (L / S / Flat)" value={`${s.longs} / ${s.shorts} / ${s.flats}`} />
+
+      {/* Current standing call */}
+      <div style={{ padding: "10px 12px", borderRadius: 9, background: "rgba(15,23,42,0.025)", border: `1px solid ${BORDER}` }}>
+        <div style={{ fontSize: 9.5, fontWeight: 700, color: TEXT3, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 4 }}>Current call</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+          <DirBadge d={s.lastDirection} />
+          <span style={{ fontSize: 11, color: TEXT2 }}>Upside to target</span>
+          <span style={{ marginLeft: "auto", fontSize: 13, fontWeight: 800, fontFamily: "JetBrains Mono, monospace", color: sign(s.impliedUpside) }}>{fmtPct(s.impliedUpside)}</span>
+        </div>
+        <div style={{ fontSize: 10.5, color: TEXT3, fontFamily: "JetBrains Mono, monospace" }}>
+          target {fmtPrice(s.lastTarget)} · last {fmtPrice(s.lastPrice)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const BENCHMARK_OPTIONS = [
+  { value: "auto", label: "Auto (by market)" },
+  { value: "SPY",  label: "S&P 500 (SPY)" },
+  { value: "ACWI", label: "MSCI ACWI" },
+  { value: "ILF",  label: "MSCI LatAm (ILF)" },
+  { value: "ECH",  label: "MSCI Chile (ECH)" },
+  { value: "EWZ",  label: "MSCI Brazil (EWZ)" },
+  { value: "EWW",  label: "MSCI Mexico (EWW)" },
+];
 
 // ── Searchable combobox ─────────────────────────────────────────────────────────
 function Combobox({
@@ -252,13 +479,17 @@ export default function AnalystTrackRecord() {
   const [currency,  setCurrency]  = useState("USD");
 
   const [previewRows, setPreviewRows] = useState<PreviewRow[]>([]);
-  const [calcMap,     setCalcMap]     = useState<Map<number, CalcRow>>(new Map());
-  const [calcMeta,    setCalcMeta]    = useState<{ ticker: string; nativeCurrency: string; targetCurrency: string } | null>(null);
+  const [calc,        setCalc]        = useState<CalcPayload | null>(null);
 
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [loadingCalc,    setLoadingCalc]    = useState(false);
   const [error,          setError]          = useState<string | null>(null);
   const [touched,        setTouched]        = useState(false);
+  const [showAdd,        setShowAdd]        = useState(false);
+  const [benchmark,      setBenchmark]      = useState("auto");
+  const [refreshKey,     setRefreshKey]     = useState(0);
+
+  const calcMap = useMemo(() => new Map((calc?.rows ?? []).map(r => [r.id, r])), [calc]);
 
   // Load dropdown options + sensible date defaults (first post → today).
   useEffect(() => {
@@ -293,8 +524,7 @@ export default function AnalystTrackRecord() {
   useEffect(() => {
     if (!options) return;
     setTouched(true);
-    setCalcMap(new Map());
-    setCalcMeta(null);
+    setCalc(null);
     const handle = setTimeout(() => {
       const qs = new URLSearchParams();
       if (startDate) qs.set("startDate", startDate);
@@ -309,7 +539,7 @@ export default function AnalystTrackRecord() {
         .finally(() => setLoadingPreview(false));
     }, 300);
     return () => clearTimeout(handle);
-  }, [options, startDate, endDate, analyst, company]);
+  }, [options, startDate, endDate, analyst, company, refreshKey]);
 
   const calculate = useCallback(() => {
     if (!company) return;
@@ -318,20 +548,40 @@ export default function AnalystTrackRecord() {
     fetch("/api/analysis/track-record", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ startDate, endDate, analyst, company, currency }),
+      body:    JSON.stringify({ startDate, endDate, analyst, company, currency, benchmark }),
     })
       .then(async r => {
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || "Calculation failed.");
         return d as CalcPayload;
       })
-      .then(d => {
-        setCalcMap(new Map(d.rows.map(row => [row.id, row])));
-        setCalcMeta({ ticker: d.ticker, nativeCurrency: d.nativeCurrency, targetCurrency: d.targetCurrency });
-      })
-      .catch((e: Error) => { setError(e.message); setCalcMap(new Map()); setCalcMeta(null); })
+      .then(d => setCalc(d))
+      .catch((e: Error) => { setError(e.message); setCalc(null); })
       .finally(() => setLoadingCalc(false));
-  }, [startDate, endDate, analyst, company, currency]);
+  }, [startDate, endDate, analyst, company, currency, benchmark]);
+
+  // Re-run the calculation when the benchmark changes (only if already calculated).
+  useEffect(() => {
+    if (calc) calculate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [benchmark]);
+
+  // Refresh global option lists (companies/analysts/types) without touching dates.
+  const reloadOptions = useCallback(() => {
+    fetch("/api/analysis/track-record/options")
+      .then(r => r.json())
+      .then((d: TrackRecordOptions) => { setOptions(d); setAnalystOptions(d.analysts); })
+      .catch(() => {});
+  }, []);
+
+  // After a successful insert: refresh options, focus the saved company, force a preview reload.
+  const handleSaved = useCallback((savedCompany: string) => {
+    setShowAdd(false);
+    reloadOptions();
+    setAnalyst("");
+    setCompany(savedCompany);
+    setRefreshKey(k => k + 1);
+  }, [reloadOptions]);
 
   const hasCalc = calcMap.size > 0;
 
@@ -345,16 +595,8 @@ export default function AnalystTrackRecord() {
     return out;
   }, [previewRows, calcMap]);
 
-  const summary = useMemo(() => {
-    if (chartData.length === 0) return null;
-    const pos  = chartData.filter(d => d.direction !== "flat" && d.periodReturn != null);
-    const wins = pos.filter(d => (d.periodReturn ?? 0) > 0).length;
-    return {
-      totalCompound: chartData[chartData.length - 1].compound,
-      positions:     pos.length,
-      hitRate:       pos.length ? (wins / pos.length) * 100 : null,
-    };
-  }, [chartData]);
+  const summary  = calc?.summary ?? null;
+  const benchLbl = calc?.benchmark?.label ?? "Benchmark";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -392,6 +634,18 @@ export default function AnalystTrackRecord() {
         <div style={{ flex: 1 }} />
 
         <button
+          onClick={() => setShowAdd(true)}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "9px 16px", borderRadius: 8,
+            border: `1px solid rgba(43,92,224,0.30)`, background: "rgba(43,92,224,0.06)",
+            color: BLUE, fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer",
+          }}
+        >
+          + Add recommendation
+        </button>
+
+        <button
           onClick={calculate}
           disabled={!company || loadingCalc}
           title={!company ? "Select a company to calculate" : undefined}
@@ -426,53 +680,99 @@ export default function AnalystTrackRecord() {
         </div>
       )}
 
-      {/* ── Chart: per-recommendation return (bars) + compounding (line) ───────── */}
-      {chartData.length > 0 && (
-        <div style={{
-          background: "#FFFFFF", border: `1px solid ${BORDER}`, borderRadius: 12,
-          boxShadow: "0 1px 4px rgba(15,23,42,0.06)", padding: "16px 18px",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: TEXT1 }}>
-              Per-recommendation return &amp; compounding
-            </span>
-            <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-              <LegendDot color={GREEN} label="Gain" />
-              <LegendDot color={RED} label="Loss" />
-              <LegendDot color={BLUE} label="Compound" line />
+      {/* ── Charts + metrics rail (after Calculate) ───────────────────────────── */}
+      {hasCalc && summary && calc && (
+        <div style={{ display: "flex", gap: 14, alignItems: "flex-start", flexWrap: "wrap" }}>
+          {/* LEFT: charts */}
+          <div style={{ flex: 1, minWidth: 340, display: "flex", flexDirection: "column", gap: 14 }}>
+
+            {/* Equity curve (hero) */}
+            <div style={{ background: "#FFFFFF", border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 1px 4px rgba(15,23,42,0.06)", padding: "14px 16px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: TEXT1 }}>
+                    Equity curve — strategy vs benchmark <span style={{ color: TEXT3, fontWeight: 500 }}>({calc.targetCurrency})</span>
+                  </span>
+                  <InfoTip content={<Method
+                    what="compara cuánto ganó/perdió seguir al analista vs comprar y mantener el mercado."
+                    how="compuesto diario de los retornos direccionales; benchmark = buy&hold del índice/ETF."
+                    value="¿genera alpha? (alpha = estrategia − benchmark)." />} />
+                </div>
+                <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                  <LegendDot color={BLUE} label="Strategy" line />
+                  <LegendDot color="#94A3B8" label={benchLbl} line />
+                  <LegendDot color={GREEN} label="Ahead" />
+                  <LegendDot color={RED} label="Behind" />
+                  <select value={benchmark} onChange={e => setBenchmark(e.target.value)}
+                    style={{ padding: "5px 8px", borderRadius: 7, border: `1px solid ${BORDER}`, background: "#F8FAFF", fontSize: 11, color: TEXT1, cursor: "pointer", outline: "none" }}>
+                    {BENCHMARK_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <EquityChart data={calc.equityCurve ?? []} benchLabel={benchLbl} />
+            </div>
+
+            {/* Price with points */}
+            <div style={{ background: "#FFFFFF", border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 1px 4px rgba(15,23,42,0.06)", padding: "14px 16px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: TEXT1 }}>
+                    Price, recommendations &amp; targets <span style={{ color: TEXT3, fontWeight: 500 }}>({calc.nativeCurrency || "local"})</span>
+                  </span>
+                  <InfoTip content={<Method
+                    what="dibuja el precio real con un punto en cada call (▲ compra / ▼ venta) y su target."
+                    how="precio ajustado; franjas verde/roja marcan cuándo estuvo long/short."
+                    value="timing visual — ¿compró barato y vendió caro?" />} />
+                </div>
+                <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                  <LegendDot color={GREEN} label="Buy" />
+                  <LegendDot color={RED} label="Sell" />
+                  <LegendDot color={TEXT3} label="Hold" />
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10.5, color: TEXT2 }}>
+                    <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#fff", border: `1.4px solid ${BLUE}` }} /> Target
+                  </span>
+                </div>
+              </div>
+              <PriceChart priceLine={calc.priceLine ?? []} markers={calc.markers ?? []} rows={calc.rows} ccy={calc.nativeCurrency || "local"} />
+            </div>
+
+            {/* Per-recommendation bars (secondary) */}
+            <div style={{ background: "#FFFFFF", border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 1px 4px rgba(15,23,42,0.06)", padding: "14px 16px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: TEXT1 }}>Per-recommendation return</span>
+                  <InfoTip content={<Method
+                    what="el resultado de cada call individual (verde gana / roja pierde) + línea de acumulado."
+                    how="retorno direccional de cada tramo entry→exit."
+                    value="consistencia y hit-rate — ¿le pega seguido o vive de un acierto?" />} />
+                </div>
+                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                  <LegendDot color={GREEN} label="Gain" />
+                  <LegendDot color={RED} label="Loss" />
+                  <LegendDot color={BLUE} label="Compound" line />
+                </div>
+              </div>
+              <ResponsiveContainer width="100%" height={220}>
+                <ComposedChart data={chartData} margin={{ top: 6, right: 6, bottom: 0, left: -8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.05)" vertical={false} />
+                  <XAxis dataKey="label" tick={axisTick} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={20} />
+                  <YAxis yAxisId="ret" tick={axisTick} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} width={46} />
+                  <YAxis yAxisId="cmp" orientation="right" tick={{ ...axisTick, fill: BLUE }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} width={48} />
+                  <ReferenceLine yAxisId="ret" y={0} stroke="rgba(15,23,42,0.25)" />
+                  <Tooltip cursor={{ fill: "rgba(43,92,224,0.05)" }} content={(p) => <BarTooltip active={p.active} payload={p.payload as unknown as { payload: ChartPoint }[]} />} />
+                  <Bar yAxisId="ret" dataKey="periodReturn" radius={[2, 2, 0, 0]} maxBarSize={36} isAnimationActive={false}>
+                    {chartData.map((d, i) => (<Cell key={i} fill={d.direction === "flat" ? "#CBD5E1" : (d.periodReturn ?? 0) >= 0 ? GREEN : RED} />))}
+                  </Bar>
+                  <Line yAxisId="cmp" type="monotone" dataKey="compound" stroke={BLUE} strokeWidth={2} dot={false} isAnimationActive={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={300}>
-            <ComposedChart data={chartData} margin={{ top: 6, right: 6, bottom: 0, left: -8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.05)" vertical={false} />
-              <XAxis
-                dataKey="label"
-                tick={{ fill: TEXT3, fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}
-                tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={20}
-              />
-              <YAxis
-                yAxisId="ret"
-                tick={{ fill: TEXT3, fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}
-                tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} width={46}
-              />
-              <YAxis
-                yAxisId="cmp" orientation="right"
-                tick={{ fill: BLUE, fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}
-                tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} width={48}
-              />
-              <ReferenceLine yAxisId="ret" y={0} stroke="rgba(15,23,42,0.25)" />
-              <Tooltip
-                cursor={{ fill: "rgba(43,92,224,0.05)" }}
-                content={(p) => <BarTooltip active={p.active} payload={p.payload as unknown as { payload: ChartPoint }[]} />}
-              />
-              <Bar yAxisId="ret" dataKey="periodReturn" radius={[2, 2, 0, 0]} maxBarSize={36} isAnimationActive={false}>
-                {chartData.map((d, i) => (
-                  <Cell key={i} fill={d.direction === "flat" ? "#CBD5E1" : (d.periodReturn ?? 0) >= 0 ? GREEN : RED} />
-                ))}
-              </Bar>
-              <Line yAxisId="cmp" type="monotone" dataKey="compound" stroke={BLUE} strokeWidth={2} dot={false} isAnimationActive={false} />
-            </ComposedChart>
-          </ResponsiveContainer>
+
+          {/* RIGHT: metrics rail */}
+          <div style={{ width: 250, flexShrink: 0 }}>
+            <MetricsRail s={summary} ccy={calc.targetCurrency} benchLabel={benchLbl} />
+          </div>
         </div>
       )}
 
@@ -497,23 +797,15 @@ export default function AnalystTrackRecord() {
               animation: "spin 0.8s linear infinite",
             }} />
           )}
-          {summary && (
-            <>
-              <Stat label="Compound" value={fmtPct(summary.totalCompound)}
-                valueColor={(summary.totalCompound ?? 0) >= 0 ? GREEN : RED} accent />
-              <Stat label="Positions" value={summary.positions} />
-              {summary.hitRate != null && <Stat label="Hit rate" value={`${summary.hitRate.toFixed(0)}%`} />}
-            </>
-          )}
           <div style={{ flex: 1 }} />
-          {calcMeta && (
+          {hasCalc && calc && (
             <span style={{ ...MONO, color: TEXT3 }}>
-              {calcMeta.ticker} · {calcMeta.nativeCurrency || "—"} → {calcMeta.targetCurrency || "—"}
+              {calc.ticker} · {calc.nativeCurrency || "—"} → {calc.targetCurrency || "—"}
             </span>
           )}
           {!hasCalc && (
             <span style={{ fontSize: 10, color: TEXT3, fontStyle: "italic" }}>
-              Select a company and run to compute returns
+              Select a company and run to compute charts
             </span>
           )}
         </div>
@@ -585,6 +877,13 @@ export default function AnalystTrackRecord() {
           </table>
         </div>
       </div>
+
+      <AddRecommendationModal
+        open={showAdd}
+        options={options}
+        onClose={() => setShowAdd(false)}
+        onSaved={handleSaved}
+      />
     </div>
   );
 }

@@ -837,9 +837,9 @@ model AnalystRecommendationHistory {
 }
 
 model CompanyIsin {
-  id          Int    @id @default(autoincrement())
-  companyName String @unique @map("company_name") @db.VarChar(255)
-  isin        String @unique @db.VarChar(50)
+  id          Int     @id @default(autoincrement())
+  companyName String  @unique @map("company_name") @db.VarChar(255)
+  isin        String? @unique @db.VarChar(50)
   yahooFinanceTicker String? @map("yahoo_finance_ticker") @db.VarChar(100)
 
   @@map("company_isins")
