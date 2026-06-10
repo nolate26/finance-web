@@ -116,9 +116,10 @@ function Method({ what, how, value }: { what: string; how: string; value: string
       <Row k="Qué hace" v={what} />
       <Row k="Metodología" v={how} />
       <Row k="Valor" v={value} />
-      <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${BORDER}`, fontSize: 10.5, color: TEXT3, lineHeight: 1.45 }}>
-        <b style={{ color: TEXT2 }}>Datos:</b> recomendaciones históricas de analistas (BDD propia) + precios diarios de Yahoo Finance (adjclose, ajustado por dividendos/splits), convertidos a la moneda elegida con el FX de cada fecha.{" "}
-        <b style={{ color: TEXT2 }}>Base:</b> cada recomendación define una posición — Comprar = long, Vender = short, Mantener = fuera — desde su fecha hasta la siguiente (la última, hasta hoy).
+      <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${BORDER}`, fontSize: 10.5, color: TEXT3, lineHeight: 1.5 }}>
+        <b style={{ color: TEXT2 }}>Datos:</b> recomendaciones históricas de los analistas (base de datos propia) + precios diarios de Yahoo Finance, convertidos a la moneda elegida con el tipo de cambio de cada fecha.{" "}
+        <b style={{ color: TEXT2 }}>Precio:</b> los retornos usan precio ajustado (incluye dividendos y splits = retorno total); el gráfico de precio muestra el precio nominal para poder compararlo con los targets.{" "}
+        <b style={{ color: TEXT2 }}>Posición:</b> Comprar = long, Vender = short, Mantener = fuera, desde cada recomendación hasta la siguiente (la última, hasta hoy o la fecha final elegida).
       </div>
     </div>
   );
@@ -694,9 +695,9 @@ export default function AnalystTrackRecord() {
                     Equity curve — strategy vs benchmark <span style={{ color: TEXT3, fontWeight: 500 }}>({calc.targetCurrency})</span>
                   </span>
                   <InfoTip content={<Method
-                    what="compara cuánto ganó/perdió seguir al analista vs comprar y mantener el mercado."
-                    how="compuesto diario de los retornos direccionales; benchmark = buy&hold del índice/ETF."
-                    value="¿genera alpha? (alpha = estrategia − benchmark)." />} />
+                    what="simula seguir al analista en esta acción y lo compara contra comprar y mantener el mercado; ambas curvas parten de 0%."
+                    how="cada día estás long (Comprar), short (Vender) o fuera (Mantener) según la recomendación vigente, y se compone el retorno día a día. El benchmark es comprar y mantener el índice/ETF en la misma moneda. El fondo es verde cuando la estrategia va por encima del benchmark y rojo cuando va por debajo."
+                    value="mide si el analista le agrega valor al mercado. Alpha = retorno de la estrategia − retorno del benchmark." />} />
                 </div>
                 <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
                   <LegendDot color={BLUE} label="Strategy" line />
@@ -720,9 +721,9 @@ export default function AnalystTrackRecord() {
                     Price, recommendations &amp; targets <span style={{ color: TEXT3, fontWeight: 500 }}>({calc.nativeCurrency || "local"})</span>
                   </span>
                   <InfoTip content={<Method
-                    what="dibuja el precio real con un punto en cada call (▲ compra / ▼ venta) y su target."
-                    how="precio ajustado; franjas verde/roja marcan cuándo estuvo long/short."
-                    value="timing visual — ¿compró barato y vendió caro?" />} />
+                    what="muestra el precio de la acción en el tiempo, con un punto en cada recomendación (▲ Comprar / ▼ Vender / ◦ Mantener) y su precio objetivo (target)."
+                    how="usa el precio nominal de mercado (sin ajustar por dividendos) para que sea directamente comparable con el target del analista. Las franjas verde/roja marcan los tramos en que la estrategia estuvo long/short."
+                    value="timing y nivel: ¿recomendó comprar barato y vender caro?, ¿qué tan cerca o lejos quedó el precio de sus targets?" />} />
                 </div>
                 <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
                   <LegendDot color={GREEN} label="Buy" />
@@ -742,9 +743,9 @@ export default function AnalystTrackRecord() {
                 <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: TEXT1 }}>Per-recommendation return</span>
                   <InfoTip content={<Method
-                    what="el resultado de cada call individual (verde gana / roja pierde) + línea de acumulado."
-                    how="retorno direccional de cada tramo entry→exit."
-                    value="consistencia y hit-rate — ¿le pega seguido o vive de un acierto?" />} />
+                    what="muestra el resultado de cada recomendación por separado: barra verde si esa llamada ganó, roja si perdió; la línea azul es el retorno acumulado (compuesto)."
+                    how="para cada tramo (de una recomendación a la siguiente) calcula el retorno direccional: Comprar gana si el precio sube, Vender gana si baja, Mantener no cuenta."
+                    value="consistencia: ¿acierta seguido (hit-rate alto) o el resultado depende de uno o dos aciertos grandes?" />} />
                 </div>
                 <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                   <LegendDot color={GREEN} label="Gain" />

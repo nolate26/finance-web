@@ -63,6 +63,12 @@ export async function POST(request: Request) {
         await prisma.performanceAttribution.createMany({ data: rows, skipDuplicates: true });
         break;
 
+      case 'EmpresasIndustriasV2':         
+        await prisma.empresasIndustriasV2.createMany({data: rows, skipDuplicates: true, });// Protege contra tickers duplicados                 
+        break;
+ 
+
+
 
       case 'AnalystRecommendationHistory':
         await prisma.analystRecommendationHistory.createMany({ data: rows, skipDuplicates: true });

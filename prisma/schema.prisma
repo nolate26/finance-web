@@ -844,3 +844,35 @@ model CompanyIsin {
 
   @@map("company_isins")
 }
+
+
+model EmpresasIndustriasV2 {
+
+  id                 Int      @id @default(autoincrement())
+
+  nombreLatam        String   @map("nombre_latam")
+
+  nombreChile        String   @map("nombre_chile")
+
+  isin               String   @map("isin")
+
+  moneda             String   @map("moneda")
+
+  countryRisk        String   @map("country_risk")
+
+  industriaGics      String   @map("industria_gics")
+
+  industriaChile     String   @map("industria_chile")
+
+  tickerBloomberg    String   @unique @map("ticker_bloomberg")
+
+  companyDescription String?  @db.Text @map("company_description")
+ 
+  @@index([tickerBloomberg])
+
+  @@index([isin])
+
+  @@map("empresas_industrias_v2")
+
+}
+ 

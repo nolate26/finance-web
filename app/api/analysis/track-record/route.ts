@@ -275,10 +275,13 @@ export async function POST(request: NextRequest) {
     const period2 = new Date(Math.max(endTs.getTime(), ...recTimes));
     period2.setUTCDate(period2.getUTCDate() + 7);
 
-    // 4. Prices (adjusted close) + native currency.
+    // 4. Prices + native currency. adjclose (total return: dividends/splits) drives
+    //    the returns/equity; raw close is the nominal price shown in the price chart
+    //    so it's comparable to the analyst's nominal target price.
     const priceChart     = await yf.chart(ticker, { period1, period2, interval: "1d" });
     const nativeCurrency = priceChart.meta?.currency ?? "";
     const priceSeries    = buildSeries(priceChart.quotes, "adjclose");
+    const rawSeries      = buildSeries(priceChart.quotes, "close");
 
     if (priceSeries.length === 0) {
       return NextResponse.json(
@@ -358,12 +361,16 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // ── 7. Price line (native) + per-recommendation markers ─────────────────
+    // ── 7. Price line (nominal close, native) + per-recommendation markers ───
     const firstT  = dayT(recs[0].date);
     const endTUTC = dayT(endTs);
 
+    // Nominal price (raw close) so it lines up with the analyst's nominal targets;
+    // fall back to adjclose only if a raw close is missing.
+    const lineSeries = rawSeries.length ? rawSeries : priceSeries;
+
     const priceLine: PricePoint[] = downsample(
-      priceSeries
+      lineSeries
         .filter((p) => p.t >= firstT && p.t <= endTUTC)
         .map((p) => ({ date: isoFromT(p.t), price: round2(p.v)! })),
     );
@@ -375,7 +382,7 @@ export async function POST(request: NextRequest) {
         date:           isoFromT(t),
         direction:      directionOf(r.recommendation),
         recommendation: r.recommendation,
-        price:          round2(lookupForward(priceSeries, t)),
+        price:          round2(lookupForward(lineSeries, t)),
         target:         round2(r.targetPrice),
       };
     });
