@@ -121,7 +121,9 @@ export async function GET(
 
   try {
     const headers = await prisma.modelHeader.findMany({
-      where:   { ticker },
+      // El ticker llega desde companies/list en MAYÚSCULAS (empresas_industrias_v2) y
+      // model_headers usa su propia capitalización → comparar con UPPER en ambos lados.
+      where:   { ticker: { equals: ticker, mode: "insensitive" } },
       orderBy: { updateDate: "desc" },
       take:    12,
       select:  {

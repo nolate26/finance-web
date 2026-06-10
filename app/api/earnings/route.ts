@@ -83,17 +83,18 @@ export async function GET(req: NextRequest) {
         );
 
         const companyNames = fpwRows.map((r) => r.company);
-        const empresas = await prisma.empresasIndustrias.findMany({
-          where:  { nombreLatam: { in: companyNames }, tickerBloomberg: { not: null } },
+        const empresas = await prisma.empresasIndustriasV2.findMany({
+          where:  { nombreLatam: { in: companyNames }, tickerBloomberg: { not: "" } },
           select: { tickerBloomberg: true, nombreLatam: true },
         });
 
-        fundTickers = empresas.map((e) => e.tickerBloomberg!).filter(Boolean);
+        // v2 guarda los tickers en MAYÚSCULAS → normalizamos para comparar contra earnings_surprise
+        fundTickers = empresas.map((e) => e.tickerBloomberg.toUpperCase()).filter(Boolean);
 
         for (const e of empresas) {
           if (e.tickerBloomberg) {
             const w = companyWeights.get(e.nombreLatam);
-            if (w) tickerWeightsMap.set(e.tickerBloomberg, w);
+            if (w) tickerWeightsMap.set(e.tickerBloomberg.toUpperCase(), w);
           }
         }
       }
@@ -139,13 +140,14 @@ export async function GET(req: NextRequest) {
     const sectorMap = new Map<string, string | null>();
 
     if (uniqueTickers.length > 0) {
-      const empresas = await prisma.empresasIndustrias.findMany({
-        where:  { tickerBloomberg: { in: uniqueTickers } },
+      const empresas = await prisma.empresasIndustriasV2.findMany({
+        where:  { tickerBloomberg: { in: uniqueTickers.map((t) => t.toUpperCase()) } },
         select: { tickerBloomberg: true, industriaGics: true },
       });
       for (const e of empresas) {
-        if (e.tickerBloomberg && !sectorMap.has(e.tickerBloomberg)) {
-          sectorMap.set(e.tickerBloomberg, e.industriaGics);
+        const key = e.tickerBloomberg.toUpperCase();
+        if (key && !sectorMap.has(key)) {
+          sectorMap.set(key, e.industriaGics);
         }
       }
     }
@@ -178,10 +180,11 @@ export async function GET(req: NextRequest) {
 
     // ── 6. Build response ──────────────────────────────────────────────────────
     const data: EarningsRow[] = rows.map((r) => {
-      const wts = tickerWeightsMap.get(r.tickerBloomberg);
+      const tkU = r.tickerBloomberg.toUpperCase();
+      const wts = tickerWeightsMap.get(tkU);
       return {
         tickerBloomberg: r.tickerBloomberg,
-        sector:          sectorMap.get(r.tickerBloomberg) ?? null,
+        sector:          sectorMap.get(tkU) ?? null,
         quarter:         r.quarter,
         reportDate:      r.reportDate.toISOString().slice(0, 10),
         currency:        r.currency        ?? null,

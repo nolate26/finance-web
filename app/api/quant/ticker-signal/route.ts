@@ -25,8 +25,10 @@ export async function GET(request: NextRequest) {
   const ticker = request.nextUrl.searchParams.get("ticker");
   if (!ticker) return NextResponse.json({ error: "Missing ticker" }, { status: 400 });
 
+  // signals_raw guarda los tickers en capitalización propia y companies/list ahora
+  // entrega el ticker en MAYÚSCULAS (empresas_industrias_v2) → comparar UPPER ambos lados.
   const row = await prisma.signalRaw.findFirst({
-    where:   { ticker },
+    where:   { ticker: { equals: ticker, mode: "insensitive" } },
     orderBy: { signalDate: "desc" },
     select: {
       signalDate: true,

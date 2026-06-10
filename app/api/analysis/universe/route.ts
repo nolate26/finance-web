@@ -15,8 +15,8 @@ export interface UniversePayload {
 
 export async function GET() {
   try {
-    const rows = await prisma.empresasIndustrias.findMany({
-      where:   { tickerBloomberg: { not: null } },
+    const rows = await prisma.empresasIndustriasV2.findMany({
+      where:   { tickerBloomberg: { not: "" } },
       select:  { tickerBloomberg: true, nombreLatam: true, industriaGics: true },
       orderBy: { tickerBloomberg: "asc" },
     });

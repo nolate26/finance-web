@@ -84,8 +84,13 @@ export async function POST(request: Request) {
         // updateMany es seguro: si el ticker no existe, no hace nada y no rompe el servidor.
         for (const row of rows) {
           if (row.ticker_bloomberg && row.company_description) {
-            await prisma.empresasIndustrias.updateMany({
-              where: { tickerBloomberg: row.ticker_bloomberg },
+            // v2 guarda los tickers en MAYÚSCULAS → matcheamos con UPPER en ambos lados.
+            // Solo rellenamos descripciones vacías en el destino (IS NULL OR = '').
+            await prisma.empresasIndustriasV2.updateMany({
+              where: {
+                tickerBloomberg: row.ticker_bloomberg.toUpperCase(),
+                OR: [{ companyDescription: null }, { companyDescription: "" }],
+              },
               data: { companyDescription: row.company_description },
             });
           }

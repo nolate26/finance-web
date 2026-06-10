@@ -25,20 +25,21 @@ export async function GET(request: NextRequest) {
 
     // Attach industry via tickerBloomberg → industriaGics
     const uniqueCompanies = [...new Set(records.map((r) => r.company))];
-    const empresas = await prisma.empresasIndustrias.findMany({
-      where:  { tickerBloomberg: { in: uniqueCompanies } },
+    const empresas = await prisma.empresasIndustriasV2.findMany({
+      where:  { tickerBloomberg: { in: uniqueCompanies.map((c) => c.toUpperCase()) } },
       select: { tickerBloomberg: true, industriaGics: true },
     });
+    // v2 guarda los tickers en MAYÚSCULAS → indexamos y consultamos en mayúsculas
     const industryMap: Record<string, string> = Object.fromEntries(
       empresas
         .filter((e) => e.tickerBloomberg)
-        .map((e) => [e.tickerBloomberg!, e.industriaGics ?? "Other"])
+        .map((e) => [e.tickerBloomberg.toUpperCase(), e.industriaGics ?? "Other"])
     );
 
     const enriched = records.map((r) => ({
       ...r,
       date:     r.date.toISOString().slice(0, 10),
-      industry: industryMap[r.company] ?? "Other",
+      industry: industryMap[r.company.toUpperCase()] ?? "Other",
     }));
 
     // Unique filter options

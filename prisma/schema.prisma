@@ -103,9 +103,8 @@ model top_picks {
   region             String   // Guardará "LATAM" o "CHILE"
   period_date        DateTime // Guardará el mes (ej: 2026-04-01)
   
-  // La conexión con tu tabla maestra usando el Nombre (Llave Primaria)
-  nombre_latam       String   
-  empresa            EmpresasIndustrias @relation(fields: [nombre_latam], references: [nombreLatam])
+  // Guardamos el nombre como escalar (sin relación FK al maestro)
+  nombre_latam       String
 
   // Los datos del reporte
   industry_group     String
@@ -143,7 +142,6 @@ model EmpresasIndustrias {
   industriaChile  String? @map("industria_chile") @db.VarChar(200)
   tickerBloomberg String? @map("ticker_bloomberg") @db.VarChar(100)
   companyDescription String? @map("company_description") @db.Text
-  top_picks           top_picks[]
   @@map("empresas_industrias")
 }
 model SsUniverse {

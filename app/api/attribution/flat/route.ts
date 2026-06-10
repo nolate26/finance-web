@@ -128,10 +128,12 @@ export async function GET(request: NextRequest) {
         lw.report_date,
         ls.snapshot_date
       FROM latest_weights lw
-      INNER JOIN empresas_industrias ei
+      INNER JOIN empresas_industrias_v2 ei
         ON ei.nombre_latam = lw.company
+       AND ei.nombre_latam IS NOT NULL AND ei.nombre_latam <> ''
       INNER JOIN latest_snapshots ls
-        ON ls.ticker = ei.ticker_bloomberg
+        ON UPPER(ls.ticker) = UPPER(ei.ticker_bloomberg)
+       AND ei.ticker_bloomberg IS NOT NULL AND ei.ticker_bloomberg <> ''
     `;
 
     if (rows.length === 0) {

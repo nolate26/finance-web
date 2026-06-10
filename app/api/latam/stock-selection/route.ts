@@ -10,7 +10,7 @@ type LatamRow = Awaited<
 >[number];
 
 type EmpresaRow = Awaited<
-  ReturnType<typeof prisma.empresasIndustrias.findMany>
+  ReturnType<typeof prisma.empresasIndustriasV2.findMany>
 >[number];
 
 // ── Typed response shape ──────────────────────────────────────────────────────
@@ -146,7 +146,7 @@ export async function GET() {
         where: { snapshotDate: latestDate },
         orderBy: { mktCapUsd: "desc" },
       }),
-      prisma.empresasIndustrias.findMany(),
+      prisma.empresasIndustriasV2.findMany(),
       prisma.fundPortfolioWeight.findMany({
         where: {
           fundName: {

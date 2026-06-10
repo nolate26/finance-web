@@ -260,7 +260,9 @@ export default function ConsensusCheckTable() {
       fetch("/api/companies/list").then((r) => r.json()),
     ]).then(([consensus, companies]: [ConsensusCheckPayload & { error?: string }, { companies?: { ticker: string }[] }]) => {
       if (consensus.error) { setError(true); } else { setData(consensus); }
-      setValidTickers(new Set((companies.companies ?? []).map((c) => c.ticker)));
+      // companies/list entrega tickers en MAYÚSCULAS (empresas_industrias_v2) →
+      // normalizamos el Set para comparar sin distinguir mayúsculas/minúsculas.
+      setValidTickers(new Set((companies.companies ?? []).map((c) => c.ticker.toUpperCase())));
       setLoading(false);
     }).catch(() => { setError(true); setLoading(false); });
   }, []);
@@ -301,12 +303,14 @@ export default function ConsensusCheckTable() {
   }
 
   function handleTickerClick(ticker: string) {
-    if (!validTickers.has(ticker)) {
+    if (!validTickers.has(ticker.toUpperCase())) {
       setNotFoundMsg(ticker);
       return;
     }
     setNotFoundMsg(null);
-    router.push(`/companies?ticker=${encodeURIComponent(ticker)}&tab=model`);
+    // El deep-dive identifica empresas por el ticker de empresas_industrias_v2 (MAYÚSCULAS) →
+    // navegamos con el ticker en mayúsculas para que case con la lista de companies/list.
+    router.push(`/companies?ticker=${encodeURIComponent(ticker.toUpperCase())}&tab=model`);
   }
 
   const thProps = { sortBy, sortDir, onSort: handleSort };

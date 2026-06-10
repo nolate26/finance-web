@@ -89,7 +89,7 @@ export async function GET(
     const where = { equals: decodedTicker, mode: "insensitive" as const };
 
     // Step A: resolve nombre_latam from ticker (needed for portfolio weights join)
-    const empresa = await prisma.empresasIndustrias.findFirst({
+    const empresa = await prisma.empresasIndustriasV2.findFirst({
       where: { tickerBloomberg: { equals: decodedTicker, mode: "insensitive" } },
       select: { nombreLatam: true, companyDescription: true },
     });

@@ -124,7 +124,7 @@ export async function GET(request: NextRequest) {
       SELECT
         ei.ticker_bloomberg                          AS ticker,
         lw.company,
-        COALESCE(ei.industria_gics, 'Unclassified') AS sector,
+        COALESCE(NULLIF(ei.industria_gics, ''), 'Unclassified') AS sector,
         lw.w_p,
         lw.w_b,
         COALESCE(ls.ret_ytd, 0) AS ret_ytd,
@@ -134,8 +134,12 @@ export async function GET(request: NextRequest) {
         lw.report_date,
         ls.snapshot_date
       FROM latest_weights lw
-      INNER JOIN empresas_industrias ei ON ei.nombre_latam = lw.company
-      INNER JOIN latest_snapshots    ls ON ls.ticker = ei.ticker_bloomberg
+      INNER JOIN empresas_industrias_v2 ei
+        ON ei.nombre_latam = lw.company
+       AND ei.nombre_latam IS NOT NULL AND ei.nombre_latam <> ''
+      INNER JOIN latest_snapshots ls
+        ON UPPER(ls.ticker) = UPPER(ei.ticker_bloomberg)
+       AND ei.ticker_bloomberg IS NOT NULL AND ei.ticker_bloomberg <> ''
     `;
 
     if (rows.length === 0) {

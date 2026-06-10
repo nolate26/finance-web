@@ -12,7 +12,7 @@ export interface CompanyListItem {
 /**
  * GET /api/companies/list
  * Returns all companies (fund_portfolio_weights ∪ model_headers, joined to
- * empresas_industrias) plus all banks (bank_headers). Each item carries a `kind`
+ * empresas_industrias_v2) plus all banks (bank_headers). Each item carries a `kind`
  * so the deep-dive can route a ticker to the company or bank model view.
  * Company takes precedence if a ticker exists in both sets.
  */
@@ -26,33 +26,33 @@ export async function GET() {
     // no N+1; GROUP BY guarantees a single row per ticker.
     const rows = await prisma.$queryRaw<{ ticker: string; nombre: string; kind: string }[]>`
       WITH base AS (
-        SELECT ei.ticker_bloomberg AS ticker, fpw.company AS nombre
+        SELECT UPPER(ei.ticker_bloomberg) AS ticker, fpw.company AS nombre
         FROM fund_portfolio_weights fpw
-        JOIN empresas_industrias ei ON fpw.company = ei.nombre_latam
+        JOIN empresas_industrias_v2 ei ON fpw.company = ei.nombre_latam
         WHERE fpw.fund_name IN (
           'Moneda_Renta_Variable', 'Pionero', 'Orange', 'Glory', 'Mercer',
           'Moneda_Latin_America_Equities_(LX)', 'Moneda_Latin_America_Small_Cap_(LX)'
         )
-        AND ei.ticker_bloomberg IS NOT NULL
+        AND ei.ticker_bloomberg IS NOT NULL AND ei.ticker_bloomberg <> ''
 
         UNION
 
-        SELECT ei.ticker_bloomberg AS ticker, ei.nombre_latam AS nombre
-        FROM empresas_industrias ei
-        JOIN model_headers mh ON mh.ticker = ei.ticker_bloomberg
-        WHERE ei.ticker_bloomberg IS NOT NULL
+        SELECT UPPER(ei.ticker_bloomberg) AS ticker, ei.nombre_latam AS nombre
+        FROM empresas_industrias_v2 ei
+        JOIN model_headers mh ON UPPER(mh.ticker) = UPPER(ei.ticker_bloomberg)
+        WHERE ei.ticker_bloomberg IS NOT NULL AND ei.ticker_bloomberg <> ''
 
         UNION
 
-        SELECT bh.ticker AS ticker, COALESCE(ei.nombre_latam, bh.ticker) AS nombre
+        SELECT UPPER(bh.ticker) AS ticker, COALESCE(NULLIF(ei.nombre_latam, ''), bh.ticker) AS nombre
         FROM bank_headers bh
-        LEFT JOIN empresas_industrias ei ON ei.ticker_bloomberg = bh.ticker
+        LEFT JOIN empresas_industrias_v2 ei ON UPPER(ei.ticker_bloomberg) = UPPER(bh.ticker)
       )
       SELECT b.ticker AS ticker,
              MIN(b.nombre) AS nombre,
              CASE
-               WHEN EXISTS (SELECT 1 FROM bank_headers bh  WHERE bh.ticker = b.ticker)
-                AND NOT EXISTS (SELECT 1 FROM model_headers mh WHERE mh.ticker = b.ticker)
+               WHEN EXISTS (SELECT 1 FROM bank_headers bh  WHERE UPPER(bh.ticker) = UPPER(b.ticker))
+                AND NOT EXISTS (SELECT 1 FROM model_headers mh WHERE UPPER(mh.ticker) = UPPER(b.ticker))
                THEN 'bank' ELSE 'company'
              END AS kind
       FROM base b

@@ -7,10 +7,11 @@ import IndustryView from "@/components/companies/IndustryView";
 import CompanyModal from "@/components/companies/CompanyModal";
 import IndicesTable from "@/components/chile/IndicesTable";
 import TopPicksForm from "@/components/top-picks/TopPicksForm";
+import ActiveDecisions from "@/components/chile/ActiveDecisions";
 import { Company } from "@/lib/companies";
 import ProjectionsPage from "@/app/projections/page";
 
-type ActiveTab = "stock-selection" | "projections" | "top-picks";
+type ActiveTab = "stock-selection" | "projections" | "top-picks" | "active-decisions";
 
 const SORT_OPTIONS = [
   { value: "mkt_cap_bn_desc",      label: "Mkt Cap ↓",       key: "mkt_cap_bn",      order: "desc" as const },
@@ -214,7 +215,7 @@ export default function ChilePage() {
           width: "fit-content",
         }}
       >
-        {(["stock-selection", "projections", "top-picks"] as ActiveTab[]).map((tab) => (
+        {(["stock-selection", "projections", "top-picks", "active-decisions"] as ActiveTab[]).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -225,7 +226,7 @@ export default function ChilePage() {
               border: activeTab === tab ? "1px solid rgba(43,92,224,0.25)" : "1px solid transparent",
             }}
           >
-            {tab === "stock-selection" ? "Stock Selection" : tab === "projections" ? "Projections" : "Top Picks"}
+            {tab === "stock-selection" ? "Stock Selection" : tab === "projections" ? "Projections" : tab === "top-picks" ? "Top Picks" : "Active Decisions"}
           </button>
         ))}
       </div>
@@ -432,6 +433,9 @@ export default function ChilePage() {
 
       {/* ── Top Picks ───────────────────────────────────────────────────────── */}
       {activeTab === "top-picks" && <TopPicksForm defaultRegion="CHILE" />}
+
+      {/* ── Active Decisions ────────────────────────────────────────────────── */}
+      {activeTab === "active-decisions" && <ActiveDecisions />}
     </div>
   );
 }

@@ -147,7 +147,7 @@ export async function GET() {
       prisma.proyecciones_financieras.findMany({
         orderBy: [{ generated_at: "desc" }, { empresa: "asc" }],
       }),
-      prisma.empresasIndustrias.findMany(),
+      prisma.empresasIndustriasV2.findMany(),
     ]);
 
     if (allProyecciones.length === 0) {

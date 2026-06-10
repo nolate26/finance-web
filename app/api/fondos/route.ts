@@ -61,7 +61,7 @@ export interface FondoData extends FondoMeta {
   fundMeta?: Record<string, { group: string; isMoneda: boolean }>;
 }
 
-// ── Industry maps (built from empresas_industrias DB table) ──────────────────
+// ── Industry maps (built from empresas_industrias_v2 DB table) ───────────────
 //
 // Chile funds report using international names, so the portfolio holdings
 // may not match nombre_chile.  We try two keys and always return industria_chile:
@@ -78,13 +78,15 @@ type IndustryMaps = {
 };
 
 async function loadIndustryMaps(): Promise<IndustryMaps> {
-  const rows = await prisma.empresasIndustrias.findMany();
+  const rows = await prisma.empresasIndustriasV2.findMany();
 
   const chileByChile = new Map<string, string>();
   const chileByLatam = new Map<string, string>();
   const latamMap     = new Map<string, string>();
 
   for (const r of rows) {
+    // Fuente con campos vacíos: ignorar filas sin nombre_latam (IS NOT NULL AND <> '')
+    if (!r.nombreLatam) continue;
     const latamKey = r.nombreLatam.toLowerCase().trim();
     if (r.industriaChile) {
       if (r.nombreChile) chileByChile.set(r.nombreChile.toLowerCase().trim(), r.industriaChile);

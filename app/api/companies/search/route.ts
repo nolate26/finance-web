@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const rows = await prisma.empresasIndustrias.findMany({
+    const rows = await prisma.empresasIndustriasV2.findMany({
       where: {
         OR: [
           { nombreLatam: { contains: q, mode: "insensitive" } },

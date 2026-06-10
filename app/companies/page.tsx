@@ -221,12 +221,16 @@ function CompaniesPageContent() {
         const list = d.companies ?? [];
         setCompanies(list);
         if (list.length > 0) {
-          const found = tickerParam ? list.find((c) => c.ticker === tickerParam) : null;
+          // companies/list entrega tickers en MAYÚSCULAS (empresas_industrias_v2) → comparar
+          // sin distinguir mayúsculas para que cualquier origen (URL, ConsensusCheckTable…) case.
+          const found = tickerParam
+            ? list.find((c) => c.ticker.toUpperCase() === tickerParam.toUpperCase())
+            : null;
           if (tickerParam && !found) {
             setTickerNotFound(tickerParam);
             // Don't navigate — leave page in empty state
           } else {
-            const defaultItem = found ?? list.find((c) => c.ticker === "CCU CI Equity") ?? list[0];
+            const defaultItem = found ?? list.find((c) => c.ticker.toUpperCase() === "CCU CI EQUITY") ?? list[0];
             handleSelect(defaultItem);
           }
           if (tabParam === "model" || tabParam === "consensus") {

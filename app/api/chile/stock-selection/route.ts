@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
         select: { cierreCartera: true, precios: true, resultados: true },
       }),
       // Load full table so we can replicate the fondos dual-lookup pattern
-      prisma.empresasIndustrias.findMany(),
+      prisma.empresasIndustriasV2.findMany(),
     ]);
 
     if (!latest) {
@@ -105,6 +105,7 @@ export async function GET(request: NextRequest) {
     const tickerByChile = new Map<string, string>(); // nombre_chile.lower → ticker_bloomberg
     const tickerByLatam = new Map<string, string>(); // nombre_latam.lower → ticker_bloomberg
     for (const ind of allIndustries) {
+      if (!ind.nombreLatam) continue; // fuente con campos vacíos: IS NOT NULL AND <> ''
       const latamKey = ind.nombreLatam.toLowerCase().trim();
       if (ind.industriaChile) {
         if (ind.nombreChile) chileByChile.set(ind.nombreChile.toLowerCase().trim(), ind.industriaChile);
@@ -150,19 +151,17 @@ export async function GET(request: NextRequest) {
     let companies = companiesRaw.map((r) => addIndustry(toFrontendRow(r)));
 
     // ── Enrich companies with upside + thesis ─────────────────────────────────
-    const validTickers = [...new Set(
-      companies.map(c => resolveTickerForName(String(c.company ?? ""))).filter(Boolean) as string[]
-    )];
-
-    const modelHeaders = validTickers.length > 0
+    // resolveTickerForName entrega los tickers en MAYÚSCULAS (empresas_industrias_v2),
+    // pero model_headers usa su propia capitalización: no se puede filtrar con `in`
+    // (case-sensitive). Cargamos la última tesis por ticker e indexamos con UPPER.
+    const modelHeaders = companies.length > 0
       ? await prisma.modelHeader.findMany({
-          where:    { ticker: { in: validTickers } },
           orderBy:  { updateDate: "desc" },
           distinct: ["ticker"],
           select:   { ticker: true, thesis: true },
         })
       : [];
-    const thesisByTicker = new Map(modelHeaders.map(h => [h.ticker, h.thesis]));
+    const thesisByTicker = new Map(modelHeaders.map(h => [h.ticker.toUpperCase(), h.thesis]));
 
     companies = companies.map(c => {
       const ticker  = resolveTickerForName(String(c.company ?? ""));

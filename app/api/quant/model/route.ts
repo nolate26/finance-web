@@ -81,14 +81,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ date: targetDateStr, dates, rows: [] } satisfies ModelPayload);
   }
 
-  // Join with EmpresasIndustrias for name + industry
-  const tickers   = signals.map((s) => s.ticker);
-  const companies = await prisma.empresasIndustrias.findMany({
+  // Join with EmpresasIndustriasV2 for name + industry.
+  // v2 guarda los tickers en MAYÚSCULAS → normalizamos ambos lados del cruce.
+  const tickers   = signals.flatMap((s) => (s.ticker ? [s.ticker.toUpperCase()] : []));
+  const companies = await prisma.empresasIndustriasV2.findMany({
     where:  { tickerBloomberg: { in: tickers } },
     select: { tickerBloomberg: true, nombreLatam: true, industriaGics: true },
   });
 
-  const coMap = new Map(companies.map((c) => [c.tickerBloomberg, c]));
+  const coMap = new Map(companies.map((c) => [c.tickerBloomberg.toUpperCase(), c]));
 
   // Fund positioning (latest reportDate per fund), keyed by nombreLatam
   const [mleMap, mscMap] = await Promise.all([
@@ -97,7 +98,7 @@ export async function GET(request: NextRequest) {
   ]);
 
   const rows: ModelRow[] = signals.map((s) => {
-    const co = s.ticker ? coMap.get(s.ticker) : undefined;
+    const co = s.ticker ? coMap.get(s.ticker.toUpperCase()) : undefined;
     const nl = co?.nombreLatam ?? null;
     const inMle = nl != null && mleMap.has(nl);
     const inMsc = nl != null && mscMap.has(nl);
