@@ -19,19 +19,19 @@ export interface ADBand {
 }
 
 export interface ADCompany {
-  ticker:     string;
-  name:       string;
-  gics:       string | null;
+  ticker:      string;
+  name:        string;
+  gics:        string | null;
   yahooTicker: string | null;
-  pe:         ADBand | null;
-  evEbitda:   ADBand | null;
-  // Fundamentales desde ss_universe (último cierre). ni_yr1e / ebitda_yr1e están en
-  // CLP mil-millones (misma base que mkt_cap_bn → pe_yr1e = mkt_cap_bn / ni_yr1e).
-  niYr1e:     number | null;
-  ebitdaYr1e: number | null;
-  netDebt:    number | null;
-  peYr1eSs:   number | null;   // P/E forward que reporta el analista (referencia)
-  // Campos de precio: solo con ?withPrices=true
+  pe:          ADBand | null;
+  evEbitda:    ADBand | null;
+  // Consenso (consensus_estimates), año forward más cercano. En MILLONES de la moneda
+  // de reporte de la empresa (CLP para la mayoría; USD para Copec/CMPC/etc.).
+  netIncome:   number | null;
+  ebitda:      number | null;
+  // Deuda neta desde ss_universe.net_debt (CLP mil-millones; positivo = deuda, negativo = caja).
+  netDebt:     number | null;
+  // Solo con ?withPrices=true
   currentPrice?: number | null;
   currency?:     string | null;
   shares?:       number | null;
@@ -39,14 +39,15 @@ export interface ADCompany {
 
 export interface ActiveDecisionsPayload {
   asOf:       string | null;
-  ssAsOf:     string | null;
   withPrices: boolean;
+  usdClp?:    number | null;   // para convertir NET_INCOME en USD → CLP
   companies:  ADCompany[];
 }
 
 interface CompanyRow { ticker: string; name: string; chile: string | null; latam: string | null; gics: string | null; isin: string | null; yahoo: string | null; }
 interface SeriesRow  { tk: string; pe: number | null; ev: number | null; }
-interface SsRow      { company: string; ni: number | null; ebitda: number | null; net_debt: number | null; pe: number | null; }
+interface ConsRow    { tk: string; metric: string; value: number; }
+interface SsRow      { company: string; net_debt: number | null; }
 
 const CHILE_FILTER =
   "(UPPER(e.moneda) = 'CLP' OR UPPER(e.country_risk) IN ('CHILE', 'CL'))";
@@ -90,21 +91,28 @@ export async function GET(request: NextRequest) {
       WHERE ${CHILE_FILTER}
     `);
 
-    // ── 3. Fundamentales del último cierre de ss_universe (por nombre) ────────
-    const ssRows = await prisma.$queryRawUnsafe<SsRow[]>(`
-      SELECT company, ni_yr1e AS ni, ebitda_yr1e AS ebitda, net_debt, pe_yr1e AS pe
-      FROM ss_universe
-      WHERE cierre_cartera = (SELECT MAX(cierre_cartera) FROM ss_universe)
-        AND record_type = 'company'
+    // ── 3. Consenso NET_INCOME / EBITDA del año forward más cercano (latest) ──
+    const consRows = await prisma.$queryRawUnsafe<ConsRow[]>(`
+      SELECT DISTINCT ON (UPPER(ce.ticker), ce.metric)
+             UPPER(ce.ticker) AS tk, ce.metric AS metric, ce.value AS value
+      FROM consensus_estimates ce
+      JOIN empresas_industrias_v2 e ON UPPER(e.ticker_bloomberg) = UPPER(ce.ticker)
+      WHERE ce.metric IN ('NET_INCOME', 'EBITDA') AND ${CHILE_FILTER}
+      ORDER BY UPPER(ce.ticker), ce.metric, ce.period ASC, ce.date DESC
     `);
-    const [{ ssasof }] = await prisma.$queryRawUnsafe<{ ssasof: Date | null }[]>(
-      `SELECT MAX(cierre_cartera) AS ssasof FROM ss_universe`,
-    );
     const [{ asof }] = await prisma.$queryRawUnsafe<{ asof: Date | null }[]>(
       `SELECT MAX(date) AS asof FROM valuation_history`,
     );
 
-    // ── Group multiples by UPPER(ticker); fundamentals by lower(name) ────────
+    // ── 4. Deuda neta del último cierre de ss_universe (match por nombre) ─────
+    const ssRows = await prisma.$queryRawUnsafe<SsRow[]>(`
+      SELECT company, net_debt
+      FROM ss_universe
+      WHERE cierre_cartera = (SELECT MAX(cierre_cartera) FROM ss_universe)
+        AND record_type = 'company'
+    `);
+
+    // ── Group by UPPER(ticker) ───────────────────────────────────────────────
     const peByTk = new Map<string, (number | null)[]>();
     const evByTk = new Map<string, (number | null)[]>();
     for (const r of seriesRows) {
@@ -112,46 +120,53 @@ export async function GET(request: NextRequest) {
       peByTk.get(r.tk)!.push(r.pe);
       evByTk.get(r.tk)!.push(r.ev);
     }
-    const ssByName = new Map<string, SsRow>();
+    const niByTk = new Map<string, number>();
+    const ebByTk = new Map<string, number>();
+    for (const r of consRows) {
+      if (r.metric === "NET_INCOME") niByTk.set(r.tk, r.value);
+      else if (r.metric === "EBITDA") ebByTk.set(r.tk, r.value);
+    }
+    const ndByName = new Map<string, number>();
     for (const r of ssRows) {
       const k = r.company?.toLowerCase().trim();
-      if (k && !ssByName.has(k)) ssByName.set(k, r);
+      if (k && r.net_debt != null && !ndByName.has(k)) ndByName.set(k, r.net_debt);
     }
-    const ss = (c: CompanyRow): SsRow | undefined =>
-      ssByName.get((c.chile ?? "").toLowerCase().trim()) ??
-      ssByName.get((c.latam ?? "").toLowerCase().trim());
+    const netDebtOf = (c: CompanyRow): number | null =>
+      ndByName.get((c.chile ?? "").toLowerCase().trim()) ??
+      ndByName.get((c.latam ?? "").toLowerCase().trim()) ?? null;
 
     const companies: ADCompany[] = companyRows.map((c) => {
       const tk = c.ticker.toUpperCase();
-      const s = ss(c);
       return {
-        ticker:     c.ticker,
-        name:       c.name,
-        gics:       c.gics,
+        ticker:      c.ticker,
+        name:        c.name,
+        gics:        c.gics,
         yahooTicker: c.yahoo,
-        pe:         band(peByTk.get(tk) ?? []),
-        evEbitda:   band(evByTk.get(tk) ?? []),
-        niYr1e:     s?.ni ?? null,
-        ebitdaYr1e: s?.ebitda ?? null,
-        netDebt:    s?.net_debt ?? null,
-        peYr1eSs:   s?.pe ?? null,
+        pe:          band(peByTk.get(tk) ?? []),
+        evEbitda:    band(evByTk.get(tk) ?? []),
+        netIncome:   niByTk.get(tk) ?? null,
+        ebitda:      ebByTk.get(tk) ?? null,
+        netDebt:     netDebtOf(c),
       };
     });
 
-    // ── 4. Precio actual + acciones (solo con ?withPrices) ───────────────────
+    // ── 4. Precio actual + acciones + USDCLP (solo con ?withPrices) ──────────
+    let usdClp: number | null = null;
     if (withPrices) {
-      const symbols = [...new Set(companies.map((c) => c.yahooTicker).filter((s): s is string => !!s))];
+      const symbols = [
+        ...new Set(companies.map((c) => c.yahooTicker).filter((s): s is string => !!s)),
+        "USDCLP=X",
+      ];
       const quoteMap = new Map<string, YQuote>();
-      if (symbols.length) {
-        try {
-          const raw = await (yf.quote as unknown as (
-            s: string[], q?: unknown, m?: unknown,
-          ) => Promise<YQuote[]>)(symbols, undefined, { validateResult: false });
-          for (const r of Array.isArray(raw) ? raw : [raw]) if (r?.symbol) quoteMap.set(r.symbol, r);
-        } catch (e) {
-          console.error("[active-decisions] yahoo quote failed:", e);
-        }
+      try {
+        const raw = await (yf.quote as unknown as (
+          s: string[], q?: unknown, m?: unknown,
+        ) => Promise<YQuote[]>)(symbols, undefined, { validateResult: false });
+        for (const r of Array.isArray(raw) ? raw : [raw]) if (r?.symbol) quoteMap.set(r.symbol, r);
+      } catch (e) {
+        console.error("[active-decisions] yahoo quote failed:", e);
       }
+      usdClp = quoteMap.get("USDCLP=X")?.regularMarketPrice ?? null;
       for (const co of companies) {
         const qt = co.yahooTicker ? quoteMap.get(co.yahooTicker) : undefined;
         const price = qt?.regularMarketPrice ?? null;
@@ -162,9 +177,9 @@ export async function GET(request: NextRequest) {
     }
 
     const payload: ActiveDecisionsPayload = {
-      asOf:   asof ? asof.toISOString().slice(0, 10) : null,
-      ssAsOf: ssasof ? ssasof.toISOString().slice(0, 10) : null,
+      asOf: asof ? asof.toISOString().slice(0, 10) : null,
       withPrices,
+      usdClp,
       companies,
     };
     return NextResponse.json(payload);
