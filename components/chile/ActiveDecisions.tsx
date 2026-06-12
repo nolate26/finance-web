@@ -346,9 +346,9 @@ export default function ActiveDecisions() {
                       </div>
                     ) : <span style={{ color: TEXT3, fontSize: 11 }}>{noImplied}</span>}
                   </td>
-                  {/* Multiple band (editable) */}
+                  {/* Multiple band (editable en P/E y EV/EBITDA) */}
                   <td style={td}>
-                    <BandEdit band={r.band} vals={r.vals} editable={metric === "pe"} edited={r.edited}
+                    <BandEdit band={r.band} vals={r.vals} editable edited={r.edited}
                       onChange={(f, v) => setBandField(r, f, v)} onReset={() => resetBand(r)} />
                   </td>
                   {/* Earnings: Utilidad NI (P/E) — o EBITDA + Deuda Neta (EV/EBITDA) */}
