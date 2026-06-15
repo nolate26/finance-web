@@ -530,6 +530,28 @@ model SignalRaw {
   @@index([ticker])
   @@map("signals_raw")
 }
+
+model MomentumSignal {
+
+  signalDate DateTime @map("signal_date") @db.Date
+  ticker     String   @db.VarChar(100) // Ticker Bloomberg
+
+  // Señal de momentum (skip-return 315-15, total return USD)
+  signal     Float?   // retorno acumulado de la ventana [t-315, t-15], en %
+  score      Float?   // puntaje rank-percentil 0-100 (rank 1 = 100)
+  zscore     Float?   @map("z_score") // sigmas vs media cross-section de la fecha
+  rank       Int?     // puesto ordinal (1 = mejor momentum)
+ 
+  @@id([signalDate, ticker])
+  @@index([signalDate])
+  @@index([ticker])
+  @@map("momentum_signals")
+
+}
+ 
+
+
+
  
 model BenchmarkMxla {
   date DateTime @id @map("date") @db.Date

@@ -406,6 +406,28 @@ export async function POST(request: Request) {
         break;
 
       // --- NUEVAS TABLAS: SIGNALS Y BENCHMARK ---
+      case 'MomentumSignal':
+        const momentumRows = rows.map((r: any) => ({
+          // Mantenemos la fecha para no perder la historia
+          signalDate: new Date(r.signalDate ?? r.signal_date ?? r.date),
+          ticker:     r.ticker ?? r.Ticker,
+ 
+          // Señal cruda (skip-return en %) y puntaje relativo 0-100
+          signal:     r.signal ?? r.Signal ?? null,
+          score:      r.score ?? r.Score ?? null,
+ 
+          // zscore: el campo físico es z_score, pero @map lo resuelve Prisma
+          zscore:     r.zscore ?? r.z_score ?? r.zScore ?? null,
+ 
+          // rank ordinal (1 = mejor momentum)
+          rank:       r.rank ?? r.Rank ?? null,
+        }));
+ 
+        await prisma.momentumSignal.createMany({
+          data: momentumRows,
+          skipDuplicates: true // Evita duplicados si corres el script 2 veces el mismo día
+        });
+        break;
       // --- NUEVAS TABLAS: SIGNALS Y BENCHMARK ---
       case 'SignalRaw':
         const signalRows = rows.map((r: any) => ({
