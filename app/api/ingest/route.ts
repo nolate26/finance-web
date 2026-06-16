@@ -467,7 +467,24 @@ export async function POST(request: Request) {
         });
         break;
 
-      
+      case 'StockSelectionV1':
+        const ssRows = rows.map((r: any) => ({
+          company:     r.company,
+          currency:    r.currency,
+          metric:      r.metric,
+          series:      r.series ?? 'TOTAL',
+          fiscalYear:  r.fiscalYear ?? r.fiscal_year,
+          quarter:     r.quarter,
+          periodLabel: r.periodLabel ?? r.period_label,
+          value:       r.value ?? null,
+        }));
+ 
+        await prisma.stockSelectionV1.createMany({
+          data: ssRows,
+          skipDuplicates: true
+        });
+        break;
+
         
       default:
         return NextResponse.json({ error: `Tabla ${table} no reconocida` }, { status: 400 });

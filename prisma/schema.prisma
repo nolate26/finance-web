@@ -896,3 +896,22 @@ model EmpresasIndustriasV2 {
 
 }
  
+
+
+
+model StockSelectionV1 {
+  company      String   @db.VarChar(120)
+  currency     String   @db.VarChar(3)   // CLP | USD (constante por compañía)
+  metric       String   @db.VarChar(40)  // revenue, ebitda, shares, utilidad, ...
+  series       String   @default("TOTAL") @db.VarChar(10) // TOTAL | A | B
+  fiscalYear   Int      @map("fiscal_year")
+  quarter      Int      // 1..4
+  periodLabel  String   @map("period_label") @db.VarChar(10) // "1Q 2026"
+  value        Float?
+ 
+  @@id([company, metric, series, fiscalYear, quarter])
+  @@index([metric])
+  @@index([company])
+  @@index([fiscalYear, quarter])
+  @@map("stock_selection_v1")
+}
