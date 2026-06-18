@@ -79,6 +79,7 @@ function computeV(mcap: number | null, a: Alloc): Record<string, number | null> 
 interface DisplayRow {
   company: string; tickerBBG: string | null; ssCurrency: "CLP" | "USD"; industria: string | null;
   divLabel: string | null;
+  payout: number | null;    // pool_div (payout) de proyecciones_financieras, decimal 0..1
   label: string;            // "" consolidada/single · "A"/"B" serie
   kind: "single" | "consolidated" | "series";
   seriesBBG: string | null;
@@ -127,20 +128,20 @@ function computeGroup(c: SsV1Company, tc: number): CompanyGroup {
     const s = c.series[0];
     const v = withPriceFields(computeV(seriesMcaps[0], whole), s);
     return {
-      cons: { company: c.company, tickerBBG: c.tickerBBG, ssCurrency: ss, industria: c.industria, divLabel: c.divLabel, label: "", kind: "single", seriesBBG: c.tickerBBG, v },
+      cons: { company: c.company, tickerBBG: c.tickerBBG, ssCurrency: ss, industria: c.industria, divLabel: c.divLabel, payout: c.payout, label: "", kind: "single", seriesBBG: c.tickerBBG, v },
       series: [],
     };
   }
 
   // Consolidada (whole, M.Cap = Σ series)
   const consV = withPriceFields(computeV(mcapConsol, whole), null);
-  const cons: DisplayRow = { company: c.company, tickerBBG: c.tickerBBG, ssCurrency: ss, industria: c.industria, divLabel: c.divLabel, label: "", kind: "consolidated", seriesBBG: c.tickerBBG, v: consV };
+  const cons: DisplayRow = { company: c.company, tickerBBG: c.tickerBBG, ssCurrency: ss, industria: c.industria, divLabel: c.divLabel, payout: c.payout, label: "", kind: "consolidated", seriesBBG: c.tickerBBG, v: consV };
 
   // Series A/B (prorateadas por acciones)
   const series: DisplayRow[] = c.series.map((s, i) => {
     const w = s.shares != null && c.sharesTotal ? s.shares / c.sharesTotal : 0;
     const v = withPriceFields(computeV(seriesMcaps[i], scaleAlloc(w)), s);
-    return { company: c.company, tickerBBG: c.tickerBBG, ssCurrency: ss, industria: c.industria, divLabel: c.divLabel, label: s.label, kind: "series", seriesBBG: s.bbg, v };
+    return { company: c.company, tickerBBG: c.tickerBBG, ssCurrency: ss, industria: c.industria, divLabel: c.divLabel, payout: c.payout, label: s.label, kind: "series", seriesBBG: s.bbg, v };
   });
 
   return { cons, series };
@@ -199,7 +200,7 @@ function buildGroups(periodN: string | null, periodN4: string | null): Group[] {
       xCol("fvs", "FV/S", "#475569"),
     ] },
     { title: "Dividendos", accent: AMBER, cols: [
-      { id: "polDiv", label: "Pol Div", align: "left", sortVal: (r) => r.divLabel ?? null, render: (r) => ({ text: r.divLabel ?? "—", color: r.divLabel ? TEXT2 : TEXT3 }) },
+      { id: "polDiv", label: "Pol Div", align: "right", sortVal: (r) => r.payout, render: (r) => ({ text: r.payout != null ? (r.payout * 100).toFixed(0) + "%" : "—", color: r.payout != null ? TEXT2 : TEXT3 }) },
       { id: "divYield", label: "Yield 26E", align: "right", sortVal: num("divYield"), render: (r) => ({ text: yld(r.v.divYield), color: AMBER, weight: 600 }) },
     ] },
     { title: "Retorno s/ capital", accent: "#0D9488", cols: [
@@ -423,7 +424,7 @@ export default function StockSelectionV1() {
       <div style={{ marginTop: 10, fontSize: 11, color: TEXT2, lineHeight: 1.6 }}>
         <div><strong>Series A/B:</strong> cada serie usa su propio precio (Yahoo) y nº de acciones → M.Cap por serie; la <strong>consolidada</strong> suma los M.Cap. Las filas A/B muestran fundamentales <strong>prorateados</strong> por % de acciones, así que sus múltiplos son por acción (P/U serie A de Andina ≈ 11,4x); la consolidada usa el M.Cap total contra el fundamental completo (P/U ≈ 12,8x).</div>
         <div><strong>Unidades:</strong> todo en USD mn vía conv() (÷TC si CLP). M.Cap usa la moneda del precio de Yahoo. <strong>Retornos:</strong> precio ajustado, acumulados. <strong>P/U:</strong> &ldquo;NM&rdquo; si utilidad ≤ 0.</div>
-        <div><strong>Pol Div / Div Yield</strong> usan <code>proyecciones_financieras.div</code> como payout; hoy trae etiqueta de sector (no numérica) → Yield en &ldquo;—&rdquo;. <strong>Rec./Date/TP</strong> manuales.</div>
+        <div><strong>Pol Div</strong> = <code>proyecciones_financieras.pool_div</code> (payout, en %). <strong>Div Yield 26E</strong> = payout × Utilidad 2026E / M.Cap. <strong>Rec./Date/TP</strong> manuales.</div>
       </div>
     </div>
   );

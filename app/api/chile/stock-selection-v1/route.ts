@@ -89,16 +89,6 @@ const SERIES_CONFIG: Record<string, { A: { yahoo: string; bbg: string }; B: { ya
   soquimich: { A: { yahoo: "SQM-A.SN",      bbg: "SQM/A CI" },    B: { yahoo: "SQM-B.SN",      bbg: "SQM/B CI" } },
 };
 
-function parsePayout(raw: string | null | undefined): number | null {
-  if (!raw) return null;
-  const pct = /%/.test(raw);
-  const cleaned = raw.trim().replace(/[%\s]/g, "").replace(",", ".");
-  if (!/^-?\d*\.?\d+$/.test(cleaned)) return null;
-  const n = parseFloat(cleaned);
-  if (!isFinite(n)) return null;
-  return pct ? n / 100 : n > 1.5 ? n / 100 : n;
-}
-
 // ── Precios / retornos (Yahoo) ──────────────────────────────────────────────────
 const DAY = 86400000;
 interface ChartPoint { t: number; v: number; }
@@ -238,7 +228,7 @@ export async function GET(request: NextRequest) {
     };
 
     // ── Proyecciones (latest generated_at) ────────────────────────────────────
-    interface ProjPick { moneda: "CLP" | "USD" | null; base_year: number; div: string | null; ebitda: (number | null)[]; utilidad: (number | null)[]; }
+    interface ProjPick { moneda: "CLP" | "USD" | null; base_year: number; div: string | null; pool_div: number | null; ebitda: (number | null)[]; utilidad: (number | null)[]; }
     const projByName = new Map<string, ProjPick>(); const projAt = new Map<string, number>();
     for (const p of projRows) {
       const k = norm(p.empresa); const ts = new Date(p.generated_at).getTime();
@@ -246,6 +236,7 @@ export async function GET(request: NextRequest) {
         projAt.set(k, ts);
         projByName.set(k, {
           moneda: p.moneda === "USD" ? "USD" : p.moneda === "CLP" ? "CLP" : null, base_year: p.base_year, div: p.div ?? null,
+          pool_div: p.pool_div ?? null,
           ebitda: [p.ebitda_y0 ?? null, p.ebitda_y1 ?? null, p.ebitda_y2 ?? null],
           utilidad: [p.utilidad_y0 ?? null, p.utilidad_y1 ?? null, p.utilidad_y2 ?? null],
         });
@@ -293,7 +284,7 @@ export async function GET(request: NextRequest) {
         equityN: at(f, "equity", nKey), equityN4: at(f, "equity", n4Key), minorityN: at(f, "minority_interest", nKey),
         ebitda2026E: projYear(pick, "ebitda", 2026), ebitda2027E: projYear(pick, "ebitda", 2027),
         utilidad2026E: projYear(pick, "utilidad", 2026), utilidad2027E: projYear(pick, "utilidad", 2027),
-        divLabel: pick?.div ?? null, payout: parsePayout(pick?.div),
+        divLabel: pick?.div ?? null, payout: pick?.pool_div ?? null,
       });
     }
     companies.sort((a, b) => a.company.localeCompare(b.company));
