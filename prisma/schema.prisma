@@ -245,6 +245,7 @@ model proyecciones_financieras {
   moneda        String?  @db.VarChar(20)
   analyst       String?  @db.VarChar(100)
   div           String?  @db.VarChar(100)
+  pool_div      Float?   // Pol. Dividendo (payout), columna AC del Excel
   base_year     Int      @default(2025)
   ingresos_y0   Float?
   ebitda_y0     Float?
