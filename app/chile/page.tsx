@@ -8,10 +8,11 @@ import CompanyModal from "@/components/companies/CompanyModal";
 import IndicesTable from "@/components/chile/IndicesTable";
 import TopPicksForm from "@/components/top-picks/TopPicksForm";
 import ActiveDecisions from "@/components/chile/ActiveDecisions";
+import StockSelectionV1 from "@/components/chile/StockSelectionV1";
 import { Company } from "@/lib/companies";
 import ProjectionsPage from "@/app/projections/page";
 
-type ActiveTab = "stock-selection" | "projections" | "top-picks" | "active-decisions";
+type ActiveTab = "stock-selection" | "stock-selection-v1" | "projections" | "top-picks" | "active-decisions";
 
 const SORT_OPTIONS = [
   { value: "mkt_cap_bn_desc",      label: "Mkt Cap ↓",       key: "mkt_cap_bn",      order: "desc" as const },
@@ -215,7 +216,7 @@ export default function ChilePage() {
           width: "fit-content",
         }}
       >
-        {(["stock-selection", "projections", "top-picks", "active-decisions"] as ActiveTab[]).map((tab) => (
+        {(["stock-selection", "stock-selection-v1", "projections", "top-picks", "active-decisions"] as ActiveTab[]).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -226,7 +227,7 @@ export default function ChilePage() {
               border: activeTab === tab ? "1px solid rgba(43,92,224,0.25)" : "1px solid transparent",
             }}
           >
-            {tab === "stock-selection" ? "Stock Selection" : tab === "projections" ? "Projections" : tab === "top-picks" ? "Top Picks" : "Active Decisions"}
+            {tab === "stock-selection" ? "Stock Selection" : tab === "stock-selection-v1" ? "Stock Selection v1" : tab === "projections" ? "Projections" : tab === "top-picks" ? "Top Picks" : "Active Decisions"}
           </button>
         ))}
       </div>
@@ -427,6 +428,9 @@ export default function ChilePage() {
           ))}
         </>
       )}
+
+      {/* ── Stock Selection v1 ──────────────────────────────────────────────── */}
+      {activeTab === "stock-selection-v1" && <StockSelectionV1 />}
 
       {/* ── Projections ─────────────────────────────────────────────────────── */}
       {activeTab === "projections" && <ProjectionsPage />}

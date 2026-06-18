@@ -1,0 +1,325 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import YahooFinance from "yahoo-finance2";
+
+export const dynamic = "force-dynamic";
+
+const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
+
+// ── Public types ──────────────────────────────────────────────────────────────
+// El frontend aplica conv() con el TC manual. La API devuelve fundamentales en su
+// MONEDA REPORTADA (sin convertir), en MILLONES; acciones en millones.
+// Las compañías de doble serie (A/B) traen una entrada por serie con su propio
+// ticker Yahoo y nº de acciones; el frontend arma filas A / B / consolidada.
+
+export interface SsV1Series {
+  label:       string;        // "A" | "B" | "TOTAL"
+  bbg:         string | null;
+  yahooTicker: string | null;
+  shares:      number | null; // millones de acciones de esta serie
+  // Precios / retornos (solo con ?withPrices=true)
+  price?:    number | null;
+  currency?: string | null;   // moneda del precio (CLP / USD / GBp…)
+  retMonth?: number | null;
+  retYtd?:   number | null;
+  retYear?:  number | null;
+  ret3y?:    number | null;
+  ret5y?:    number | null;
+}
+
+export interface SsV1Company {
+  company:     string;
+  tickerBBG:   string | null;
+  industria:   string | null;
+  gics:        string | null;
+  dual:        boolean;       // true → tiene series A/B
+
+  ssCurrency:   "CLP" | "USD";
+  projCurrency: "CLP" | "USD" | null;
+
+  series:      SsV1Series[];  // [TOTAL] para compañías de una serie; [A, B] para dobles
+  sharesTotal: number | null; // serie TOTAL, millones
+
+  // Fundamentales (moneda reportada, millones) ─ a nivel COMPAÑÍA (sin prorratear)
+  ebitdaN:     number | null;
+  ebitdaN4:    number | null;
+  ebitdaLtm:   number | null;
+  utilidadN:   number | null;
+  utilidadN4:  number | null;
+  utilidadLtm: number | null;
+  revenueLtm:  number | null;
+  ebitLtm:     number | null;
+  debtN:       number | null;
+  debtN4:      number | null;
+  equityN:     number | null;
+  equityN4:    number | null;
+  minorityN:   number | null;
+
+  // Proyecciones (moneda projCurrency, millones)
+  ebitda2026E:   number | null;
+  ebitda2027E:   number | null;
+  utilidad2026E: number | null;
+  utilidad2027E: number | null;
+  divLabel:      string | null;
+  payout:        number | null;
+}
+
+export interface SsV1Payload {
+  withPrices: boolean;
+  periodN:    string | null;
+  periodN4:   string | null;
+  ltmLabels:  string[];
+  companies:  SsV1Company[];
+}
+
+// ── Homologación / overrides ───────────────────────────────────────────────────
+const norm = (s: string | null | undefined) => (s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+const cleanBBG = (t: string | null | undefined) => (t ? t.replace(/\s+EQUITY$/i, "").trim() : null);
+
+const NAME_OVERRIDES: Record<string, string> = {
+  aguas: "aguas-a", andina: "andina-b", "las condes": "clinica las condes", potasios: "potasios-b",
+};
+
+// Compañías de doble serie (A/B): ticker Yahoo y BBG por serie, verificados.
+const SERIES_CONFIG: Record<string, { A: { yahoo: string; bbg: string }; B: { yahoo: string; bbg: string } }> = {
+  aguas:     { A: { yahoo: "AGUAS-A.SN",    bbg: "AGUAS/A CI" },  B: { yahoo: "AGUAS-B.SN",    bbg: "AGUAS/B CI" } },
+  andina:    { A: { yahoo: "ANDINA-A.SN",   bbg: "ANDINAA CI" },  B: { yahoo: "ANDINA-B.SN",   bbg: "ANDINAB CI" } },
+  embonor:   { A: { yahoo: "EMBONOR-A.SN",  bbg: "EMBONOA CI" },  B: { yahoo: "EMBONOR-B.SN",  bbg: "EMBONOB CI" } },
+  potasios:  { A: { yahoo: "POTASIOS-A.SN", bbg: "POTASIOA CI" }, B: { yahoo: "POTASIOS-B.SN", bbg: "POTASIOB CI" } },
+  soquimich: { A: { yahoo: "SQM-A.SN",      bbg: "SQM/A CI" },    B: { yahoo: "SQM-B.SN",      bbg: "SQM/B CI" } },
+};
+
+function parsePayout(raw: string | null | undefined): number | null {
+  if (!raw) return null;
+  const pct = /%/.test(raw);
+  const cleaned = raw.trim().replace(/[%\s]/g, "").replace(",", ".");
+  if (!/^-?\d*\.?\d+$/.test(cleaned)) return null;
+  const n = parseFloat(cleaned);
+  if (!isFinite(n)) return null;
+  return pct ? n / 100 : n > 1.5 ? n / 100 : n;
+}
+
+// ── Precios / retornos (Yahoo) ──────────────────────────────────────────────────
+const DAY = 86400000;
+interface ChartPoint { t: number; v: number; }
+function priceAsOf(series: ChartPoint[], targetMs: number): number | null {
+  let res: number | null = null;
+  for (const p of series) { if (p.t <= targetMs) res = p.v; else break; }
+  return res;
+}
+const retOf = (cur: number, base: number | null): number | null => (base != null && base > 0 ? cur / base - 1 : null);
+
+interface YChartQuote { date: Date; close: number | null; adjclose?: number | null; }
+interface YChart { meta?: { currency?: string; regularMarketPrice?: number }; quotes: YChartQuote[]; }
+interface PriceData { price: number | null; currency: string | null; retMonth: number | null; retYtd: number | null; retYear: number | null; ret3y: number | null; ret5y: number | null; }
+
+async function fetchPrice(ticker: string): Promise<PriceData | null> {
+  try {
+    const period2 = new Date();
+    const period1 = new Date(period2.getTime() - (5 * 365 + 21) * DAY);
+    const chart = (await yf.chart(ticker, { period1, period2, interval: "1d" })) as YChart;
+    const series: ChartPoint[] = [];
+    for (const q of chart.quotes ?? []) {
+      const v = q.adjclose ?? q.close;
+      if (v != null && isFinite(v) && q.date) series.push({ t: new Date(q.date).getTime(), v });
+    }
+    series.sort((a, b) => a.t - b.t);
+    if (!series.length) return null;
+    const last = series[series.length - 1], cur = last.v, curT = last.t;
+    const yearStart = Date.UTC(new Date(curT).getUTCFullYear(), 0, 1) - 1;
+    return {
+      price: chart.meta?.regularMarketPrice ?? (chart.quotes?.[chart.quotes.length - 1]?.close ?? null),
+      currency: chart.meta?.currency ?? null,
+      retMonth: retOf(cur, priceAsOf(series, curT - 30 * DAY)),
+      retYtd: retOf(cur, priceAsOf(series, yearStart)),
+      retYear: retOf(cur, priceAsOf(series, curT - 365 * DAY)),
+      ret3y: retOf(cur, priceAsOf(series, curT - 3 * 365 * DAY)),
+      ret5y: retOf(cur, priceAsOf(series, curT - 5 * 365 * DAY)),
+    };
+  } catch {
+    return null;
+  }
+}
+async function fetchPricesChunked(tickers: string[]): Promise<Map<string, PriceData>> {
+  const out = new Map<string, PriceData>();
+  const CHUNK = 8;
+  for (let i = 0; i < tickers.length; i += CHUNK) {
+    const batch = tickers.slice(i, i + CHUNK);
+    const res = await Promise.all(batch.map((t) => fetchPrice(t)));
+    res.forEach((p, j) => { if (p) out.set(batch[j], p); });
+  }
+  return out;
+}
+
+// ── Route ─────────────────────────────────────────────────────────────────────
+interface EmpRow { tickerBloomberg: string | null; isin: string | null; industriaChile: string | null; industriaGics: string | null; nombreLatam: string; }
+interface ResolvedName { tickerBBG: string | null; yahoo: string | null; industria: string | null; gics: string | null; }
+
+export async function GET(request: NextRequest) {
+  const withPrices = request.nextUrl.searchParams.get("withPrices") === "true";
+
+  try {
+    const [ssRows, projRows, empresas, isins] = await Promise.all([
+      // Sin filtro de serie: necesitamos shares A/B además de TOTAL.
+      prisma.stockSelectionV1.findMany({
+        select: { company: true, currency: true, metric: true, series: true, fiscalYear: true, quarter: true, value: true },
+      }),
+      prisma.proyecciones_financieras.findMany(),
+      prisma.empresasIndustriasV2.findMany({
+        select: { nombreLatam: true, nombreChile: true, isin: true, tickerBloomberg: true, industriaChile: true, industriaGics: true },
+      }),
+      prisma.companyIsin.findMany({ select: { isin: true, yahooFinanceTicker: true } }),
+    ]);
+
+    const yahooByIsin = new Map<string, string>();
+    for (const c of isins) if (c.isin && c.yahooFinanceTicker?.trim()) yahooByIsin.set(c.isin.trim(), c.yahooFinanceTicker.trim());
+
+    // name(normalizado) → filas candidatas de empresas_industrias_v2
+    const byName = new Map<string, EmpRow[]>();
+    const addName = (key: string | null, row: EmpRow) => {
+      const k = norm(key); if (!k) return;
+      if (!byName.has(k)) byName.set(k, []);
+      const arr = byName.get(k)!; if (!arr.includes(row)) arr.push(row);
+    };
+    for (const e of empresas) {
+      if (!norm(e.nombreLatam)) continue;
+      const row: EmpRow = { tickerBloomberg: e.tickerBloomberg, isin: e.isin, industriaChile: e.industriaChile, industriaGics: e.industriaGics, nombreLatam: e.nombreLatam };
+      addName(e.nombreLatam, row); addName(e.nombreChile, row);
+    }
+    const yahooOf = (row: EmpRow): string | null => (row.isin ? yahooByIsin.get(row.isin.trim()) ?? null : null);
+    const resolveName = (company: string): ResolvedName | null => {
+      const key = norm(company);
+      let rows = byName.get(key);
+      if ((!rows || !rows.length) && NAME_OVERRIDES[key]) rows = byName.get(NAME_OVERRIDES[key]);
+      if (!rows || !rows.length) return null;
+      const scored = rows.map((r) => { const y = yahooOf(r); return { r, y, score: y ? (/\.SN$/i.test(y) ? 2 : 1) : 0 }; });
+      scored.sort((a, b) => b.score - a.score);
+      const best = scored[0];
+      return { tickerBBG: cleanBBG(best.r.tickerBloomberg), yahoo: best.y, industria: best.r.industriaChile || null, gics: best.r.industriaGics || null };
+    };
+
+    // ── Periodo n ─────────────────────────────────────────────────────────────
+    let maxFy = 0, maxQ = 0;
+    for (const r of ssRows) if (r.fiscalYear > maxFy || (r.fiscalYear === maxFy && r.quarter > maxQ)) { maxFy = r.fiscalYear; maxQ = r.quarter; }
+    const qKey = (fy: number, q: number) => fy * 10 + q;
+    const nKey = qKey(maxFy, maxQ), n4Key = qKey(maxFy - 1, maxQ);
+    const ltmKeys: number[] = []; { let f = maxFy, q = maxQ; for (let i = 0; i < 4; i++) { ltmKeys.push(qKey(f, q)); q--; if (q === 0) { q = 4; f--; } } }
+    const labelOf = (fy: number, q: number) => `${q}Q ${fy}`;
+    const ltmLabels = (() => { const o: string[] = []; let f = maxFy, q = maxQ; for (let i = 0; i < 4; i++) { o.push(labelOf(f, q)); q--; if (q === 0) { q = 4; f--; } } return o.reverse(); })();
+
+    // ── Fundamentales (serie TOTAL) + shares por serie ────────────────────────
+    interface Fund { currency: "CLP" | "USD"; metrics: Map<string, Map<number, number>>; sharesSeries: Map<string, Map<number, number>>; }
+    const funds = new Map<string, Fund>();
+    for (const r of ssRows) {
+      const k = norm(r.company);
+      let f = funds.get(k);
+      if (!f) { f = { currency: r.currency === "USD" ? "USD" : "CLP", metrics: new Map(), sharesSeries: new Map() }; funds.set(k, f); }
+      if (r.value == null) continue;
+      const key = qKey(r.fiscalYear, r.quarter);
+      if (r.metric === "shares" && (r.series === "A" || r.series === "B")) {
+        let mm = f.sharesSeries.get(r.series); if (!mm) { mm = new Map(); f.sharesSeries.set(r.series, mm); }
+        mm.set(key, r.value);
+      } else if (r.series === "TOTAL") {
+        let mm = f.metrics.get(r.metric); if (!mm) { mm = new Map(); f.metrics.set(r.metric, mm); }
+        mm.set(key, r.value);
+      }
+    }
+    const at = (f: Fund, metric: string, key: number): number | null => f.metrics.get(metric)?.get(key) ?? null;
+    const ltmSum = (f: Fund, metric: string): number | null => {
+      const mm = f.metrics.get(metric); if (!mm) return null;
+      let s = 0, c = 0; for (const key of ltmKeys) { const v = mm.get(key); if (v != null) { s += v; c++; } }
+      return c ? s : null;
+    };
+    const latestOf = (mm: Map<number, number> | undefined): number | null => {
+      if (!mm) return null;
+      const atN = mm.get(nKey); if (atN != null) return atN;
+      let bk = -1, bv: number | null = null; for (const [key, v] of mm) if (key > bk) { bk = key; bv = v; }
+      return bv;
+    };
+
+    // ── Proyecciones (latest generated_at) ────────────────────────────────────
+    interface ProjPick { moneda: "CLP" | "USD" | null; base_year: number; div: string | null; ebitda: (number | null)[]; utilidad: (number | null)[]; }
+    const projByName = new Map<string, ProjPick>(); const projAt = new Map<string, number>();
+    for (const p of projRows) {
+      const k = norm(p.empresa); const ts = new Date(p.generated_at).getTime();
+      if (!projAt.has(k) || ts > projAt.get(k)!) {
+        projAt.set(k, ts);
+        projByName.set(k, {
+          moneda: p.moneda === "USD" ? "USD" : p.moneda === "CLP" ? "CLP" : null, base_year: p.base_year, div: p.div ?? null,
+          ebitda: [p.ebitda_y0 ?? null, p.ebitda_y1 ?? null, p.ebitda_y2 ?? null],
+          utilidad: [p.utilidad_y0 ?? null, p.utilidad_y1 ?? null, p.utilidad_y2 ?? null],
+        });
+      }
+    }
+    const projYear = (pick: ProjPick | undefined, arr: "ebitda" | "utilidad", cal: number): number | null => {
+      if (!pick) return null; const off = cal - pick.base_year; if (off < 0 || off > 2) return null; return pick[arr][off] ?? null;
+    };
+
+    // ── Construir universo ────────────────────────────────────────────────────
+    const companies: SsV1Company[] = [];
+    const seen = new Set<string>();
+    for (const r of ssRows) {
+      const k = norm(r.company);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      const resolved = resolveName(r.company);
+      if (!resolved) continue;
+
+      const f = funds.get(k)!;
+      const pick = projByName.get(k);
+      const sharesTotal = latestOf(f.metrics.get("shares"));
+
+      // ¿Doble serie? Requiere config + shares A/B
+      const cfg = SERIES_CONFIG[k];
+      const sharesA = latestOf(f.sharesSeries.get("A"));
+      const sharesB = latestOf(f.sharesSeries.get("B"));
+      const dual = !!cfg && sharesA != null && sharesB != null;
+
+      const series: SsV1Series[] = dual
+        ? [
+            { label: "A", bbg: cfg.A.bbg, yahooTicker: cfg.A.yahoo, shares: sharesA },
+            { label: "B", bbg: cfg.B.bbg, yahooTicker: cfg.B.yahoo, shares: sharesB },
+          ]
+        : [{ label: "TOTAL", bbg: resolved.tickerBBG, yahooTicker: resolved.yahoo, shares: sharesTotal }];
+
+      companies.push({
+        company: r.company, tickerBBG: resolved.tickerBBG, industria: resolved.industria, gics: resolved.gics, dual,
+        ssCurrency: f.currency, projCurrency: pick?.moneda ?? null,
+        series, sharesTotal,
+        ebitdaN: at(f, "ebitda", nKey), ebitdaN4: at(f, "ebitda", n4Key), ebitdaLtm: ltmSum(f, "ebitda"),
+        utilidadN: at(f, "utilidad", nKey), utilidadN4: at(f, "utilidad", n4Key), utilidadLtm: ltmSum(f, "utilidad"),
+        revenueLtm: ltmSum(f, "revenue"), ebitLtm: ltmSum(f, "ebit"),
+        debtN: at(f, "debt", nKey), debtN4: at(f, "debt", n4Key),
+        equityN: at(f, "equity", nKey), equityN4: at(f, "equity", n4Key), minorityN: at(f, "minority_interest", nKey),
+        ebitda2026E: projYear(pick, "ebitda", 2026), ebitda2027E: projYear(pick, "ebitda", 2027),
+        utilidad2026E: projYear(pick, "utilidad", 2026), utilidad2027E: projYear(pick, "utilidad", 2027),
+        divLabel: pick?.div ?? null, payout: parsePayout(pick?.div),
+      });
+    }
+    companies.sort((a, b) => a.company.localeCompare(b.company));
+
+    // ── Precios (Yahoo, on-demand) ────────────────────────────────────────────
+    if (withPrices) {
+      const tickers = [...new Set(companies.flatMap((c) => c.series.map((s) => s.yahooTicker)).filter((t): t is string => !!t))];
+      const priceMap = await fetchPricesChunked(tickers);
+      for (const c of companies)
+        for (const s of c.series) {
+          const pd = s.yahooTicker ? priceMap.get(s.yahooTicker) ?? null : null;
+          s.price = pd?.price ?? null; s.currency = pd?.currency ?? null;
+          s.retMonth = pd?.retMonth ?? null; s.retYtd = pd?.retYtd ?? null; s.retYear = pd?.retYear ?? null;
+          s.ret3y = pd?.ret3y ?? null; s.ret5y = pd?.ret5y ?? null;
+        }
+    }
+
+    const payload: SsV1Payload = {
+      withPrices,
+      periodN: maxFy ? labelOf(maxFy, maxQ) : null,
+      periodN4: maxFy ? labelOf(maxFy - 1, maxQ) : null,
+      ltmLabels, companies,
+    };
+    return NextResponse.json(payload);
+  } catch (e) {
+    console.error("[stock-selection-v1]", e);
+    return NextResponse.json({ error: "Internal server error", details: String(e) }, { status: 500 });
+  }
+}
