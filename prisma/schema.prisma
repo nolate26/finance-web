@@ -715,6 +715,11 @@ model EmailResearch {
   title       String?   @db.VarChar(255)
   subject     String?   @db.Text
   html        String    @db.Text         // El cuerpo final procesado
+
+  // Nuevos campos agregados
+  targetPrice   Float?    @map("target_price")
+  recommendation String?  @map("recommendation") @db.VarChar(50) // BUY, SELL, HOLD, etc.
+
   
   // Metadatos del origen
   from        String?   @db.VarChar(255)
@@ -724,7 +729,10 @@ model EmailResearch {
   @@index([company, date])
   @@map("email_research")
 }
- 
+
+
+
+
 
 // ------------------------------------------
 // HEADER (cabecera) — un registro por (ticker, updateDate)
