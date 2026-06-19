@@ -40,7 +40,7 @@ export async function POST(request: Request) {
             category: category || 'Uncategorized',
             title: title || null,
             recommendation: recommendation || null,
-            target_price: target_price || null,
+            targetPrice: target_price || null,
             subject: subject || null,
             html: html,
             from: source?.from || null,
