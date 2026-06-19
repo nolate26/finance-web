@@ -42,6 +42,23 @@ function makeConv(tc: number) {
 const ratio = (n: number | null, d: number | null): number | null =>
   n != null && d != null && d > 0 ? n / d : null;
 
+// Recomendación: texto coloreado (Comprar=verde, Mantener=ámbar, Vender=rojo; free-text neutro).
+const REC_STYLE: Record<string, { label: string; color: string }> = {
+  comprar: { label: "Comprar", color: GREEN },
+  mantener: { label: "Mantener", color: AMBER },
+  vender: { label: "Vender", color: RED },
+};
+const recCell = (rec: string | null): { text: string; color: string; weight?: number } => {
+  if (!rec) return { text: "—", color: TEXT3 };
+  const m = REC_STYLE[rec.toLowerCase().trim()];
+  return m ? { text: m.label, color: m.color, weight: 700 } : { text: rec, color: TEXT2 };
+};
+const fmtDate = (d: string | null): string => {
+  if (!d) return "—";
+  const [y, m, day] = d.split("-");
+  return y && m && day ? `${day}/${m}/${y.slice(2)}` : d;
+};
+
 // ── Computed value bag (USD mn) ────────────────────────────────────────────────
 interface Alloc {
   dn: number | null; debtN4Usd: number | null; equityNUsd: number | null; equityN4Usd: number | null;
@@ -80,6 +97,9 @@ interface DisplayRow {
   company: string; tickerBBG: string | null; ssCurrency: "CLP" | "USD"; industria: string | null;
   divLabel: string | null;
   payout: number | null;    // pool_div (payout) de proyecciones_financieras, decimal 0..1
+  rec: string | null;       // recomendación (AnalystRecommendationHistory)
+  recDate: string | null;   // YYYY-MM-DD
+  tp: number | null;        // target price, moneda del listado (sin conv)
   label: string;            // "" consolidada/single · "A"/"B" serie
   kind: "single" | "consolidated" | "series";
   seriesBBG: string | null;
@@ -128,20 +148,20 @@ function computeGroup(c: SsV1Company, tc: number): CompanyGroup {
     const s = c.series[0];
     const v = withPriceFields(computeV(seriesMcaps[0], whole), s);
     return {
-      cons: { company: c.company, tickerBBG: c.tickerBBG, ssCurrency: ss, industria: c.industria, divLabel: c.divLabel, payout: c.payout, label: "", kind: "single", seriesBBG: c.tickerBBG, v },
+      cons: { company: c.company, tickerBBG: c.tickerBBG, ssCurrency: ss, industria: c.industria, divLabel: c.divLabel, payout: c.payout, rec: c.rec, recDate: c.recDate, tp: c.tp, label: "", kind: "single", seriesBBG: c.tickerBBG, v },
       series: [],
     };
   }
 
   // Consolidada (whole, M.Cap = Σ series)
   const consV = withPriceFields(computeV(mcapConsol, whole), null);
-  const cons: DisplayRow = { company: c.company, tickerBBG: c.tickerBBG, ssCurrency: ss, industria: c.industria, divLabel: c.divLabel, payout: c.payout, label: "", kind: "consolidated", seriesBBG: c.tickerBBG, v: consV };
+  const cons: DisplayRow = { company: c.company, tickerBBG: c.tickerBBG, ssCurrency: ss, industria: c.industria, divLabel: c.divLabel, payout: c.payout, rec: c.rec, recDate: c.recDate, tp: c.tp, label: "", kind: "consolidated", seriesBBG: c.tickerBBG, v: consV };
 
   // Series A/B (prorateadas por acciones)
   const series: DisplayRow[] = c.series.map((s, i) => {
     const w = s.shares != null && c.sharesTotal ? s.shares / c.sharesTotal : 0;
     const v = withPriceFields(computeV(seriesMcaps[i], scaleAlloc(w)), s);
-    return { company: c.company, tickerBBG: c.tickerBBG, ssCurrency: ss, industria: c.industria, divLabel: c.divLabel, payout: c.payout, label: s.label, kind: "series", seriesBBG: s.bbg, v };
+    return { company: c.company, tickerBBG: c.tickerBBG, ssCurrency: ss, industria: c.industria, divLabel: c.divLabel, payout: c.payout, rec: s.rec ?? null, recDate: s.recDate ?? null, tp: s.tp ?? null, label: s.label, kind: "series", seriesBBG: s.bbg, v };
   });
 
   return { cons, series };
@@ -207,10 +227,10 @@ function buildGroups(periodN: string | null, periodN4: string | null): Group[] {
       { id: "roic", label: "ROIC LTM", align: "right", sortVal: num("roic"), render: (r) => ({ text: roePct(r.v.roic), color: TEXT1 }) },
       xCol("fvic", "FV/IC", "#475569"),
     ] },
-    { title: "Manual", accent: TEXT3, cols: [
-      { id: "rec", label: "Rec.", align: "center", render: () => ({ text: "—", color: TEXT3 }) },
-      { id: "date", label: "Date", align: "center", render: () => ({ text: "—", color: TEXT3 }) },
-      { id: "tp", label: "TP", align: "center", render: () => ({ text: "—", color: TEXT3 }) },
+    { title: "Recomendación", accent: "#334155", cols: [
+      { id: "rec", label: "Rec.", align: "left", sortVal: (r) => r.rec, render: (r) => recCell(r.rec) },
+      { id: "recDate", label: "Date", align: "center", sortVal: (r) => r.recDate, render: (r) => ({ text: fmtDate(r.recDate), color: r.recDate ? TEXT2 : TEXT3 }) },
+      { id: "tp", label: "TP", align: "right", sortVal: (r) => r.tp, render: (r) => ({ text: r.tp != null ? fmtPrice(r.tp) : "—", color: r.tp != null ? TEXT1 : TEXT3, weight: 600 }) },
     ] },
   ];
 }
@@ -424,7 +444,8 @@ export default function StockSelectionV1() {
       <div style={{ marginTop: 10, fontSize: 11, color: TEXT2, lineHeight: 1.6 }}>
         <div><strong>Series A/B:</strong> cada serie usa su propio precio (Yahoo) y nº de acciones → M.Cap por serie; la <strong>consolidada</strong> suma los M.Cap. Las filas A/B muestran fundamentales <strong>prorateados</strong> por % de acciones, así que sus múltiplos son por acción (P/U serie A de Andina ≈ 11,4x); la consolidada usa el M.Cap total contra el fundamental completo (P/U ≈ 12,8x).</div>
         <div><strong>Unidades:</strong> todo en USD mn vía conv() (÷TC si CLP). M.Cap usa la moneda del precio de Yahoo. <strong>Retornos:</strong> precio ajustado, acumulados. <strong>P/U:</strong> &ldquo;NM&rdquo; si utilidad ≤ 0.</div>
-        <div><strong>Pol Div</strong> = <code>proyecciones_financieras.pool_div</code> (payout, en %). <strong>Div Yield 26E</strong> = payout × Utilidad 2026E / M.Cap. <strong>Rec./Date/TP</strong> manuales.</div>
+        <div><strong>Pol Div</strong> = <code>proyecciones_financieras.pool_div</code> (payout, en %). <strong>Div Yield 26E</strong> = payout × Utilidad 2026E / M.Cap.</div>
+        <div><strong>Rec./Date/TP</strong> = <code>AnalystRecommendationHistory</code> (última por fecha), cruzado por <code>company_isins.company_name</code> → isin → <code>ticker_bloomberg</code>. TP en moneda del precio (sin TC); nombres sin mapeo en company_isins quedan en &ldquo;—&rdquo;.</div>
       </div>
     </div>
   );

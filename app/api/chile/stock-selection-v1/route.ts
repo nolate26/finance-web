@@ -17,6 +17,10 @@ export interface SsV1Series {
   bbg:         string | null;
   yahooTicker: string | null;
   shares:      number | null; // millones de acciones de esta serie
+  // Recomendación (AnalystRecommendationHistory, match por BBG de la serie)
+  rec?:     string | null;
+  recDate?: string | null;    // YYYY-MM-DD
+  tp?:      number | null;     // target price, moneda del listado (sin conv)
   // Precios / retornos (solo con ?withPrices=true)
   price?:    number | null;
   currency?: string | null;   // moneda del precio (CLP / USD / GBp…)
@@ -62,6 +66,11 @@ export interface SsV1Company {
   utilidad2027E: number | null;
   divLabel:      string | null;
   payout:        number | null;
+
+  // Recomendación a nivel compañía (match por tickerBBG) — para fila consolidada/single
+  rec:     string | null;
+  recDate: string | null;   // YYYY-MM-DD
+  tp:      number | null;    // target price, moneda del listado (sin conv)
 }
 
 export interface SsV1Payload {
@@ -157,7 +166,7 @@ export async function GET(request: NextRequest) {
   const withPrices = request.nextUrl.searchParams.get("withPrices") === "true";
 
   try {
-    const [ssRows, projRows, empresas, isins] = await Promise.all([
+    const [ssRows, projRows, empresas, isins, recRows] = await Promise.all([
       // Sin filtro de serie: necesitamos shares A/B además de TOTAL.
       prisma.stockSelectionV1.findMany({
         select: { company: true, currency: true, metric: true, series: true, fiscalYear: true, quarter: true, value: true },
@@ -166,8 +175,13 @@ export async function GET(request: NextRequest) {
       prisma.empresasIndustriasV2.findMany({
         select: { nombreLatam: true, nombreChile: true, isin: true, tickerBloomberg: true, industriaChile: true, industriaGics: true, yahooFinanceTicker: true },
       }),
-      // Fallback heredado por si la columna nueva está vacía para alguna fila.
-      prisma.companyIsin.findMany({ select: { isin: true, yahooFinanceTicker: true } }),
+      // company_isins: company_name → isin (llave de las recos) + fallback de Yahoo.
+      prisma.companyIsin.findMany({ select: { companyName: true, isin: true, yahooFinanceTicker: true } }),
+      // Recomendaciones del analista (Rec./Date/TP). Orden asc → al reducir queda la última.
+      prisma.analystRecommendationHistory.findMany({
+        orderBy: [{ date: "asc" }, { id: "asc" }],
+        select: { company: true, date: true, recommendation: true, targetPrice: true },
+      }),
     ]);
 
     const yahooByIsin = new Map<string, string>();
@@ -205,6 +219,32 @@ export async function GET(request: NextRequest) {
       const best = scored[0];
       return { tickerBBG: cleanBBG(best.r.tickerBloomberg), yahoo: best.y, industria: best.r.industriaChile || null, gics: best.r.industriaGics || null };
     };
+
+    // ── Recomendaciones: ARH.company → company_isins.company_name → isin → bbg ──
+    const isinByCompanyName = new Map<string, string>();
+    for (const ci of isins) {
+      const nm = norm(ci.companyName), isin = ci.isin?.trim();
+      if (nm && isin) isinByCompanyName.set(nm, isin);
+    }
+    const bbgByIsin = new Map<string, string>();
+    for (const e of empresas) {
+      const isin = e.isin?.trim(), bbg = cleanBBG(e.tickerBloomberg);
+      if (isin && bbg && !bbgByIsin.has(isin)) bbgByIsin.set(isin, bbg);
+    }
+    interface RecInfo { rec: string; recDate: string; tp: number | null; }
+    const recByBbg = new Map<string, RecInfo>();
+    for (const r of recRows) { // recRows viene asc por date,id → el último .set gana = más reciente
+      const isin = isinByCompanyName.get(norm(r.company));
+      if (!isin) continue;
+      const bbg = bbgByIsin.get(isin);
+      if (!bbg) continue;
+      recByBbg.set(bbg.toUpperCase(), {
+        rec: r.recommendation,
+        recDate: r.date.toISOString().slice(0, 10),
+        tp: r.targetPrice > 0 ? r.targetPrice : null,
+      });
+    }
+    const recOf = (bbg: string | null | undefined): RecInfo | null => (bbg ? recByBbg.get(bbg.toUpperCase()) ?? null : null);
 
     // ── Periodo n ─────────────────────────────────────────────────────────────
     let maxFy = 0, maxQ = 0;
@@ -295,11 +335,15 @@ export async function GET(request: NextRequest) {
       } else {
         series = [{ label: "TOTAL", bbg: resolved.tickerBBG, yahooTicker: resolved.yahoo, shares: sharesTotal }];
       }
+      // Rec/Date/TP por BBG: cada serie por su clase; nivel compañía por tickerBBG.
+      for (const s of series) { const ri = recOf(s.bbg); s.rec = ri?.rec ?? null; s.recDate = ri?.recDate ?? null; s.tp = ri?.tp ?? null; }
+      const coRec = recOf(resolved.tickerBBG);
 
       companies.push({
         company: r.company, tickerBBG: resolved.tickerBBG, industria: resolved.industria, gics: resolved.gics, dual,
         ssCurrency: f.currency, projCurrency: pick?.moneda ?? null,
         series, sharesTotal,
+        rec: coRec?.rec ?? null, recDate: coRec?.recDate ?? null, tp: coRec?.tp ?? null,
         ebitdaN: at(f, "ebitda", nKey), ebitdaN4: at(f, "ebitda", n4Key), ebitdaLtm: ltmSum(f, "ebitda"),
         utilidadN: at(f, "utilidad", nKey), utilidadN4: at(f, "utilidad", n4Key), utilidadLtm: ltmSum(f, "utilidad"),
         revenueLtm: ltmSum(f, "revenue"), ebitLtm: ltmSum(f, "ebit"),
