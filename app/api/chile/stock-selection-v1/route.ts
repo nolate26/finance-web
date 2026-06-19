@@ -80,13 +80,21 @@ const NAME_OVERRIDES: Record<string, string> = {
   aguas: "aguas-a", andina: "andina-b", "las condes": "clinica las condes", potasios: "potasios-b",
 };
 
-// Compañías de doble serie (A/B): ticker Yahoo y BBG por serie, verificados.
-const SERIES_CONFIG: Record<string, { A: { yahoo: string; bbg: string }; B: { yahoo: string; bbg: string } }> = {
-  aguas:     { A: { yahoo: "AGUAS-A.SN",    bbg: "AGUAS/A CI" },  B: { yahoo: "AGUAS-B.SN",    bbg: "AGUAS/B CI" } },
-  andina:    { A: { yahoo: "ANDINA-A.SN",   bbg: "ANDINAA CI" },  B: { yahoo: "ANDINA-B.SN",   bbg: "ANDINAB CI" } },
-  embonor:   { A: { yahoo: "EMBONOR-A.SN",  bbg: "EMBONOA CI" },  B: { yahoo: "EMBONOR-B.SN",  bbg: "EMBONOB CI" } },
-  potasios:  { A: { yahoo: "POTASIOS-A.SN", bbg: "POTASIOA CI" }, B: { yahoo: "POTASIOS-B.SN", bbg: "POTASIOB CI" } },
-  soquimich: { A: { yahoo: "SQM-A.SN",      bbg: "SQM/A CI" },    B: { yahoo: "SQM-B.SN",      bbg: "SQM/B CI" } },
+// Compañías de doble serie (A/B): nombre_chile de cada serie en empresas_industrias_v2.
+// El ticker Yahoo y BBG por serie se sacan de esa tabla (no se hardcodean).
+const SERIES_NAMES: Record<string, { A: string; B: string }> = {
+  aguas:     { A: "aguas-a",    B: "aguas-b" },
+  andina:    { A: "andina-a",   B: "andina-b" },
+  embonor:   { A: "embonor-a",  B: "embonor-b" },
+  potasios:  { A: "potasios-a", B: "potasios-b" },
+  soquimich: { A: "sqm-a",      B: "sqm-b" },
+};
+
+// Correcciones de tickers Yahoo mal cargados en empresas_industrias_v2.yahoo_finance_ticker
+// (clave = valor en la tabla, en MAYÚSCULAS). Reportar al usuario para que arregle la fuente.
+const YAHOO_OVERRIDE: Record<string, string> = {
+  "POTASIO-A.SN": "POTASIOS-A.SN",
+  "POTASIO-B.SN": "POTASIOS-B.SN",
 };
 
 // ── Precios / retornos (Yahoo) ──────────────────────────────────────────────────
@@ -142,7 +150,7 @@ async function fetchPricesChunked(tickers: string[]): Promise<Map<string, PriceD
 }
 
 // ── Route ─────────────────────────────────────────────────────────────────────
-interface EmpRow { tickerBloomberg: string | null; isin: string | null; industriaChile: string | null; industriaGics: string | null; nombreLatam: string; }
+interface EmpRow { tickerBloomberg: string | null; isin: string | null; industriaChile: string | null; industriaGics: string | null; nombreLatam: string; yahooFinanceTicker: string | null; }
 interface ResolvedName { tickerBBG: string | null; yahoo: string | null; industria: string | null; gics: string | null; }
 
 export async function GET(request: NextRequest) {
@@ -156,8 +164,9 @@ export async function GET(request: NextRequest) {
       }),
       prisma.proyecciones_financieras.findMany(),
       prisma.empresasIndustriasV2.findMany({
-        select: { nombreLatam: true, nombreChile: true, isin: true, tickerBloomberg: true, industriaChile: true, industriaGics: true },
+        select: { nombreLatam: true, nombreChile: true, isin: true, tickerBloomberg: true, industriaChile: true, industriaGics: true, yahooFinanceTicker: true },
       }),
+      // Fallback heredado por si la columna nueva está vacía para alguna fila.
       prisma.companyIsin.findMany({ select: { isin: true, yahooFinanceTicker: true } }),
     ]);
 
@@ -173,10 +182,19 @@ export async function GET(request: NextRequest) {
     };
     for (const e of empresas) {
       if (!norm(e.nombreLatam)) continue;
-      const row: EmpRow = { tickerBloomberg: e.tickerBloomberg, isin: e.isin, industriaChile: e.industriaChile, industriaGics: e.industriaGics, nombreLatam: e.nombreLatam };
+      const row: EmpRow = { tickerBloomberg: e.tickerBloomberg, isin: e.isin, industriaChile: e.industriaChile, industriaGics: e.industriaGics, nombreLatam: e.nombreLatam, yahooFinanceTicker: e.yahooFinanceTicker };
       addName(e.nombreLatam, row); addName(e.nombreChile, row);
     }
-    const yahooOf = (row: EmpRow): string | null => (row.isin ? yahooByIsin.get(row.isin.trim()) ?? null : null);
+    // Ticker Yahoo: 1) empresas_industrias_v2.yahoo_finance_ticker (fuente curada),
+    // 2) fallback company_isins por ISIN. Luego aplica overrides de tickers rotos.
+    const fixYahoo = (y: string | null | undefined): string | null => {
+      if (!y || !y.trim()) return null;
+      const t = y.trim();
+      return YAHOO_OVERRIDE[t.toUpperCase()] ?? t;
+    };
+    const yahooOf = (row: EmpRow): string | null =>
+      fixYahoo(row.yahooFinanceTicker) ?? fixYahoo(row.isin ? yahooByIsin.get(row.isin.trim()) : null);
+    const empByName = (key: string): EmpRow | null => byName.get(norm(key))?.[0] ?? null;
     const resolveName = (company: string): ResolvedName | null => {
       const key = norm(company);
       let rows = byName.get(key);
@@ -260,18 +278,23 @@ export async function GET(request: NextRequest) {
       const pick = projByName.get(k);
       const sharesTotal = latestOf(f.metrics.get("shares"));
 
-      // ¿Doble serie? Requiere config + shares A/B
-      const cfg = SERIES_CONFIG[k];
+      // ¿Doble serie? Requiere mapeo de nombres de serie + shares A/B.
+      // Ticker Yahoo y BBG por serie salen de empresas_industrias_v2 (fila de cada clase).
+      const sn = SERIES_NAMES[k];
       const sharesA = latestOf(f.sharesSeries.get("A"));
       const sharesB = latestOf(f.sharesSeries.get("B"));
-      const dual = !!cfg && sharesA != null && sharesB != null;
+      const dual = !!sn && sharesA != null && sharesB != null;
 
-      const series: SsV1Series[] = dual
-        ? [
-            { label: "A", bbg: cfg.A.bbg, yahooTicker: cfg.A.yahoo, shares: sharesA },
-            { label: "B", bbg: cfg.B.bbg, yahooTicker: cfg.B.yahoo, shares: sharesB },
-          ]
-        : [{ label: "TOTAL", bbg: resolved.tickerBBG, yahooTicker: resolved.yahoo, shares: sharesTotal }];
+      let series: SsV1Series[];
+      if (dual) {
+        const rowA = empByName(sn.A), rowB = empByName(sn.B);
+        series = [
+          { label: "A", bbg: cleanBBG(rowA?.tickerBloomberg), yahooTicker: rowA ? yahooOf(rowA) : null, shares: sharesA },
+          { label: "B", bbg: cleanBBG(rowB?.tickerBloomberg), yahooTicker: rowB ? yahooOf(rowB) : null, shares: sharesB },
+        ];
+      } else {
+        series = [{ label: "TOTAL", bbg: resolved.tickerBBG, yahooTicker: resolved.yahoo, shares: sharesTotal }];
+      }
 
       companies.push({
         company: r.company, tickerBBG: resolved.tickerBBG, industria: resolved.industria, gics: resolved.gics, dual,
