@@ -4,10 +4,10 @@ import { prisma } from '@/lib/prisma';
 export async function POST(request: Request) {
   try {
     const data = await request.json();
-  
+ 
     const {
       schemaVersion,
-      company, // <-- ahora array
+      company,
       date,
       category,
       title,
@@ -26,21 +26,28 @@ export async function POST(request: Request) {
       );
     }
  
-    // ✅ asegurar que sea array
+    // asegurar array
     const companies = Array.isArray(company) ? company : [company];
  
-    // ✅ crear N registros (uno por ticker)
+    // convertir target_price a número
+    const parsedTargetPrice =
+      target_price !== undefined &&
+      target_price !== null &&
+      target_price !== ''
+        ? Number(target_price)
+        : null;
+ 
     const reports = await Promise.all(
       companies.map((ticker: string) =>
         prisma.emailResearch.create({
           data: {
             schemaVersion: schemaVersion || "1.0",
-            company: ticker, // <- uno por fila
+            company: ticker,
             date: date ? new Date(date) : new Date(),
             category: category || 'Uncategorized',
             title: title || null,
             recommendation: recommendation || null,
-            targetPrice: target_price || null,
+            targetPrice: parsedTargetPrice, // ✅ ESTE ES EL CAMBIO IMPORTANTE
             subject: subject || null,
             html: html,
             from: source?.from || null,
@@ -67,3 +74,4 @@ export async function POST(request: Request) {
     );
   }
 }
+ 
