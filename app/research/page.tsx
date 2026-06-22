@@ -6,15 +6,17 @@ import { Loader2, Search, X, ChevronDown, Mail, ExternalLink } from "lucide-reac
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface ResearchRecord {
-  id:       number;
-  company:  string;
-  date:     string;
-  category: string;
-  title:    string | null;
-  subject:  string | null;
-  from:     string | null;
-  html:     string;
-  industry: string;
+  id:             number;
+  company:        string;
+  date:           string;
+  category:       string;
+  title:          string | null;
+  subject:        string | null;
+  from:           string | null;
+  html:           string;
+  industry:       string;
+  targetPrice:    number | null;
+  recommendation: string | null;
 }
 
 interface Filters {
@@ -39,23 +41,54 @@ function senderName(from: string | null): string {
   return match ? match[1].trim() : from.replace(/<.*>/, "").trim() || from;
 }
 
-// Deterministic color from string for category badges
-const CATEGORY_COLORS = [
-  { bg: "rgba(43,92,224,0.08)",   border: "rgba(43,92,224,0.22)",   text: "#1E3A8A"  }, // blue
-  { bg: "rgba(5,150,105,0.08)",   border: "rgba(5,150,105,0.22)",   text: "#065F46"  }, // green
-  { bg: "rgba(217,119,6,0.08)",   border: "rgba(217,119,6,0.22)",   text: "#78350F"  }, // amber
-  { bg: "rgba(124,58,237,0.08)",  border: "rgba(124,58,237,0.22)",  text: "#4C1D95"  }, // violet
-  { bg: "rgba(220,38,38,0.08)",   border: "rgba(220,38,38,0.22)",   text: "#7F1D1D"  }, // red
-  { bg: "rgba(8,145,178,0.08)",   border: "rgba(8,145,178,0.22)",   text: "#164E63"  }, // cyan
-  { bg: "rgba(234,88,12,0.08)",   border: "rgba(234,88,12,0.22)",   text: "#7C2D12"  }, // orange
-  { bg: "rgba(15,118,110,0.08)",  border: "rgba(15,118,110,0.22)",  text: "#134E4A"  }, // teal
-];
-
-function categoryColor(cat: string) {
-  let hash = 0;
-  for (let i = 0; i < cat.length; i++) hash = (hash * 31 + cat.charCodeAt(i)) & 0xffff;
-  return CATEGORY_COLORS[hash % CATEGORY_COLORS.length];
+// Target price: ignore null / NaN, format the rest with thousands separators.
+function fmtTarget(v: number | null | undefined): string | null {
+  if (v == null || Number.isNaN(v)) return null;
+  return v.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
+
+// Recommendation: treat "N/A", "NaN", "null", "-", "" as empty.
+function cleanRec(v: string | null | undefined): string | null {
+  if (!v) return null;
+  const t = v.trim();
+  if (!t || /^(n\/?a|nan|null|none|-+)$/i.test(t)) return null;
+  return t;
+}
+
+// ── Category grouping ──────────────────────────────────────────────────────────
+
+const GROUP_ORDER = ["Earnings", "Update", "Cases", "Others"] as const;
+type Group = (typeof GROUP_ORDER)[number];
+
+function categoryGroup(cat: string | null | undefined): Group {
+  const c = (cat ?? "").toLowerCase();
+  if (c.includes("earning")) return "Earnings";
+  if (c.includes("update"))  return "Update";
+  if (c.includes("case"))    return "Cases";
+  return "Others";
+}
+
+const GROUP_COLORS: Record<Group, { bg: string; border: string; text: string }> = {
+  Earnings: { bg: "rgba(43,92,224,0.08)",   border: "rgba(43,92,224,0.22)",   text: "#1E3A8A" },
+  Update:   { bg: "rgba(5,150,105,0.08)",   border: "rgba(5,150,105,0.22)",   text: "#065F46" },
+  Cases:    { bg: "rgba(124,58,237,0.08)",  border: "rgba(124,58,237,0.22)",  text: "#4C1D95" },
+  Others:   { bg: "rgba(100,116,139,0.08)", border: "rgba(100,116,139,0.22)", text: "#334155" },
+};
+function groupColor(g: Group) { return GROUP_COLORS[g]; }
+
+// Recommendation pill colour by direction.
+function recColor(rec: string) {
+  const t = rec.toUpperCase();
+  if (/BUY|OVERWEIGHT|OUTPERFORM|ACCUMULATE|ADD|COMPRA|SOBREPONDERAR/.test(t))
+    return { bg: "rgba(5,150,105,0.10)",  border: "rgba(5,150,105,0.28)",  text: "#047857" };
+  if (/SELL|UNDERWEIGHT|UNDERPERFORM|REDUCE|VENTA|SUBPONDERAR/.test(t))
+    return { bg: "rgba(220,38,38,0.10)",  border: "rgba(220,38,38,0.28)",  text: "#B91C1C" };
+  if (/HOLD|NEUTRAL|MARKET|EQUAL|MANTENER|PERFORM/.test(t))
+    return { bg: "rgba(217,119,6,0.10)",  border: "rgba(217,119,6,0.28)",  text: "#B45309" };
+  return { bg: "rgba(100,116,139,0.10)", border: "rgba(100,116,139,0.26)", text: "#475569" };
+}
+
+const GRID = "110px 150px minmax(160px,1fr) 120px 90px 120px 140px 36px";
 
 // ── Filter chip ───────────────────────────────────────────────────────────────
 
@@ -105,7 +138,9 @@ function FilterSelect({
 // ── Detail modal ──────────────────────────────────────────────────────────────
 
 function DetailModal({ record, onClose }: { record: ResearchRecord; onClose: () => void }) {
-  const col = categoryColor(record.category);
+  const col = groupColor(categoryGroup(record.category));
+  const tp  = fmtTarget(record.targetPrice);
+  const rec = cleanRec(record.recommendation);
   return (
     <div
       onClick={onClose}
@@ -162,6 +197,27 @@ function DetailModal({ record, onClose }: { record: ResearchRecord; onClose: () 
               }}>
                 {record.company}
               </span>
+              {tp && (
+                <span style={{
+                  fontSize: 11, fontWeight: 700, color: "#334155",
+                  background: "#F1F5F9", border: "1px solid rgba(15,23,42,0.10)",
+                  borderRadius: 6, padding: "2px 9px", fontFamily: "JetBrains Mono, monospace",
+                }}>
+                  TP {tp}
+                </span>
+              )}
+              {rec && (() => {
+                const rc = recColor(rec);
+                return (
+                  <span style={{
+                    fontSize: 10, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase",
+                    padding: "3px 9px", borderRadius: 6,
+                    background: rc.bg, border: `1px solid ${rc.border}`, color: rc.text,
+                  }}>
+                    {rec}
+                  </span>
+                );
+              })()}
               {record.industry && record.industry !== "Other" && (
                 <span style={{ fontSize: 10, color: "#94A3B8" }}>
                   {record.industry}
@@ -222,6 +278,104 @@ function DetailModal({ record, onClose }: { record: ResearchRecord; onClose: () 
   );
 }
 
+// ── Table row ─────────────────────────────────────────────────────────────────
+
+function NoteRow({ r, zebra, onClick }: { r: ResearchRecord; zebra: boolean; onClick: () => void }) {
+  const col = groupColor(categoryGroup(r.category));
+  const tp  = fmtTarget(r.targetPrice);
+  const rec = cleanRec(r.recommendation);
+  const rc  = rec ? recColor(rec) : null;
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        display: "grid",
+        gridTemplateColumns: GRID,
+        gap: "0 16px",
+        padding: "13px 20px",
+        alignItems: "center",
+        borderBottom: "1px solid rgba(15,23,42,0.05)",
+        background: zebra ? "rgba(15,23,42,0.012)" : "transparent",
+        cursor: "pointer",
+        transition: "background 0.1s",
+      }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.03)"; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = zebra ? "rgba(15,23,42,0.012)" : "transparent"; }}
+    >
+      {/* Date */}
+      <div style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: "#64748B", whiteSpace: "nowrap" }}>
+        {formatDate(r.date)}
+      </div>
+
+      {/* Company + industry */}
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {r.company}
+        </div>
+        <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {r.industry}
+        </div>
+      </div>
+
+      {/* Title */}
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 12, color: "#334155", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {r.title ?? r.subject ?? <span style={{ color: "#CBD5E1" }}>No title</span>}
+        </div>
+      </div>
+
+      {/* Category badge */}
+      <div>
+        <span style={{
+          display: "inline-block",
+          fontSize: 10, fontWeight: 700,
+          padding: "2px 8px", borderRadius: 6,
+          background: col.bg, border: `1px solid ${col.border}`, color: col.text,
+          whiteSpace: "nowrap", maxWidth: "100%",
+          overflow: "hidden", textOverflow: "ellipsis",
+        }}>
+          {r.category}
+        </span>
+      </div>
+
+      {/* Target price */}
+      <div style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, fontWeight: 600, color: tp ? "#334155" : "#CBD5E1", whiteSpace: "nowrap" }}>
+        {tp ?? "—"}
+      </div>
+
+      {/* Recommendation */}
+      <div>
+        {rec && rc ? (
+          <span style={{
+            display: "inline-block", fontSize: 10, fontWeight: 800,
+            letterSpacing: "0.04em", textTransform: "uppercase",
+            padding: "2px 8px", borderRadius: 6,
+            background: rc.bg, border: `1px solid ${rc.border}`, color: rc.text,
+            whiteSpace: "nowrap", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis",
+          }}>
+            {rec}
+          </span>
+        ) : (
+          <span style={{ fontSize: 11, color: "#CBD5E1" }}>—</span>
+        )}
+      </div>
+
+      {/* From */}
+      <div style={{ fontSize: 11, color: "#64748B", display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
+        <Mail size={11} style={{ flexShrink: 0, color: "#CBD5E1" }} />
+        <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {senderName(r.from)}
+        </span>
+      </div>
+
+      {/* Open icon */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <ExternalLink size={13} style={{ color: "#CBD5E1" }} />
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function ResearchPage() {
@@ -232,7 +386,7 @@ export default function ResearchPage() {
 
   // Active filters
   const [fCompany,  setFCompany]  = useState("");
-  const [fCategory, setFCategory] = useState("");
+  const [fGroup,    setFGroup]    = useState<"" | Group>("");
   const [fFrom,     setFFrom]     = useState("");
   const [fIndustry, setFIndustry] = useState("");
   const [fSearch,   setFSearch]   = useState("");
@@ -255,24 +409,40 @@ export default function ResearchPage() {
     const q = fSearch.trim().toLowerCase();
     return records.filter((r) => {
       if (fCompany  && r.company  !== fCompany)  return false;
-      if (fCategory && r.category !== fCategory) return false;
+      if (fGroup    && categoryGroup(r.category) !== fGroup) return false;
       if (fIndustry && r.industry !== fIndustry) return false;
       if (fFrom && !(r.from ?? "").toLowerCase().includes(fFrom.toLowerCase())) return false;
       if (fDateFrom && r.date < fDateFrom) return false;
       if (fDateTo   && r.date > fDateTo)   return false;
       if (q) {
-        const hay = [r.company, r.category, r.title, r.subject, r.from, r.industry]
+        const hay = [r.company, r.category, r.title, r.subject, r.from, r.industry, r.recommendation]
           .filter(Boolean).join(" ").toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [records, fCompany, fCategory, fFrom, fIndustry, fSearch, fDateFrom, fDateTo]);
+  }, [records, fCompany, fGroup, fFrom, fIndustry, fSearch, fDateFrom, fDateTo]);
 
-  const activeFilterCount = [fCompany, fCategory, fFrom, fIndustry, fDateFrom, fDateTo].filter(Boolean).length;
+  // Groups present in the data, in canonical order.
+  const groups = useMemo(
+    () => GROUP_ORDER.filter((g) => records.some((r) => categoryGroup(r.category) === g)),
+    [records]
+  );
+
+  // Bucket the visible records into ordered sections.
+  const sections = useMemo(() => {
+    const map = new Map<Group, ResearchRecord[]>();
+    for (const r of visible) {
+      const g = categoryGroup(r.category);
+      (map.get(g) ?? map.set(g, []).get(g)!).push(r);
+    }
+    return GROUP_ORDER.filter((g) => map.has(g)).map((g) => ({ group: g, rows: map.get(g)! }));
+  }, [visible]);
+
+  const activeFilterCount = [fCompany, fGroup, fFrom, fIndustry, fDateFrom, fDateTo].filter(Boolean).length;
 
   const clearAll = () => {
-    setFCompany(""); setFCategory(""); setFFrom("");
+    setFCompany(""); setFGroup(""); setFFrom("");
     setFIndustry(""); setFDateFrom(""); setFDateTo(""); setFSearch("");
   };
 
@@ -332,7 +502,7 @@ export default function ResearchPage() {
 
         <FilterSelect label="Industry"   value={fIndustry} options={filters.industries} onChange={setFIndustry} />
         <FilterSelect label="Company"    value={fCompany}  options={filters.companies}  onChange={setFCompany}  />
-        <FilterSelect label="Category"   value={fCategory} options={filters.categories} onChange={setFCategory} />
+        <FilterSelect label="Group"      value={fGroup}    options={groups as unknown as string[]} onChange={(v) => setFGroup(v as "" | Group)} />
         <FilterSelect label="From"       value={fFrom}     options={filters.froms}       onChange={setFFrom}     />
 
         {/* Date range */}
@@ -397,14 +567,14 @@ export default function ResearchPage() {
         {/* Column headers */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "110px 160px 1fr 130px 160px 36px",
+          gridTemplateColumns: GRID,
           gap: "0 16px",
           padding: "9px 20px",
           background: "#F8FAFF",
           borderBottom: "1px solid rgba(15,23,42,0.07)",
         }}>
-          {["Date", "Company", "Title", "Category", "From", ""].map((h) => (
-            <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", color: "#94A3B8", textTransform: "uppercase" }}>
+          {["Date", "Company", "Title", "Category", "Target Price", "Recommendation", "From", ""].map((h, i) => (
+            <div key={h || `c${i}`} style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", color: "#94A3B8", textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {h}
             </div>
           ))}
@@ -422,74 +592,29 @@ export default function ResearchPage() {
             <div style={{ fontSize: 12, color: "#94A3B8" }}>Try adjusting or clearing the active filters</div>
           </div>
         ) : (
-          visible.map((r, idx) => {
-            const col = categoryColor(r.category);
+          sections.map(({ group, rows }) => {
+            const gc = groupColor(group);
             return (
-              <div
-                key={r.id}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "110px 160px 1fr 130px 160px 36px",
-                  gap: "0 16px",
-                  padding: "13px 20px",
-                  alignItems: "center",
-                  borderBottom: idx < visible.length - 1 ? "1px solid rgba(15,23,42,0.05)" : "none",
-                  background: idx % 2 === 1 ? "rgba(15,23,42,0.012)" : "transparent",
-                  cursor: "pointer",
-                  transition: "background 0.1s",
-                }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.03)"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = idx % 2 === 1 ? "rgba(15,23,42,0.012)" : "transparent"; }}
-                onClick={() => setSelected(r)}
-              >
-                {/* Date */}
-                <div style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: "#64748B", whiteSpace: "nowrap" }}>
-                  {formatDate(r.date)}
-                </div>
-
-                {/* Company + industry */}
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {r.company}
-                  </div>
-                  <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {r.industry}
-                  </div>
-                </div>
-
-                {/* Title */}
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 12, color: "#334155", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {r.title ?? r.subject ?? <span style={{ color: "#CBD5E1" }}>No title</span>}
-                  </div>
-                </div>
-
-                {/* Category badge */}
-                <div>
-                  <span style={{
-                    display: "inline-block",
-                    fontSize: 10, fontWeight: 700,
-                    padding: "2px 8px", borderRadius: 6,
-                    background: col.bg, border: `1px solid ${col.border}`, color: col.text,
-                    whiteSpace: "nowrap", maxWidth: "100%",
-                    overflow: "hidden", textOverflow: "ellipsis",
-                  }}>
-                    {r.category}
+              <div key={group}>
+                {/* Group / section header */}
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  padding: "8px 20px",
+                  background: gc.bg,
+                  borderTop: "1px solid rgba(15,23,42,0.05)",
+                  borderBottom: `1px solid ${gc.border}`,
+                }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: gc.text }}>
+                    {group}
+                  </span>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: gc.text, opacity: 0.7, fontFamily: "JetBrains Mono, monospace" }}>
+                    {rows.length}
                   </span>
                 </div>
 
-                {/* From */}
-                <div style={{ fontSize: 11, color: "#64748B", display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
-                  <Mail size={11} style={{ flexShrink: 0, color: "#CBD5E1" }} />
-                  <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {senderName(r.from)}
-                  </span>
-                </div>
-
-                {/* Open icon */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <ExternalLink size={13} style={{ color: "#CBD5E1" }} />
-                </div>
+                {rows.map((r, idx) => (
+                  <NoteRow key={r.id} r={r} zebra={idx % 2 === 1} onClick={() => setSelected(r)} />
+                ))}
               </div>
             );
           })

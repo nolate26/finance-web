@@ -20,6 +20,8 @@ export async function GET(request: NextRequest) {
         subject:  true,
         from:     true,
         html:     true,
+        targetPrice:    true,
+        recommendation: true,
       },
     });
 
