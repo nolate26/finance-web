@@ -7,6 +7,7 @@ import type {
   BankFinancialRow,
   BankKpiRow,
 } from "@/app/api/companies/[ticker]/bank-model/route";
+import { consensusScaleFactor } from "@/lib/consensusScale";
 
 // ── Palette ────────────────────────────────────────────────────────────────────
 const C = {
@@ -33,10 +34,18 @@ const yoy = (cur: number | null, prev: number | null): number | null =>
 // Montos: #,##0 con negativos entre paréntesis, cero/null = "-".
 const fmtMoney = (v: number | null): string => {
   if (v === null) return "-";
+  const abs = Math.abs(v);
+  if (abs < 0.005) return "-";                 // efectivamente cero
+  // |v| < 10 → 2 decimales · 10–50 → 1 decimal · ≥50 → entero (negativos entre paréntesis).
+  if (abs < 50) {
+    const dec = abs < 10 ? 2 : 1;
+    const s = abs.toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+    return v < 0 ? `(${s})` : s;
+  }
   const r = Math.round(v);
   if (r === 0) return "-";
-  const abs = Math.abs(r).toLocaleString("en-US", { maximumFractionDigits: 0 });
-  return r < 0 ? `(${abs})` : abs;
+  const s = Math.abs(r).toLocaleString("en-US", { maximumFractionDigits: 0 });
+  return r < 0 ? `(${s})` : s;
 };
 // Porcentajes: 0.0% (signo + para filas con colorize / variaciones).
 const fmtPct = (v: number | null, signed = false): string => {
@@ -272,24 +281,18 @@ interface BankKpiSection {
 
 // Keyed by kpiOrder (NOT kpiName) — kpiName repeats within a section ("Var %").
 function buildBankKpiSections(kpis: BankKpiRow[]): BankKpiSection[] {
-  const sectionOrder = new Map<string, number>();
-  const sectionMap   = new Map<string, Map<number, { kpiName: string; order: number; byYear: Map<number, number | null> }>>();
+  // `kpis` llega en orden de inserción (≈ planilla); el Map preserva el orden de
+  // primer-encuentro de cada sección, así respetamos el orden de origen.
+  const sectionMap = new Map<string, Map<number, { kpiName: string; order: number; byYear: Map<number, number | null> }>>();
 
   for (const k of kpis) {
-    if (!sectionMap.has(k.sectionName)) {
-      sectionMap.set(k.sectionName, new Map());
-      sectionOrder.set(k.sectionName, k.kpiOrder);
-    } else {
-      const cur = sectionOrder.get(k.sectionName)!;
-      if (k.kpiOrder < cur) sectionOrder.set(k.sectionName, k.kpiOrder);
-    }
+    if (!sectionMap.has(k.sectionName)) sectionMap.set(k.sectionName, new Map());
     const sec = sectionMap.get(k.sectionName)!;
     if (!sec.has(k.kpiOrder)) sec.set(k.kpiOrder, { kpiName: k.kpiName, order: k.kpiOrder, byYear: new Map() });
     sec.get(k.kpiOrder)!.byYear.set(k.year, k.value);
   }
 
   return Array.from(sectionMap.entries())
-    .sort((a, b) => (sectionOrder.get(a[0]) ?? 0) - (sectionOrder.get(b[0]) ?? 0))
     .map(([sectionName, kpiMap]) => ({
       sectionName,
       kpis: Array.from(kpiMap.values())
@@ -387,8 +390,8 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
     return map;
   }, [consensusEstimates]);
 
-  // Bank model fields share the raw consensus scale — do NOT divide by 1000.
-  const getConsensus = useMemo(() => (keys: string[], year: number): number | null => {
+  // Raw consensus (sin escalar) para una métrica/año.
+  const rawCon = (keys: string[], year: number): number | null => {
     const period = String(year);
     for (const [dbMetric, periods] of latestConsensus) {
       const lc = dbMetric.toLowerCase();
@@ -398,7 +401,27 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
       }
     }
     return null;
-  }, [latestConsensus]);
+  };
+
+  // consensus_estimates puede venir en 1× o 1000× la escala del modelo de banco (que se
+  // guarda en crudo). Detectamos el factor potencia-de-1000 comparando consenso vs modelo;
+  // fallback 1 preserva el comportamiento histórico (sin división) cuando no hay overlap.
+  const scaleFactor = useMemo(() => {
+    const model: (number | null)[] = [];
+    const cons:  (number | null)[] = [];
+    const add = (keys: string[], modelOf: (d: YearData) => number | null) => {
+      for (const d of enriched) { model.push(modelOf(d)); cons.push(rawCon(keys, d.year)); }
+    };
+    add(NI_KEYS,  d => d.controllingNetIncome);
+    add(REV_KEYS, d => d.revenue);
+    return consensusScaleFactor(model, cons, 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enriched, latestConsensus]);
+
+  const getConsensus = (keys: string[], year: number): number | null => {
+    const v = rawCon(keys, year);
+    return v != null ? v / scaleFactor : null;
+  };
 
   // Actual Price = last estimate year's share price (most recently set by analyst).
   const actualPrice = useMemo(

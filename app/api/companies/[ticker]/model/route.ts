@@ -147,7 +147,8 @@ export async function GET(
           },
         },
         kpis: {
-          orderBy: [{ sectionName: "asc" }, { kpiOrder: "asc" }, { year: "asc" }],
+          // Orden de inserción (≈ orden de la planilla); el builder preserva este orden.
+          orderBy: { id: "asc" },
           select: {
             year: true, sectionName: true, kpiName: true, kpiOrder: true, value: true,
           },

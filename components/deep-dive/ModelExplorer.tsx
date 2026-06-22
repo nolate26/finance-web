@@ -7,6 +7,7 @@ import type {
   ModelFinancialRow,
   ModelKpiRow,
 } from "@/app/api/companies/[ticker]/model/route";
+import { consensusScaleFactor } from "@/lib/consensusScale";
 
 // ── Palette ────────────────────────────────────────────────────────────────────
 const C = {
@@ -35,8 +36,14 @@ const nopat = (ebit: number | null, tax: number | null) =>
   ebit === null || tax === null ? null : ebit * (1 - tax);
 
 // ── Formatters ─────────────────────────────────────────────────────────────────
-const fmtAbs = (v: number | null) =>
-  v === null ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: 0 });
+const fmtAbs = (v: number | null) => {
+  if (v === null) return "—";
+  const abs = Math.abs(v);
+  // |v| < 10 → 2 decimales · 10–50 → 1 decimal · ≥50 → entero con miles.
+  if (abs < 10) return v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (abs < 50) return v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  return v.toLocaleString("en-US", { maximumFractionDigits: 0 });
+};
 const fmtPct = (v: number | null, plain = false) => {
   if (v === null) return "—";
   const p = v * 100;
@@ -94,6 +101,11 @@ interface Section {
   rows:  RowSpec[];
 }
 
+// Consensus metric matchers (Bloomberg metric name → model field).
+const REV_KEYS    = ["revenue", "revenues", "sales", "net revenues"];
+const EBITDA_KEYS = ["ebitda"];
+const NI_KEYS     = ["ni", "net income", "net profit", "netincome", "controlling"];
+
 // ── Section definitions ────────────────────────────────────────────────────────
 const SECTIONS: Section[] = [
   // 1. INCOME STATEMENT
@@ -127,19 +139,19 @@ const SECTIONS: Section[] = [
     key: "bbg", title: "Bloomberg Consensus",
     rows: [
       { key: "bbg_rev",     label: "Revenue ($)",                    kind: "consensus",    fmt: "abs",
-        bbgKeys: ["revenue", "revenues", "sales", "net revenues"] },
+        bbgKeys: REV_KEYS },
       { key: "bbg_rev_vs",  label: "vs Consensus (%)",               kind: "vs_consensus", fmt: "pct", indent: 1,
-        bbgKeys: ["revenue", "revenues", "sales", "net revenues"],
+        bbgKeys: REV_KEYS,
         modelFn: d => d.revenue },
       { key: "bbg_ebitda",  label: "EBITDA ($)",                     kind: "consensus",    fmt: "abs",
-        bbgKeys: ["ebitda"] },
+        bbgKeys: EBITDA_KEYS },
       { key: "bbg_eb_vs",   label: "vs Consensus (%)",               kind: "vs_consensus", fmt: "pct", indent: 1,
-        bbgKeys: ["ebitda"],
+        bbgKeys: EBITDA_KEYS,
         modelFn: d => d.ebitda },
       { key: "bbg_ni",      label: "Controlling Net Income ($)",      kind: "consensus",    fmt: "abs",
-        bbgKeys: ["ni", "net income", "net profit", "netincome", "controlling"] },
+        bbgKeys: NI_KEYS },
       { key: "bbg_ni_vs",   label: "vs Consensus (%)",               kind: "vs_consensus", fmt: "pct", indent: 1,
-        bbgKeys: ["ni", "net income", "net profit", "netincome", "controlling"],
+        bbgKeys: NI_KEYS,
         modelFn: d => d.netIncome },
     ],
   },
@@ -314,24 +326,18 @@ interface KpiSection {
 }
 
 function buildKpiSections(kpis: ModelKpiRow[]): KpiSection[] {
-  const sectionOrder = new Map<string, number>();
-  const sectionMap   = new Map<string, Map<string, { order: number; byYear: Map<number, number | null> }>>();
+  // `kpis` llega en orden de inserción (≈ planilla); el Map preserva el orden de
+  // primer-encuentro de cada sección, así respetamos el orden de origen.
+  const sectionMap = new Map<string, Map<string, { order: number; byYear: Map<number, number | null> }>>();
 
   for (const k of kpis) {
-    if (!sectionMap.has(k.sectionName)) {
-      sectionMap.set(k.sectionName, new Map());
-      sectionOrder.set(k.sectionName, k.kpiOrder);
-    } else {
-      const cur = sectionOrder.get(k.sectionName)!;
-      if (k.kpiOrder < cur) sectionOrder.set(k.sectionName, k.kpiOrder);
-    }
+    if (!sectionMap.has(k.sectionName)) sectionMap.set(k.sectionName, new Map());
     const sec = sectionMap.get(k.sectionName)!;
     if (!sec.has(k.kpiName)) sec.set(k.kpiName, { order: k.kpiOrder, byYear: new Map() });
     sec.get(k.kpiName)!.byYear.set(k.year, k.value);
   }
 
   return Array.from(sectionMap.entries())
-    .sort((a, b) => (sectionOrder.get(a[0]) ?? 0) - (sectionOrder.get(b[0]) ?? 0))
     .map(([sectionName, kpiMap]) => ({
       sectionName,
       kpis: Array.from(kpiMap.entries())
@@ -402,16 +408,38 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
     return map;
   }, [consensusEstimates]);
 
-  const getConsensus = (keys: string[], year: number): number | null => {
+  // Raw consensus value (sin escalar) para una métrica/año.
+  const rawCon = (keys: string[], year: number): number | null => {
     const period = String(year);
     for (const [dbMetric, periods] of latestConsensus) {
       const lc = dbMetric.toLowerCase();
       if (keys.some(k => lc === k || lc.replace(/_/g, "") === k.replace(/\s/g, ""))) {
         const v = periods.get(period);
-        return v != null ? v / 1_000 : null;
+        return v != null ? v : null;
       }
     }
     return null;
+  };
+
+  // consensus_estimates llega en escala inconsistente por ticker (1× o 1000× el modelo).
+  // Detectamos el factor potencia-de-1000 comparando consenso crudo vs modelo; fallback 1000
+  // preserva el comportamiento histórico (÷1000) cuando no hay overlap para detectar.
+  const scaleFactor = useMemo(() => {
+    const model: (number | null)[] = [];
+    const cons:  (number | null)[] = [];
+    const add = (keys: string[], modelOf: (d: YearData) => number | null) => {
+      for (const d of enriched) { model.push(modelOf(d)); cons.push(rawCon(keys, d.year)); }
+    };
+    add(NI_KEYS,     d => d.netIncome);
+    add(REV_KEYS,    d => d.revenue);
+    add(EBITDA_KEYS, d => d.ebitda);
+    return consensusScaleFactor(model, cons, 1000);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enriched, latestConsensus]);
+
+  const getConsensus = (keys: string[], year: number): number | null => {
+    const v = rawCon(keys, year);
+    return v != null ? v / scaleFactor : null;
   };
 
   // Actual Price = last estimate year's share price (most recently set by analyst)
@@ -627,42 +655,24 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
         ]);
 
         for (const { kpiName, byYear: kByYear } of kpis) {
-          const isMgn = isMarginMetric(kpiName);
+          const isMgn  = isMarginMetric(kpiName);
+          const hasPct = kpiName.includes("%");   // título con '%' → azul
           const fmt: Fmt = isMgn ? "pct_plain" : "abs";
 
           rows.push([
-            xc(kpiName, { font: { bold: true, sz: 10 }, fill: F_WHITE, alignment: { horizontal: "left" } }),
+            xc(kpiName, { font: { bold: true, sz: 10, color: { rgb: hasPct ? "1D4ED8" : "111827" } }, fill: hasPct ? F_DRV : F_WHITE, alignment: { horizontal: "left" } }),
             ...years.map(yr => {
               const v    = kByYear.get(yr) ?? null;
               const isEst = (byYear.get(yr)?.isEst) ?? false;
               const { text } = renderCell(v, fmt, false);
               return xc(text, {
-                font:      { name: "Courier New", sz: 10, bold: true },
-                fill:      isEst ? F_EST : F_WHITE,
+                font:      { name: "Courier New", sz: 10, bold: true, color: { rgb: hasPct ? "1D4ED8" : "111827" } },
+                fill:      hasPct ? F_DRV : isEst ? F_EST : F_WHITE,
                 alignment: { horizontal: "center" },
                 border:    bdr(),
               });
             }),
           ]);
-
-          if (!isMgn) {
-            rows.push([
-              xc("  Var %", { font: { italic: true, sz: 10 }, fill: F_DRV, alignment: { horizontal: "left" } }),
-              ...years.map((yr, i) => {
-                const curr = kByYear.get(yr) ?? null;
-                const prev = i > 0 ? (kByYear.get(years[i - 1]) ?? null) : null;
-                const v    = sgrow(curr, prev);
-                const { text } = renderCell(v, "pct", true);
-                const fColor = v !== null ? (v > 0.0005 ? "1D4ED8" : v < -0.0005 ? "DC2626" : "374151") : "9CA3AF";
-                return xc(text, {
-                  font:      { name: "Courier New", sz: 10, italic: true, color: { rgb: fColor } },
-                  fill:      F_DRV,
-                  alignment: { horizontal: "center" },
-                  border:    bdr(),
-                });
-              }),
-            ]);
-          }
         }
       }
     }
@@ -993,11 +1003,12 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                       </td>
                     </tr>
 
-                    {kpis.flatMap(({ kpiName, byYear: kByYear }) => {
-                      const isMgn = isMarginMetric(kpiName);
+                    {kpis.map(({ kpiName, byYear: kByYear }) => {
+                      const isMgn  = isMarginMetric(kpiName);
+                      const hasPct = kpiName.includes("%");   // título con '%' → azul
                       const fmt: Fmt = isMgn ? "pct_plain" : "abs";
 
-                      const rows: React.ReactNode[] = [
+                      return (
                         <tr
                           key={`kpi-${sectionName}-${kpiName}`}
                           style={{ borderBottom: `1px solid ${C.BDR}` }}
@@ -1006,7 +1017,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                         >
                           <td style={{
                             ...labelSticky, padding: CELL_PAD, paddingLeft: 22,
-                            background: C.WHITE, color: C.TXT, fontWeight: 500, fontSize: 11,
+                            background: hasPct ? C.DRV_BG : C.WHITE, color: hasPct ? C.BLUE : C.TXT, fontWeight: 500, fontSize: 11,
                           }}>
                             {kpiName}
                           </td>
@@ -1017,8 +1028,8 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                             return (
                               <td key={yr} style={{
                                 ...yearColW, padding: CELL_PAD, textAlign: "center",
-                                background: isEst ? C.EST_BG : C.WHITE,
-                                color, fontWeight: 600, fontSize: 11,
+                                background: hasPct ? C.DRV_BG : isEst ? C.EST_BG : C.WHITE,
+                                color: hasPct ? C.BLUE : color, fontWeight: 600, fontSize: 11,
                                 borderLeft: `1px solid ${C.BDR}`, ...MONO,
                               }}>
                                 {text}
@@ -1026,45 +1037,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                             );
                           })}
                         </tr>
-                      ];
-
-                      if (!isMgn) {
-                        rows.push(
-                          <tr
-                            key={`kpi-${sectionName}-${kpiName}-var`}
-                            style={{ borderBottom: `1px solid ${C.BDR}` }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(29,78,216,0.04)"; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ""; }}
-                          >
-                            <td style={{
-                              ...labelSticky, padding: CELL_PAD, paddingLeft: 32,
-                              background: C.DRV_BG, color: C.TXT2,
-                              fontWeight: 400, fontStyle: "italic", fontSize: 10.5,
-                            }}>
-                              Var %
-                            </td>
-                            {years.map((yr, i) => {
-                              const curr   = kByYear.get(yr) ?? null;
-                              const prevYr = years[i - 1];
-                              const prev   = prevYr !== undefined ? (kByYear.get(prevYr) ?? null) : null;
-                              const v      = sgrow(curr, prev);
-                              const { text, color } = renderCell(v, "pct", true);
-                              return (
-                                <td key={yr} style={{
-                                  ...yearColW, padding: CELL_PAD, textAlign: "center",
-                                  background: C.DRV_BG, color,
-                                  fontWeight: 400, fontStyle: "italic", fontSize: 10.5,
-                                  borderLeft: `1px solid ${C.BDR}`, ...MONO,
-                                }}>
-                                  {text}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        );
-                      }
-
-                      return rows;
+                      );
                     })}
                   </React.Fragment>
                 ))}
