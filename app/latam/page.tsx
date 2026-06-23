@@ -112,7 +112,7 @@ function AttributionSection() {
 }
 
 export default function LatAmPage() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>("stock-selection");
+  const [activeTab, setActiveTab] = useState<ActiveTab>("consensus-check");
 
   // data
   const [allCompanies, setAllCompanies] = useState<LatamCompany[]>([]);
@@ -314,11 +314,11 @@ export default function LatAmPage() {
       >
         {(
           [
-            { key: "stock-selection",  label: "Stock Selection"       },
-            { key: "top-picks",        label: "Top Picks"             },
-            { key: "attribution",      label: "Perf. Attribution"     },
-            { key: "earnings",         label: "Earnings Surprises"    },
-            { key: "consensus-check",  label: "Estimates vs Consensus" },
+            { key: "consensus-check",  label: "Moneda Estimates"   },
+            { key: "earnings",         label: "Earnings Surprises" },
+            { key: "attribution",      label: "Perf. Attribution"  },
+            { key: "top-picks",        label: "Top Picks"          },
+            { key: "stock-selection",  label: "Stock Selection"    },
           ] as { key: ActiveTab; label: string }[]
         ).map(({ key, label }) => (
           <button

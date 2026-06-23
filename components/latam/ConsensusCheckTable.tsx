@@ -186,54 +186,76 @@ function Th({
   );
 }
 
+// ── Country code → display name ─────────────────────────────────────────────────
+const COUNTRY_NAMES: Record<string, string> = {
+  AR: "Argentina", BR: "Brazil", CL: "Chile", CN: "China", CO: "Colombia",
+  MX: "Mexico", PA: "Panama", PE: "Peru", US: "United States", UY: "Uruguay", OT: "Other",
+};
+const countryName = (c: string) => COUNTRY_NAMES[c] ?? c;
+
+// Shared select style for the filter dropdowns.
+const selStyle = (active: boolean): React.CSSProperties => ({
+  padding: "6px 12px", borderRadius: 7,
+  border: active ? "1px solid rgba(43,92,224,0.30)" : "1px solid rgba(15,23,42,0.12)",
+  background: active ? "rgba(43,92,224,0.07)" : "#F8FAFF",
+  color: active ? "#1E3A8A" : "#64748B",
+  fontSize: 12, fontFamily: "Inter, sans-serif", cursor: "pointer", outline: "none",
+  minWidth: 150,
+});
+
 // ── Sorting ────────────────────────────────────────────────────────────────────
-// Removed Revenue sort keys — only EBITDA and NI remain
+// Cada columna es ordenable. Var% ordena por valor CON SIGNO (sin abs → negativos y
+// positivos no se mezclan).
 type SortKey =
-  | "ticker" | "updateDate" | "upside"
+  | "ticker" | "updateDate" | "recc" | "upside"
+  | "monEbitda1" | "monEbitda2" | "monNi1" | "monNi2"
+  | "conEbitda1" | "conEbitda2" | "conNi1" | "conNi2"
   | "varEbitda1" | "varEbitda2" | "varNi1" | "varNi2";
 
-// 12 data columns: Moneda(4) + Consensus(4) + Var%(4)
-// Indices 0-3: Moneda EBITDA1/2, NI1/2  → not sortable
-// Indices 4-7: Consensus EBITDA1/2, NI1/2 → not sortable
-// Indices 8-11: Var EBITDA1/2, NI1/2 → sortable
-const VAR_YEAR_SORT: (SortKey | null)[] = [
-  null, null, null, null,          // Moneda (0-3)
-  null, null, null, null,          // Consensus (4-7)
-  "varEbitda1", "varEbitda2",      // Var EBITDA (8-9)
-  "varNi1",     "varNi2",          // Var NI (10-11)
+// 12 columnas de datos en orden de display → su SortKey.
+const COL_SORT: SortKey[] = [
+  "monEbitda1", "monEbitda2", "monNi1", "monNi2",   // Moneda (0-3)
+  "conEbitda1", "conEbitda2", "conNi1", "conNi2",   // Consensus (4-7)
+  "varEbitda1", "varEbitda2", "varNi1", "varNi2",   // Var % (8-11)
 ];
 
-const VAR_SORT_KEYS = new Set<SortKey>(["varEbitda1","varEbitda2","varNi1","varNi2"]);
+// Recomendación → rank (compra alto, venta bajo) para un orden con sentido.
+function recRank(recc: string | null): number | null {
+  if (!recc) return null;
+  const u = recc.toUpperCase();
+  if (u.includes("BUY")  || u === "OW" || u.includes("OVERWEIGHT")  || u.includes("OUTPERFORM"))  return 3;
+  if (u.includes("SELL") || u === "UW" || u.includes("UNDERWEIGHT") || u.includes("UNDERPERFORM")) return 1;
+  if (u.includes("HOLD") || u.includes("NEUTRAL") || u.includes("MARKET") || u.includes("EQUAL"))  return 2;
+  return 0;
+}
 
-function getVarValue(row: ConsensusCheckRow, key: SortKey): number | null {
+function sortValue(row: ConsensusCheckRow, key: SortKey): number | string | null {
   switch (key) {
+    case "ticker":     return row.ticker;
+    case "updateDate": return row.updateDate;
+    case "recc":       return recRank(row.recc);
+    case "upside":     return row.upside;
+    case "monEbitda1": return row.moneda.ebitda1FY;
+    case "monEbitda2": return row.moneda.ebitda2FY;
+    case "monNi1":     return row.moneda.ni1FY;
+    case "monNi2":     return row.moneda.ni2FY;
+    case "conEbitda1": return row.consensus.ebitda1FY;
+    case "conEbitda2": return row.consensus.ebitda2FY;
+    case "conNi1":     return row.consensus.ni1FY;
+    case "conNi2":     return row.consensus.ni2FY;
     case "varEbitda1": return varPct(row.moneda.ebitda1FY, row.consensus.ebitda1FY);
     case "varEbitda2": return varPct(row.moneda.ebitda2FY, row.consensus.ebitda2FY);
     case "varNi1":     return varPct(row.moneda.ni1FY,     row.consensus.ni1FY);
     case "varNi2":     return varPct(row.moneda.ni2FY,     row.consensus.ni2FY);
-    default:           return null;
   }
 }
 
 function sortRows(rows: ConsensusCheckRow[], by: SortKey, dir: "asc" | "desc"): ConsensusCheckRow[] {
   return [...rows].sort((a, b) => {
-    let av: string | number | null;
-    let bv: string | number | null;
-    if (VAR_SORT_KEYS.has(by)) {
-      const va = getVarValue(a, by);
-      const vb = getVarValue(b, by);
-      av = va != null ? Math.abs(va) : null;
-      bv = vb != null ? Math.abs(vb) : null;
-    } else {
-      switch (by) {
-        case "ticker":     av = a.ticker;     bv = b.ticker;     break;
-        case "updateDate": av = a.updateDate; bv = b.updateDate; break;
-        case "upside":     av = a.upside;     bv = b.upside;     break;
-        default:           av = null;         bv = null;
-      }
-    }
+    const av = sortValue(a, by);
+    const bv = sortValue(b, by);
     if (av == null && bv == null) return 0;
-    if (av == null) return 1;
+    if (av == null) return 1;   // nulls al final
     if (bv == null) return -1;
     const cmp = typeof av === "number" && typeof bv === "number"
       ? av - bv
@@ -250,7 +272,9 @@ export default function ConsensusCheckTable() {
   const [error,         setError]         = useState(false);
   const [sortBy,        setSortBy]        = useState<SortKey>("updateDate");
   const [sortDir,       setSortDir]       = useState<"asc" | "desc">("desc");
-  const [analystFilter, setAnalystFilter] = useState("");
+  const [analystFilter,  setAnalystFilter]  = useState("");
+  const [countryFilter,  setCountryFilter]  = useState("");
+  const [industryFilter, setIndustryFilter] = useState("");
   const [validTickers,  setValidTickers]  = useState<Set<string>>(new Set());
   const [notFoundMsg,   setNotFoundMsg]   = useState<string | null>(null);
 
@@ -291,15 +315,21 @@ export default function ConsensusCheckTable() {
   const y1 = String(year1FY).slice(2) + "e";
   const y2 = String(year2FY).slice(2) + "e";
 
-  const analysts = Array.from(new Set(rows.map((r) => r.analyst).filter(Boolean) as string[])).sort();
+  const analysts   = Array.from(new Set(rows.map((r) => r.analyst).filter(Boolean) as string[])).sort();
+  const countries  = Array.from(new Set(rows.map((r) => r.country).filter(Boolean) as string[])).sort();
+  const industries = Array.from(new Set(rows.map((r) => r.industry).filter(Boolean) as string[])).sort();
 
   const sorted   = sortRows(rows, sortBy, sortDir);
-  const filtered = analystFilter ? sorted.filter((r) => r.analyst === analystFilter) : sorted;
+  const filtered = sorted.filter((r) =>
+    (!analystFilter  || r.analyst  === analystFilter)  &&
+    (!countryFilter  || r.country  === countryFilter)  &&
+    (!industryFilter || r.industry === industryFilter)
+  );
 
   function handleSort(key: string) {
     const k = key as SortKey;
     if (sortBy === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else { setSortBy(k); setSortDir(VAR_SORT_KEYS.has(k) ? "desc" : "asc"); }
+    else { setSortBy(k); setSortDir(k === "ticker" ? "asc" : "desc"); }
   }
 
   function handleTickerClick(ticker: string) {
@@ -343,35 +373,33 @@ export default function ConsensusCheckTable() {
         </div>
       )}
 
-      {/* ── Toolbar: analyst filter + download ── */}
+      {/* ── Toolbar: filtros + download ── */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
-        <select
-          value={analystFilter}
-          onChange={(e) => setAnalystFilter(e.target.value)}
-          style={{
-            padding:     "6px 12px",
-            borderRadius: 7,
-            border:      "1px solid rgba(15,23,42,0.12)",
-            background:  "#F8FAFF",
-            color:       analystFilter ? "#0F172A" : "#64748B",
-            fontSize:    12,
-            fontFamily:  "Inter, sans-serif",
-            cursor:      "pointer",
-            outline:     "none",
-            minWidth:    160,
-          }}
-        >
-          <option value="">All Analysts</option>
-          {analysts.map((a) => (
-            <option key={a} value={a}>{a}</option>
-          ))}
-        </select>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          {/* País */}
+          <select value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)} style={selStyle(!!countryFilter)}>
+            <option value="">All Countries</option>
+            {countries.map((c) => <option key={c} value={c}>{countryName(c)}</option>)}
+          </select>
 
-        {analystFilter && (
-          <span style={{ marginLeft: 10, fontSize: 11, color: "#64748B", fontFamily: "JetBrains Mono, monospace" }}>
-            {filtered.length} of {sorted.length}
-          </span>
-        )}
+          {/* Industria */}
+          <select value={industryFilter} onChange={(e) => setIndustryFilter(e.target.value)} style={selStyle(!!industryFilter)}>
+            <option value="">All Industries</option>
+            {industries.map((i) => <option key={i} value={i}>{i}</option>)}
+          </select>
+
+          {/* Analyst */}
+          <select value={analystFilter} onChange={(e) => setAnalystFilter(e.target.value)} style={selStyle(!!analystFilter)}>
+            <option value="">All Analysts</option>
+            {analysts.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+
+          {(analystFilter || countryFilter || industryFilter) && (
+            <span style={{ fontSize: 11, color: "#64748B", fontFamily: "JetBrains Mono, monospace" }}>
+              {filtered.length} of {rows.length}
+            </span>
+          )}
+        </div>
 
         {/* Download */}
         <button
@@ -415,7 +443,7 @@ export default function ConsensusCheckTable() {
               </Th>
               <Th level={0} rowSpan={3} sortKey="updateDate" {...thProps}>Update As Of</Th>
               <Th level={0} rowSpan={3}>Analyst</Th>
-              <Th level={0} rowSpan={3}>Rec</Th>
+              <Th level={0} rowSpan={3} sortKey="recc" {...thProps}>Rec</Th>
               <Th level={0} rowSpan={3} sortKey="upside" {...thProps}>Upside</Th>
 
               {sections.map((s) => (
@@ -467,15 +495,15 @@ export default function ConsensusCheckTable() {
               )}
             </tr>
 
-            {/* ── Row 3: year labels (Var% cols 8-11 are sortable) ── */}
+            {/* ── Row 3: year labels — TODAS las columnas son ordenables ── */}
             <tr>
               {Array.from({ length: 12 }).map((_, i) => {
-                const varKey  = VAR_YEAR_SORT[i];
-                const isSorted = varKey != null && sortBy === varKey;
+                const colKey   = COL_SORT[i];
+                const isSorted = sortBy === colKey;
                 return (
                   <th
                     key={i}
-                    onClick={varKey ? () => handleSort(varKey) : undefined}
+                    onClick={() => handleSort(colKey)}
                     style={{
                       background:   "#F1F5F9",
                       color:        isSorted ? "#4338CA" : "#374151",
@@ -487,16 +515,14 @@ export default function ConsensusCheckTable() {
                       borderBottom: `1px solid ${C.BDR}`,
                       whiteSpace:   "nowrap",
                       fontFamily:   "JetBrains Mono, monospace",
-                      cursor:       varKey ? "pointer" : undefined,
-                      userSelect:   varKey ? "none" : undefined,
+                      cursor:       "pointer",
+                      userSelect:   "none",
                     }}
                   >
                     {i % 2 === 0 ? y1 : y2}
-                    {varKey && (
-                      <span style={{ marginLeft: 3, fontSize: 8, opacity: isSorted ? 1 : 0.35 }}>
-                        {isSorted ? (sortDir === "desc" ? "▼" : "▲") : "↕"}
-                      </span>
-                    )}
+                    <span style={{ marginLeft: 3, fontSize: 8, opacity: isSorted ? 1 : 0.35 }}>
+                      {isSorted ? (sortDir === "desc" ? "▼" : "▲") : "↕"}
+                    </span>
                   </th>
                 );
               })}

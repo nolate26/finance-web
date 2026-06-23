@@ -11,6 +11,8 @@ export interface ConsensusCheckRow {
   tp:         number | null;
   upside:     number | null;
   thesis:     string | null;
+  country:    string | null;   // empresas_industrias_v2.country_risk (AR, BR, CL, …)
+  industry:   string | null;   // empresas_industrias_v2.industria_gics
   moneda: {
     rev1FY:    number | null;
     rev2FY:    number | null;
@@ -97,7 +99,7 @@ export async function GET() {
     }
 
     // Financials for each ticker's latest snapshot, for year1FY and year2FY.
-    const [financials, bankFinancials, consensusRows] = await Promise.all([
+    const [financials, bankFinancials, consensusRows, empresas] = await Promise.all([
       latestHeaders.length
         ? prisma.modelFinancials.findMany({
             where: {
@@ -128,7 +130,22 @@ export async function GET() {
         orderBy: { date: "desc" },
         select:  { ticker: true, metric: true, period: true, value: true },
       }),
+      // País (country_risk) e industria (industria_gics) por ticker Bloomberg.
+      prisma.empresasIndustriasV2.findMany({
+        select: { tickerBloomberg: true, countryRisk: true, industriaGics: true },
+      }),
     ]);
+
+    // ei: UPPER(ticker) → { country, industry } (match case-insensitive).
+    const eiMap = new Map<string, { country: string | null; industry: string | null }>();
+    for (const e of empresas) {
+      if (!e.tickerBloomberg) continue;
+      eiMap.set(e.tickerBloomberg.toUpperCase(), {
+        country:  e.countryRisk   || null,
+        industry: e.industriaGics || null,
+      });
+    }
+    const eiFor = (ticker: string) => eiMap.get(ticker.toUpperCase()) ?? { country: null, industry: null };
 
     // financials: (ticker, year) → company model values (already in consensus/1000 scale)
     const finMap = new Map<string, { revenue: number | null; ebitda: number | null; netIncome: number | null; sharePrice: number | null }>();
@@ -198,6 +215,7 @@ export async function GET() {
         tp,
         upside,
         thesis:     h.thesis ?? null,
+        ...eiFor(h.ticker),
         moneda,
         consensus: scaledConsensus(moneda, rawConsensus),
       };
@@ -242,6 +260,7 @@ export async function GET() {
         tp,
         upside,
         thesis:     h.thesis ?? null,
+        ...eiFor(h.ticker),
         moneda,
         consensus: scaledConsensus(moneda, rawConsensus),
       };
