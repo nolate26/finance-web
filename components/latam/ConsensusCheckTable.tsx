@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Download } from "lucide-react";
+import { Download, CalendarDays } from "lucide-react";
 import type { ConsensusCheckPayload, ConsensusCheckRow } from "@/app/api/latam/consensus-check/route";
 import { downloadExcel } from "@/lib/exportExcel";
 
@@ -207,7 +207,7 @@ const selStyle = (active: boolean): React.CSSProperties => ({
 // Cada columna es ordenable. Var% ordena por valor CON SIGNO (sin abs → negativos y
 // positivos no se mezclan).
 type SortKey =
-  | "ticker" | "updateDate" | "recc" | "upside"
+  | "ticker" | "updateDate" | "recc" | "upside" | "upsideModel"
   | "monEbitda1" | "monEbitda2" | "monNi1" | "monNi2"
   | "conEbitda1" | "conEbitda2" | "conNi1" | "conNi2"
   | "varEbitda1" | "varEbitda2" | "varNi1" | "varNi2";
@@ -233,8 +233,9 @@ function sortValue(row: ConsensusCheckRow, key: SortKey): number | string | null
   switch (key) {
     case "ticker":     return row.ticker;
     case "updateDate": return row.updateDate;
-    case "recc":       return recRank(row.recc);
-    case "upside":     return row.upside;
+    case "recc":        return recRank(row.recc);
+    case "upside":      return row.upside;
+    case "upsideModel": return row.upsideModel;
     case "monEbitda1": return row.moneda.ebitda1FY;
     case "monEbitda2": return row.moneda.ebitda2FY;
     case "monNi1":     return row.moneda.ni1FY;
@@ -311,7 +312,7 @@ export default function ConsensusCheckTable() {
     );
   }
 
-  const { rows, year1FY, year2FY } = data;
+  const { rows, year1FY, year2FY, pricesAsOf } = data;
   const y1 = String(year1FY).slice(2) + "e";
   const y2 = String(year2FY).slice(2) + "e";
 
@@ -405,13 +406,15 @@ export default function ConsensusCheckTable() {
         <button
           onClick={() => {
             const headers = [
-              "Ticker", "Update Date", "Analyst", "Rec", "Upside",
+              "Ticker", "Update Date", "Analyst", "Rec", "Upside @Model", "Upside Live",
               `Moneda EBITDA ${y1}`, `Moneda EBITDA ${y2}`, `Moneda NI ${y1}`, `Moneda NI ${y2}`,
               `BBG EBITDA ${y1}`,    `BBG EBITDA ${y2}`,    `BBG NI ${y1}`,    `BBG NI ${y2}`,
               `Var EBITDA ${y1}`,    `Var EBITDA ${y2}`,    `Var NI ${y1}`,    `Var NI ${y2}`,
             ];
             const rows = filtered.map((r) => [
-              shortTicker(r.ticker), r.updateDate, r.analyst ?? "", r.recc ?? "", r.upside != null ? +(r.upside * 100).toFixed(2) : null,
+              shortTicker(r.ticker), r.updateDate, r.analyst ?? "", r.recc ?? "",
+              r.upsideModel != null ? +(r.upsideModel * 100).toFixed(2) : null,
+              r.upside      != null ? +(r.upside      * 100).toFixed(2) : null,
               r.moneda.ebitda1FY, r.moneda.ebitda2FY, r.moneda.ni1FY, r.moneda.ni2FY,
               r.consensus.ebitda1FY != null ? +(r.consensus.ebitda1FY / 1000).toFixed(1) : null,
               r.consensus.ebitda2FY != null ? +(r.consensus.ebitda2FY / 1000).toFixed(1) : null,
@@ -432,6 +435,26 @@ export default function ConsensusCheckTable() {
         </button>
       </div>
 
+      {/* Prices as of — último día de precios (px_last) usado para el Upside Live, igual para todos */}
+      {pricesAsOf && (
+        <div style={{ display: "flex", marginBottom: 12 }}>
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: 8,
+            padding: "7px 14px", borderRadius: 9,
+            background: "rgba(29,78,216,0.07)",
+            border: "1px solid rgba(29,78,216,0.22)",
+          }}>
+            <CalendarDays size={15} style={{ color: "#1D4ED8", flexShrink: 0 }} />
+            <span style={{ fontSize: 13, color: "#475569", fontWeight: 600, letterSpacing: "0.01em" }}>
+              Prices as of
+            </span>
+            <span style={{ fontSize: 14, color: "#1D4ED8", fontWeight: 800, fontFamily: "JetBrains Mono, monospace", letterSpacing: "0.02em" }}>
+              {fmtDate(pricesAsOf)}
+            </span>
+          </span>
+        </div>
+      )}
+
       {/* ── Table ── */}
       <div style={{ overflowX: "auto", borderRadius: 10, border: `1px solid ${C.BDR}`, boxShadow: "0 1px 6px rgba(15,23,42,0.07)" }}>
         <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 900, tableLayout: "auto" }}>
@@ -444,7 +467,8 @@ export default function ConsensusCheckTable() {
               <Th level={0} rowSpan={3} sortKey="updateDate" {...thProps}>Update As Of</Th>
               <Th level={0} rowSpan={3}>Analyst</Th>
               <Th level={0} rowSpan={3} sortKey="recc" {...thProps}>Rec</Th>
-              <Th level={0} rowSpan={3} sortKey="upside" {...thProps}>Upside</Th>
+              <Th level={0} rowSpan={3} sortKey="upsideModel" {...thProps}>Upside @Model</Th>
+              <Th level={0} rowSpan={3} sortKey="upside" {...thProps}>Upside Live</Th>
 
               {sections.map((s) => (
                 <th
@@ -531,8 +555,9 @@ export default function ConsensusCheckTable() {
 
           <tbody>
             {filtered.map((row: ConsensusCheckRow, idx: number) => {
-              const upside = fmtUpside(row.upside);
-              const rowBg  = idx % 2 === 0 ? "#FFFFFF" : C.ROW_ALT;
+              const upside  = fmtUpside(row.upside);
+              const upsideM = fmtUpside(row.upsideModel);
+              const rowBg   = idx % 2 === 0 ? "#FFFFFF" : C.ROW_ALT;
               return (
                 <tr
                   key={row.ticker}
@@ -609,7 +634,21 @@ export default function ConsensusCheckTable() {
                     <ReccBadge recc={row.recc} />
                   </td>
 
-                  {/* Upside */}
+                  {/* Upside @Model (analyst, al hacer el modelo) */}
+                  <td style={{
+                    padding:     "6px 10px",
+                    fontSize:    12,
+                    fontFamily:  "JetBrains Mono, monospace",
+                    textAlign:   "center",
+                    fontWeight:  row.upsideModel != null ? 700 : 400,
+                    color:       upsideM.color,
+                    borderRight: `1px solid ${C.BDR}`,
+                    whiteSpace:  "nowrap",
+                  }}>
+                    {upsideM.text}
+                  </td>
+
+                  {/* Upside Live (vs precio actual) */}
                   <td style={{
                     padding:     "6px 10px",
                     fontSize:    12,
@@ -646,7 +685,7 @@ export default function ConsensusCheckTable() {
 
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={17} style={{ textAlign: "center", padding: 32, color: "#94A3B8", fontSize: 13 }}>
+                <td colSpan={18} style={{ textAlign: "center", padding: 32, color: "#94A3B8", fontSize: 13 }}>
                   No model data available.
                 </td>
               </tr>

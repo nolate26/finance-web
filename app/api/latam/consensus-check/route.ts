@@ -8,9 +8,10 @@ export interface ConsensusCheckRow {
   updateDate: string;
   analyst:    string | null;
   recc:       string | null;
-  tp:         number | null;
-  upside:     number | null;
-  thesis:     string | null;
+  tp:          number | null;
+  upside:      number | null;   // vs precio de mercado actual (px_last del último día)
+  upsideModel: number | null;   // upside del analista al hacer el modelo (vs share_price del modelo)
+  thesis:      string | null;
   country:    string | null;   // empresas_industrias_v2.country_risk (AR, BR, CL, …)
   industry:   string | null;   // empresas_industrias_v2.industria_gics
   moneda: {
@@ -32,9 +33,10 @@ export interface ConsensusCheckRow {
 }
 
 export interface ConsensusCheckPayload {
-  rows:    ConsensusCheckRow[];
-  year1FY: number;
-  year2FY: number;
+  rows:       ConsensusCheckRow[];
+  year1FY:    number;
+  year2FY:    number;
+  pricesAsOf: string | null;   // último día de precios (price_range_52w) usado para el Upside
 }
 
 // Consensus is ingested in inconsistent scales: for some tickers it is stored ~1000×
@@ -95,11 +97,19 @@ export async function GET() {
     const latestBankHeaders = latestBankHeadersRaw.filter((b) => !companyTickerSet.has(b.ticker));
 
     if (latestHeaders.length === 0 && latestBankHeaders.length === 0) {
-      return NextResponse.json({ rows: [], year1FY, year2FY } satisfies ConsensusCheckPayload);
+      return NextResponse.json({ rows: [], year1FY, year2FY, pricesAsOf: null } satisfies ConsensusCheckPayload);
     }
 
+    // Último día de precios de mercado (mismo día para todos). El Upside usa px_last de ese
+    // día; los tickers sin precio ese día quedan sin upside.
+    const latestPriceRow = await prisma.priceRange52w.findFirst({
+      orderBy: { date: "desc" }, select: { date: true },
+    });
+    const pricesAsOfDate = latestPriceRow?.date ?? null;
+    const pricesAsOf     = pricesAsOfDate ? pricesAsOfDate.toISOString().slice(0, 10) : null;
+
     // Financials for each ticker's latest snapshot, for year1FY and year2FY.
-    const [financials, bankFinancials, consensusRows, empresas] = await Promise.all([
+    const [financials, bankFinancials, consensusRows, empresas, prices] = await Promise.all([
       latestHeaders.length
         ? prisma.modelFinancials.findMany({
             where: {
@@ -134,7 +144,18 @@ export async function GET() {
       prisma.empresasIndustriasV2.findMany({
         select: { tickerBloomberg: true, countryRisk: true, industriaGics: true },
       }),
+      // Precios del último día (px_last) para el Upside.
+      pricesAsOfDate
+        ? prisma.priceRange52w.findMany({
+            where:  { date: pricesAsOfDate },
+            select: { ticker: true, pxLast: true },
+          })
+        : Promise.resolve([] as { ticker: string; pxLast: number }[]),
     ]);
+
+    // Precio de mercado del último día: UPPER(ticker) → px_last (match case-insensitive).
+    const priceMap = new Map<string, number>();
+    for (const p of prices) priceMap.set(p.ticker.toUpperCase(), p.pxLast);
 
     // ei: UPPER(ticker) → { country, industry } (match case-insensitive).
     const eiMap = new Map<string, { country: string | null; industry: string | null }>();
@@ -186,9 +207,11 @@ export async function GET() {
       const getCon = (metric: string, period: string) =>
         conMap.get(`${h.ticker.toUpperCase()}::${metric.toUpperCase()}::${period}`) ?? null;
 
-      const price  = fin1?.sharePrice ?? fin2?.sharePrice ?? null;
-      const tp     = h.tp ?? null;
-      const upside = tp && price ? tp / price - 1 : null;
+      const price       = priceMap.get(h.ticker.toUpperCase()) ?? null;   // px_last del último día (live)
+      const modelPrice  = fin1?.sharePrice ?? fin2?.sharePrice ?? null;   // precio dentro del modelo
+      const tp          = h.tp ?? null;
+      const upside      = tp && price      ? tp / price      - 1 : null;  // vs precio actual
+      const upsideModel = tp && modelPrice ? tp / modelPrice - 1 : null;  // upside del analista al hacer el modelo
 
       const moneda = {
         rev1FY:    fin1?.revenue   ?? null,
@@ -214,6 +237,7 @@ export async function GET() {
         recc:       h.recc   ?? null,
         tp,
         upside,
+        upsideModel,
         thesis:     h.thesis ?? null,
         ...eiFor(h.ticker),
         moneda,
@@ -231,9 +255,11 @@ export async function GET() {
       const getCon = (metric: string, period: string) =>
         conMap.get(`${h.ticker.toUpperCase()}::${metric.toUpperCase()}::${period}`) ?? null;
 
-      const price  = fin1?.sharePrice ?? fin2?.sharePrice ?? null;
-      const tp     = h.tp ?? null;
-      const upside = tp && price ? tp / price - 1 : null;
+      const price       = priceMap.get(h.ticker.toUpperCase()) ?? null;   // px_last del último día (live)
+      const modelPrice  = fin1?.sharePrice ?? fin2?.sharePrice ?? null;   // precio dentro del modelo
+      const tp          = h.tp ?? null;
+      const upside      = tp && price      ? tp / price      - 1 : null;  // vs precio actual
+      const upsideModel = tp && modelPrice ? tp / modelPrice - 1 : null;  // upside del analista al hacer el modelo
 
       const moneda = {
         rev1FY:    k1000(fin1?.revenue),
@@ -259,6 +285,7 @@ export async function GET() {
         recc:       h.recc   ?? null,
         tp,
         upside,
+        upsideModel,
         thesis:     h.thesis ?? null,
         ...eiFor(h.ticker),
         moneda,
@@ -268,7 +295,7 @@ export async function GET() {
 
     const rows = [...companyRows, ...bankRows];
 
-    return NextResponse.json({ rows, year1FY, year2FY } satisfies ConsensusCheckPayload);
+    return NextResponse.json({ rows, year1FY, year2FY, pricesAsOf } satisfies ConsensusCheckPayload);
   } catch (e) {
     console.error("[consensus-check]", e);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
