@@ -38,8 +38,8 @@ export interface AnalystRecSnap {
 export interface PriceRange52wSnap {
   date: string;
   pxLast: number;
-  high52w: number;
-  low52w: number;
+  high52w: number| null;
+  low52w: number| null;
   pctRange: number | null;
 }
 
