@@ -7,9 +7,11 @@ export async function GET(request: NextRequest) {
   const company = request.nextUrl.searchParams.get("company") ?? undefined;
 
   try {
-    // Fetch records — optionally filtered by company (Bloomberg ticker)
+    // Fetch records — optionally filtered by company (Bloomberg ticker).
+    // El sidebar entrega el ticker en MAYÚSCULAS y email_research.company está en
+    // mixed-case → comparar case-insensitive para que la pestaña Research no salga vacía.
     const records = await prisma.emailResearch.findMany({
-      where:   company ? { company } : undefined,
+      where:   company ? { company: { equals: company, mode: "insensitive" } } : undefined,
       orderBy: { date: "desc" },
       select: {
         id:       true,
