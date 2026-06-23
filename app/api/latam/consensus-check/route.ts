@@ -96,10 +96,6 @@ export async function GET() {
       return NextResponse.json({ rows: [], year1FY, year2FY } satisfies ConsensusCheckPayload);
     }
 
-    const tickers     = latestHeaders.map((h) => h.ticker);
-    const bankTickers = latestBankHeaders.map((b) => b.ticker);
-    const allTickers  = [...tickers, ...bankTickers];
-
     // Financials for each ticker's latest snapshot, for year1FY and year2FY.
     const [financials, bankFinancials, consensusRows] = await Promise.all([
       latestHeaders.length
@@ -122,10 +118,10 @@ export async function GET() {
             select: { ticker: true, year: true, revenue: true, controllingNetIncome: true, sharePrice: true },
           })
         : Promise.resolve([] as { ticker: string; year: number; revenue: number | null; controllingNetIncome: number | null; sharePrice: number | null }[]),
-      // Latest consensus per (ticker, metric, period). Periods are calendar years: '2026', '2027'.
+      // Consensus para los 2 FY; el ticker se matchea case-insensitive en JS (abajo) porque
+      // consensus_estimates trae casing distinto a model_headers / empresas_industrias_v2.
       prisma.consensusEstimate.findMany({
         where: {
-          ticker: { in: allTickers },
           metric: { in: ["NET_INCOME", "EBITDA", "REVENUE"] },
           period: { in: [String(year1FY), String(year2FY)] },
         },
@@ -155,11 +151,12 @@ export async function GET() {
       });
     }
 
-    // consensus: (ticker, metric, period) → value (deduplicated, first = latest)
+    // consensus: (TICKER, METRIC, period) → value (deduplicated, first = latest).
+    // Claves normalizadas a UPPER → match case-insensitive contra los tickers de los headers.
     const conMap  = new Map<string, number>();
     const seenCon = new Set<string>();
     for (const r of consensusRows) {
-      const key = `${r.ticker}::${r.metric}::${r.period}`;
+      const key = `${r.ticker.toUpperCase()}::${r.metric.toUpperCase()}::${r.period}`;
       if (!seenCon.has(key)) {
         seenCon.add(key);
         conMap.set(key, r.value);
@@ -170,7 +167,7 @@ export async function GET() {
       const fin1 = finMap.get(`${h.ticker}::${year1FY}`);
       const fin2 = finMap.get(`${h.ticker}::${year2FY}`);
       const getCon = (metric: string, period: string) =>
-        conMap.get(`${h.ticker}::${metric}::${period}`) ?? null;
+        conMap.get(`${h.ticker.toUpperCase()}::${metric.toUpperCase()}::${period}`) ?? null;
 
       const price  = fin1?.sharePrice ?? fin2?.sharePrice ?? null;
       const tp     = h.tp ?? null;
@@ -214,7 +211,7 @@ export async function GET() {
       const fin1 = bankFinMap.get(`${h.ticker}::${year1FY}`);
       const fin2 = bankFinMap.get(`${h.ticker}::${year2FY}`);
       const getCon = (metric: string, period: string) =>
-        conMap.get(`${h.ticker}::${metric}::${period}`) ?? null;
+        conMap.get(`${h.ticker.toUpperCase()}::${metric.toUpperCase()}::${period}`) ?? null;
 
       const price  = fin1?.sharePrice ?? fin2?.sharePrice ?? null;
       const tp     = h.tp ?? null;
