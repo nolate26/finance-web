@@ -32,6 +32,9 @@ export default function KPICards({ priceRange, shortInterest }: Props) {
   const range52 = priceRange
     ? (() => {
         const { pxLast, high52w, low52w } = priceRange;
+        if (high52w == null || low52w == null) {
+          return null;
+        }
         const span = high52w - low52w;
         const pct = span > 0 ? ((pxLast - low52w) / span) * 100 : 50;
         const clamped = Math.max(0, Math.min(100, pct));
@@ -102,7 +105,7 @@ export default function KPICards({ priceRange, shortInterest }: Props) {
               <div style={{ textAlign: "left" }}>
                 <div style={{ fontSize: 9, color: "#94A3B8", marginBottom: 2 }}>52w Low</div>
                 <div style={{ fontSize: 12, fontFamily: "JetBrains Mono, monospace", fontWeight: 600, color: "#DC2626" }}>
-                  {fmtPrice(priceRange.low52w)}
+                  {priceRange.low52w !== null ? fmtPrice(priceRange.low52w) : "N/A"}
                 </div>
               </div>
               <div style={{ textAlign: "center" }}>
@@ -114,7 +117,7 @@ export default function KPICards({ priceRange, shortInterest }: Props) {
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontSize: 9, color: "#94A3B8", marginBottom: 2 }}>52w High</div>
                 <div style={{ fontSize: 12, fontFamily: "JetBrains Mono, monospace", fontWeight: 600, color: "#059669" }}>
-                  {fmtPrice(priceRange.high52w)}
+                  {priceRange.high52w !== null ? fmtPrice(priceRange.high52w) : "N/A"}
                 </div>
               </div>
             </div>
