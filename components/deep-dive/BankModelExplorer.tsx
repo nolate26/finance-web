@@ -8,6 +8,15 @@ import type {
   BankKpiRow,
 } from "@/app/api/companies/[ticker]/bank-model/route";
 import { consensusScaleFactor } from "@/lib/consensusScale";
+import ModelEstimateChart, { buildEstimateRows, type EstimateMetric, type EstimateRow } from "@/components/deep-dive/ModelEstimateChart";
+
+// ── Estimate-evolution chart metrics (Net Income default) ────────────────────────
+// Banks don't carry EBITDA / FCFE, so we track the closest analogues.
+const ESTIMATE_METRICS: EstimateMetric[] = [
+  { key: "NI",  label: "Net Income", gradId: "bme_ni",  colors: ["#7C3AED", "#A78BFA"] },
+  { key: "REV", label: "Revenue",    gradId: "bme_rev", colors: ["#059669", "#34D399"] },
+  { key: "EPS", label: "EPS",        gradId: "bme_eps", colors: ["#D97706", "#FBBF24"] },
+];
 
 // ── Palette ────────────────────────────────────────────────────────────────────
 const C = {
@@ -380,6 +389,20 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
     [snapshot],
   );
 
+  // Estimate evolution: how the analyst's projections for the current + next year
+  // moved across every published revision (oldest → newest).
+  const estimate = useMemo(() => {
+    const snaps = history?.snapshots ?? [];
+    const cy = new Date().getFullYear();
+    const yrs = [cy, cy + 1];
+    const rowsByMetric: Record<string, EstimateRow[]> = {
+      NI:  buildEstimateRows(snaps, yrs, (r) => r.controllingNetIncome),
+      REV: buildEstimateRows(snaps, yrs, (r) => r.revenue),
+      EPS: buildEstimateRows(snaps, yrs, (r) => r.eps),
+    };
+    return { rowsByMetric, years: yrs.map(String) };
+  }, [history]);
+
   // Latest consensus value per (metric, period).
   const latestConsensus = useMemo(() => {
     const map = new Map<string, Map<string, number>>();
@@ -629,13 +652,15 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 6px" }}>
 
-      {/* ── TOP PANEL: Info + Version ─────────────────────────────────────── */}
+      {/* ── TOP PANEL: Info + actions (left half) · Estimate chart (right half) ── */}
       <div style={{
-        display: "grid", gridTemplateColumns: "1fr auto",
-        gap: 16, alignItems: "start",
+        display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)",
+        gap: 16, alignItems: "stretch",
         padding: "12px 16px", background: "#F8FAFC",
         border: `1px solid ${C.BDR}`, borderRadius: 10,
       }}>
+        {/* ── Left half: model info table + actions ── */}
+        <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 12, minWidth: 0 }}>
         {/* Left: model info */}
         <table style={{ borderCollapse: "collapse", fontSize: 12 }}>
           <tbody>
@@ -683,52 +708,62 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
             ))}
           </tbody>
         </table>
+        </div>
 
-        {/* Right: export + version */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button
-              onClick={exportToExcel}
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 5,
-                padding: "5px 12px", borderRadius: 5, cursor: "pointer",
-                background: "#16A34A", color: C.WHITE, fontWeight: 700, fontSize: 11,
-                letterSpacing: "0.02em", border: "none", outline: "none",
-              }}
-            >
-              <svg width="12" height="12" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
-                <rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.3"/>
-                <path d="M4 7l3 3 3-3M7 4v6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              Export Excel
-            </button>
+        {/* ── Right half: estimate evolution chart ── */}
+        <div style={{ minWidth: 0, borderLeft: `1px solid ${C.BDR}`, paddingLeft: 16, height: 250 }}>
+          <ModelEstimateChart
+            metrics={ESTIMATE_METRICS}
+            rowsByMetric={estimate.rowsByMetric}
+            years={estimate.years}
+            defaultMetric="NI"
+          />
+        </div>
+      </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: 0, border: `2px solid ${C.TXT}`, borderRadius: 6, overflow: "hidden" }}>
-              <span style={{ padding: "5px 14px", background: C.HDR, color: C.WHITE, fontWeight: 800, fontSize: 12, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-                Update
-              </span>
-              <select
-                value={selectedDate}
-                onChange={e => setSelectedDate(e.target.value)}
-                style={{ border: "none", padding: "5px 10px", fontSize: 13, ...MONO, background: C.WHITE, color: C.TXT, fontWeight: 700, cursor: "pointer", outline: "none", minWidth: 110 }}
-              >
-                {snapshots.map(s => (
-                  <option key={s.header.updateDate} value={s.header.updateDate}>
-                    {fmtDate(s.header.updateDate)}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+      {/* ── Actions: export + version (top-right, between panel and table) ── */}
+      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
 
-          {!isLatest && (
-            <button
-              onClick={() => setSelectedDate(snapshots[0].header.updateDate)}
-              style={{ padding: "3px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer", background: C.BLUE, color: C.WHITE, border: "none", borderRadius: 5, outline: "none" }}
-            >
-              ← Latest
-            </button>
-          )}
+        {!isLatest && (
+          <button
+            onClick={() => setSelectedDate(snapshots[0].header.updateDate)}
+            style={{ padding: "5px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer", background: C.BLUE, color: C.WHITE, border: "none", borderRadius: 5, outline: "none" }}
+          >
+            ← Latest
+          </button>
+        )}
+
+        <button
+          onClick={exportToExcel}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 5,
+            padding: "5px 12px", borderRadius: 5, cursor: "pointer",
+            background: "#16A34A", color: C.WHITE, fontWeight: 700, fontSize: 11,
+            letterSpacing: "0.02em", border: "none", outline: "none",
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
+            <rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.3"/>
+            <path d="M4 7l3 3 3-3M7 4v6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          Export Excel
+        </button>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 0, border: `2px solid ${C.TXT}`, borderRadius: 6, overflow: "hidden" }}>
+          <span style={{ padding: "5px 14px", background: C.HDR, color: C.WHITE, fontWeight: 800, fontSize: 12, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+            Update
+          </span>
+          <select
+            value={selectedDate}
+            onChange={e => setSelectedDate(e.target.value)}
+            style={{ border: "none", padding: "5px 10px", fontSize: 13, ...MONO, background: C.WHITE, color: C.TXT, fontWeight: 700, cursor: "pointer", outline: "none", minWidth: 110 }}
+          >
+            {snapshots.map(s => (
+              <option key={s.header.updateDate} value={s.header.updateDate}>
+                {fmtDate(s.header.updateDate)}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
