@@ -323,11 +323,6 @@ function ReccBadge({ recc }: { recc: string | null }) {
 }
 
 // ── KPI section helpers ────────────────────────────────────────────────────────
-function isMarginMetric(name: string): boolean {
-  const lc = name.toLowerCase();
-  return /\b(margin|yield|rate)\b/.test(lc) || lc.includes("%");
-}
-
 interface KpiSection {
   sectionName: string;
   kpis: { kpiName: string; kpiOrder: number; byYear: Map<number, number | null> }[];
@@ -677,9 +672,8 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
         ]);
 
         for (const { kpiName, byYear: kByYear } of kpis) {
-          const isMgn  = isMarginMetric(kpiName);
-          const hasPct = kpiName.includes("%");   // título con '%' → azul
-          const fmt: Fmt = isMgn ? "pct_plain" : "abs";
+          const hasPct = kpiName.includes("%");   // sólo '%' → azul + porcentaje
+          const fmt: Fmt = hasPct ? "pct_plain" : "abs";
 
           rows.push([
             xc(kpiName, { font: { bold: true, sz: 10, color: { rgb: hasPct ? "1D4ED8" : "111827" } }, fill: hasPct ? F_DRV : F_WHITE, alignment: { horizontal: "left" } }),
@@ -1033,9 +1027,8 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                     </tr>
 
                     {kpis.map(({ kpiName, byYear: kByYear }) => {
-                      const isMgn  = isMarginMetric(kpiName);
-                      const hasPct = kpiName.includes("%");   // título con '%' → azul
-                      const fmt: Fmt = isMgn ? "pct_plain" : "abs";
+                      const hasPct = kpiName.includes("%");   // sólo '%' → azul + porcentaje
+                      const fmt: Fmt = hasPct ? "pct_plain" : "abs";
 
                       return (
                         <tr

@@ -271,18 +271,6 @@ function ReccBadge({ recc }: { recc: string | null }) {
 }
 
 // ── KPI section helpers ────────────────────────────────────────────────────────
-function isVarMetric(name: string): boolean {
-  return /var/i.test(name);
-}
-function isPctMetric(name: string): boolean {
-  const lc = name.toLowerCase();
-  return /\b(margin|yield|rate)\b/.test(lc) || lc.includes("%");
-}
-function kpiFmt(name: string): Fmt {
-  if (isVarMetric(name) || isPctMetric(name)) return "pct";
-  return "money";
-}
-
 interface BankKpiSection {
   sectionName: string;
   kpis: { kpiName: string; kpiOrder: number; byYear: Map<number, number | null> }[];
@@ -612,19 +600,17 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
           ...Array.from({ length: years.length }, () => xc("", { fill: F_SUB })),
         ]);
         for (const { kpiName, byYear: kByYear } of kpis) {
-          const fmt   = kpiFmt(kpiName);
-          const isVar = isVarMetric(kpiName);
+          const hasPct = kpiName.includes("%");   // sólo '%' → azul + porcentaje
+          const fmt: Fmt = hasPct ? "pct" : "money";
           rows.push([
-            xc(kpiName, { font: { bold: !isVar, italic: isVar, sz: 10, color: { rgb: isVar ? "374151" : "111827" } }, fill: isVar ? F_DRV : F_WHITE, alignment: { horizontal: "left" } }),
+            xc(kpiName, { font: { bold: true, sz: 10, color: { rgb: hasPct ? "1D4ED8" : "111827" } }, fill: hasPct ? F_DRV : F_WHITE, alignment: { horizontal: "left" } }),
             ...years.map(yr => {
               const v = kByYear.get(yr) ?? null;
               const isEst = (byYear.get(yr)?.isEst) ?? false;
-              const r = renderCell(v, fmt, fmt === "pct" && isVar);
-              let fColor = "111827";
-              if (fmt === "pct" && isVar && v !== null) fColor = v > 0.0005 ? "1D4ED8" : v < -0.0005 ? "DC2626" : "374151";
-              return xc(r.text, {
-                font: { name: "Courier New", sz: 10, bold: !isVar, italic: isVar, color: { rgb: fColor } },
-                fill: isVar ? F_DRV : isEst ? F_EST : F_WHITE, alignment: { horizontal: "center" }, border: bdr(),
+              const { text } = renderCell(v, fmt, false);
+              return xc(text, {
+                font: { name: "Courier New", sz: 10, bold: true, color: { rgb: hasPct ? "1D4ED8" : "111827" } },
+                fill: hasPct ? F_DRV : isEst ? F_EST : F_WHITE, alignment: { horizontal: "center" }, border: bdr(),
               });
             }),
           ]);
@@ -900,8 +886,8 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
                     </tr>
 
                     {kpis.map(({ kpiName, kpiOrder, byYear: kByYear }) => {
-                      const fmt   = kpiFmt(kpiName);
-                      const isVar = isVarMetric(kpiName);
+                      const hasPct = kpiName.includes("%");   // sólo '%' → azul + porcentaje
+                      const fmt: Fmt = hasPct ? "pct" : "money";
                       return (
                         <tr
                           key={`kpi-${sectionName}-${kpiOrder}`}
@@ -910,27 +896,22 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
                           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ""; }}
                         >
                           <td style={{
-                            ...labelSticky, padding: CELL_PAD, paddingLeft: isVar ? 32 : 22,
-                            background: isVar ? C.DRV_BG : C.WHITE,
-                            color: isVar ? C.TXT2 : C.TXT,
-                            fontWeight: isVar ? 400 : 500,
-                            fontStyle: isVar ? "italic" : "normal",
-                            fontSize: isVar ? 10.5 : 11,
+                            ...labelSticky, padding: CELL_PAD, paddingLeft: 22,
+                            background: hasPct ? C.DRV_BG : C.WHITE,
+                            color: hasPct ? C.BLUE : C.TXT,
+                            fontWeight: 500, fontSize: 11,
                           }}>
                             {kpiName}
                           </td>
                           {years.map(yr => {
                             const v = kByYear.get(yr) ?? null;
                             const isEst = (byYear.get(yr)?.isEst) ?? false;
-                            const { text, color } = renderCell(v, fmt, fmt === "pct" && isVar);
-                            const cellBg = isVar ? C.DRV_BG : isEst ? C.EST_BG : C.WHITE;
+                            const { text, color } = renderCell(v, fmt, false);
                             return (
                               <td key={yr} style={{
                                 ...yearColW, padding: CELL_PAD, textAlign: "center",
-                                background: cellBg, color,
-                                fontWeight: isVar ? 400 : 600,
-                                fontStyle: isVar ? "italic" : "normal",
-                                fontSize: isVar ? 10.5 : 11,
+                                background: hasPct ? C.DRV_BG : isEst ? C.EST_BG : C.WHITE,
+                                color: hasPct ? C.BLUE : color, fontWeight: 600, fontSize: 11,
                                 borderLeft: `1px solid ${C.BDR}`, ...MONO,
                               }}>
                                 {text}

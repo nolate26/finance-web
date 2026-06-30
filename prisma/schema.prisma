@@ -632,15 +632,18 @@ model ModelHeader {
   recc       String?  @db.VarChar(10)
   tp         Float?
   analyst    String?  @db.VarChar(100)
-  currency   String?  @db.VarChar(50)    // ← NUEVO
-  thesis     String?  @db.Text           // ← NUEVO (Text para textos largos)
+  currency   String?  @db.VarChar(50)
+  unit       String?  @map("unit") @db.VarChar(20)   // ← NUEVO (D6)
+  thesis     String?  @db.Text
   link       String?  @db.VarChar(500)
-  
   financials ModelFinancials[]
-  kpis       ModelKPI[]                  // ← NUEVA RELACIÓN
+  kpis       ModelKPI[]
   @@id([ticker, updateDate])
   @@map("model_headers")
 }
+
+
+
 // ==========================================
 // MODELO ACTUALIZADO - ModelFinancials
 // ==========================================
@@ -650,6 +653,10 @@ model ModelFinancials {
   updateDate       DateTime @map("update_date") @db.Date
   year             Int
   
+  // FX (nuevos)
+  fxConsensus      Float?   @map("fx_consensus")     // ← NUEVO (fila 12)
+  fxEop            Float?   @map("fx_eop")           // ← NUEVO (fila 15)
+ 
   // Income Statement
   revenue          Float?
   ebit             Float?
