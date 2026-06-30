@@ -73,8 +73,11 @@ function enrich(financials: ModelFinancialRow[]): YearData[] {
   return financials.map(f => {
     const isEst        = f.year >= now;
     const effPrice     = f.sharePrice;
-    const effMarketCap = f.marketCap ??
+    const baseMarketCap = f.marketCap ??
       (f.sharePrice !== null && f.sharesOut !== null ? f.sharePrice * f.sharesOut : null);
+    // fxEop lleva el market cap a la moneda del modelo (no-op si es null) → arregla los
+    // múltiplos cuando el precio está en otra divisa que el modelo (ej. LTM: precio CLP, modelo USD).
+    const effMarketCap = baseMarketCap !== null ? baseMarketCap * (f.fxEop ?? 1) : null;
     return { ...f, isEst, effPrice, effMarketCap };
   });
 }
@@ -447,9 +450,11 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
     const add = (keys: string[], modelOf: (d: YearData) => number | null) => {
       for (const d of enriched) { model.push(modelOf(d)); cons.push(rawCon(keys, d.year)); }
     };
-    add(NI_KEYS,     d => d.netIncome);
-    add(REV_KEYS,    d => d.revenue);
-    add(EBITDA_KEYS, d => d.ebitda);
+    // Modelo convertido a la moneda del consenso (× fxConsensus) antes de detectar la escala,
+    // para que el detector mida sólo diferencia de escala (mn/000mn) y no de divisa.
+    add(NI_KEYS,     d => d.netIncome != null ? d.netIncome * (d.fxConsensus ?? 1) : null);
+    add(REV_KEYS,    d => d.revenue   != null ? d.revenue   * (d.fxConsensus ?? 1) : null);
+    add(EBITDA_KEYS, d => d.ebitda    != null ? d.ebitda    * (d.fxConsensus ?? 1) : null);
     return consensusScaleFactor(model, cons, 1000);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enriched, latestConsensus]);
@@ -623,8 +628,9 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
             let fFill  = isDerived ? F_DRV : isEst ? F_EST : F_WHITE;
 
             if (isVsCons && row.bbgKeys && row.modelFn) {
-              const bbg   = getConsensus(row.bbgKeys, yr);
-              const model = row.modelFn(d);
+              const bbg     = getConsensus(row.bbgKeys, yr);
+              const modelRaw = row.modelFn(d);
+              const model   = modelRaw !== null ? modelRaw * (d.fxConsensus ?? 1) : null;
               if (bbg !== null && model !== null && bbg !== 0) {
                 const v = (model - bbg) / Math.abs(bbg);
                 text   = fmtPct(v, false);
@@ -942,7 +948,8 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
 
                         if (isVsCons && row.bbgKeys && row.modelFn) {
                           const bbgVal   = getConsensus(row.bbgKeys, yr);
-                          const modelVal = row.modelFn(d);
+                          const modelRaw = row.modelFn(d);
+                          const modelVal = modelRaw !== null ? modelRaw * (d.fxConsensus ?? 1) : null;
                           if (bbgVal !== null && modelVal !== null && bbgVal !== 0) {
                             vsConsValue = (modelVal - bbgVal) / Math.abs(bbgVal);
                           }

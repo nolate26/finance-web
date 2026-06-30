@@ -53,6 +53,20 @@ function varPct(moneda: number | null, consensusRaw: number | null): number | nu
   return ((moneda - consensus) / Math.abs(consensus)) * 100;
 }
 
+// ── Unit scaling (DIFERIDO — pendiente de un modelo real con `unit`) ──────────────
+// `unit` (ModelHeader, ahora disponible en row.unit) declara cómo subió los números el
+// analista:  "mn" = millones · "000 mn" = miles de millones.
+// Hipótesis a confirmar con el primer ejemplo: "000 mn" ⇒ el consenso (en mn) se divide por
+// 1000;  "mn" ⇒ sin división. HOY la metodología vigente funciona (el server normaliza el
+// consenso a 1000× el modelo y el cliente divide por 1000 en fmtConNum/varPct), así que esto
+// NO se cablea todavía.
+// TODO: con un ejemplo subido, reemplazar el ÷1000 fijo por:
+//   const k = row.unit != null ? unitFactor(row.unit) : 1000;   // dividir el consenso por k
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function unitFactor(unit: string | null): number {
+  return unit === "000 mn" ? 1000 : 1;
+}
+
 function shortTicker(ticker: string): string {
   return ticker.replace(/ Equity$/i, "").trim();
 }

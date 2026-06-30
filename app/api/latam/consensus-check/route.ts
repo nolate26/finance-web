@@ -14,6 +14,7 @@ export interface ConsensusCheckRow {
   thesis:      string | null;
   country:    string | null;   // empresas_industrias_v2.country_risk (AR, BR, CL, …)
   industry:   string | null;   // empresas_industrias_v2.industria_gics
+  unit:        string | null;  // ModelHeader.unit ("mn" | "000 mn"); null para bancos
   moneda: {
     rev1FY:    number | null;
     rev2FY:    number | null;
@@ -57,6 +58,11 @@ function consensusScaleFactor(moneda: (number | null)[], consensus: (number | nu
   return 1;
 }
 
+// Modelo → moneda del consenso: multiplica por el fx del analista (no-op si es null).
+// El sentido (fx o 1/fx) lo decide el analista; acá sólo multiplicamos.
+const applyFx = (v: number | null | undefined, fx: number | null | undefined): number | null =>
+  v == null ? null : v * (fx ?? 1);
+
 function scaledConsensus(
   moneda: ConsensusCheckRow["moneda"],
   raw:    ConsensusCheckRow["consensus"],
@@ -83,7 +89,7 @@ export async function GET() {
       prisma.modelHeader.findMany({
         distinct: ["ticker"],
         orderBy:  { updateDate: "desc" },
-        select:   { ticker: true, updateDate: true, analyst: true, recc: true, tp: true, thesis: true },
+        select:   { ticker: true, updateDate: true, analyst: true, recc: true, tp: true, thesis: true, unit: true },
       }),
       prisma.bankHeader.findMany({
         distinct: ["ticker"],
@@ -117,9 +123,9 @@ export async function GET() {
                 ticker: h.ticker, updateDate: h.updateDate, year: { in: [year1FY, year2FY] },
               })),
             },
-            select: { ticker: true, year: true, revenue: true, ebitda: true, netIncome: true, sharePrice: true },
+            select: { ticker: true, year: true, fxConsensus: true, revenue: true, ebitda: true, netIncome: true, sharePrice: true },
           })
-        : Promise.resolve([] as { ticker: string; year: number; revenue: number | null; ebitda: number | null; netIncome: number | null; sharePrice: number | null }[]),
+        : Promise.resolve([] as { ticker: string; year: number; fxConsensus: number | null; revenue: number | null; ebitda: number | null; netIncome: number | null; sharePrice: number | null }[]),
       latestBankHeaders.length
         ? prisma.bankFinancials.findMany({
             where: {
@@ -168,14 +174,16 @@ export async function GET() {
     }
     const eiFor = (ticker: string) => eiMap.get(ticker.toUpperCase()) ?? { country: null, industry: null };
 
-    // financials: (ticker, year) → company model values (already in consensus/1000 scale)
-    const finMap = new Map<string, { revenue: number | null; ebitda: number | null; netIncome: number | null; sharePrice: number | null }>();
+    // financials: (ticker, year) → company model values (already in consensus/1000 scale).
+    // fxConsensus convierte la moneda del modelo a la del consenso (no-op si es null).
+    const finMap = new Map<string, { revenue: number | null; ebitda: number | null; netIncome: number | null; sharePrice: number | null; fxConsensus: number | null }>();
     for (const f of financials) {
       finMap.set(`${f.ticker}::${f.year}`, {
-        revenue:    f.revenue    ?? null,
-        ebitda:     f.ebitda     ?? null,
-        netIncome:  f.netIncome  ?? null,
-        sharePrice: f.sharePrice ?? null,
+        revenue:     f.revenue     ?? null,
+        ebitda:      f.ebitda      ?? null,
+        netIncome:   f.netIncome   ?? null,
+        sharePrice:  f.sharePrice  ?? null,
+        fxConsensus: f.fxConsensus ?? null,
       });
     }
 
@@ -213,13 +221,16 @@ export async function GET() {
       const upside      = tp && price      ? tp / price      - 1 : null;  // vs precio actual
       const upsideModel = tp && modelPrice ? tp / modelPrice - 1 : null;  // upside del analista al hacer el modelo
 
+      // Moneda convertida a la moneda del consenso (× fxConsensus por año). El detector de
+      // escala (scaledConsensus) corre sobre la moneda ya convertida → alinea bien cualquier
+      // divisa, no sólo las ≈1000× (CLP).
       const moneda = {
-        rev1FY:    fin1?.revenue   ?? null,
-        rev2FY:    fin2?.revenue   ?? null,
-        ebitda1FY: fin1?.ebitda    ?? null,
-        ebitda2FY: fin2?.ebitda    ?? null,
-        ni1FY:     fin1?.netIncome ?? null,
-        ni2FY:     fin2?.netIncome ?? null,
+        rev1FY:    applyFx(fin1?.revenue,   fin1?.fxConsensus),
+        rev2FY:    applyFx(fin2?.revenue,   fin2?.fxConsensus),
+        ebitda1FY: applyFx(fin1?.ebitda,    fin1?.fxConsensus),
+        ebitda2FY: applyFx(fin2?.ebitda,    fin2?.fxConsensus),
+        ni1FY:     applyFx(fin1?.netIncome, fin1?.fxConsensus),
+        ni2FY:     applyFx(fin2?.netIncome, fin2?.fxConsensus),
       };
       const rawConsensus = {
         rev1FY:    getCon("REVENUE",    String(year1FY)),
@@ -240,6 +251,7 @@ export async function GET() {
         upsideModel,
         thesis:     h.thesis ?? null,
         ...eiFor(h.ticker),
+        unit:       h.unit ?? null,
         moneda,
         consensus: scaledConsensus(moneda, rawConsensus),
       };
@@ -288,6 +300,7 @@ export async function GET() {
         upsideModel,
         thesis:     h.thesis ?? null,
         ...eiFor(h.ticker),
+        unit:       null,   // los bancos no tienen columna unit
         moneda,
         consensus: scaledConsensus(moneda, rawConsensus),
       };

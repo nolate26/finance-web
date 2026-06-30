@@ -58,6 +58,7 @@ export interface SsV1Company {
   equityN:     number | null;
   equityN4:    number | null;
   minorityN:   number | null;
+  minorityN4:  number | null;
 
   // Proyecciones (moneda projCurrency, millones)
   ebitda2026E:   number | null;
@@ -73,11 +74,16 @@ export interface SsV1Company {
   tp:      number | null;    // target price, moneda del listado (sin conv)
 }
 
+export interface SsV1Period { fy: number; q: number; label: string; }
+
 export interface SsV1Payload {
   withPrices: boolean;
   periodN:    string | null;
   periodN4:   string | null;
   ltmLabels:  string[];
+  periods:    SsV1Period[]; // quarters disponibles (desc), para el selector
+  selFy:      number;       // período n activo
+  selQ:       number;
   companies:  SsV1Company[];
 }
 
@@ -164,6 +170,8 @@ interface ResolvedName { tickerBBG: string | null; yahoo: string | null; industr
 
 export async function GET(request: NextRequest) {
   const withPrices = request.nextUrl.searchParams.get("withPrices") === "true";
+  const fyParam = request.nextUrl.searchParams.get("fy");
+  const qParam = request.nextUrl.searchParams.get("q");
 
   try {
     const [ssRows, projRows, empresas, isins, recRows] = await Promise.all([
@@ -246,14 +254,26 @@ export async function GET(request: NextRequest) {
     }
     const recOf = (bbg: string | null | undefined): RecInfo | null => (bbg ? recByBbg.get(bbg.toUpperCase()) ?? null : null);
 
-    // ── Periodo n ─────────────────────────────────────────────────────────────
-    let maxFy = 0, maxQ = 0;
-    for (const r of ssRows) if (r.fiscalYear > maxFy || (r.fiscalYear === maxFy && r.quarter > maxQ)) { maxFy = r.fiscalYear; maxQ = r.quarter; }
+    // ── Periodo n (seleccionable vía ?fy=&q=) ─────────────────────────────────
     const qKey = (fy: number, q: number) => fy * 10 + q;
-    const nKey = qKey(maxFy, maxQ), n4Key = qKey(maxFy - 1, maxQ);
-    const ltmKeys: number[] = []; { let f = maxFy, q = maxQ; for (let i = 0; i < 4; i++) { ltmKeys.push(qKey(f, q)); q--; if (q === 0) { q = 4; f--; } } }
     const labelOf = (fy: number, q: number) => `${q}Q ${fy}`;
-    const ltmLabels = (() => { const o: string[] = []; let f = maxFy, q = maxQ; for (let i = 0; i < 4; i++) { o.push(labelOf(f, q)); q--; if (q === 0) { q = 4; f--; } } return o.reverse(); })();
+
+    // Quarters presentes en los datos (desc) → para el selector del front.
+    const periodMap = new Map<number, { fy: number; q: number }>();
+    for (const r of ssRows) { const k = qKey(r.fiscalYear, r.quarter); if (!periodMap.has(k)) periodMap.set(k, { fy: r.fiscalYear, q: r.quarter }); }
+    const periods = [...periodMap.values()]
+      .sort((a, b) => qKey(b.fy, b.q) - qKey(a.fy, a.q))
+      .map((p) => ({ fy: p.fy, q: p.q, label: labelOf(p.fy, p.q) }));
+
+    // n = el quarter pedido (si existe en los datos), si no el más reciente.
+    let selFy = periods[0]?.fy ?? 0, selQ = periods[0]?.q ?? 0;
+    if (fyParam && qParam) {
+      const fy = parseInt(fyParam, 10), q = parseInt(qParam, 10);
+      if (Number.isFinite(fy) && Number.isFinite(q) && periodMap.has(qKey(fy, q))) { selFy = fy; selQ = q; }
+    }
+    const nKey = qKey(selFy, selQ), n4Key = qKey(selFy - 1, selQ);
+    const ltmKeys: number[] = []; { let f = selFy, q = selQ; for (let i = 0; i < 4; i++) { ltmKeys.push(qKey(f, q)); q--; if (q === 0) { q = 4; f--; } } }
+    const ltmLabels = (() => { const o: string[] = []; let f = selFy, q = selQ; for (let i = 0; i < 4; i++) { o.push(labelOf(f, q)); q--; if (q === 0) { q = 4; f--; } } return o.reverse(); })();
 
     // ── Fundamentales (serie TOTAL) + shares por serie ────────────────────────
     interface Fund { currency: "CLP" | "USD"; metrics: Map<string, Map<number, number>>; sharesSeries: Map<string, Map<number, number>>; }
@@ -348,7 +368,8 @@ export async function GET(request: NextRequest) {
         utilidadN: at(f, "utilidad", nKey), utilidadN4: at(f, "utilidad", n4Key), utilidadLtm: ltmSum(f, "utilidad"),
         revenueLtm: ltmSum(f, "revenue"), ebitLtm: ltmSum(f, "ebit"),
         debtN: at(f, "debt", nKey), debtN4: at(f, "debt", n4Key),
-        equityN: at(f, "equity", nKey), equityN4: at(f, "equity", n4Key), minorityN: at(f, "minority_interest", nKey),
+        equityN: at(f, "equity", nKey), equityN4: at(f, "equity", n4Key),
+        minorityN: at(f, "minority_interest", nKey), minorityN4: at(f, "minority_interest", n4Key),
         ebitda2026E: projYear(pick, "ebitda", 2026), ebitda2027E: projYear(pick, "ebitda", 2027),
         utilidad2026E: projYear(pick, "utilidad", 2026), utilidad2027E: projYear(pick, "utilidad", 2027),
         divLabel: pick?.div ?? null, payout: pick?.pool_div ?? null,
@@ -371,9 +392,9 @@ export async function GET(request: NextRequest) {
 
     const payload: SsV1Payload = {
       withPrices,
-      periodN: maxFy ? labelOf(maxFy, maxQ) : null,
-      periodN4: maxFy ? labelOf(maxFy - 1, maxQ) : null,
-      ltmLabels, companies,
+      periodN: selFy ? labelOf(selFy, selQ) : null,
+      periodN4: selFy ? labelOf(selFy - 1, selQ) : null,
+      ltmLabels, periods, selFy, selQ, companies,
     };
     return NextResponse.json(payload);
   } catch (e) {

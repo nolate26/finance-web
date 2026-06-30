@@ -6,6 +6,8 @@ export const dynamic = "force-dynamic";
 // ── Types ──────────────────────────────────────────────────────────────────────
 export interface ModelFinancialRow {
   year:          number;
+  fxConsensus:   number | null;   // model → consensus currency (per year)
+  fxEop:         number | null;   // market cap → model currency (per year, hist + proj)
   revenue:       number | null;
   ebit:          number | null;
   taxRate:       number | null;
@@ -42,6 +44,7 @@ export interface ModelHeaderSnap {
   analyst:    string | null;
   link:       string | null;
   currency:   string | null;
+  unit:       string | null;   // "mn" | "000 mn" — analyst's number scale
   thesis:     string | null;
 }
 
@@ -71,7 +74,8 @@ export interface ModelPayload {
 
 // ── Helper ─────────────────────────────────────────────────────────────────────
 function mapRow(r: {
-  year: number; revenue: number | null; ebit: number | null; taxRate: number | null;
+  year: number; fxConsensus: number | null; fxEop: number | null;
+  revenue: number | null; ebit: number | null; taxRate: number | null;
   da: number | null; ebitda: number | null; netFinExp: number | null;
   taxes: number | null; netIncome: number | null;
   eps: number | null; sharesOut: number | null; netDebt: number | null; minorities: number | null;
@@ -83,6 +87,8 @@ function mapRow(r: {
 }): ModelFinancialRow {
   return {
     year:           r.year,
+    fxConsensus:    r.fxConsensus    ?? null,
+    fxEop:          r.fxEop          ?? null,
     revenue:        r.revenue        ?? null,
     ebit:           r.ebit           ?? null,
     taxRate:        r.taxRate        ?? null,
@@ -134,11 +140,13 @@ export async function GET(
         analyst:    true,
         link:       true,
         currency:   true,
+        unit:       true,
         thesis:     true,
         financials: {
           orderBy: { year: "asc" },
           select: {
-            year: true, revenue: true, ebit: true, taxRate: true, da: true,
+            year: true, fxConsensus: true, fxEop: true,
+            revenue: true, ebit: true, taxRate: true, da: true,
             ebitda: true, netFinExp: true, taxes: true, netIncome: true, eps: true,
             sharesOut: true, netDebt: true, minorities: true, controllingEq: true,
             tangibleEq: true, ppe: true, workingCapital: true, fcf: true, capex: true,
@@ -165,6 +173,7 @@ export async function GET(
         analyst:    h.analyst  ?? null,
         link:       h.link     ?? null,
         currency:   h.currency ?? null,
+        unit:       h.unit     ?? null,
         thesis:     h.thesis   ?? null,
       },
       financials: h.financials.map(mapRow),
