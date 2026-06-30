@@ -321,6 +321,7 @@ export async function POST(request: Request) {
             tp:       header.tp,
             analyst:  header.analyst,
             currency: header.currency,  // ← NUEVO
+            unit:     header.unit,        // ← NUEVO
             thesis:   header.thesis,    // ← NUEVO
             link:     header.link
           },
@@ -331,6 +332,7 @@ export async function POST(request: Request) {
             tp:         header.tp,
             analyst:    header.analyst,
             currency:   header.currency,  // ← NUEVO
+            unit:       header.unit,        // ← NUEVO
             thesis:     header.thesis,    // ← NUEVO
             link:       header.link
           }
