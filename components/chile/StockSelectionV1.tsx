@@ -220,8 +220,13 @@ interface ColDef {
   sortVal?: (r: DisplayRow) => number | string | null;
   align?: "left" | "right" | "center";
 }
-interface Group { title: string; accent: string; cols: ColDef[] }
+interface Group { id: string; title: string; accent: string; cols: ColDef[]; collapsible?: boolean; primary?: string }
 const num = (id: string) => (r: DisplayRow) => r.v[id];
+// columnas visibles de un grupo: si es colapsable y está cerrado → solo la "primary" (o la 1ª)
+const visibleCols = (g: Group, expanded: Set<string>): ColDef[] =>
+  g.collapsible && !expanded.has(g.id)
+    ? [g.cols.find((c) => c.id === g.primary) ?? g.cols[0]]
+    : g.cols;
 
 function buildGroups(periodN: string | null, periodN4: string | null): Group[] {
   const retCol = (id: string, label: string): ColDef => ({
@@ -248,32 +253,32 @@ function buildGroups(periodN: string | null, periodN4: string | null): Group[] {
   });
 
   return [
-    { title: "Precios y Retornos", accent: "#0EA5E9", cols: [
+    { id: "precRet", title: "Precios y Retornos", accent: "#0EA5E9", cols: [
       { id: "price", label: "Precio", align: "right", sortVal: num("price"), render: (r) => ({ text: fmtPrice(r.v.price), color: TEXT1, weight: 600 }) },
       retCol("retMonth", "Mes"), retCol("retYtd", "YTD"), retCol("retYear", "Año"), retCol("ret3y", "L3Y"), retCol("ret5y", "L5Y"),
     ] },
-    { title: "Tamaño / EV (USD mn)", accent: "#475569", cols: [mnCol("mcap", "M.Cap"), mnCol("dn", "DN"), mnCol("fv", "FV", TEXT1)] },
-    { title: `EBITDA ${periodN4 ?? "n-4"} → ${periodN ?? "n"} (USD mn)`, accent: "#0D9488", cols: [mnCol("ebitdaN4", "Ac-1"), mnCol("ebitdaN", "Ac"), varCol("ebitdaVar", "Var%")] },
-    { title: `Utilidad ${periodN4 ?? "n-4"} → ${periodN ?? "n"} (USD mn)`, accent: "#9333EA", cols: [mnCol("utilidadN4", "Ac-1"), mnCol("utilidadN", "Ac"), varCol("utilVar", "Var%")] },
-    { title: "EBITDA (USD mn)", accent: "#0D9488", cols: [mnCol("ebitdaLtmUsd", "LTM"), mnCol("ebitda26Usd", "2026E"), mnCol("ebitda27Usd", "2027E")] },
-    { title: "FV/EBITDA", accent: BLUE, cols: [xCol("fvEbitdaLtm", "LTM"), xCol("fvEbitda26", "2026E"), xCol("fvEbitda27", "2027E")] },
-    { title: "Utilidad (USD mn)", accent: "#9333EA", cols: [mnCol("utilLtmUsd", "LTM"), mnCol("util26Usd", "2026E"), mnCol("util27Usd", "2027E")] },
-    { title: "P/U", accent: VIOLET, cols: [puCol("puLtm", "LTM", "utilLtmUsd"), puCol("pu26", "2026E", "util26Usd"), puCol("pu27", "2027E", "util27Usd")] },
-    { title: "Otros múltiplos", accent: "#475569", cols: [
+    { id: "size", title: "Tamaño / EV (USD mn)", accent: "#475569", cols: [mnCol("mcap", "M.Cap"), mnCol("dn", "DN"), mnCol("fv", "FV", TEXT1)] },
+    { id: "ebitdaRep", title: `EBITDA ${periodN4 ?? "n-4"} → ${periodN ?? "n"} (USD mn)`, accent: "#0D9488", collapsible: true, primary: "ebitdaVar", cols: [mnCol("ebitdaN4", "Ac-1"), mnCol("ebitdaN", "Ac"), varCol("ebitdaVar", "Var%")] },
+    { id: "utilRep", title: `Utilidad ${periodN4 ?? "n-4"} → ${periodN ?? "n"} (USD mn)`, accent: "#9333EA", collapsible: true, primary: "utilVar", cols: [mnCol("utilidadN4", "Ac-1"), mnCol("utilidadN", "Ac"), varCol("utilVar", "Var%")] },
+    { id: "ebitdaUsd", title: "EBITDA (USD mn)", accent: "#0D9488", collapsible: true, primary: "ebitdaLtmUsd", cols: [mnCol("ebitdaLtmUsd", "LTM"), mnCol("ebitda26Usd", "2026E"), mnCol("ebitda27Usd", "2027E")] },
+    { id: "fvEbitda", title: "FV/EBITDA", accent: BLUE, collapsible: true, primary: "fvEbitda26", cols: [xCol("fvEbitdaLtm", "LTM"), xCol("fvEbitda26", "2026E"), xCol("fvEbitda27", "2027E")] },
+    { id: "utilUsd", title: "Utilidad (USD mn)", accent: "#9333EA", collapsible: true, primary: "utilLtmUsd", cols: [mnCol("utilLtmUsd", "LTM"), mnCol("util26Usd", "2026E"), mnCol("util27Usd", "2027E")] },
+    { id: "pu", title: "P/U", accent: VIOLET, collapsible: true, primary: "pu26", cols: [puCol("puLtm", "LTM", "utilLtmUsd"), puCol("pu26", "2026E", "util26Usd"), puCol("pu27", "2027E", "util27Usd")] },
+    { id: "otros", title: "Otros múltiplos", accent: "#475569", collapsible: true, primary: "pbv", cols: [
       xCol("pbv", "P/BV", "#475569"),
       { id: "roeLtm", label: "ROE LTM", align: "right", sortVal: num("roeLtm"), render: (r) => ({ text: roePct(r.v.roeLtm), color: TEXT1 }) },
       { id: "roe26", label: "ROE 26E", align: "right", sortVal: num("roe26"), render: (r) => ({ text: roePct(r.v.roe26), color: TEXT1 }) },
       xCol("fvs", "FV/S", "#475569"),
     ] },
-    { title: "Dividendos", accent: AMBER, cols: [
+    { id: "div", title: "Dividendos", accent: AMBER, collapsible: true, primary: "divYield", cols: [
       { id: "polDiv", label: "Pol Div", align: "right", sortVal: (r) => r.payout, render: (r) => ({ text: r.payout != null ? (r.payout * 100).toFixed(0) + "%" : "—", color: r.payout != null ? TEXT2 : TEXT3 }) },
       { id: "divYield", label: "Yield 26E", align: "right", sortVal: num("divYield"), render: (r) => ({ text: yld(r.v.divYield), color: AMBER, weight: 600 }) },
     ] },
-    { title: "Retorno s/ capital", accent: "#0D9488", cols: [
+    { id: "roicG", title: "Retorno s/ capital", accent: "#0D9488", collapsible: true, primary: "roic", cols: [
       { id: "roic", label: "ROIC LTM", align: "right", sortVal: num("roic"), render: (r) => ({ text: roePct(r.v.roic), color: TEXT1 }) },
       xCol("fvic", "FV/IC", "#475569"),
     ] },
-    { title: "Recomendación", accent: "#334155", cols: [
+    { id: "rec", title: "Recomendación", accent: "#334155", collapsible: true, primary: "rec", cols: [
       { id: "rec", label: "Rec.", align: "left", sortVal: (r) => r.rec, render: (r) => recCell(r.rec) },
       { id: "recDate", label: "Date", align: "center", sortVal: (r) => r.recDate, render: (r) => ({ text: fmtDate(r.recDate), color: r.recDate ? TEXT2 : TEXT3 }) },
       { id: "tp", label: "TP", align: "right", sortVal: (r) => r.tp, render: (r) => ({ text: r.tp != null ? fmtPrice(r.tp) : "—", color: r.tp != null ? TEXT1 : TEXT3, weight: 600 }) },
@@ -295,7 +300,10 @@ export default function StockSelectionV1() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [showMethod, setShowMethod] = useState(true);
   const [selPeriod, setSelPeriod] = useState<string | null>(null); // "fy-q"; null = más reciente
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set()); // grupos colapsables abiertos
   const fixedMode = sortKey === FIXED_KEY;
+  const toggleGroup = (id: string) =>
+    setExpandedGroups((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
   const load = useCallback((withPrices: boolean, periodKey: string | null) => {
     if (withPrices) setPricesLoading(true); else setLoading(true);
@@ -437,11 +445,11 @@ export default function StockSelectionV1() {
 
   const renderCells = (r: DisplayRow, topBorder = false) =>
     groupDefs.map((g) =>
-      g.cols.map((col, i) => {
+      visibleCols(g, expandedGroups).map((col, i) => {
         const out = col.render(r);
         return (
           <td key={col.id}
-            style={{ padding: r.kind === "series" ? "5px 10px" : "8px 10px", textAlign: col.align ?? "right", fontFamily: "JetBrains Mono, monospace", fontSize: r.kind === "series" ? 11 : 11.5, color: out.color ?? TEXT1, fontWeight: out.weight ?? 400, borderBottom: `1px solid ${BORDER}`, borderTop: topBorder ? SECTION_BORDER : undefined, borderLeft: i === 0 ? `1px solid ${BORDER}` : "none", whiteSpace: "nowrap", opacity: r.kind === "series" ? 0.92 : 1 }}>
+            style={{ padding: r.kind === "series" ? "3px 6px" : "5px 6px", textAlign: col.align ?? "right", fontFamily: "JetBrains Mono, monospace", fontSize: r.kind === "series" ? 10 : 10.5, color: out.color ?? TEXT1, fontWeight: out.weight ?? 400, borderBottom: `1px solid ${BORDER}`, borderTop: topBorder ? SECTION_BORDER : undefined, borderLeft: i === 0 ? `1px solid ${BORDER}` : "none", whiteSpace: "nowrap", opacity: r.kind === "series" ? 0.92 : 1 }}>
             {out.text}
           </td>
         );
@@ -502,26 +510,36 @@ export default function StockSelectionV1() {
         </div>
       )}
 
+      <div style={{ fontSize: 10.5, color: TEXT3, marginBottom: 6 }}>
+        Los grupos con <span style={{ color: TEXT2, fontWeight: 700 }}>▸</span> muestran 1 columna — clic en el encabezado para desplegar el resto.
+      </div>
+
       {/* Tabla */}
       <div style={{ overflowX: "auto", border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 1px 4px rgba(15,23,42,0.06)" }}>
-        <table style={{ borderCollapse: "collapse", fontSize: 12, minWidth: 1600 }}>
+        <table style={{ borderCollapse: "collapse", fontSize: 11 }}>
           <thead>
             <tr style={{ background: "#F0F4FA" }}>
               <th style={{ ...stickyTh, top: 0, zIndex: 6 }} rowSpan={2}>Empresa</th>
-              {groupDefs.map((g) => (
-                <th key={g.title} colSpan={g.cols.length}
-                  style={{ padding: "6px 10px", textAlign: "center", fontSize: 10, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: g.accent, borderBottom: `1px solid ${BORDER}`, borderLeft: `1px solid ${BORDER}`, whiteSpace: "nowrap", background: "#F0F4FA" }}>
-                  {g.title}
-                </th>
-              ))}
+              {groupDefs.map((g) => {
+                const open = !g.collapsible || expandedGroups.has(g.id);
+                return (
+                  <th key={g.id} colSpan={visibleCols(g, expandedGroups).length}
+                    onClick={() => g.collapsible && toggleGroup(g.id)}
+                    title={g.collapsible ? (open ? "Contraer" : "Desplegar columnas") : undefined}
+                    style={{ padding: "4px 6px", textAlign: "center", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: g.accent, borderBottom: `1px solid ${BORDER}`, borderLeft: `1px solid ${BORDER}`, whiteSpace: "nowrap", background: "#F0F4FA", cursor: g.collapsible ? "pointer" : "default", userSelect: "none" }}>
+                    {g.collapsible && <span style={{ fontSize: 8, marginRight: 3, opacity: 0.6 }}>{open ? "▾" : "▸"}</span>}
+                    {g.title}
+                  </th>
+                );
+              })}
             </tr>
             <tr style={{ background: "#F0F4FA" }}>
               {groupDefs.map((g) =>
-                g.cols.map((col, i) => {
+                visibleCols(g, expandedGroups).map((col, i) => {
                   const active = sortKey === col.id;
                   return (
                     <th key={col.id} onClick={() => col.sortVal && sortBy(col.id)}
-                      style={{ padding: "7px 10px", textAlign: col.align ?? "right", fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: active ? BLUE : TEXT2, borderBottom: `1px solid ${BORDER}`, borderLeft: i === 0 ? `1px solid ${BORDER}` : "none", whiteSpace: "nowrap", cursor: col.sortVal ? "pointer" : "default", userSelect: "none", background: "#F0F4FA" }}>
+                      style={{ padding: "4px 6px", textAlign: col.align ?? "right", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", color: active ? BLUE : TEXT2, borderBottom: `1px solid ${BORDER}`, borderLeft: i === 0 ? `1px solid ${BORDER}` : "none", whiteSpace: "nowrap", cursor: col.sortVal ? "pointer" : "default", userSelect: "none", background: "#F0F4FA" }}>
                       {col.label}{col.sortVal && <span style={{ fontSize: 9, opacity: active ? 1 : 0.35, marginLeft: 2 }}>{active ? (sortDir === "asc" ? "▲" : "▼") : "↕"}</span>}
                     </th>
                   );
@@ -539,21 +557,21 @@ export default function StockSelectionV1() {
                 const bg = gi % 2 === 0 ? "#fff" : "rgba(248,250,255,0.6)";
                 return (
                   <tr key={`${r.company}-${r.label || "cons"}`} style={{ background: isSeries ? "rgba(248,250,255,0.85)" : bg }}>
-                    <td style={{ ...stickyTd, borderTop: topBorder ? SECTION_BORDER : undefined, background: isSeries ? "#F4F8FF" : (gi % 2 === 0 ? "#fff" : "#F6F9FF"), paddingLeft: isSeries ? 26 : 12 }}>
+                    <td style={{ ...stickyTd, borderTop: topBorder ? SECTION_BORDER : undefined, background: isSeries ? "#F4F8FF" : (gi % 2 === 0 ? "#fff" : "#F6F9FF"), paddingLeft: isSeries ? 18 : 8 }}>
                       {isSeries ? (
                         <>
-                          <div style={{ fontSize: 11, fontWeight: 600, color: TEXT2, whiteSpace: "nowrap" }}>
+                          <div style={{ fontSize: 10, fontWeight: 600, color: TEXT2, whiteSpace: "nowrap" }}>
                             <span style={{ color: TEXT3 }}>↳</span> Serie {r.label}
                           </div>
-                          <div style={{ fontSize: 9.5, color: TEXT3, fontFamily: "JetBrains Mono, monospace", whiteSpace: "nowrap" }}>{r.seriesBBG ?? "—"}</div>
+                          <div style={{ fontSize: 9, color: TEXT3, fontFamily: "JetBrains Mono, monospace", whiteSpace: "nowrap" }}>{r.seriesBBG ?? "—"}</div>
                         </>
                       ) : (
                         <>
-                          <div style={{ fontWeight: 600, color: TEXT1, whiteSpace: "nowrap" }}>
+                          <div style={{ fontSize: 11, fontWeight: 600, color: TEXT1, whiteSpace: "nowrap" }}>
                             {r.company}
                             {r.kind === "consolidated" && <span style={consBadge}>consol.</span>}
                           </div>
-                          <div style={{ fontSize: 10, color: TEXT3, fontFamily: "JetBrains Mono, monospace", whiteSpace: "nowrap" }}>
+                          <div style={{ fontSize: 9, color: TEXT3, fontFamily: "JetBrains Mono, monospace", whiteSpace: "nowrap" }}>
                             {r.tickerBBG ?? "—"}<span style={ccyBadge(r.ssCurrency)}>{r.ssCurrency}</span>
                           </div>
                         </>
@@ -565,7 +583,7 @@ export default function StockSelectionV1() {
               });
             })}
             {groups.length === 0 && (
-              <tr><td colSpan={1 + allCols.length} style={{ textAlign: "center", padding: 32, color: TEXT3, fontSize: 13 }}>Sin empresas para los filtros actuales.</td></tr>
+              <tr><td colSpan={1 + groupDefs.reduce((n, g) => n + visibleCols(g, expandedGroups).length, 0)} style={{ textAlign: "center", padding: 32, color: TEXT3, fontSize: 13 }}>Sin empresas para los filtros actuales.</td></tr>
             )}
           </tbody>
         </table>
@@ -604,8 +622,8 @@ export default function StockSelectionV1() {
 }
 
 // ── Style helpers ────────────────────────────────────────────────────────────────
-const stickyTh: React.CSSProperties = { position: "sticky", left: 0, padding: "7px 12px", textAlign: "left", fontSize: 10, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: TEXT2, background: "#F0F4FA", borderBottom: `1px solid ${BORDER}`, borderRight: `1px solid ${BORDER}`, whiteSpace: "nowrap" };
-const stickyTd: React.CSSProperties = { position: "sticky", left: 0, zIndex: 1, padding: "8px 12px", borderBottom: `1px solid ${BORDER}`, borderRight: `1px solid ${BORDER}`, verticalAlign: "middle" };
+const stickyTh: React.CSSProperties = { position: "sticky", left: 0, padding: "4px 8px", textAlign: "left", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: TEXT2, background: "#F0F4FA", borderBottom: `1px solid ${BORDER}`, borderRight: `1px solid ${BORDER}`, whiteSpace: "nowrap" };
+const stickyTd: React.CSSProperties = { position: "sticky", left: 0, zIndex: 1, padding: "4px 8px", borderBottom: `1px solid ${BORDER}`, borderRight: `1px solid ${BORDER}`, verticalAlign: "middle" };
 const retryBtn: React.CSSProperties = { marginTop: 10, padding: "6px 16px", borderRadius: 6, background: "rgba(43,92,224,0.08)", border: "1px solid rgba(43,92,224,0.20)", color: BLUE, cursor: "pointer", fontSize: 13 };
 const ccyBadge = (ccy: "CLP" | "USD"): React.CSSProperties => ({ marginLeft: 5, fontSize: 9, fontWeight: 700, color: ccy === "USD" ? "#B45309" : TEXT3, background: ccy === "USD" ? "rgba(180,83,9,0.12)" : "rgba(100,116,139,0.10)", borderRadius: 4, padding: "1px 4px" });
 const consBadge: React.CSSProperties = { marginLeft: 6, fontSize: 8.5, fontWeight: 700, color: BLUE, background: "rgba(43,92,224,0.10)", borderRadius: 4, padding: "1px 5px", textTransform: "uppercase", letterSpacing: "0.04em" };
