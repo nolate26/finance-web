@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
-import { Loader2, Search, X, ChevronDown, Mail, ExternalLink } from "lucide-react";
+import { useEffect, useState, useMemo, useRef } from "react";
+import { Loader2, Search, X, ChevronDown, Mail, ExternalLink, Copy, Check, Send } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -26,6 +26,12 @@ interface Filters {
   industries: string[];
 }
 
+interface ResearchTicker {
+  ticker:   string;
+  name:     string;
+  industry: string;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatDate(iso: string): string {
@@ -33,6 +39,21 @@ function formatDate(iso: string): string {
   return new Date(y, m - 1, d).toLocaleDateString("en-US", {
     day: "2-digit", month: "short", year: "numeric",
   });
+}
+
+// Local "today" as an ISO yyyy-mm-dd string (avoids UTC off-by-one).
+function todayISO(): string {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+// yyyy-mm-dd → dd-mm-yyyy (the subject-line date format).
+function isoToDMY(iso: string): string {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  return `${d}-${m}-${y}`;
 }
 
 function senderName(from: string | null): string {
@@ -376,6 +397,305 @@ function NoteRow({ r, zebra, onClick }: { r: ResearchRecord; zebra: boolean; onC
   );
 }
 
+// ── Subject composer ────────────────────────────────────────────────────────────
+
+const SUBJECT_EMAIL = "equitiesmoneda@patria.com";
+const TYPE_OPTIONS  = ["Meetings", "Update", "Case", "Earnings", "Sellside", "Other"] as const;
+const REC_OPTIONS   = ["", "BUY", "SELL", "HOLD"] as const;
+
+// Searchable multi-select for BBG tickers.
+function TickerPicker({
+  universe, selected, onChange,
+}: {
+  universe: ResearchTicker[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open,  setOpen]  = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  // Close the dropdown on outside click.
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, []);
+
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const chosen = new Set(selected);
+    return universe
+      .filter((t) => !chosen.has(t.ticker))
+      .filter((t) => !q || t.ticker.toLowerCase().includes(q) || t.name.toLowerCase().includes(q))
+      .slice(0, 8);
+  }, [universe, selected, query]);
+
+  const add    = (t: string) => { onChange([...selected, t]); setQuery(""); setOpen(true); };
+  const remove = (t: string) => onChange(selected.filter((x) => x !== t));
+
+  // Enter picks the single/top match, letting a fast typist add without the mouse.
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && results.length > 0) { e.preventDefault(); add(results[0].ticker); }
+    if (e.key === "Backspace" && !query && selected.length > 0) remove(selected[selected.length - 1]);
+  };
+
+  return (
+    <div ref={boxRef} style={{ position: "relative", width: "100%" }}>
+      <div
+        onClick={() => setOpen(true)}
+        style={{
+          display: "flex", alignItems: "center", flexWrap: "wrap", gap: 5,
+          minHeight: 34, padding: "3px 8px", boxSizing: "border-box",
+          borderRadius: 8, background: "#F8FAFF",
+          border: "1px solid rgba(15,23,42,0.12)", cursor: "text",
+        }}
+      >
+        {selected.map((t) => (
+          <span key={t} style={{
+            display: "inline-flex", alignItems: "center", gap: 4,
+            fontSize: 11, fontWeight: 700, fontFamily: "JetBrains Mono, monospace",
+            color: "#1E3A8A", background: "rgba(43,92,224,0.09)",
+            border: "1px solid rgba(43,92,224,0.22)", borderRadius: 6, padding: "2px 4px 2px 7px",
+          }}>
+            {t}
+            <button
+              onClick={(e) => { e.stopPropagation(); remove(t); }}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                border: "none", background: "transparent", cursor: "pointer",
+                color: "#2B5CE0", padding: 0, lineHeight: 0,
+              }}
+            >
+              <X size={11} />
+            </button>
+          </span>
+        ))}
+        <input
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={onKeyDown}
+          placeholder={selected.length ? "" : "Search BBG ticker…"}
+          style={{
+            flex: "1 1 80px", minWidth: 80, border: "none", outline: "none",
+            background: "transparent", fontSize: 12, color: "#0F172A",
+            fontFamily: "Inter, sans-serif",
+          }}
+        />
+      </div>
+
+      {open && results.length > 0 && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 50,
+          background: "#fff", borderRadius: 10,
+          border: "1px solid rgba(15,23,42,0.10)",
+          boxShadow: "0 12px 32px rgba(15,23,42,0.16)",
+          overflow: "hidden", maxHeight: 260, overflowY: "auto",
+        }}>
+          {results.map((t) => (
+            <button
+              key={t.ticker}
+              onClick={() => add(t.ticker)}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+                width: "100%", textAlign: "left", padding: "8px 12px",
+                border: "none", borderBottom: "1px solid rgba(15,23,42,0.05)",
+                background: "transparent", cursor: "pointer",
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.05)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+            >
+              <span style={{ minWidth: 0 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, fontFamily: "JetBrains Mono, monospace", color: "#0F172A" }}>
+                  {t.ticker}
+                </span>
+                <span style={{ display: "block", fontSize: 10, color: "#94A3B8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {t.name}
+                </span>
+              </span>
+              <span style={{ fontSize: 10, color: "#CBD5E1", whiteSpace: "nowrap", flexShrink: 0 }}>{t.industry}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Small labelled field wrapper for the composer grid.
+function Field({ label, children, style }: { label: string; children: React.ReactNode; style?: React.CSSProperties }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4, ...style }}>
+      <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#94A3B8" }}>
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+const composerInput: React.CSSProperties = {
+  padding: "7px 10px", borderRadius: 8, background: "#F8FAFF",
+  border: "1px solid rgba(15,23,42,0.12)", color: "#0F172A",
+  fontSize: 12, outline: "none", fontFamily: "Inter, sans-serif",
+  boxSizing: "border-box", width: "100%",
+};
+
+function SubjectComposer({ universe }: { universe: ResearchTicker[] }) {
+  const [type,    setType]    = useState<(typeof TYPE_OPTIONS)[number]>("Update");
+  const [tickers, setTickers] = useState<string[]>([]);
+  const [title,   setTitle]   = useState("");
+  const [date,    setDate]    = useState(todayISO());
+  const [rec,     setRec]     = useState<(typeof REC_OPTIONS)[number]>("");
+  const [tp,      setTp]      = useState("0");
+  const [copied,  setCopied]  = useState(false);
+
+  // Type | TICKER1, TICKER2 | Title | dd-mm-yyyy | REC | TP
+  const subject = useMemo(() => {
+    return [
+      type,
+      tickers.join(", "),
+      title.trim(),
+      isoToDMY(date),
+      rec,
+      tp.trim(),
+    ].join(" | ");
+  }, [type, tickers, title, date, rec, tp]);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(subject);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch { /* clipboard unavailable */ }
+  };
+
+  const mailto = `mailto:${SUBJECT_EMAIL}?subject=${encodeURIComponent(subject)}`;
+
+  return (
+    <div style={{
+      background: "#fff",
+      border: "1px solid rgba(15,23,42,0.08)",
+      borderRadius: 12,
+      padding: "14px 16px",
+      marginBottom: 16,
+      boxShadow: "0 1px 4px rgba(15,23,42,0.05)",
+    }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <Send size={14} style={{ color: "#2B5CE0" }} />
+        <span style={{ fontSize: 13, fontWeight: 800, color: "#0F172A", letterSpacing: "-0.01em" }}>
+          Compose email subject
+        </span>
+        <span style={{ fontSize: 11, color: "#94A3B8" }}>
+          — genera el asunto para enviar a {SUBJECT_EMAIL}
+        </span>
+      </div>
+
+      {/* Inputs */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "130px minmax(200px,1.4fr) minmax(170px,1.5fr) 140px 100px 90px",
+        gap: 10, alignItems: "end",
+      }}>
+        <Field label="Type">
+          <div style={{ position: "relative" }}>
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value as (typeof TYPE_OPTIONS)[number])}
+              style={{ ...composerInput, appearance: "none", paddingRight: 26, cursor: "pointer" }}
+            >
+              {TYPE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+            <ChevronDown size={12} style={{ position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "#94A3B8" }} />
+          </div>
+        </Field>
+
+        <Field label="BBG Ticker(s)">
+          <TickerPicker universe={universe} selected={tickers} onChange={setTickers} />
+        </Field>
+
+        <Field label="Title">
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Free text…" style={composerInput} />
+        </Field>
+
+        <Field label="Date">
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ ...composerInput, cursor: "pointer" }} />
+        </Field>
+
+        <Field label="REC">
+          <div style={{ position: "relative" }}>
+            <select
+              value={rec}
+              onChange={(e) => setRec(e.target.value as (typeof REC_OPTIONS)[number])}
+              style={{ ...composerInput, appearance: "none", paddingRight: 26, cursor: "pointer" }}
+            >
+              <option value="">—</option>
+              {REC_OPTIONS.filter(Boolean).map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+            <ChevronDown size={12} style={{ position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "#94A3B8" }} />
+          </div>
+        </Field>
+
+        <Field label="TP">
+          <input
+            type="number"
+            value={tp}
+            onChange={(e) => setTp(e.target.value)}
+            style={{ ...composerInput, fontFamily: "JetBrains Mono, monospace" }}
+          />
+        </Field>
+      </div>
+
+      {/* Preview + actions */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 10, marginTop: 12, flexWrap: "wrap",
+      }}>
+        <div style={{
+          flex: "1 1 320px", minWidth: 240,
+          padding: "9px 12px", borderRadius: 8,
+          background: "#F1F5F9", border: "1px solid rgba(15,23,42,0.08)",
+          fontFamily: "JetBrains Mono, monospace", fontSize: 12, color: "#334155",
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        }}>
+          {subject}
+        </div>
+
+        <button
+          onClick={copy}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "9px 14px", borderRadius: 8,
+            background: copied ? "rgba(5,150,105,0.10)" : "#fff",
+            border: copied ? "1px solid rgba(5,150,105,0.35)" : "1px solid rgba(15,23,42,0.14)",
+            color: copied ? "#047857" : "#334155",
+            fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.12s", flexShrink: 0,
+          }}
+        >
+          {copied ? <Check size={14} /> : <Copy size={14} />}
+          {copied ? "Copied" : "Copy subject"}
+        </button>
+
+        <a
+          href={mailto}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "9px 16px", borderRadius: 8,
+            background: "#2B5CE0", border: "1px solid #2B5CE0",
+            color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer",
+            textDecoration: "none", flexShrink: 0,
+          }}
+        >
+          <Mail size={14} /> Open email
+        </a>
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function ResearchPage() {
@@ -383,6 +703,7 @@ export default function ResearchPage() {
   const [filters,  setFilters]  = useState<Filters>({ categories: [], companies: [], froms: [], industries: [] });
   const [loading,  setLoading]  = useState(true);
   const [selected, setSelected] = useState<ResearchRecord | null>(null);
+  const [tickers,  setTickers]  = useState<ResearchTicker[]>([]);
 
   // Active filters
   const [fCompany,  setFCompany]  = useState("");
@@ -403,6 +724,12 @@ export default function ResearchPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+
+    // BBG ticker universe for the subject composer's searchable picker.
+    fetch("/api/research/tickers")
+      .then((r) => r.json())
+      .then((d: { tickers?: ResearchTicker[] }) => setTickers(d.tickers ?? []))
+      .catch(() => {});
   }, []);
 
   const visible = useMemo(() => {
@@ -469,6 +796,9 @@ export default function ResearchPage() {
           </span>
         )}
       </div>
+
+      {/* ── Subject composer ────────────────────────────────────────────── */}
+      <SubjectComposer universe={tickers} />
 
       {/* ── Filter bar ──────────────────────────────────────────────────── */}
       <div style={{
