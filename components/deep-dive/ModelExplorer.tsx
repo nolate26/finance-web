@@ -25,6 +25,8 @@ const C = {
   EST_BG:  "#FFFDE7",
   DRV_BG:  "#DBEAFE",   // stronger blue for derived rows
   CON_BG:  "#FFFDE7",
+  LIVE_BG: "#DCFCE7",   // celdas con precio de mercado (price_range_52w) en años proyectados
+  LIVE_TXT:"#166534",
   BDR:     "#9CA3AF",   // stronger borders
   BLUE:    "#1D4ED8",
   RED:     "#DC2626",
@@ -66,19 +68,39 @@ interface YearData extends ModelFinancialRow {
   isEst:        boolean;
   effPrice:     number | null;
   effMarketCap: number | null;
+  priceIsLive:  boolean;   // true si effPrice viene de price_range_52w (año proyectado con precio vivo)
 }
 
-function enrich(financials: ModelFinancialRow[]): YearData[] {
+function enrich(financials: ModelFinancialRow[], livePrice: number | null): YearData[] {
   const now = new Date().getFullYear();
   return financials.map(f => {
-    const isEst        = f.year >= now;
-    const effPrice     = f.sharePrice;
-    const baseMarketCap = f.marketCap ??
-      (f.sharePrice !== null && f.sharesOut !== null ? f.sharePrice * f.sharesOut : null);
-    // fxEop lleva el market cap a la moneda del modelo (no-op si es null) → arregla los
-    // múltiplos cuando el precio está en otra divisa que el modelo (ej. LTM: precio CLP, modelo USD).
-    const effMarketCap = baseMarketCap !== null ? baseMarketCap * (f.fxEop ?? 1) : null;
-    return { ...f, isEst, effPrice, effMarketCap };
+    const isEst = f.year >= now;
+    // En años proyectados, si hay precio de mercado (price_range_52w) lo usamos en vez del precio
+    // del modelo y recomputamos el market cap con él, para que TODOS los múltiplos derivados
+    // (EV/EBITDA, P/E, P/BV, yields, upside…) queden calculados con el precio vivo.
+    const priceIsLive = isEst && livePrice !== null;
+    const effPrice     = priceIsLive ? livePrice : f.sharePrice;
+
+    // Market cap en la escala de los financials (revenue/EBITDA/NI). Reglas:
+    //  • Precio vivo (proyectado): se arma desde precio×acciones CRUDO y el fxEop del analista lo
+    //    lleva a la escala de los financials (ej. CLP: fxEop=0.001, porque precio×acciones queda en
+    //    CLP mn y los financials están en CLP bn).
+    //  • Resto de años: la columna market_cap del modelo YA viene en esa escala → se usa tal cual.
+    //    Aplicarle fxEop encima la escalaría DOS veces (ese era el bug del histórico: los yields
+    //    salían ~1000× altos y el market cap real no cuadraba con el proyectado).
+    //  • Sin market_cap: se reconstruye desde precio×acciones × fxEop.
+    let effMarketCap: number | null;
+    if (priceIsLive && livePrice !== null && f.sharesOut !== null) {
+      effMarketCap = livePrice * f.sharesOut * (f.fxEop ?? 1);
+    } else if (f.marketCap !== null) {
+      effMarketCap = f.marketCap;
+    } else if (f.sharePrice !== null && f.sharesOut !== null) {
+      effMarketCap = f.sharePrice * f.sharesOut * (f.fxEop ?? 1);
+    } else {
+      effMarketCap = null;
+    }
+
+    return { ...f, isEst, effPrice, effMarketCap, priceIsLive };
   });
 }
 
@@ -387,8 +409,8 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
   );
 
   const enriched = useMemo(
-    () => (snapshot ? enrich(snapshot.financials) : []),
-    [snapshot],
+    () => (snapshot ? enrich(snapshot.financials, history?.livePrice?.value ?? null) : []),
+    [snapshot, history],
   );
 
   const byYear = useMemo(() => {
@@ -464,16 +486,14 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
     return v != null ? v / scaleFactor : null;
   };
 
-  // Actual Price = last estimate year's share price (most recently set by analyst)
-  const actualPrice = useMemo(
+  // Initial recommendation price = precio del modelo al recomendar (último sharePrice del
+  // analista, típicamente en el último año con dato real). NO usa el precio vivo.
+  const initialPrice = useMemo(
     () => enriched.filter(d => d.isEst && d.sharePrice !== null).at(-1)?.sharePrice
        ?? enriched.filter(d => d.sharePrice !== null).at(-1)?.sharePrice
        ?? null,
     [enriched],
   );
-  const upside = snapshot?.header.tp && actualPrice
-    ? snapshot.header.tp / actualPrice - 1
-    : null;
 
   // ── Loading / error states ─────────────────────────────────────────────────
   if (loading) {
@@ -499,6 +519,11 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
 
   const { header }  = snapshot;
   const snapshots   = history!.snapshots;
+  const livePrice   = history!.livePrice;   // precio de mercado usado en años proyectados
+  const currentPrice = livePrice?.value ?? null;   // precio de mercado actual (el resaltado en verde)
+  // Dos upsides para ver el cambio: al recomendar (vs precio del modelo) y hoy (vs precio de mercado).
+  const upsideInitial = header.tp && initialPrice ? header.tp / initialPrice - 1 : null;
+  const upsideCurrent = header.tp && currentPrice ? header.tp / currentPrice - 1 : null;
   const isLatest    = selectedDate === snapshots[0]?.header.updateDate;
   const now         = new Date().getFullYear();
 
@@ -535,6 +560,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
     const F_GRAY   = fill("F0F4FA");
     const F_POS    = fill("DCFCE7");
     const F_NEG    = fill("FEE2E2");
+    const F_LIVE   = fill("DCFCE7");   // celdas de precio de mercado (price_range_52w)
 
     const bdr = (rgb = "9CA3AF") => ({
       top:    { style: "thin", color: { rgb } },
@@ -555,9 +581,11 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
     const metaItems: [string, string][] = [
       ["Ticker Bloomberg", header.ticker],
       ["Recommendation",   header.recc ?? "—"],
-      ["Actual Price",     actualPrice !== null ? fmtSmall(actualPrice) : "—"],
+      ["Initial recommendation price", initialPrice !== null ? fmtSmall(initialPrice) : "—"],
       ["TP",               header.tp   !== null ? fmtSmall(header.tp)   : "—"],
-      ["Upside",           upside !== null ? fmtPct(upside) : "—"],
+      ["Upside (initial)", upsideInitial !== null ? fmtPct(upsideInitial) : "—"],
+      ["Current price",    currentPrice !== null ? `${fmtSmall(currentPrice)}${livePrice ? `  ·  ${fmtDate(livePrice.date)}` : ""}` : "—"],
+      ["Upside (current)", upsideCurrent !== null ? fmtPct(upsideCurrent) : "—"],
       ["Thesis",           header.thesis ?? "—"],
       ["Analyst",          header.analyst ?? "—"],
       ["Updated",          header.updateDate],
@@ -648,6 +676,8 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                 text = r.text;
                 if (row.colorize) fColor = r.color === C.BLUE ? "1D4ED8" : r.color === C.RED ? "DC2626" : "111827";
               }
+              // Precio vivo (Share Price, año proyectado con price_range_52w) → resaltado.
+              if (row.key === "price" && d.priceIsLive) { fFill = F_LIVE; fColor = "166534"; }
             }
 
             return xc(text, {
@@ -737,18 +767,35 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
             {[
               { label: "Ticker Bloomberg", value: <span style={{ fontWeight: 700, color: C.TXT, ...MONO }}>{header.ticker}</span> },
               { label: "Recommendation",  value: <ReccBadge recc={header.recc} /> },
-              { label: "Actual Price",    value: actualPrice !== null
-                  ? <span style={{ fontWeight: 700, color: C.TXT, ...MONO }}>{fmtSmall(actualPrice)}</span>
+              { label: "Initial recommendation price",    value: initialPrice !== null
+                  ? <span style={{ fontWeight: 700, color: C.TXT, ...MONO }}>{fmtSmall(initialPrice)}</span>
                   : <span style={{ color: C.TXT2 }}>—</span> },
               { label: "TP",              value: header.tp !== null
                   ? <span style={{ fontWeight: 800, color: C.TXT, ...MONO }}>{fmtSmall(header.tp)}</span>
                   : <span style={{ color: C.TXT2 }}>—</span> },
-              { label: "Upside",          value: upside !== null
+              { label: "Upside (initial)", value: upsideInitial !== null
                   ? <span style={{
                       padding: "1px 10px", borderRadius: 4, fontWeight: 800,
-                      background: upside > 0 ? "rgba(21,128,61,0.12)" : "rgba(220,38,38,0.12)",
-                      color: upside > 0 ? C.GREEN : C.RED,
-                    }}>{fmtPct(upside)}</span>
+                      background: upsideInitial > 0 ? "rgba(21,128,61,0.12)" : "rgba(220,38,38,0.12)",
+                      color: upsideInitial > 0 ? C.GREEN : C.RED,
+                    }}>{fmtPct(upsideInitial)}</span>
+                  : <span style={{ color: C.TXT2 }}>—</span> },
+              { label: "Current price",   value: currentPrice !== null
+                  ? <span style={{
+                      display: "inline-flex", alignItems: "center", gap: 6,
+                      padding: "1px 10px", borderRadius: 4, fontWeight: 800,
+                      background: "#EFF4FF", color: C.BLUE, ...MONO,
+                    }}>
+                      {fmtSmall(currentPrice)}
+                      {livePrice && <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.8 }}>{fmtDate(livePrice.date)}</span>}
+                    </span>
+                  : <span style={{ color: C.TXT2 }}>—</span> },
+              { label: "Upside (current)", value: upsideCurrent !== null
+                  ? <span style={{
+                      padding: "1px 10px", borderRadius: 4, fontWeight: 800,
+                      background: upsideCurrent > 0 ? "rgba(21,128,61,0.12)" : "rgba(220,38,38,0.12)",
+                      color: upsideCurrent > 0 ? C.GREEN : C.RED,
+                    }}>{fmtPct(upsideCurrent)}</span>
                   : <span style={{ color: C.TXT2 }}>—</span> },
               { label: "Thesis",          value: header.thesis
                   ? <span style={{ color: C.TXT, fontStyle: "italic" }}>{header.thesis}</span>
@@ -805,6 +852,20 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
           >
             ← Latest
           </button>
+        )}
+
+        {/* Live price date — precio de mercado usado en los años proyectados */}
+        {livePrice && (
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "5px 12px", borderRadius: 5,
+            background: C.LIVE_BG, color: C.LIVE_TXT,
+            fontWeight: 700, fontSize: 11, letterSpacing: "0.02em",
+            border: "1px solid rgba(22,101,52,0.28)",
+          }}>
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.LIVE_TXT, flexShrink: 0 }} />
+            Price {fmtSmall(livePrice.value)} @ {fmtDate(livePrice.date)}
+          </span>
         )}
 
         {/* Excel export button */}
@@ -982,11 +1043,14 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                         }
 
                         const { text, color } = renderCell(value, row.fmt, !!row.colorize);
+                        // Celda de precio vivo (Share Price, año proyectado con price_range_52w) → color distinto.
+                        const liveCell = row.key === "price" && d.priceIsLive;
                         return (
                           <td key={yr} style={{
                             ...yearColW, padding: CELL_PAD, textAlign: "center",
-                            background: cellBg, color,
-                            fontWeight: isDerived ? 400 : 600,
+                            background: liveCell ? C.LIVE_BG : cellBg,
+                            color:      liveCell ? C.LIVE_TXT : color,
+                            fontWeight: liveCell ? 800 : isDerived ? 400 : 600,
                             fontStyle:  isDerived ? "italic" : "normal",
                             fontSize:   isDerived ? 10.5 : 11,
                             borderLeft: `1px solid ${C.BDR}`,

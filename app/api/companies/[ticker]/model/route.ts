@@ -64,6 +64,9 @@ export interface ModelSnapshot {
 
 export interface ModelHistoryPayload {
   snapshots: ModelSnapshot[];
+  // Precio de mercado más reciente (price_range_52w). El explorer lo usa para sobre-escribir
+  // el precio de los años proyectados y recalcular los múltiplos con el precio vivo.
+  livePrice: { value: number; date: string } | null;
 }
 
 // Keep backward compat alias
@@ -123,7 +126,7 @@ export async function GET(
   { params }: { params: Promise<{ ticker: string }> },
 ) {
   const { ticker: rawTicker } = await params;
-  const ticker = decodeURIComponent(rawTicker);
+  const ticker = decodeURIComponent(rawTicker).trim();
 
   try {
     const headers = await prisma.modelHeader.findMany({
@@ -164,6 +167,17 @@ export async function GET(
       },
     });
 
+    // Precio de mercado más reciente (px_last). Match case-insensitive: los tickers difieren
+    // en casing/espacios entre tablas (price_range_52w está limpio; el param viene de empresas).
+    const priceRow = await prisma.priceRange52w.findFirst({
+      where:   { ticker: { equals: ticker, mode: "insensitive" } },
+      orderBy: { date: "desc" },
+      select:  { pxLast: true, date: true },
+    });
+    const livePrice = priceRow
+      ? { value: priceRow.pxLast, date: priceRow.date.toISOString().slice(0, 10) }
+      : null;
+
     const snapshots: ModelSnapshot[] = headers.map((h) => ({
       header: {
         ticker:     h.ticker,
@@ -186,7 +200,7 @@ export async function GET(
       })),
     }));
 
-    return NextResponse.json({ snapshots } satisfies ModelHistoryPayload);
+    return NextResponse.json({ snapshots, livePrice } satisfies ModelHistoryPayload);
   } catch (e) {
     console.error("[model]", e);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

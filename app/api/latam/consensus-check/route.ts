@@ -63,6 +63,12 @@ function consensusScaleFactor(moneda: (number | null)[], consensus: (number | nu
 const applyFx = (v: number | null | undefined, fx: number | null | undefined): number | null =>
   v == null ? null : v * (fx ?? 1);
 
+// Clave canónica para joins por ticker entre tablas. Los tickers vienen con casing
+// distinto entre tablas y, a veces, con espacios sobrantes (p.ej. bank_headers guarda
+// "NU US Equity " con espacio final, mientras price/consensus lo tienen limpio). Sin
+// trim, el match exacto falla y la fila queda sin precio/consenso. Normalizamos siempre.
+const normTicker = (t: string) => t.trim().toUpperCase();
+
 function scaledConsensus(
   moneda: ConsensusCheckRow["moneda"],
   raw:    ConsensusCheckRow["consensus"],
@@ -106,16 +112,23 @@ export async function GET() {
       return NextResponse.json({ rows: [], year1FY, year2FY, pricesAsOf: null } satisfies ConsensusCheckPayload);
     }
 
-    // Último día de precios de mercado (mismo día para todos). El Upside usa px_last de ese
-    // día; los tickers sin precio ese día quedan sin upside.
+    // Fecha de referencia = último día de precios de la tabla (para el badge "Prices as of").
+    // OJO: el Upside NO se ata a ese día exacto — la ingesta llega despareja por ticker, así que
+    // fijar una sola fecha global dejaba sin upside a nombres recién agregados o atrasados. En su
+    // lugar traemos una ventana reciente y tomamos, por ticker, su ÚLTIMO precio disponible.
     const latestPriceRow = await prisma.priceRange52w.findFirst({
       orderBy: { date: "desc" }, select: { date: true },
     });
     const pricesAsOfDate = latestPriceRow?.date ?? null;
     const pricesAsOf     = pricesAsOfDate ? pricesAsOfDate.toISOString().slice(0, 10) : null;
+    // Ventana hacia atrás desde el último día; suficiente para cubrir el rezago de ingesta.
+    const PRICE_WINDOW_DAYS = 14;
+    const priceWindowStart  = pricesAsOfDate
+      ? new Date(pricesAsOfDate.getTime() - PRICE_WINDOW_DAYS * 86_400_000)
+      : null;
 
     // Financials for each ticker's latest snapshot, for year1FY and year2FY.
-    const [financials, bankFinancials, consensusRows, empresas, prices] = await Promise.all([
+    const [financials, bankFinancials, consensusRows, empresas, prices, refPrices, bankRefPrices] = await Promise.all([
       latestHeaders.length
         ? prisma.modelFinancials.findMany({
             where: {
@@ -150,29 +163,72 @@ export async function GET() {
       prisma.empresasIndustriasV2.findMany({
         select: { tickerBloomberg: true, countryRisk: true, industriaGics: true },
       }),
-      // Precios del último día (px_last) para el Upside.
-      pricesAsOfDate
+      // Precios de la ventana reciente (px_last) para el Upside. Ordenados por fecha desc para
+      // quedarnos, por ticker, con la fila más nueva al construir el mapa.
+      priceWindowStart
         ? prisma.priceRange52w.findMany({
-            where:  { date: pricesAsOfDate },
-            select: { ticker: true, pxLast: true },
+            where:   { date: { gte: priceWindowStart } },
+            orderBy: { date: "desc" },
+            select:  { ticker: true, date: true, pxLast: true },
           })
-        : Promise.resolve([] as { ticker: string; pxLast: number }[]),
+        : Promise.resolve([] as { ticker: string; date: Date; pxLast: number }[]),
+      // Precio de referencia del modelo para "Upside @Model": algunos analistas NO cargan el
+      // share_price en los años proyectados (year1FY/year2FY) sino en el último año con dato real
+      // (p.ej. 2025). Traemos todos los años ≤ year1FY con share_price no nulo, ordenados por año
+      // desc, para quedarnos por ticker con el del mayor año disponible.
+      latestHeaders.length
+        ? prisma.modelFinancials.findMany({
+            where: {
+              OR: latestHeaders.map((h) => ({
+                ticker: h.ticker, updateDate: h.updateDate, year: { lte: year1FY }, sharePrice: { not: null },
+              })),
+            },
+            orderBy: { year: "desc" },
+            select:  { ticker: true, sharePrice: true },
+          })
+        : Promise.resolve([] as { ticker: string; sharePrice: number | null }[]),
+      latestBankHeaders.length
+        ? prisma.bankFinancials.findMany({
+            where: {
+              OR: latestBankHeaders.map((b) => ({
+                ticker: b.ticker, updateDate: b.updateDate, year: { lte: year1FY }, sharePrice: { not: null },
+              })),
+            },
+            orderBy: { year: "desc" },
+            select:  { ticker: true, sharePrice: true },
+          })
+        : Promise.resolve([] as { ticker: string; sharePrice: number | null }[]),
     ]);
 
-    // Precio de mercado del último día: UPPER(ticker) → px_last (match case-insensitive).
+    // Precio de mercado más reciente por ticker: normTicker → px_last. Como `prices` viene
+    // ordenado por fecha desc, la primera aparición de cada ticker es su último precio.
     const priceMap = new Map<string, number>();
-    for (const p of prices) priceMap.set(p.ticker.toUpperCase(), p.pxLast);
+    for (const p of prices) {
+      const k = normTicker(p.ticker);
+      if (!priceMap.has(k)) priceMap.set(k, p.pxLast);
+    }
+
+    // Precio de referencia del modelo por ticker: normTicker → share_price del mayor año ≤ year1FY
+    // con valor válido. refPrices/bankRefPrices vienen ordenados por año desc, así que la primera
+    // aparición (no nula, no 0) de cada ticker es la del año más reciente disponible.
+    const modelPriceMap = new Map<string, number>();
+    for (const r of [...refPrices, ...bankRefPrices]) {
+      const k = normTicker(r.ticker);
+      if (r.sharePrice != null && r.sharePrice !== 0 && !modelPriceMap.has(k)) {
+        modelPriceMap.set(k, r.sharePrice);
+      }
+    }
 
     // ei: UPPER(ticker) → { country, industry } (match case-insensitive).
     const eiMap = new Map<string, { country: string | null; industry: string | null }>();
     for (const e of empresas) {
       if (!e.tickerBloomberg) continue;
-      eiMap.set(e.tickerBloomberg.toUpperCase(), {
+      eiMap.set(normTicker(e.tickerBloomberg), {
         country:  e.countryRisk   || null,
         industry: e.industriaGics || null,
       });
     }
-    const eiFor = (ticker: string) => eiMap.get(ticker.toUpperCase()) ?? { country: null, industry: null };
+    const eiFor = (ticker: string) => eiMap.get(normTicker(ticker)) ?? { country: null, industry: null };
 
     // financials: (ticker, year) → company model values (already in consensus/1000 scale).
     // fxConsensus convierte la moneda del modelo a la del consenso (no-op si es null).
@@ -202,7 +258,7 @@ export async function GET() {
     const conMap  = new Map<string, number>();
     const seenCon = new Set<string>();
     for (const r of consensusRows) {
-      const key = `${r.ticker.toUpperCase()}::${r.metric.toUpperCase()}::${r.period}`;
+      const key = `${normTicker(r.ticker)}::${r.metric.toUpperCase()}::${r.period}`;
       if (!seenCon.has(key)) {
         seenCon.add(key);
         conMap.set(key, r.value);
@@ -213,10 +269,11 @@ export async function GET() {
       const fin1 = finMap.get(`${h.ticker}::${year1FY}`);
       const fin2 = finMap.get(`${h.ticker}::${year2FY}`);
       const getCon = (metric: string, period: string) =>
-        conMap.get(`${h.ticker.toUpperCase()}::${metric.toUpperCase()}::${period}`) ?? null;
+        conMap.get(`${normTicker(h.ticker)}::${metric.toUpperCase()}::${period}`) ?? null;
 
-      const price       = priceMap.get(h.ticker.toUpperCase()) ?? null;   // px_last del último día (live)
-      const modelPrice  = fin1?.sharePrice ?? fin2?.sharePrice ?? null;   // precio dentro del modelo
+      const price       = priceMap.get(normTicker(h.ticker)) ?? null;     // px_last más reciente (live)
+      const modelPrice  = modelPriceMap.get(normTicker(h.ticker))         // precio de referencia (mayor año ≤ year1FY)
+                        ?? fin1?.sharePrice ?? fin2?.sharePrice ?? null;   // fallback: años proyectados
       const tp          = h.tp ?? null;
       const upside      = tp && price      ? tp / price      - 1 : null;  // vs precio actual
       const upsideModel = tp && modelPrice ? tp / modelPrice - 1 : null;  // upside del analista al hacer el modelo
@@ -265,10 +322,11 @@ export async function GET() {
       const fin1 = bankFinMap.get(`${h.ticker}::${year1FY}`);
       const fin2 = bankFinMap.get(`${h.ticker}::${year2FY}`);
       const getCon = (metric: string, period: string) =>
-        conMap.get(`${h.ticker.toUpperCase()}::${metric.toUpperCase()}::${period}`) ?? null;
+        conMap.get(`${normTicker(h.ticker)}::${metric.toUpperCase()}::${period}`) ?? null;
 
-      const price       = priceMap.get(h.ticker.toUpperCase()) ?? null;   // px_last del último día (live)
-      const modelPrice  = fin1?.sharePrice ?? fin2?.sharePrice ?? null;   // precio dentro del modelo
+      const price       = priceMap.get(normTicker(h.ticker)) ?? null;     // px_last más reciente (live)
+      const modelPrice  = modelPriceMap.get(normTicker(h.ticker))         // precio de referencia (mayor año ≤ year1FY)
+                        ?? fin1?.sharePrice ?? fin2?.sharePrice ?? null;   // fallback: años proyectados
       const tp          = h.tp ?? null;
       const upside      = tp && price      ? tp / price      - 1 : null;  // vs precio actual
       const upsideModel = tp && modelPrice ? tp / modelPrice - 1 : null;  // upside del analista al hacer el modelo
