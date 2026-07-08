@@ -78,24 +78,32 @@ function cleanRec(v: string | null | undefined): string | null {
 
 // ── Category grouping ──────────────────────────────────────────────────────────
 
-const GROUP_ORDER = ["Earnings", "Update", "Cases", "Others"] as const;
+// Mismas categorías que el compositor de asunto (TYPE_OPTIONS).
+const GROUP_ORDER = ["Meetings", "Update", "Case", "Earnings", "Sellside", "Other"] as const;
 type Group = (typeof GROUP_ORDER)[number];
 
 function categoryGroup(cat: string | null | undefined): Group {
   const c = (cat ?? "").toLowerCase();
-  if (c.includes("earning")) return "Earnings";
-  if (c.includes("update"))  return "Update";
-  if (c.includes("case"))    return "Cases";
-  return "Others";
+  if (c.includes("meeting"))                        return "Meetings";
+  if (/sell[\s-]?side/.test(c))                     return "Sellside";
+  if (c.includes("earning"))                        return "Earnings";
+  if (c.includes("case"))                           return "Case";
+  if (c.includes("update"))                         return "Update";
+  return "Other";
 }
 
 const GROUP_COLORS: Record<Group, { bg: string; border: string; text: string }> = {
-  Earnings: { bg: "rgba(43,92,224,0.08)",   border: "rgba(43,92,224,0.22)",   text: "#1E3A8A" },
+  Meetings: { bg: "rgba(8,145,178,0.08)",   border: "rgba(8,145,178,0.22)",   text: "#0E7490" },
   Update:   { bg: "rgba(5,150,105,0.08)",   border: "rgba(5,150,105,0.22)",   text: "#065F46" },
-  Cases:    { bg: "rgba(124,58,237,0.08)",  border: "rgba(124,58,237,0.22)",  text: "#4C1D95" },
-  Others:   { bg: "rgba(100,116,139,0.08)", border: "rgba(100,116,139,0.22)", text: "#334155" },
+  Case:     { bg: "rgba(124,58,237,0.08)",  border: "rgba(124,58,237,0.22)",  text: "#4C1D95" },
+  Earnings: { bg: "rgba(43,92,224,0.08)",   border: "rgba(43,92,224,0.22)",   text: "#1E3A8A" },
+  Sellside: { bg: "rgba(217,119,6,0.08)",   border: "rgba(217,119,6,0.22)",   text: "#B45309" },
+  Other:    { bg: "rgba(100,116,139,0.08)", border: "rgba(100,116,139,0.22)", text: "#334155" },
 };
 function groupColor(g: Group) { return GROUP_COLORS[g]; }
+
+// Cuántas notas (más recientes) se muestran por categoría antes de expandir.
+const PREVIEW_COUNT = 4;
 
 // Recommendation pill colour by direction.
 function recColor(rec: string) {
@@ -399,7 +407,7 @@ function NoteRow({ r, zebra, onClick }: { r: ResearchRecord; zebra: boolean; onC
 
 // ── Subject composer ────────────────────────────────────────────────────────────
 
-const SUBJECT_EMAIL = "equitiesmoneda@patria.com";
+const SUBJECT_EMAIL = "meetingsequities@patria.com";
 const TYPE_OPTIONS  = ["Meetings", "Update", "Case", "Earnings", "Sellside", "Other"] as const;
 const REC_OPTIONS   = ["", "BUY", "SELL", "HOLD"] as const;
 
@@ -704,6 +712,8 @@ export default function ResearchPage() {
   const [loading,  setLoading]  = useState(true);
   const [selected, setSelected] = useState<ResearchRecord | null>(null);
   const [tickers,  setTickers]  = useState<ResearchTicker[]>([]);
+  // Categorías expandidas (por defecto se muestran las más recientes; al hacer clic se ven todas).
+  const [expanded, setExpanded] = useState<Set<Group>>(new Set());
 
   // Active filters
   const [fCompany,  setFCompany]  = useState("");
@@ -772,6 +782,16 @@ export default function ResearchPage() {
     setFCompany(""); setFGroup(""); setFFrom("");
     setFIndustry(""); setFDateFrom(""); setFDateTo(""); setFSearch("");
   };
+
+  const toggleGroup = (g: Group) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(g)) next.delete(g); else next.add(g);
+      return next;
+    });
+
+  // Con una búsqueda activa mostramos todas las coincidencias (no truncamos por categoría).
+  const forceExpand = fSearch.trim().length > 0;
 
   return (
     <div style={{ maxWidth: 1280, margin: "0 auto", padding: "32px 24px" }}>
@@ -924,27 +944,72 @@ export default function ResearchPage() {
         ) : (
           sections.map(({ group, rows }) => {
             const gc = groupColor(group);
+            const isOpen      = forceExpand || expanded.has(group);
+            const canCollapse = !forceExpand && rows.length > PREVIEW_COUNT;
+            const shown       = isOpen ? rows : rows.slice(0, PREVIEW_COUNT);
+            const hiddenCount = rows.length - shown.length;
             return (
               <div key={group}>
-                {/* Group / section header */}
-                <div style={{
-                  display: "flex", alignItems: "center", gap: 8,
-                  padding: "8px 20px",
-                  background: gc.bg,
-                  borderTop: "1px solid rgba(15,23,42,0.05)",
-                  borderBottom: `1px solid ${gc.border}`,
-                }}>
-                  <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: gc.text }}>
-                    {group}
-                  </span>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: gc.text, opacity: 0.7, fontFamily: "JetBrains Mono, monospace" }}>
-                    {rows.length}
-                  </span>
+                {/* Group / section header — clickeable para expandir/colapsar */}
+                <div
+                  onClick={canCollapse ? () => toggleGroup(group) : undefined}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+                    padding: "8px 20px",
+                    background: gc.bg,
+                    borderTop: "1px solid rgba(15,23,42,0.05)",
+                    borderBottom: `1px solid ${gc.border}`,
+                    cursor: canCollapse ? "pointer" : "default",
+                    userSelect: "none",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    {canCollapse && (
+                      <ChevronDown
+                        size={13}
+                        style={{
+                          color: gc.text,
+                          transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)",
+                          transition: "transform 0.15s",
+                        }}
+                      />
+                    )}
+                    <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: gc.text }}>
+                      {group}
+                    </span>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: gc.text, opacity: 0.7, fontFamily: "JetBrains Mono, monospace" }}>
+                      {rows.length}
+                    </span>
+                  </div>
+                  {canCollapse && (
+                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: gc.text, opacity: 0.75 }}>
+                      {isOpen ? "Show less" : `Show all ${rows.length}`}
+                    </span>
+                  )}
                 </div>
 
-                {rows.map((r, idx) => (
+                {shown.map((r, idx) => (
                   <NoteRow key={r.id} r={r} zebra={idx % 2 === 1} onClick={() => setSelected(r)} />
                 ))}
+
+                {/* Footer expand — visible sólo cuando hay filas ocultas */}
+                {canCollapse && !isOpen && (
+                  <button
+                    onClick={() => toggleGroup(group)}
+                    style={{
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                      width: "100%", padding: "9px 20px",
+                      background: "transparent", border: "none",
+                      borderBottom: "1px solid rgba(15,23,42,0.05)",
+                      color: gc.text, fontSize: 11, fontWeight: 700,
+                      cursor: "pointer", transition: "background 0.1s",
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = gc.bg; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                  >
+                    <ChevronDown size={13} /> Show {hiddenCount} more {group.toLowerCase()} note{hiddenCount === 1 ? "" : "s"}
+                  </button>
+                )}
               </div>
             );
           })

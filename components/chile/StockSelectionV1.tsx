@@ -220,7 +220,7 @@ interface ColDef {
   sortVal?: (r: DisplayRow) => number | string | null;
   align?: "left" | "right" | "center";
 }
-interface Group { id: string; title: string; accent: string; cols: ColDef[]; collapsible?: boolean; primary?: string }
+interface Group { id: string; title: string; hint?: string; accent: string; cols: ColDef[]; collapsible?: boolean; primary?: string }
 const num = (id: string) => (r: DisplayRow) => r.v[id];
 // columnas visibles de un grupo: si es colapsable y está cerrado → solo la "primary" (o la 1ª)
 const visibleCols = (g: Group, expanded: Set<string>): ColDef[] =>
@@ -257,14 +257,14 @@ function buildGroups(periodN: string | null, periodN4: string | null): Group[] {
       { id: "price", label: "Precio", align: "right", sortVal: num("price"), render: (r) => ({ text: fmtPrice(r.v.price), color: TEXT1, weight: 600 }) },
       retCol("retMonth", "Mes"), retCol("retYtd", "YTD"), retCol("retYear", "Año"), retCol("ret3y", "L3Y"), retCol("ret5y", "L5Y"),
     ] },
-    { id: "size", title: "Tamaño / EV (USD mn)", accent: "#475569", cols: [mnCol("mcap", "M.Cap"), mnCol("dn", "DN"), mnCol("fv", "FV", TEXT1)] },
-    { id: "ebitdaRep", title: `EBITDA ${periodN4 ?? "n-4"} → ${periodN ?? "n"} (USD mn)`, accent: "#0D9488", collapsible: true, primary: "ebitdaVar", cols: [mnCol("ebitdaN4", "Ac-1"), mnCol("ebitdaN", "Ac"), varCol("ebitdaVar", "Var%")] },
-    { id: "utilRep", title: `Utilidad ${periodN4 ?? "n-4"} → ${periodN ?? "n"} (USD mn)`, accent: "#9333EA", collapsible: true, primary: "utilVar", cols: [mnCol("utilidadN4", "Ac-1"), mnCol("utilidadN", "Ac"), varCol("utilVar", "Var%")] },
-    { id: "ebitdaUsd", title: "EBITDA (USD mn)", accent: "#0D9488", collapsible: true, primary: "ebitdaLtmUsd", cols: [mnCol("ebitdaLtmUsd", "LTM"), mnCol("ebitda26Usd", "2026E"), mnCol("ebitda27Usd", "2027E")] },
+    { id: "size", title: "Tamaño / EV", hint: "M.Cap, deuda neta y firm value — USD mn", accent: "#475569", cols: [mnCol("mcap", "M.Cap"), mnCol("dn", "DN"), mnCol("fv", "FV", TEXT1)] },
+    { id: "ebitdaRep", title: "EBITDA a/a", hint: `EBITDA reportado, trimestre ${periodN4 ?? "n-4"} → ${periodN ?? "n"} — USD mn`, accent: "#0D9488", collapsible: true, primary: "ebitdaVar", cols: [mnCol("ebitdaN4", "Ac-1"), mnCol("ebitdaN", "Ac"), varCol("ebitdaVar", "Var%")] },
+    { id: "utilRep", title: "Utilidad a/a", hint: `Utilidad reportada, trimestre ${periodN4 ?? "n-4"} → ${periodN ?? "n"} — USD mn`, accent: "#9333EA", collapsible: true, primary: "utilVar", cols: [mnCol("utilidadN4", "Ac-1"), mnCol("utilidadN", "Ac"), varCol("utilVar", "Var%")] },
+    { id: "ebitdaUsd", title: "EBITDA", hint: "EBITDA LTM y estimado 2026E / 2027E — USD mn", accent: "#0D9488", collapsible: true, primary: "ebitdaLtmUsd", cols: [mnCol("ebitdaLtmUsd", "LTM"), mnCol("ebitda26Usd", "2026E"), mnCol("ebitda27Usd", "2027E")] },
     { id: "fvEbitda", title: "FV/EBITDA", accent: BLUE, collapsible: true, primary: "fvEbitda26", cols: [xCol("fvEbitdaLtm", "LTM"), xCol("fvEbitda26", "2026E"), xCol("fvEbitda27", "2027E")] },
-    { id: "utilUsd", title: "Utilidad (USD mn)", accent: "#9333EA", collapsible: true, primary: "utilLtmUsd", cols: [mnCol("utilLtmUsd", "LTM"), mnCol("util26Usd", "2026E"), mnCol("util27Usd", "2027E")] },
+    { id: "utilUsd", title: "Utilidad", hint: "Utilidad LTM y estimada 2026E / 2027E — USD mn", accent: "#9333EA", collapsible: true, primary: "utilLtmUsd", cols: [mnCol("utilLtmUsd", "LTM"), mnCol("util26Usd", "2026E"), mnCol("util27Usd", "2027E")] },
     { id: "pu", title: "P/U", accent: VIOLET, collapsible: true, primary: "pu26", cols: [puCol("puLtm", "LTM", "utilLtmUsd"), puCol("pu26", "2026E", "util26Usd"), puCol("pu27", "2027E", "util27Usd")] },
-    { id: "otros", title: "Otros múltiplos", accent: "#475569", collapsible: true, primary: "pbv", cols: [
+    { id: "otros", title: "Otros", hint: "Otros múltiplos: P/BV · ROE · FV/S", accent: "#475569", collapsible: true, primary: "pbv", cols: [
       xCol("pbv", "P/BV", "#475569"),
       { id: "roeLtm", label: "ROE LTM", align: "right", sortVal: num("roeLtm"), render: (r) => ({ text: roePct(r.v.roeLtm), color: TEXT1 }) },
       { id: "roe26", label: "ROE 26E", align: "right", sortVal: num("roe26"), render: (r) => ({ text: roePct(r.v.roe26), color: TEXT1 }) },
@@ -274,7 +274,7 @@ function buildGroups(periodN: string | null, periodN4: string | null): Group[] {
       { id: "polDiv", label: "Pol Div", align: "right", sortVal: (r) => r.payout, render: (r) => ({ text: r.payout != null ? (r.payout * 100).toFixed(0) + "%" : "—", color: r.payout != null ? TEXT2 : TEXT3 }) },
       { id: "divYield", label: "Yield 26E", align: "right", sortVal: num("divYield"), render: (r) => ({ text: yld(r.v.divYield), color: AMBER, weight: 600 }) },
     ] },
-    { id: "roicG", title: "Retorno s/ capital", accent: "#0D9488", collapsible: true, primary: "roic", cols: [
+    { id: "roicG", title: "ROIC", hint: "Retorno sobre capital: ROIC LTM y FV/IC", accent: "#0D9488", collapsible: true, primary: "roic", cols: [
       { id: "roic", label: "ROIC LTM", align: "right", sortVal: num("roic"), render: (r) => ({ text: roePct(r.v.roic), color: TEXT1 }) },
       xCol("fvic", "FV/IC", "#475569"),
     ] },
@@ -300,7 +300,7 @@ export default function StockSelectionV1() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [showMethod, setShowMethod] = useState(true);
   const [selPeriod, setSelPeriod] = useState<string | null>(null); // "fy-q"; null = más reciente
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set()); // grupos colapsables abiertos
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(["fvEbitda", "pu"])); // grupos colapsables abiertos (los múltiplos clave parten desplegados)
   const fixedMode = sortKey === FIXED_KEY;
   const toggleGroup = (id: string) =>
     setExpandedGroups((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
@@ -400,11 +400,11 @@ export default function StockSelectionV1() {
       { k: "DN", v: "deuda neta del período n (campo debt de stock_selection_v1), → USD." },
       { k: "FV", f: "M.Cap + DN", v: "firm value (enterprise value)." },
     ] },
-    { title: `EBITDA ${pN4} → ${pN} (USD mn)`, accent: "#0D9488", items: [
+    { title: `EBITDA Y/Y — ${pN4} → ${pN} (USD mn)`, accent: "#0D9488", items: [
       { k: "Ac-1 / Ac", v: `EBITDA reportado del trimestre ${pN4} y del trimestre ${pN}, convertidos a USD (÷ TC si CLP).` },
       { k: "Var%", f: "Ac / Ac-1 − 1", v: "variación interanual (neutra al TC)." },
     ] },
-    { title: `Utilidad ${pN4} → ${pN} (USD mn)`, accent: "#9333EA", items: [
+    { title: `Utilidad Y/Y — ${pN4} → ${pN} (USD mn)`, accent: "#9333EA", items: [
       { k: "Ac-1 / Ac", v: `utilidad neta reportada del trimestre ${pN4} y del trimestre ${pN}, convertidas a USD (÷ TC si CLP).` },
       { k: "Var%", f: "Ac / Ac-1 − 1", v: "variación interanual (neutra al TC)." },
     ] },
@@ -432,7 +432,7 @@ export default function StockSelectionV1() {
       { k: "Pol Div", v: "payout objetivo (proyecciones_financieras.pool_div), en %." },
       { k: "Yield 26E", f: "máx(payout × Utilidad 2026E, 0) / M.Cap", v: "dividendo estimado sobre el M.Cap." },
     ] },
-    { title: "Retorno sobre capital", accent: "#0D9488", items: [
+    { title: "ROIC — retorno sobre capital", accent: "#0D9488", items: [
       { k: "ROIC LTM", f: "NOPAT / Capital invertido (n-4)", v: "NOPAT = EBIT LTM × (1 − 27%). Capital invertido (n-4) = Patrimonio + Deuda neta + Interés minoritario, todo del período n-4 y en USD." },
       { k: "FV/IC", f: "FV / Capital invertido (n)", v: "Capital invertido (n) = Patrimonio + Deuda neta + Interés minoritario del período n." },
     ] },
@@ -511,12 +511,12 @@ export default function StockSelectionV1() {
       )}
 
       <div style={{ fontSize: 10.5, color: TEXT3, marginBottom: 6 }}>
-        Los grupos con <span style={{ color: TEXT2, fontWeight: 700 }}>▸</span> muestran 1 columna — clic en el encabezado para desplegar el resto.
+        Montos en USD mn (÷ TC si es CLP) · Los grupos con <span style={{ color: TEXT2, fontWeight: 700 }}>▸</span> muestran 1 columna — clic en el encabezado para desplegar el resto.
       </div>
 
       {/* Tabla */}
       <div style={{ overflowX: "auto", border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 1px 4px rgba(15,23,42,0.06)" }}>
-        <table style={{ borderCollapse: "collapse", fontSize: 11 }}>
+        <table style={{ borderCollapse: "collapse", fontSize: 11, width: "100%" }}>
           <thead>
             <tr style={{ background: "#F0F4FA" }}>
               <th style={{ ...stickyTh, top: 0, zIndex: 6 }} rowSpan={2}>Empresa</th>
@@ -525,7 +525,7 @@ export default function StockSelectionV1() {
                 return (
                   <th key={g.id} colSpan={visibleCols(g, expandedGroups).length}
                     onClick={() => g.collapsible && toggleGroup(g.id)}
-                    title={g.collapsible ? (open ? "Contraer" : "Desplegar columnas") : undefined}
+                    title={[g.hint, g.collapsible ? (open ? "Clic para contraer" : "Clic para desplegar") : null].filter(Boolean).join(" · ") || undefined}
                     style={{ padding: "4px 6px", textAlign: "center", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: g.accent, borderBottom: `1px solid ${BORDER}`, borderLeft: `1px solid ${BORDER}`, whiteSpace: "nowrap", background: "#F0F4FA", cursor: g.collapsible ? "pointer" : "default", userSelect: "none" }}>
                     {g.collapsible && <span style={{ fontSize: 8, marginRight: 3, opacity: 0.6 }}>{open ? "▾" : "▸"}</span>}
                     {g.title}
