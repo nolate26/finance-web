@@ -30,12 +30,12 @@ function QuantAnalysisContent() {
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       {/* Page header */}
-      <div style={{ marginBottom: 18 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: "#0F172A", letterSpacing: "-0.02em", margin: 0 }}>
+      <div style={{ marginBottom: 20 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", letterSpacing: "-0.035em", lineHeight: 1.15, margin: 0 }}>
           Quant Analysis
         </h1>
-        <p style={{ fontSize: 12, color: "#64748B", marginTop: 4 }}>
-          {active.sub} — LatAm Equities
+        <p style={{ fontSize: 12, color: "#64748B", marginTop: 5, fontWeight: 500, letterSpacing: "0.01em" }}>
+          {active.sub} · LatAm Equities
         </p>
       </div>
 

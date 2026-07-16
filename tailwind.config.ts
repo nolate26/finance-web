@@ -31,8 +31,8 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ["'Figtree'", "sans-serif"],
-        mono: ["'JetBrains Mono'", "monospace"],
+        sans: ["var(--font-sans)", "'Figtree'", "sans-serif"],
+        mono: ["var(--font-mono)", "'JetBrains Mono'", "monospace"],
       },
     },
   },

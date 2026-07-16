@@ -14,49 +14,51 @@ export default function ChilePage() {
   return (
     <div className="max-w-[1600px] mx-auto px-6 py-6">
       {/* Page header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          marginBottom: 20,
-          flexWrap: "wrap",
-          gap: 12,
-        }}
-      >
+      <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, color: "#0F172A", letterSpacing: "-0.02em" }}>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", letterSpacing: "-0.035em", lineHeight: 1.15, margin: 0 }}>
             Chile Equities
           </h1>
-          <p style={{ fontSize: 12, marginTop: 4, color: "#64748B" }}>
-            Chilean Equity Universe — AGF Coverage
+          <p style={{ fontSize: 12, marginTop: 5, color: "#64748B", fontWeight: 500, letterSpacing: "0.01em" }}>
+            Chilean equity universe · AGF coverage
           </p>
         </div>
       </div>
 
       {/* Sub-navigation tabs */}
       <div
-        className="flex items-center gap-1 mb-5 p-1 rounded-lg"
+        className="flex items-center mb-5"
         style={{
+          gap: 2, padding: "3px", borderRadius: 10,
           background: "rgba(15,23,42,0.04)",
           border: "1px solid rgba(15,23,42,0.08)",
           width: "fit-content",
         }}
       >
-        {(["stock-selection", "projections", "top-picks", "active-decisions"] as ActiveTab[]).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className="px-5 py-1.5 rounded-md text-sm font-semibold transition-all"
-            style={{
-              background: activeTab === tab ? "rgba(43,92,224,0.10)" : "transparent",
-              color: activeTab === tab ? "#1E3A8A" : "#64748B",
-              border: activeTab === tab ? "1px solid rgba(43,92,224,0.25)" : "1px solid transparent",
-            }}
-          >
-            {tab === "stock-selection" ? "Stock Selection" : tab === "projections" ? "Projections" : tab === "top-picks" ? "Top Picks" : "Active Decisions"}
-          </button>
-        ))}
+        {(["stock-selection", "projections", "top-picks", "active-decisions"] as ActiveTab[]).map((tab) => {
+          const active = activeTab === tab;
+          const label = tab === "stock-selection" ? "Stock Selection"
+                      : tab === "projections"     ? "Projections"
+                      : tab === "top-picks"       ? "Top Picks"
+                      :                             "Active Decisions";
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className="px-5 py-1.5 rounded-lg text-sm transition-all"
+              style={{
+                background: active ? "#FFFFFF"  : "transparent",
+                color:      active ? "#1B2E7E"  : "#475569",
+                border:     active ? "1px solid rgba(15,23,42,0.11)" : "1px solid transparent",
+                boxShadow:  active ? "0 1px 3px rgba(15,23,42,0.09)" : "none",
+                fontWeight: active ? 700 : 500,
+                cursor: "pointer",
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
 
       {/* ── Stock Selection ─────────────────────────────────────────────────── */}

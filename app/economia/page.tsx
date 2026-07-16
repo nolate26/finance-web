@@ -108,30 +108,31 @@ export default function EconomiaPage() {
   return (
     <div className="max-w-[1600px] mx-auto px-6 py-6">
       {/* Page header */}
-      <div className="flex items-center justify-between mb-5">
+      <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold tracking-tight" style={{ color: "#0F172A" }}>Market</h1>
-          <p className="text-xs mt-1" style={{ color: "#64748B" }}>
-            Global valuations, macro projections &amp; commodity prices
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", letterSpacing: "-0.035em", lineHeight: 1.15, margin: 0 }}>
+            Market Overview
+          </h1>
+          <p style={{ fontSize: 12, marginTop: 5, color: "#64748B", fontWeight: 500, letterSpacing: "0.01em" }}>
+            Global valuations · Macro projections · Commodity prices
           </p>
         </div>
-        <div
-          className="flex flex-col items-end gap-0.5 bg-white/80 backdrop-blur-sm p-2 rounded-md border border-slate-200"
-        >
+        <div className="flex items-center gap-2">
+          <span className="source-pill">Bloomberg</span>
           {data.updateDate && (
-            <div className="flex items-center gap-1.5 text-xs font-mono" style={{ color: "#94A3B8" }}>
-              <Calendar size={11} />
-              <span>{formatUpdateDate(data.updateDate)}</span>
+            <div className="source-pill">
+              <Calendar size={10} />
+              {formatUpdateDate(data.updateDate)}
             </div>
           )}
-          <span className="text-xs" style={{ color: "#CBD5E1" }}>Fuente: Bloomberg</span>
         </div>
       </div>
 
       {/* Sub-tab nav */}
       <div
-        className="flex items-center gap-1 mb-6 p-1 rounded-lg"
+        className="flex items-center mb-6"
         style={{
+          gap: 2, padding: "3px", borderRadius: 10,
           background: "rgba(15,23,42,0.04)",
           border: "1px solid rgba(15,23,42,0.08)",
           width: "fit-content",
@@ -141,11 +142,14 @@ export default function EconomiaPage() {
           <button
             key={key}
             onClick={() => setView(key)}
-            className="px-5 py-1.5 rounded-md text-sm font-semibold transition-all"
+            className="px-5 py-1.5 rounded-lg text-sm transition-all"
             style={{
-              background: view === key ? "rgba(43,92,224,0.10)" : "transparent",
-              color: view === key ? "#1E3A8A" : "#64748B",
-              border: view === key ? "1px solid rgba(43,92,224,0.25)" : "1px solid transparent",
+              background: view === key ? "#FFFFFF"  : "transparent",
+              color:      view === key ? "#1B2E7E"  : "#475569",
+              border:     view === key ? "1px solid rgba(15,23,42,0.11)" : "1px solid transparent",
+              boxShadow:  view === key ? "0 1px 3px rgba(15,23,42,0.09)" : "none",
+              fontWeight: view === key ? 700 : 500,
+              cursor: "pointer",
             }}
           >
             {label}

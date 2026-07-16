@@ -71,10 +71,10 @@ function AttributionSection() {
       {/* Sub-tab bar */}
       <div
         style={{
-          display: "flex", gap: 4, marginBottom: 16,
-          padding: 4, borderRadius: 9,
-          background: "rgba(15,23,42,0.03)",
-          border: "1px solid rgba(15,23,42,0.07)",
+          display: "flex", gap: 2, marginBottom: 16,
+          padding: "3px", borderRadius: 10,
+          background: "rgba(15,23,42,0.04)",
+          border: "1px solid rgba(15,23,42,0.08)",
           width: "fit-content",
         }}
       >
@@ -91,11 +91,13 @@ function AttributionSection() {
               key={key}
               onClick={() => setMode(key)}
               style={{
-                padding: "5px 16px", borderRadius: 7, fontSize: 12, fontWeight: 600,
-                cursor: "pointer", transition: "all 0.1s",
-                background: active ? "rgba(37,99,235,0.10)" : "transparent",
-                color:      active ? "#1E3A8A"              : "#64748B",
-                border:     active ? "1px solid rgba(37,99,235,0.25)" : "1px solid transparent",
+                padding: "5px 16px", borderRadius: 8, fontSize: 12,
+                cursor: "pointer", transition: "all 0.15s",
+                background: active ? "#FFFFFF"  : "transparent",
+                color:      active ? "#1B2E7E"  : "#475569",
+                border:     active ? "1px solid rgba(15,23,42,0.11)" : "1px solid transparent",
+                boxShadow:  active ? "0 1px 3px rgba(15,23,42,0.09)" : "none",
+                fontWeight: active ? 700 : 500,
               }}
             >
               {label}
@@ -255,58 +257,33 @@ export default function LatAmPage() {
     <div className="max-w-[1800px] mx-auto px-6 py-6">
 
       {/* ── Page header ─────────────────────────────────────────────────────── */}
-      <div
-        style={{
-          display:        "flex",
-          alignItems:     "flex-start",
-          justifyContent: "space-between",
-          marginBottom:   20,
-          flexWrap:       "wrap",
-          gap:            12,
-        }}
-      >
+      <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, color: "#0F172A", letterSpacing: "-0.02em" }}>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", letterSpacing: "-0.035em", lineHeight: 1.15, margin: 0 }}>
             LatAm Equities
           </h1>
-          <p style={{ fontSize: 12, marginTop: 4, color: "#64748B" }}>
-            Latin American Equity Universe — AGF Coverage
+          <p style={{ fontSize: 12, marginTop: 5, color: "#64748B", fontWeight: 500, letterSpacing: "0.01em" }}>
+            Latin American equity universe · AGF coverage
           </p>
         </div>
 
         <button
           onClick={fetchData}
-          style={{
-            display:    "flex",
-            alignItems: "center",
-            gap:        6,
-            padding:    "6px 12px",
-            borderRadius: 8,
-            background: "rgba(43,92,224,0.06)",
-            border:     "1px solid rgba(15,23,42,0.10)",
-            color:      "#64748B",
-            cursor:     "pointer",
-            fontSize:   12,
-            fontFamily: "JetBrains Mono, monospace",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.color       = "#334155";
-            (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.25)";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.color       = "#64748B";
-            (e.currentTarget as HTMLElement).style.borderColor = "rgba(15,23,42,0.10)";
-          }}
+          className="source-pill"
+          style={{ cursor: "pointer", background: "rgba(15,23,42,0.04)", border: "1px solid rgba(15,23,42,0.09)" }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.25)"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(15,23,42,0.09)"; }}
         >
-          <RefreshCw size={12} />
-          <span>Refresh</span>
+          <RefreshCw size={10} />
+          Refresh
         </button>
       </div>
 
       {/* ── Sub-navigation tabs ──────────────────────────────────────────────── */}
       <div
-        className="flex items-center gap-1 mb-5 p-1 rounded-lg"
+        className="flex items-center mb-5"
         style={{
+          gap: 2, padding: "3px", borderRadius: 10,
           background: "rgba(15,23,42,0.04)",
           border:     "1px solid rgba(15,23,42,0.08)",
           width:      "fit-content",
@@ -324,11 +301,14 @@ export default function LatAmPage() {
           <button
             key={key}
             onClick={() => setActiveTab(key)}
-            className="px-5 py-1.5 rounded-md text-sm font-semibold transition-all"
+            className="px-5 py-1.5 rounded-lg text-sm transition-all"
             style={{
-              background: activeTab === key ? "rgba(43,92,224,0.10)" : "transparent",
-              color:      activeTab === key ? "#1E3A8A" : "#64748B",
-              border:     activeTab === key ? "1px solid rgba(43,92,224,0.25)" : "1px solid transparent",
+              background: activeTab === key ? "#FFFFFF"  : "transparent",
+              color:      activeTab === key ? "#1B2E7E"  : "#475569",
+              border:     activeTab === key ? "1px solid rgba(15,23,42,0.11)" : "1px solid transparent",
+              boxShadow:  activeTab === key ? "0 1px 3px rgba(15,23,42,0.09)" : "none",
+              fontWeight: activeTab === key ? 700 : 500,
+              cursor: "pointer",
             }}
           >
             {label}

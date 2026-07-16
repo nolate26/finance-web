@@ -269,42 +269,54 @@ export default function AnalysisPage() {
       <div className="max-w-[1600px] mx-auto px-6 py-6">
 
         {/* ── Page header ─────────────────────────────────────────────────── */}
-        <div style={{ marginBottom: 16 }}>
-          <h1 style={{ fontSize: 20, fontWeight: 700, color: TEXT1, letterSpacing: "-0.02em", margin: 0 }}>
+        <div style={{ marginBottom: 20 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: TEXT1, letterSpacing: "-0.035em", lineHeight: 1.15, margin: 0 }}>
             Analysis
           </h1>
-          <p style={{ fontSize: 12, color: TEXT2, marginTop: 4 }}>
+          <p style={{ fontSize: 12, color: "#64748B", marginTop: 5, fontWeight: 500, letterSpacing: "0.01em" }}>
             {view === "analysis"
-              ? "Multi-company comparison — valuation multiples, price performance, and consensus revisions"
-              : "Analyst Track Record — backtested total return of historical analyst recommendations"}
+              ? "Multi-company comparison · Valuation multiples · Price performance · Consensus revisions"
+              : "Analyst Track Record · Backtested total return of historical analyst recommendations"}
           </p>
         </div>
 
         {/* ── Sub-tabs ────────────────────────────────────────────────────── */}
-        <div style={{ display: "flex", gap: 4, marginBottom: 20 }}>
+        <div
+          style={{
+            display: "flex", gap: 2, marginBottom: 20,
+            padding: "3px", borderRadius: 10,
+            background: "rgba(15,23,42,0.04)",
+            border: `1px solid ${BORDER}`,
+            width: "fit-content",
+          }}
+        >
           {([
             { key: "analysis",    label: "Analysis" },
             { key: "trackRecord", label: "Analyst Track Record" },
-          ] as const).map(t => (
-            <button
-              key={t.key}
-              onClick={() => setView(t.key)}
-              style={{
-                padding:      "7px 16px",
-                borderRadius: 8,
-                border:       "1px solid",
-                borderColor:  view === t.key ? BLUE : BORDER,
-                background:   view === t.key ? "rgba(37,99,235,0.09)" : "transparent",
-                color:        view === t.key ? BLUE : TEXT2,
-                fontSize:     13,
-                fontWeight:   view === t.key ? 700 : 500,
-                cursor:       "pointer",
-                whiteSpace:   "nowrap",
-              }}
-            >
-              {t.label}
-            </button>
-          ))}
+          ] as const).map(t => {
+            const active = view === t.key;
+            return (
+              <button
+                key={t.key}
+                onClick={() => setView(t.key)}
+                style={{
+                  padding:      "6px 18px",
+                  borderRadius: 8,
+                  border:     active ? "1px solid rgba(15,23,42,0.11)" : "1px solid transparent",
+                  background:   active ? "#FFFFFF" : "transparent",
+                  color:        active ? "#1B2E7E" : "#475569",
+                  fontSize:     13,
+                  fontWeight:   active ? 700 : 500,
+                  cursor:       "pointer",
+                  whiteSpace:   "nowrap",
+                  boxShadow:    active ? "0 1px 3px rgba(15,23,42,0.09)" : "none",
+                  transition:   "all 0.15s",
+                }}
+              >
+                {t.label}
+              </button>
+            );
+          })}
         </div>
 
         {/* ── Two-column layout (Analysis sub-tab) ─────────────────────────── */}

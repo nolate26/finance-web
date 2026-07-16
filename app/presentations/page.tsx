@@ -196,8 +196,8 @@ export default function PresentationsPage() {
         {/* ── Header ──────────────────────────────────────────────────── */}
         <div className="flex items-start justify-between mb-6">
           <div>
-            <h1 className="text-xl font-bold tracking-tight" style={{ color: "#0F172A" }}>Presentations</h1>
-            <p className="text-xs mt-1" style={{ color: "#64748B" }}>Research reports and investor presentations</p>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", letterSpacing: "-0.035em", lineHeight: 1.15, margin: 0 }}>Presentations</h1>
+            <p style={{ fontSize: 12, marginTop: 5, color: "#64748B", fontWeight: 500, letterSpacing: "0.01em" }}>Research reports · Investor presentations</p>
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -213,21 +213,27 @@ export default function PresentationsPage() {
         </div>
 
         {/* ── Level 1: Category tabs ──────────────────────────────────── */}
-        <div className="flex items-center gap-1 p-1 rounded-lg mb-4" style={{ background: "rgba(15,23,42,0.04)", border: "1px solid rgba(15,23,42,0.08)", width: "fit-content" }}>
-          {MAIN_TABS.map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => handleMainCategory(key)}
-              className="px-5 py-1.5 rounded-md text-sm font-semibold transition-all"
-              style={{
-                background: mainCategory === key ? "rgba(43,92,224,0.10)" : "transparent",
-                color:      mainCategory === key ? "#1E3A8A" : "#64748B",
-                border:     mainCategory === key ? "1px solid rgba(43,92,224,0.25)" : "1px solid transparent",
-              }}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="flex items-center mb-4" style={{ gap: 2, padding: "3px", borderRadius: 10, background: "rgba(15,23,42,0.04)", border: "1px solid rgba(15,23,42,0.08)", width: "fit-content" }}>
+          {MAIN_TABS.map(({ key, label }) => {
+            const active = mainCategory === key;
+            return (
+              <button
+                key={key}
+                onClick={() => handleMainCategory(key)}
+                className="px-5 py-1.5 rounded-lg text-sm transition-all"
+                style={{
+                  background: active ? "#FFFFFF"  : "transparent",
+                  color:      active ? "#1B2E7E"  : "#475569",
+                  border:     active ? "1px solid rgba(15,23,42,0.11)" : "1px solid transparent",
+                  boxShadow:  active ? "0 1px 3px rgba(15,23,42,0.09)" : "none",
+                  fontWeight: active ? 700 : 500,
+                  cursor: "pointer",
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
 
         {/* ── Level 2: Sub-filter ─────────────────────────────────────── */}

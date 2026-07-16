@@ -22,17 +22,17 @@ const C = {
   HDR:     "#1E3A8A",
   SEC_SUB: "#374151",
   HIST_BG: "#FFFFFF",
-  EST_BG:  "#FFFDE7",
-  DRV_BG:  "#DBEAFE",   // stronger blue for derived rows
-  CON_BG:  "#FFFDE7",
-  LIVE_BG: "#DCFCE7",   // celdas con precio de mercado (price_range_52w) en años proyectados
+  EST_BG:  "#FEFCE8",   // subtle warm cream for estimate years
+  DRV_BG:  "#F4F7FF",   // near-white with barely-blue tint — replaces heavy #DBEAFE
+  CON_BG:  "#FEFCE8",
+  LIVE_BG: "#DCFCE7",
   LIVE_TXT:"#166534",
-  BDR:     "#9CA3AF",   // stronger borders
+  BDR:     "#D1D5DB",   // lighter borders — less visual noise in dense table
   BLUE:    "#1D4ED8",
   RED:     "#DC2626",
   GREEN:   "#15803D",
   TXT:     "#111827",
-  TXT2:    "#374151",   // darker secondary text
+  TXT2:    "#4B5563",   // raised from #374151 — better readability on tinted rows
   WHITE:   "#FFFFFF",
 };
 

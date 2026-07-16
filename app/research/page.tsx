@@ -248,7 +248,7 @@ function DetailModal({ record, onClose }: { record: ResearchRecord; onClose: () 
                 );
               })()}
               {record.industry && record.industry !== "Other" && (
-                <span style={{ fontSize: 10, color: "#94A3B8" }}>
+                <span style={{ fontSize: 10, color: "#64748B" }}>
                   {record.industry}
                 </span>
               )}
@@ -262,7 +262,7 @@ function DetailModal({ record, onClose }: { record: ResearchRecord; onClose: () 
             {/* From */}
             {record.from && (
               <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 7 }}>
-                <Mail size={11} style={{ color: "#94A3B8", flexShrink: 0 }} />
+                <Mail size={11} style={{ color: "#64748B", flexShrink: 0 }} />
                 <span style={{ fontSize: 11, color: "#64748B" }}>{record.from}</span>
               </div>
             )}
@@ -341,7 +341,7 @@ function NoteRow({ r, zebra, onClick }: { r: ResearchRecord; zebra: boolean; onC
         <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
           {r.company}
         </div>
-        <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        <div style={{ fontSize: 10, color: "#64748B", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
           {r.industry}
         </div>
       </div>
@@ -349,7 +349,7 @@ function NoteRow({ r, zebra, onClick }: { r: ResearchRecord; zebra: boolean; onC
       {/* Title */}
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 12, color: "#334155", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {r.title ?? r.subject ?? <span style={{ color: "#CBD5E1" }}>No title</span>}
+          {r.title ?? r.subject ?? <span style={{ color: "#64748B" }}>No title</span>}
         </div>
       </div>
 
@@ -368,7 +368,7 @@ function NoteRow({ r, zebra, onClick }: { r: ResearchRecord; zebra: boolean; onC
       </div>
 
       {/* Target price */}
-      <div style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, fontWeight: 600, color: tp ? "#334155" : "#CBD5E1", whiteSpace: "nowrap" }}>
+      <div style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, fontWeight: 600, color: tp ? "#334155" : "#94A3B8", whiteSpace: "nowrap" }}>
         {tp ?? "—"}
       </div>
 
@@ -385,13 +385,13 @@ function NoteRow({ r, zebra, onClick }: { r: ResearchRecord; zebra: boolean; onC
             {rec}
           </span>
         ) : (
-          <span style={{ fontSize: 11, color: "#CBD5E1" }}>—</span>
+          <span style={{ fontSize: 11, color: "#64748B" }}>—</span>
         )}
       </div>
 
       {/* From */}
       <div style={{ fontSize: 11, color: "#64748B", display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
-        <Mail size={11} style={{ flexShrink: 0, color: "#CBD5E1" }} />
+        <Mail size={11} style={{ flexShrink: 0, color: "#64748B" }} />
         <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
           {senderName(r.from)}
         </span>
@@ -399,7 +399,7 @@ function NoteRow({ r, zebra, onClick }: { r: ResearchRecord; zebra: boolean; onC
 
       {/* Open icon */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <ExternalLink size={13} style={{ color: "#CBD5E1" }} />
+        <ExternalLink size={13} style={{ color: "#64748B" }} />
       </div>
     </div>
   );
@@ -520,11 +520,11 @@ function TickerPicker({
                 <span style={{ fontSize: 12, fontWeight: 700, fontFamily: "JetBrains Mono, monospace", color: "#0F172A" }}>
                   {t.ticker}
                 </span>
-                <span style={{ display: "block", fontSize: 10, color: "#94A3B8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                <span style={{ display: "block", fontSize: 10, color: "#64748B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {t.name}
                 </span>
               </span>
-              <span style={{ fontSize: 10, color: "#CBD5E1", whiteSpace: "nowrap", flexShrink: 0 }}>{t.industry}</span>
+              <span style={{ fontSize: 10, color: "#64748B", whiteSpace: "nowrap", flexShrink: 0 }}>{t.industry}</span>
             </button>
           ))}
         </div>
@@ -798,11 +798,11 @@ export default function ResearchPage() {
       {/* ── Page header ─────────────────────────────────────────────────── */}
       <div style={{ marginBottom: 24, display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", letterSpacing: "-0.02em", marginBottom: 4 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", letterSpacing: "-0.035em", lineHeight: 1.15, marginBottom: 5 }}>
             Research Notes
           </h1>
-          <p style={{ fontSize: 13, color: "#64748B" }}>
-            Sell-side research and coverage updates ingested by email
+          <p style={{ fontSize: 12, color: "#64748B", fontWeight: 500, letterSpacing: "0.01em" }}>
+            Sell-side research · Coverage updates · Ingested by email
           </p>
         </div>
         {!loading && (
@@ -870,7 +870,7 @@ export default function ResearchPage() {
             fontFamily: "Inter, sans-serif",
           }}
         />
-        <span style={{ color: "#CBD5E1", fontSize: 12 }}>–</span>
+        <span style={{ color: "#94A3B8", fontSize: 12 }}>–</span>
         <input
           type="date"
           value={fDateTo}
@@ -924,7 +924,7 @@ export default function ResearchPage() {
           borderBottom: "1px solid rgba(15,23,42,0.07)",
         }}>
           {["Date", "Company", "Title", "Category", "Target Price", "Recommendation", "From", ""].map((h, i) => (
-            <div key={h || `c${i}`} style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", color: "#94A3B8", textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <div key={h || `c${i}`} style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", color: "#64748B", textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {h}
             </div>
           ))}

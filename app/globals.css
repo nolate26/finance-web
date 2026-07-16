@@ -1,3 +1,86 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── Base ────────────────────────────────────────────────────────────────────── */
+@layer base {
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: var(--font-sans, 'Figtree', system-ui, sans-serif);
+    color: #0F172A;
+  }
+
+  /* Thin, elegant scrollbar */
+  ::-webkit-scrollbar          { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track    { background: transparent; }
+  ::-webkit-scrollbar-thumb    { background: rgba(15,23,42,0.14); border-radius: 10px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(15,23,42,0.26); }
+  ::-webkit-scrollbar-corner   { background: transparent; }
+}
+
+/* ── Utilities ───────────────────────────────────────────────────────────────── */
+@layer utilities {
+  /* Subtle grid on body background */
+  .grid-bg {
+    background-color: #EEF2F7;
+    background-image:
+      linear-gradient(rgba(15,23,42,0.028) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(15,23,42,0.028) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+}
+
+/* ── Components ──────────────────────────────────────────────────────────────── */
+@layer components {
+
+  /* Card — white surface, subtle border + shadow */
+  .card {
+    background: #FFFFFF;
+    border: 1px solid rgba(15,23,42,0.08);
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05), 0 1px 2px rgba(15,23,42,0.03);
+  }
+
+  /* Card with 3-px brand-blue top accent */
+  .card-accent {
+    background: #FFFFFF;
+    border: 1px solid rgba(15,23,42,0.08);
+    border-top: 3px solid #2B5CE0;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+  }
+
+  /* ── Loading spinner ──────────────────────────────────────────────────── */
+  .spinner {
+    border-radius: 50%;
+    border: 2px solid rgba(43,92,224,0.15);
+    border-top-color: #2B5CE0;
+    animation: spin 0.75s linear infinite;
+  }
+
+  /* ── Source pill — e.g. "Bloomberg" ─────────────────────────────────── */
+  .source-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    letter-spacing: 0.03em;
+    background: rgba(15,23,42,0.04);
+    border: 1px solid rgba(15,23,42,0.09);
+    border-radius: 20px;
+    padding: 3px 11px;
+    color: #64748B;
+    white-space: nowrap;
+  }
+}
+
+/* ── Keyframes ───────────────────────────────────────────────────────────────── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

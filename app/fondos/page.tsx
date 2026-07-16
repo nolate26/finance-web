@@ -175,35 +175,45 @@ export default function FondosPage() {
   return (
     <div className="max-w-[1600px] mx-auto px-6 py-6">
       {/* Header */}
-      <div className="flex items-start justify-between mb-5 gap-4 flex-wrap">
+      <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
         <div>
-          <h1 className="text-xl font-bold tracking-tight" style={{ color: "#0F172A" }}>Funds</h1>
-          <p className="text-xs mt-1" style={{ color: "#64748B" }}>
-            Portfolio composition &amp; deviation vs benchmark
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", letterSpacing: "-0.035em", lineHeight: 1.15, margin: 0 }}>
+            Funds
+          </h1>
+          <p style={{ fontSize: 12, marginTop: 5, color: "#64748B", fontWeight: 500, letterSpacing: "0.01em" }}>
+            Portfolio composition · Deviation vs benchmark
           </p>
         </div>
         {selectedMeta && (
-          <div className="flex items-center gap-2 text-xs font-mono" style={{ color: "#94A3B8" }}>
-            <RefreshCw size={12} />
-            <span>Data as of {fmtDate(selectedMeta.date)}</span>
+          <div className="source-pill">
+            <RefreshCw size={10} />
+            Data as of {fmtDate(selectedMeta.date)}
           </div>
         )}
       </div>
 
       {/* Region tabs */}
       <div
-        className="flex items-center gap-1 mb-4 p-1 rounded-lg"
-        style={{ background: "rgba(15,23,42,0.04)", border: "1px solid rgba(15,23,42,0.08)", width: "fit-content" }}
+        className="flex items-center mb-4"
+        style={{
+          gap: 2, padding: "3px", borderRadius: 10,
+          background: "rgba(15,23,42,0.04)",
+          border: "1px solid rgba(15,23,42,0.08)",
+          width: "fit-content",
+        }}
       >
         {(["Chile", "LATAM"] as const).map((r) => (
           <button
             key={r}
             onClick={() => switchRegion(r)}
-            className="px-5 py-1.5 rounded-md text-sm font-semibold transition-all"
+            className="px-5 py-1.5 rounded-lg text-sm transition-all"
             style={{
-              background: region === r ? "rgba(43,92,224,0.10)" : "transparent",
-              color: region === r ? "#1E3A8A" : "#64748B",
-              border: region === r ? "1px solid rgba(43,92,224,0.25)" : "1px solid transparent",
+              background: region === r ? "#FFFFFF"  : "transparent",
+              color:      region === r ? "#1B2E7E"  : "#475569",
+              border:     region === r ? "1px solid rgba(15,23,42,0.11)" : "1px solid transparent",
+              boxShadow:  region === r ? "0 1px 3px rgba(15,23,42,0.09)" : "none",
+              fontWeight: region === r ? 700 : 500,
+              cursor: "pointer",
             }}
           >
             {r}
@@ -236,22 +246,30 @@ export default function FondosPage() {
 
       {/* Internal tab navigation */}
       <div
-        className="flex items-center gap-1 mb-5 p-1 rounded-lg"
-        style={{ background: "rgba(15,23,42,0.04)", border: "1px solid rgba(15,23,42,0.08)", width: "fit-content" }}
+        className="flex items-center mb-5"
+        style={{
+          gap: 2, padding: "3px", borderRadius: 10,
+          background: "rgba(15,23,42,0.04)",
+          border: "1px solid rgba(15,23,42,0.08)",
+          width: "fit-content",
+        }}
       >
         {([
-          { key: "returns", label: "Returns" },
-          { key: "cartera", label: "Cartera" },
+          { key: "returns",     label: "Returns"                },
+          { key: "cartera",     label: "Cartera"                },
           { key: "attribution", label: "Performance Attribution" },
         ] as const).map(({ key, label }) => (
           <button
             key={key}
             onClick={() => setActiveTab(key)}
-            className="px-5 py-1.5 rounded-md text-sm font-semibold transition-all"
+            className="px-5 py-1.5 rounded-lg text-sm transition-all"
             style={{
-              background: activeTab === key ? "rgba(43,92,224,0.10)" : "transparent",
-              color: activeTab === key ? "#1E3A8A" : "#64748B",
-              border: activeTab === key ? "1px solid rgba(43,92,224,0.25)" : "1px solid transparent",
+              background: activeTab === key ? "#FFFFFF"  : "transparent",
+              color:      activeTab === key ? "#1B2E7E"  : "#475569",
+              border:     activeTab === key ? "1px solid rgba(15,23,42,0.11)" : "1px solid transparent",
+              boxShadow:  activeTab === key ? "0 1px 3px rgba(15,23,42,0.09)" : "none",
+              fontWeight: activeTab === key ? 700 : 500,
+              cursor: "pointer",
             }}
           >
             {label}
