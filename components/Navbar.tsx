@@ -1,10 +1,13 @@
 "use client";
 
 import Image from "next/image";
+import { useState, useRef, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { useSession, signOut } from "next-auth/react";
 import {
   BarChart3, TrendingUp, Building2, Globe2,
   FileText, Activity, BookOpen, Sigma, Newspaper,
+  ShieldCheck, LogOut, ChevronDown,
 } from "lucide-react";
 
 const tabs = [
@@ -21,6 +24,119 @@ const tabs = [
 
 const FONT = "var(--font-sans, 'Figtree', sans-serif)";
 const MONO = "var(--font-mono, 'JetBrains Mono', monospace)";
+
+// ── User menu (session + role + logout) ─────────────────────────────────────────
+function initialsOf(nameOrEmail: string): string {
+  const base = nameOrEmail.trim();
+  if (!base) return "?";
+  if (base.includes("@")) return base[0]!.toUpperCase();
+  const parts = base.split(/\s+/);
+  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || base[0]!.toUpperCase();
+}
+
+function UserMenu() {
+  const router = useRouter();
+  const { data: session, status } = useSession();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  if (status !== "authenticated" || !session?.user) return null;
+
+  const user    = session.user;
+  const isAdmin = user.role === "admin";
+  const display = user.name || user.email || "Usuario";
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2"
+        style={{
+          padding: "4px 8px 4px 4px", borderRadius: 9,
+          background: open ? "rgba(43,92,224,0.08)" : "transparent",
+          border: `1px solid ${open ? "rgba(43,92,224,0.22)" : "rgba(15,23,42,0.10)"}`,
+          cursor: "pointer", outline: "none", transition: "all 0.12s",
+        }}
+      >
+        <span style={{
+          width: 26, height: 26, borderRadius: 7, flexShrink: 0,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          background: isAdmin ? "linear-gradient(135deg,#1E3A8A,#2B5CE0)" : "rgba(15,23,42,0.10)",
+          color: isAdmin ? "#fff" : "#475569",
+          fontSize: 11, fontWeight: 800, fontFamily: FONT,
+        }}>
+          {initialsOf(display)}
+        </span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: "#334155", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {display}
+        </span>
+        <ChevronDown size={13} style={{ color: "#94A3B8", transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+      </button>
+
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 60,
+          minWidth: 230, background: "#fff", borderRadius: 11,
+          border: "1px solid rgba(15,23,42,0.10)", boxShadow: "0 12px 34px rgba(15,23,42,0.16)",
+          overflow: "hidden",
+        }}>
+          {/* Identity block */}
+          <div style={{ padding: "12px 14px", borderBottom: "1px solid rgba(15,23,42,0.07)", background: "#F8FAFF" }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: "#0F172A", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {user.name || "—"}
+            </div>
+            <div style={{ fontSize: 11, color: "#64748B", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {user.email}
+            </div>
+            <span style={{
+              display: "inline-flex", alignItems: "center", gap: 4, marginTop: 8,
+              fontSize: 9.5, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase",
+              padding: "2px 8px", borderRadius: 6,
+              background: isAdmin ? "rgba(43,92,224,0.10)" : "rgba(100,116,139,0.10)",
+              border: `1px solid ${isAdmin ? "rgba(43,92,224,0.28)" : "rgba(100,116,139,0.24)"}`,
+              color: isAdmin ? "#1E3A8A" : "#475569",
+            }}>
+              {isAdmin && <ShieldCheck size={10} />} {user.role}
+            </span>
+          </div>
+
+          {/* Admin link */}
+          {isAdmin && (
+            <button
+              onClick={() => { setOpen(false); router.push("/admin"); }}
+              className="flex items-center gap-2"
+              style={{ width: "100%", padding: "10px 14px", background: "transparent", border: "none", cursor: "pointer", fontSize: 12.5, fontWeight: 600, color: "#334155", textAlign: "left" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.06)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+            >
+              <ShieldCheck size={14} style={{ color: "#2B5CE0" }} /> Administración
+            </button>
+          )}
+
+          {/* Logout */}
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            className="flex items-center gap-2"
+            style={{ width: "100%", padding: "10px 14px", background: "transparent", border: "none", borderTop: "1px solid rgba(15,23,42,0.06)", cursor: "pointer", fontSize: 12.5, fontWeight: 600, color: "#B91C1C", textAlign: "left" }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(185,28,28,0.05)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+          >
+            <LogOut size={14} /> Cerrar sesión
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -144,6 +260,9 @@ export default function Navbar() {
         >
           BETA
         </span>
+
+        {/* User menu — session, role badge & logout */}
+        <UserMenu />
       </div>
     </nav>
   );

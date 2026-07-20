@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import path from "path";
 import fs from "fs";
+import { requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,8 @@ function sanitizeFilename(name: string): string {
 // ── POST: Upload a PDF and attach it to a pick ────────────────────────────────
 
 export async function POST(request: Request) {
+  const deny = await requireAdmin();
+  if (deny) return deny;
   try {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
@@ -133,6 +136,8 @@ export async function POST(request: Request) {
 // ── DELETE: Remove an attachment from a pick ──────────────────────────────────
 
 export async function DELETE(request: Request) {
+  const deny = await requireAdmin();
+  if (deny) return deny;
   try {
     const { searchParams } = new URL(request.url);
     const periodId = searchParams.get("periodId")?.trim();

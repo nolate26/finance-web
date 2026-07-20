@@ -9,6 +9,7 @@ import type {
 } from "@/app/api/companies/[ticker]/bank-model/route";
 import { consensusScaleFactor } from "@/lib/consensusScale";
 import ModelEstimateChart, { buildEstimateRows, type EstimateMetric, type EstimateRow } from "@/components/deep-dive/ModelEstimateChart";
+import { useIsAdmin } from "@/lib/useIsAdmin";
 
 // ── Estimate-evolution chart metrics (Net Income default) ────────────────────────
 // Banks don't carry EBITDA / FCFE, so we track the closest analogues.
@@ -336,6 +337,8 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>("");
+  const [deleting,     setDeleting]     = useState(false);
+  const isAdmin = useIsAdmin();
 
   useEffect(() => {
     if (!ticker) return;
@@ -486,6 +489,32 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
   function fmtDate(iso: string) {
     const [y, m, d] = iso.split("-");
     return `${d}-${m}-${y}`;
+  }
+
+  // ── Delete version (admin) ─────────────────────────────────────────────────
+  async function handleDeleteVersion() {
+    if (!history || !selectedDate) return;
+    if (!window.confirm(
+      `Delete the model version from ${fmtDate(selectedDate)} for ${header.ticker}? This cannot be undone.`
+    )) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(
+        `/api/companies/${encodeURIComponent(ticker)}/bank-model?updateDate=${selectedDate}`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error ?? `HTTP ${res.status}`);
+      }
+      const remaining = history.snapshots.filter(s => s.header.updateDate !== selectedDate);
+      setHistory({ ...history, snapshots: remaining });
+      setSelectedDate(remaining[0]?.header.updateDate ?? "");
+    } catch (e) {
+      alert(`Error al eliminar la versión: ${String(e)}`);
+    } finally {
+      setDeleting(false);
+    }
   }
 
   // ── Excel export ──────────────────────────────────────────────────────────
@@ -751,6 +780,26 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
             ))}
           </select>
         </div>
+
+        {/* Delete this version — admins only */}
+        {isAdmin && (
+          <button
+            onClick={handleDeleteVersion}
+            disabled={deleting}
+            title="Delete this model version"
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 5,
+              padding: "5px 12px", borderRadius: 5, cursor: deleting ? "not-allowed" : "pointer",
+              background: "transparent", border: "1px solid rgba(220,38,38,0.35)",
+              color: C.RED, fontWeight: 700, fontSize: 11, letterSpacing: "0.02em", outline: "none",
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
+              <path d="M2 3.5h10M5.5 3.5V2.2c0-.4.3-.7.7-.7h1.6c.4 0 .7.3.7.7v1.3M3.2 3.5l.5 8c0 .5.4.9.9.9h4.8c.5 0 .9-.4.9-.9l.5-8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            {deleting ? "Deleting…" : "Delete version"}
+          </button>
+        )}
       </div>
 
       {/* ── TABLE ─────────────────────────────────────────────────────────── */}

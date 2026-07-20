@@ -46,6 +46,7 @@ model User {
   email         String?   @unique
   emailVerified DateTime?
   password      String?   // ¡Añadido para login tradicional!
+  role          String    @default("user")   // "admin" | "user" — controla permisos de edición
   image         String?
   accounts      Account[]
   sessions      Session[]

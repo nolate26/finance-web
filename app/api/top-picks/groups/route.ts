@@ -1,5 +1,6 @@
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,9 @@ export async function GET(request: NextRequest) {
 
 // PUT — bulk rename an industry_group across all periods for a region
 export async function PUT(request: NextRequest) {
+  const deny = await requireAdmin();
+  if (deny) return deny;
+
   let body: { region: string; oldGroup: string; newGroup: string };
   try {
     body = await request.json();

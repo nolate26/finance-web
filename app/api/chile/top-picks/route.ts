@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import path from "path";
 import fs from "fs";
+import { requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +53,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const deny = await requireAdmin();
+  if (deny) return deny;
   try {
     const body = (await request.json()) as TopPicksPeriod;
     const data = readData();
@@ -96,6 +99,8 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
+  const deny = await requireAdmin();
+  if (deny) return deny;
   try {
     const body = (await request.json()) as TopPicksPeriod;
     const data = readData();
@@ -111,6 +116,8 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const deny = await requireAdmin();
+  if (deny) return deny;
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");

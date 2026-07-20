@@ -1,7 +1,19 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import type { TrackRecordOptions } from "@/app/api/analysis/track-record/options/route";
+
+// Fila editable (subconjunto de PreviewRow) para reutilizar el modal en modo edición.
+export interface EditRecommendationRow {
+  id:             number;
+  date:           string;
+  type:           string;
+  analyst:        string;
+  company:        string;
+  recommendation: string;
+  currentPrice:   number;
+  targetPrice:    number;
+}
 
 // ── Design tokens (match the feature) ───────────────────────────────────────────
 const TEXT1  = "#0F172A";
@@ -32,13 +44,15 @@ function Field({ label, children, hint }: { label: string; children: React.React
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function AddRecommendationModal({
-  open, options, onClose, onSaved,
+  open, options, onClose, onSaved, editRow = null,
 }: {
   open:    boolean;
   options: TrackRecordOptions | null;
   onClose: () => void;
   onSaved: (company: string) => void;
+  editRow?: EditRecommendationRow | null;
 }) {
+  const isEditing = editRow != null;
   const [date,           setDate]           = useState(today());
   const [company,        setCompany]        = useState("");
   const [analyst,        setAnalyst]        = useState("");
@@ -52,12 +66,28 @@ export default function AddRecommendationModal({
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState<string | null>(null);
 
+  // Al abrir en modo edición, precargar los campos con la fila seleccionada.
+  useEffect(() => {
+    if (open && editRow) {
+      setDate(editRow.date);
+      setCompany(editRow.company);
+      setAnalyst(editRow.analyst);
+      setRecommendation(editRow.recommendation);
+      setType(editRow.type);
+      setCurrentPrice(String(editRow.currentPrice));
+      setTargetPrice(String(editRow.targetPrice));
+      setTicker(""); setIsin(""); setError(null);
+    }
+  }, [open, editRow]);
+
   // A company is "new" when it isn't already mapped in CompanyIsin.
+  // Al editar, la empresa ya existe → nunca se trata como nueva.
   const isNewCompany = useMemo(() => {
+    if (isEditing) return false;
     const c = company.trim();
     if (!c || !options) return false;
     return !options.mappedCompanies.includes(c);
-  }, [company, options]);
+  }, [company, options, isEditing]);
 
   if (!open) return null;
 
@@ -85,8 +115,12 @@ export default function AddRecommendationModal({
 
     setSaving(true);
     try {
-      const res = await fetch("/api/analysis/track-record/recommendations", {
-        method:  "POST",
+      const url    = isEditing
+        ? `/api/analysis/track-record/recommendations/${editRow!.id}`
+        : "/api/analysis/track-record/recommendations";
+      const method = isEditing ? "PATCH" : "POST";
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           date,
@@ -96,6 +130,7 @@ export default function AddRecommendationModal({
           recommendation: recommendation.trim(),
           currentPrice:   Number(currentPrice),
           targetPrice:    Number(targetPrice),
+          // Sólo relevante al crear (empresa nueva): al editar el backend lo ignora.
           yahooFinanceTicker: ticker.trim() || undefined,
           isin:               isin.trim()   || undefined,
         }),
@@ -132,9 +167,13 @@ export default function AddRecommendationModal({
         {/* Header */}
         <div style={{ padding: "16px 20px", borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: TEXT1 }}>Add recommendation</h3>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: TEXT1 }}>
+              {isEditing ? "Edit recommendation" : "Add recommendation"}
+            </h3>
             <p style={{ margin: "2px 0 0", fontSize: 11.5, color: TEXT2 }}>
-              Inserts a row into the analyst history{isNewCompany ? " and registers the new company" : ""}.
+              {isEditing
+                ? "Updates the selected analyst-history row."
+                : `Inserts a row into the analyst history${isNewCompany ? " and registers the new company" : ""}.`}
             </p>
           </div>
           <button onClick={close} style={{ background: "none", border: "none", fontSize: 22, lineHeight: 1, color: TEXT3, cursor: "pointer", padding: 0 }}>×</button>
@@ -221,7 +260,7 @@ export default function AddRecommendationModal({
             {saving && (
               <span style={{ width: 13, height: 13, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.45)", borderTopColor: "#FFFFFF", animation: "spin 0.8s linear infinite" }} />
             )}
-            {saving ? "Saving…" : "Save recommendation"}
+            {saving ? "Saving…" : isEditing ? "Save changes" : "Save recommendation"}
           </button>
         </div>
       </div>

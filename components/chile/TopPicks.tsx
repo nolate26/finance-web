@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { Plus, X, PlusCircle, Trash2, Paperclip, FileText } from "lucide-react";
+import { useIsAdmin } from "@/lib/useIsAdmin";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -99,11 +100,13 @@ function AttachCell({
   sector,
   periodId,
   onRefresh,
+  isAdmin,
 }: {
   pick: Pick;
   sector: string;
   periodId: string;
   onRefresh: () => void;
+  isAdmin: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -174,16 +177,21 @@ function AttachCell({
           <FileText size={11} className="shrink-0" />
           <span className="truncate">{pick.attachment.fileName.split("_").pop()}</span>
         </a>
-        <button
-          onClick={handleRemove}
-          className="text-slate-300 hover:text-red-400 transition-colors p-0.5"
-          title="Remove attachment"
-        >
-          <X size={11} />
-        </button>
+        {isAdmin && (
+          <button
+            onClick={handleRemove}
+            className="text-slate-300 hover:text-red-400 transition-colors p-0.5"
+            title="Remove attachment"
+          >
+            <X size={11} />
+          </button>
+        )}
       </div>
     );
   }
+
+  // Sin adjunto: los no-admin no ven affordance de subida.
+  if (!isAdmin) return null;
 
   return (
     <>
@@ -212,10 +220,12 @@ function CurrentView({
   period,
   onDelete,
   onRefresh,
+  isAdmin,
 }: {
   period: Period;
   onDelete?: () => void;
   onRefresh: () => void;
+  isAdmin: boolean;
 }) {
   const allPicks: Array<{ sector: string; pick: Pick }> = [];
   for (const sector of ALL_SECTORS) {
@@ -402,6 +412,7 @@ function CurrentView({
                             sector={sector}
                             periodId={period.id}
                             onRefresh={onRefresh}
+                            isAdmin={isAdmin}
                           />
                         </div>
                       </div>
@@ -1106,6 +1117,7 @@ export default function TopPicks() {
   const [editDraft, setEditDraft] = useState<Period | null>(null);
   const [saving, setSaving] = useState(false);
   const [coverageCompanies, setCoverageCompanies] = useState<CoverageCompany[]>([]);
+  const isAdmin = useIsAdmin();
 
   const fetchPeriods = useCallback(() => {
     setLoading(true);
@@ -1264,32 +1276,34 @@ export default function TopPicks() {
           ))}
         </div>
 
-        {/* New Period button */}
-        <button
-          onClick={handleOpenNew}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "7px 16px",
-            borderRadius: 8,
-            fontSize: 12,
-            fontWeight: 600,
-            border: "none",
-            background: "#2B5CE0",
-            color: "#FFFFFF",
-            cursor: "pointer",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.background = "#1E3A8A";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.background = "#2B5CE0";
-          }}
-        >
-          <Plus size={14} />
-          New Period
-        </button>
+        {/* New Period button — admins only */}
+        {isAdmin && (
+          <button
+            onClick={handleOpenNew}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "7px 16px",
+              borderRadius: 8,
+              fontSize: 12,
+              fontWeight: 600,
+              border: "none",
+              background: "#2B5CE0",
+              color: "#FFFFFF",
+              cursor: "pointer",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.background = "#1E3A8A";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.background = "#2B5CE0";
+            }}
+          >
+            <Plus size={14} />
+            New Period
+          </button>
+        )}
       </div>
 
       {/* Views */}
@@ -1309,8 +1323,9 @@ export default function TopPicks() {
           current && (
             <CurrentView
               period={current}
-              onDelete={() => handleDeletePeriod(current.id)}
+              onDelete={isAdmin ? () => handleDeletePeriod(current.id) : undefined}
               onRefresh={fetchPeriods}
+              isAdmin={isAdmin}
             />
           )
         ) : (

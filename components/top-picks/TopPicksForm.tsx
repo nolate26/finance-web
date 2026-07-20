@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Plus, Trash2, CheckCircle2, Loader2, Search, Pencil, ChevronLeft, ChevronRight, Table2 } from "lucide-react";
+import { useIsAdmin } from "@/lib/useIsAdmin";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -580,13 +581,14 @@ function savedPickToRow(p: SavedPick): PickRow {
 }
 
 function EditForm({
-  region, period, initialPicks, onSaveSuccess, onCancel,
+  region, period, initialPicks, onSaveSuccess, onCancel, onDeleteSuccess,
 }: {
-  region:        Region;
-  period:        string;
-  initialPicks:  SavedPick[];
-  onSaveSuccess: (savedPeriod: string) => void;
-  onCancel:      () => void;
+  region:          Region;
+  period:          string;
+  initialPicks:    SavedPick[];
+  onSaveSuccess:   (savedPeriod: string) => void;
+  onCancel:        () => void;
+  onDeleteSuccess: () => void;
 }) {
   // formPeriod is independent — the user can change it without clearing rows (rollover)
   const [formPeriod, setFormPeriod] = useState(period);
@@ -596,8 +598,9 @@ function EditForm({
     initialPicks.length > 0 ? initialPicks.map(savedPickToRow) : [newRow()]
   );
 
-  const [saving, setSaving] = useState(false);
-  const [error, setError]   = useState<string | null>(null);
+  const [saving, setSaving]     = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError]       = useState<string | null>(null);
   const isChile = region === "CHILE";
 
   // Existing coverage groups for autocomplete + rename
@@ -713,6 +716,28 @@ function EditForm({
     } catch (e) {
       setError(String(e));
       setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm(
+      `Delete the entire "${periodLabel(period, isChile)}" report? This removes all its picks and cannot be undone.`
+    )) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/top-picks?region=${region}&period_date=${monthValueToISO(period)}`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error ?? `HTTP ${res.status}`);
+      }
+      onDeleteSuccess();
+    } catch (e) {
+      setError(String(e));
+      setDeleting(false);
     }
   };
 
@@ -1042,6 +1067,26 @@ function EditForm({
           >
             ⟳ Rename Group
           </button>
+
+          {/* Delete entire report — only when the period already has saved picks */}
+          {initialPicks.length > 0 && (
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              title="Delete this entire report"
+              style={{
+                display: "flex", alignItems: "center", gap: 5,
+                padding: "7px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600,
+                background: "transparent", border: "1px solid rgba(220,38,38,0.22)",
+                color: "#DC2626", cursor: deleting ? "not-allowed" : "pointer", transition: "all 0.12s",
+              }}
+              onMouseEnter={(e) => { if (!deleting) (e.currentTarget as HTMLElement).style.background = "rgba(220,38,38,0.06)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+            >
+              {deleting ? <Loader2 size={13} style={{ animation: "spin 0.8s linear infinite" }} /> : <Trash2 size={13} />}
+              Delete report
+            </button>
+          )}
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -1079,6 +1124,7 @@ function EditForm({
 export default function TopPicksForm({ region: regionProp, defaultRegion }: Props) {
   const region  = regionProp ?? defaultRegion ?? "LATAM";
   const isChile = region === "CHILE";
+  const isAdmin = useIsAdmin();
 
   const [mode, setMode]     = useState<"view" | "edit" | "summary">("view");
   const [period, setPeriod] = useState<string | null>(null); // null = loading
@@ -1133,6 +1179,19 @@ export default function TopPicksForm({ region: regionProp, defaultRegion }: Prop
       .then((r) => r.json())
       .then((d: { periods?: string[] }) => setPeriods(d.periods ?? []));
     setTimeout(() => setSuccessMsg(false), 4000);
+  };
+
+  const handleDeleteSuccess = () => {
+    // The current period was deleted — reload the periods list and jump to the newest.
+    setMode("view");
+    fetch(`/api/top-picks/periods?region=${region}`)
+      .then((r) => r.json())
+      .then((d: { periods?: string[] }) => {
+        const list = d.periods ?? [];
+        setPeriods(list);
+        setPeriod(list[0] ?? (isChile ? currentQuarterMonthValue() : todayMonthValue()));
+      })
+      .catch(() => loadPicks());
   };
 
   const activePeriod = period ?? (isChile ? currentQuarterMonthValue() : todayMonthValue());
@@ -1271,8 +1330,8 @@ export default function TopPicksForm({ region: regionProp, defaultRegion }: Prop
               </button>
             )}
 
-            {/* Edit button — only in view mode */}
-            {mode === "view" && (
+            {/* Edit button — only in view mode, admins only */}
+            {mode === "view" && isAdmin && (
               <button
                 onClick={() => setMode("edit")}
                 style={{
@@ -1299,13 +1358,14 @@ export default function TopPicksForm({ region: regionProp, defaultRegion }: Prop
         {mode === "summary" && (
           <SummaryView region={region} periods={periods} isChile={isChile} />
         )}
-        {mode === "edit" && (
+        {mode === "edit" && isAdmin && (
           <EditForm
             region={region}
             period={activePeriod}
             initialPicks={picks}
             onSaveSuccess={handleSaveSuccess}
             onCancel={() => setMode("view")}
+            onDeleteSuccess={handleDeleteSuccess}
           />
         )}
       </div>

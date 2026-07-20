@@ -1,6 +1,7 @@
 import { NextResponse, NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -28,6 +29,9 @@ function num(v: number | string | undefined): number | null {
 }
 
 export async function POST(request: NextRequest) {
+  const deny = await requireAdmin();
+  if (deny) return deny;
+
   let body: Body;
   try {
     body = await request.json();

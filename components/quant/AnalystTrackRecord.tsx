@@ -11,6 +11,7 @@ import type {
   EquityPoint, Marker, Summary,
 } from "@/app/api/analysis/track-record/route";
 import AddRecommendationModal from "./AddRecommendationModal";
+import { useIsAdmin } from "@/lib/useIsAdmin";
 
 // ── Design tokens (match QuantModelTable) ───────────────────────────────────────
 const TEXT1   = "#0F172A";
@@ -487,8 +488,11 @@ export default function AnalystTrackRecord() {
   const [error,          setError]          = useState<string | null>(null);
   const [touched,        setTouched]        = useState(false);
   const [showAdd,        setShowAdd]        = useState(false);
+  const [editRow,        setEditRow]        = useState<PreviewRow | null>(null);
+  const [deletingId,     setDeletingId]     = useState<number | null>(null);
   const [benchmark,      setBenchmark]      = useState("auto");
   const [refreshKey,     setRefreshKey]     = useState(0);
+  const isAdmin = useIsAdmin();
 
   const calcMap = useMemo(() => new Map((calc?.rows ?? []).map(r => [r.id, r])), [calc]);
 
@@ -575,14 +579,35 @@ export default function AnalystTrackRecord() {
       .catch(() => {});
   }, []);
 
-  // After a successful insert: refresh options, focus the saved company, force a preview reload.
+  // After a successful insert/edit: refresh options, focus the saved company, force a preview reload.
   const handleSaved = useCallback((savedCompany: string) => {
     setShowAdd(false);
+    setEditRow(null);
     reloadOptions();
     setAnalyst("");
     setCompany(savedCompany);
     setRefreshKey(k => k + 1);
   }, [reloadOptions]);
+
+  // Delete a single recommendation (admin).
+  const handleDelete = useCallback(async (row: PreviewRow) => {
+    if (!window.confirm(
+      `Delete the ${row.recommendation} recommendation on ${row.company} (${fmtDate(row.date)})? This cannot be undone.`
+    )) return;
+    setDeletingId(row.id);
+    try {
+      const res = await fetch(`/api/analysis/track-record/recommendations/${row.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || `HTTP ${res.status}`);
+      }
+      setRefreshKey(k => k + 1);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setDeletingId(null);
+    }
+  }, []);
 
   const hasCalc = calcMap.size > 0;
 
@@ -634,17 +659,19 @@ export default function AnalystTrackRecord() {
 
         <div style={{ flex: 1 }} />
 
-        <button
-          onClick={() => setShowAdd(true)}
-          style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "9px 16px", borderRadius: 8,
-            border: `1px solid rgba(43,92,224,0.30)`, background: "rgba(43,92,224,0.06)",
-            color: BLUE, fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer",
-          }}
-        >
-          + Add recommendation
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => { setEditRow(null); setShowAdd(true); }}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "9px 16px", borderRadius: 8,
+              border: `1px solid rgba(43,92,224,0.30)`, background: "rgba(43,92,224,0.06)",
+              color: BLUE, fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer",
+            }}
+          >
+            + Add recommendation
+          </button>
+        )}
 
         <button
           onClick={calculate}
@@ -826,12 +853,13 @@ export default function AnalystTrackRecord() {
                 <th style={{ ...TH, textAlign: "center" }}>Pos</th>
                 <th style={{ ...TH, textAlign: "right" }}>Return %</th>
                 <th style={{ ...TH, textAlign: "right" }}>Compound %</th>
+                {isAdmin && <th style={{ ...TH, textAlign: "center" }}>Actions</th>}
               </tr>
             </thead>
             <tbody>
               {previewRows.length === 0 ? (
                 <tr>
-                  <td colSpan={11} style={{ textAlign: "center", padding: "44px 0", color: TEXT3, fontSize: 13 }}>
+                  <td colSpan={isAdmin ? 12 : 11} style={{ textAlign: "center", padding: "44px 0", color: TEXT3, fontSize: 13 }}>
                     {loadingPreview ? "Loading…" : touched ? "No recommendations for this filter" : "Adjust the filters above to preview recommendations"}
                   </td>
                 </tr>
@@ -871,6 +899,38 @@ export default function AnalystTrackRecord() {
                       color: !c || c.compound == null ? TEXT3 : c.compound >= 0 ? GREEN : RED }}>
                       {!c ? "—" : fmtPct(c.compound)}
                     </td>
+                    {isAdmin && (
+                      <td style={{ ...TD, textAlign: "center", whiteSpace: "nowrap" }}>
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          <button
+                            onClick={() => { setEditRow(row); setShowAdd(true); }}
+                            title="Editar recomendación"
+                            style={{
+                              display: "inline-flex", alignItems: "center", justifyContent: "center",
+                              width: 26, height: 26, borderRadius: 6, cursor: "pointer",
+                              background: "rgba(43,92,224,0.07)", border: "1px solid rgba(43,92,224,0.22)", color: BLUE,
+                            }}
+                          >
+                            <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M9.5 2.5l2 2M8.5 3.5L3 9v2h2l5.5-5.5-2-2z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                          </button>
+                          <button
+                            onClick={() => handleDelete(row)}
+                            disabled={deletingId === row.id}
+                            title="Eliminar recomendación"
+                            style={{
+                              display: "inline-flex", alignItems: "center", justifyContent: "center",
+                              width: 26, height: 26, borderRadius: 6,
+                              cursor: deletingId === row.id ? "not-allowed" : "pointer",
+                              background: "rgba(220,38,38,0.06)", border: "1px solid rgba(220,38,38,0.22)", color: RED,
+                            }}
+                          >
+                            {deletingId === row.id
+                              ? <span style={{ width: 11, height: 11, borderRadius: "50%", border: "2px solid rgba(185,28,28,0.35)", borderTopColor: RED, animation: "spin 0.8s linear infinite" }} />
+                              : <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 3.5h10M5.5 3.5V2.2c0-.4.3-.7.7-.7h1.6c.4 0 .7.3.7.7v1.3M3.2 3.5l.5 8c0 .5.4.9.9.9h4.8c.5 0 .9-.4.9-.9l.5-8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -882,7 +942,8 @@ export default function AnalystTrackRecord() {
       <AddRecommendationModal
         open={showAdd}
         options={options}
-        onClose={() => setShowAdd(false)}
+        editRow={editRow}
+        onClose={() => { setShowAdd(false); setEditRow(null); }}
         onSaved={handleSaved}
       />
     </div>

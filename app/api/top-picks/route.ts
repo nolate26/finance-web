@@ -1,5 +1,6 @@
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   const region      = request.nextUrl.searchParams.get("region");
@@ -50,6 +51,9 @@ interface PostBody {
 }
 
 export async function POST(request: NextRequest) {
+  const deny = await requireAdmin();
+  if (deny) return deny;
+
   let body: PostBody;
   try {
     body = await request.json();
@@ -87,5 +91,33 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     console.error("Top picks save error:", err);
     return NextResponse.json({ error: "Failed to save picks" }, { status: 500 });
+  }
+}
+
+// ── DELETE — borra el reporte completo de un período (solo admin) ────────────────
+export async function DELETE(request: NextRequest) {
+  const deny = await requireAdmin();
+  if (deny) return deny;
+
+  const region      = request.nextUrl.searchParams.get("region");
+  const period_date = request.nextUrl.searchParams.get("period_date");
+
+  if (!region || !period_date) {
+    return NextResponse.json({ error: "Missing region or period_date" }, { status: 400 });
+  }
+
+  const periodDate = new Date(period_date);
+  if (isNaN(periodDate.getTime())) {
+    return NextResponse.json({ error: "Invalid period_date" }, { status: 400 });
+  }
+
+  try {
+    const { count } = await prisma.top_picks.deleteMany({
+      where: { region, period_date: periodDate },
+    });
+    return NextResponse.json({ deleted: count });
+  } catch (err) {
+    console.error("Top picks delete error:", err);
+    return NextResponse.json({ error: "Failed to delete picks" }, { status: 500 });
   }
 }

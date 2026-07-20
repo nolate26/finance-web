@@ -26,11 +26,17 @@ export const config = {
     "/projections/:path*",
     "/quant/:path*",
     "/macro/:path*",
+    "/admin/:path*",
 
     // Private API routes
     "/api/companies/:path*",
     "/api/reports/:path*",
     "/api/chile/:path*",
     "/api/latam/:path*",
+    "/api/admin/:path*",
+    "/api/top-picks/:path*",
+    "/api/research/:path*",
+    "/api/analysis/:path*",
+    "/api/presentations/:path*",
   ],
 };

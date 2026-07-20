@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { FileText, Download, Upload } from "lucide-react";
 import CreatePresentationModal, { type Presentation } from "@/components/CreatePresentationModal";
+import { useIsAdmin } from "@/lib/useIsAdmin";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -103,6 +104,7 @@ export default function PresentationsPage() {
   const [presentations, setPresentations] = useState<Presentation[]>([]);
   const [loading,       setLoading]       = useState(true);
   const [showModal,     setShowModal]     = useState(false);
+  const isAdmin = useIsAdmin();
 
   const [mainCategory, setMainCategory] = useState<MainCategory>("client_presentations");
   // For investment_cases / sell_side
@@ -182,7 +184,7 @@ export default function PresentationsPage() {
 
   return (
     <>
-      {showModal && (
+      {showModal && isAdmin && (
         <CreatePresentationModal
           defaultCategory={mainCategory}
           defaultRegion={mainCategory === "client_presentations" ? subFilter : subFilter}
@@ -200,12 +202,14 @@ export default function PresentationsPage() {
             <p style={{ fontSize: 12, marginTop: 5, color: "#64748B", fontWeight: 500, letterSpacing: "0.01em" }}>Research reports · Investor presentations</p>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setShowModal(true)}
-              style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 15px", borderRadius: 8, background: "#2B5CE0", border: "none", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
-            >
-              <Upload size={14} /> Upload
-            </button>
+            {isAdmin && (
+              <button
+                onClick={() => setShowModal(true)}
+                style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 15px", borderRadius: 8, background: "#2B5CE0", border: "none", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+              >
+                <Upload size={14} /> Upload
+              </button>
+            )}
             <span className="text-xs font-mono px-2 py-1 rounded" style={{ background: "rgba(43,92,224,0.08)", color: "#2B5CE0" }}>
               {displayFiles.length} document{displayFiles.length !== 1 ? "s" : ""}
             </span>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -204,5 +205,41 @@ export async function GET(
   } catch (e) {
     console.error("[model]", e);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
+// ── DELETE — borra una versión (snapshot) del modelo por updateDate (solo admin) ──
+// Cascada a model_financials / model_kpis vía onDelete: Cascade. Match del ticker
+// case-insensitive porque model_headers puede diferir en capitalización del param.
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ ticker: string }> },
+) {
+  const deny = await requireAdmin();
+  if (deny) return deny;
+
+  const { ticker: rawTicker } = await params;
+  const ticker = decodeURIComponent(rawTicker).trim();
+  const updateDate = req.nextUrl.searchParams.get("updateDate");
+
+  if (!updateDate) {
+    return NextResponse.json({ error: "Falta updateDate" }, { status: 400 });
+  }
+  const date = new Date(updateDate);
+  if (isNaN(date.getTime())) {
+    return NextResponse.json({ error: "updateDate inválido" }, { status: 400 });
+  }
+
+  try {
+    const { count } = await prisma.modelHeader.deleteMany({
+      where: { ticker: { equals: ticker, mode: "insensitive" }, updateDate: date },
+    });
+    if (count === 0) {
+      return NextResponse.json({ error: "Versión no encontrada" }, { status: 404 });
+    }
+    return NextResponse.json({ deleted: count });
+  } catch (e) {
+    console.error("[model DELETE]", e);
+    return NextResponse.json({ error: "No se pudo eliminar la versión" }, { status: 500 });
   }
 }

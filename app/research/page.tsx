@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef } from "react";
-import { Loader2, Search, X, ChevronDown, Mail, ExternalLink, Copy, Check, Send } from "lucide-react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
+import { Loader2, Search, X, ChevronDown, Mail, ExternalLink, Copy, Check, Send, Pencil, Trash2, Save } from "lucide-react";
+import { useIsAdmin } from "@/lib/useIsAdmin";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -166,10 +167,83 @@ function FilterSelect({
 
 // ── Detail modal ──────────────────────────────────────────────────────────────
 
-function DetailModal({ record, onClose }: { record: ResearchRecord; onClose: () => void }) {
+function DetailModal({
+  record, onClose, isAdmin, onChanged,
+}: {
+  record:    ResearchRecord;
+  onClose:   () => void;
+  isAdmin:   boolean;
+  onChanged: () => void;
+}) {
   const col = groupColor(categoryGroup(record.category));
   const tp  = fmtTarget(record.targetPrice);
   const rec = cleanRec(record.recommendation);
+
+  // ── Admin edit state ──────────────────────────────────────────────────────
+  const [editing, setEditing] = useState(false);
+  const [saving,  setSaving]  = useState(false);
+  const [err,     setErr]     = useState<string | null>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);   // cuerpo editable (contentEditable)
+  const [form, setForm] = useState({
+    company:        record.company,
+    date:           record.date,
+    category:       record.category,
+    title:          record.title ?? "",
+    targetPrice:    record.targetPrice != null ? String(record.targetPrice) : "",
+    recommendation: record.recommendation ?? "",
+  });
+
+  const patch = (p: Partial<typeof form>) => setForm((f) => ({ ...f, ...p }));
+  const editInput: React.CSSProperties = {
+    width: "100%", boxSizing: "border-box", padding: "6px 9px", borderRadius: 7,
+    border: "1px solid rgba(15,23,42,0.14)", background: "#F8FAFF", fontSize: 12.5, color: "#0F172A", outline: "none",
+  };
+
+  async function save() {
+    setErr(null);
+    if (!form.company.trim() || !form.category.trim() || !form.date) {
+      setErr("Company, categoría y fecha son obligatorios."); return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/research/${record.id}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company:        form.company.trim(),
+          date:           form.date,
+          category:       form.category.trim(),
+          title:          form.title.trim() || null,
+          targetPrice:    form.targetPrice.trim() === "" ? null : Number(form.targetPrice),
+          recommendation: form.recommendation.trim() || null,
+          html:           bodyRef.current ? bodyRef.current.innerHTML : undefined,
+        }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "No se pudo guardar.");
+      onChanged();
+      onClose();
+    } catch (e) {
+      setErr((e as Error).message);
+      setSaving(false);
+    }
+  }
+
+  async function remove() {
+    if (!window.confirm("¿Eliminar esta nota de research? Esta acción no se puede deshacer.")) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/research/${record.id}`, { method: "DELETE" });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "No se pudo eliminar.");
+      onChanged();
+      onClose();
+    } catch (e) {
+      setErr((e as Error).message);
+      setSaving(false);
+    }
+  }
+
   return (
     <div
       onClick={onClose}
@@ -268,36 +342,141 @@ function DetailModal({ record, onClose }: { record: ResearchRecord; onClose: () 
             )}
           </div>
 
-          {/* Close */}
-          <button
-            onClick={onClose}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: 34, height: 34, borderRadius: 9, flexShrink: 0,
-              background: "transparent", border: "1px solid rgba(15,23,42,0.10)",
-              cursor: "pointer", color: "#64748B", transition: "all 0.12s",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.background = "rgba(15,23,42,0.06)";
-              (e.currentTarget as HTMLElement).style.color = "#0F172A";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.background = "transparent";
-              (e.currentTarget as HTMLElement).style.color = "#64748B";
-            }}
-          >
-            <X size={16} />
-          </button>
+          {/* Actions */}
+          <div style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}>
+            {isAdmin && !editing && (
+              <>
+                <button
+                  onClick={() => { setEditing(true); setErr(null); }}
+                  title="Editar / mover esta nota"
+                  style={{
+                    display: "flex", alignItems: "center", gap: 5, height: 34, padding: "0 12px",
+                    borderRadius: 9, background: "rgba(43,92,224,0.07)", border: "1px solid rgba(43,92,224,0.22)",
+                    color: "#2B5CE0", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  }}
+                >
+                  <Pencil size={13} /> Editar
+                </button>
+                <button
+                  onClick={remove}
+                  disabled={saving}
+                  title="Eliminar esta nota"
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    width: 34, height: 34, borderRadius: 9,
+                    background: "rgba(220,38,38,0.06)", border: "1px solid rgba(220,38,38,0.22)",
+                    color: "#DC2626", cursor: saving ? "not-allowed" : "pointer",
+                  }}
+                >
+                  <Trash2 size={15} />
+                </button>
+              </>
+            )}
+            {/* Close */}
+            <button
+              onClick={onClose}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+                background: "transparent", border: "1px solid rgba(15,23,42,0.10)",
+                cursor: "pointer", color: "#64748B", transition: "all 0.12s",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.background = "rgba(15,23,42,0.06)";
+                (e.currentTarget as HTMLElement).style.color = "#0F172A";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.background = "transparent";
+                (e.currentTarget as HTMLElement).style.color = "#64748B";
+              }}
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
+
+        {/* ── Admin edit form ─────────────────────────────────────────── */}
+        {editing && (
+          <div style={{ padding: "16px 28px", borderBottom: "1px solid rgba(15,23,42,0.07)", background: "#FBFCFE", flexShrink: 0 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: "#64748B", letterSpacing: "0.05em", textTransform: "uppercase" }}>Company (mover)</span>
+                <input value={form.company} onChange={(e) => patch({ company: e.target.value })} style={editInput} />
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: "#64748B", letterSpacing: "0.05em", textTransform: "uppercase" }}>Categoría</span>
+                <input value={form.category} onChange={(e) => patch({ category: e.target.value })} style={editInput} />
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: "#64748B", letterSpacing: "0.05em", textTransform: "uppercase" }}>Fecha</span>
+                <input type="date" value={form.date} onChange={(e) => patch({ date: e.target.value })} style={editInput} />
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 4, gridColumn: "1 / -1" }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: "#64748B", letterSpacing: "0.05em", textTransform: "uppercase" }}>Título</span>
+                <input value={form.title} onChange={(e) => patch({ title: e.target.value })} style={editInput} />
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: "#64748B", letterSpacing: "0.05em", textTransform: "uppercase" }}>Target Price</span>
+                <input type="number" value={form.targetPrice} onChange={(e) => patch({ targetPrice: e.target.value })} style={{ ...editInput, fontFamily: "JetBrains Mono, monospace" }} />
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: "#64748B", letterSpacing: "0.05em", textTransform: "uppercase" }}>Recomendación</span>
+                <input value={form.recommendation} onChange={(e) => patch({ recommendation: e.target.value })} placeholder="BUY / HOLD / SELL…" style={editInput} />
+              </label>
+            </div>
+
+            {err && <div style={{ marginTop: 10, fontSize: 12, color: "#B91C1C" }}>{err}</div>}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
+              <button
+                onClick={() => { setEditing(false); setErr(null); }}
+                disabled={saving}
+                style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid rgba(15,23,42,0.14)", background: "#fff", color: "#64748B", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={save}
+                disabled={saving}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  padding: "7px 16px", borderRadius: 8, border: "none",
+                  background: saving ? "rgba(43,92,224,0.5)" : "#2B5CE0", color: "#fff",
+                  fontSize: 12.5, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer",
+                }}
+              >
+                {saving ? <Loader2 size={13} style={{ animation: "spin 0.8s linear infinite" }} /> : <Save size={13} />}
+                Guardar
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ── HTML body ─────────────────────────────────────────────── */}
         <div style={{ flex: 1, overflowY: "auto", background: "#fff" }}>
+          {editing && (
+            <div style={{ maxWidth: 760, margin: "0 auto", padding: "14px 40px 0", display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 600, color: "#2B5CE0" }}>
+              <Pencil size={12} /> Contenido editable — escribe directamente sobre el texto de la nota.
+            </div>
+          )}
           <div
+            ref={bodyRef}
+            contentEditable={editing}
+            suppressContentEditableWarning
             style={{
               maxWidth: 760, margin: "0 auto",
               padding: "32px 40px 48px",
               fontSize: 14, lineHeight: 1.75, color: "#1E293B",
               fontFamily: "Inter, -apple-system, sans-serif",
+              ...(editing ? {
+                border: "1px solid rgba(43,92,224,0.35)",
+                borderRadius: 10,
+                background: "#FDFEFF",
+                margin: "8px 24px 24px",
+                padding: "20px 28px",
+                minHeight: 140,
+                outline: "none",
+              } : {}),
             }}
             dangerouslySetInnerHTML={{ __html: record.html }}
           />
@@ -712,6 +891,7 @@ export default function ResearchPage() {
   const [loading,  setLoading]  = useState(true);
   const [selected, setSelected] = useState<ResearchRecord | null>(null);
   const [tickers,  setTickers]  = useState<ResearchTicker[]>([]);
+  const isAdmin = useIsAdmin();
   // Categorías expandidas (por defecto se muestran las más recientes; al hacer clic se ven todas).
   const [expanded, setExpanded] = useState<Set<Group>>(new Set());
 
@@ -724,7 +904,7 @@ export default function ResearchPage() {
   const [fDateFrom, setFDateFrom] = useState("");
   const [fDateTo,   setFDateTo]   = useState("");
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     setLoading(true);
     fetch("/api/research")
       .then((r) => r.json())
@@ -734,13 +914,17 @@ export default function ResearchPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    reload();
 
     // BBG ticker universe for the subject composer's searchable picker.
     fetch("/api/research/tickers")
       .then((r) => r.json())
       .then((d: { tickers?: ResearchTicker[] }) => setTickers(d.tickers ?? []))
       .catch(() => {});
-  }, []);
+  }, [reload]);
 
   const visible = useMemo(() => {
     const q = fSearch.trim().toLowerCase();
@@ -1017,7 +1201,14 @@ export default function ResearchPage() {
       </div>
 
       {/* ── Detail modal ─────────────────────────────────────────────────── */}
-      {selected && <DetailModal record={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <DetailModal
+          record={selected}
+          onClose={() => setSelected(null)}
+          isAdmin={isAdmin}
+          onChanged={reload}
+        />
+      )}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
