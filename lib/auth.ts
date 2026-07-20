@@ -65,12 +65,23 @@ export const authOptions: AuthOptions = {
       return token;
     },
 
-    // Expose token.id / token.role on the client-visible session object
+    // Expose token.id / token.role on the client-visible session object.
+    // Revalidamos contra la DB en cada lectura de sesión: el `role` sale SIEMPRE
+    // de la base (no de la cookie), así los cambios de rol y los borrados aplican
+    // al instante. Si el usuario ya no existe, cae a "user" (pierde permisos admin).
     async session({ session, token }) {
       if (session.user) {
         session.user.id   = token.id   as string;
         session.user.name = token.name as string;
-        session.user.role = (token.role as string) ?? "user";
+
+        const dbUser = token.id
+          ? await prisma.user.findUnique({
+              where:  { id: token.id as string },
+              select: { role: true },
+            })
+          : null;
+
+        session.user.role = dbUser?.role ?? "user";
       }
       return session;
     },
