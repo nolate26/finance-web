@@ -1,35 +1,53 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import type { SsV1Company, SsV1Payload, SsV1Series } from "@/app/api/chile/stock-selection-v1/route";
 
 // ── Design tokens ────────────────────────────────────────────────────────────────
+// Paleta sobria (grises pizarra). El único color con significado es verde/rojo en
+// variaciones y retornos; el resto de la tabla es monocromo para que se lea como
+// una planilla institucional y no como un semáforo.
 const TEXT1 = "#0F172A";
-const TEXT2 = "#64748B";
+const TEXT2 = "#475569";
 const TEXT3 = "#94A3B8";
-const BORDER = "rgba(15,23,42,0.08)";
-const SECTION_BORDER = "2px solid rgba(15,23,42,0.24)"; // separador entre secciones del orden fijo
-const BLUE = "#2B5CE0";
-const GREEN = "#059669";
-const RED = "#DC2626";
-const AMBER = "#D97706";
-const VIOLET = "#7C3AED";
+const BORDER = "rgba(15,23,42,0.09)";
+const SECTION_BORDER = "2px solid rgba(15,23,42,0.22)"; // separador entre secciones del orden fijo
+const NAVY = "#1E3A5F";      // azul marino: encabezado y acentos del chrome
+const NAVY_BAND = "#27496E"; // banda alterna por grupo, fila 1 del encabezado
+const NAVY_TEXT = "#E8EEF5"; // texto sobre marino
+const HEAD2_BG = "#D7E2EF";  // fila 2 del encabezado (etiquetas de columna)
+const HEAD2_BAND = "#CBD9EA";
+const HEAD2_TEXT = "#15304F";
+const INK = NAVY;            // acento del chrome (botones, barras)
+const SURFACE = "#F8FAFC";   // fondo de controles
+const ZEBRA = "#FAFBFC";     // fila par
+const BAND = "rgba(30,58,95,0.030)"; // banda alterna por grupo de columnas
+const POS = "#15803D";
+const NEG = "#B91C1C";
+const NUM = "#334155";       // números neutros
+const NM_TEXT = "#A8B2C1";   // "NM" / "—"
 
 // ── Formatters ──────────────────────────────────────────────────────────────────
+// Sentinela para "no significativo": múltiplos y variaciones sobre bases ≤ 0.
+const NM = Number.NEGATIVE_INFINITY;
+const isNM = (v: number | null | undefined): boolean => v != null && !isFinite(v);
+
 const fmtMn = (v: number | null | undefined): string =>
-  v == null || !isFinite(v) ? "—" : Math.abs(v) >= 100 ? Math.round(v).toLocaleString("en-US") : v.toFixed(1);
+  v == null ? "—" : !isFinite(v) ? "NM" : Math.abs(v) >= 100 ? Math.round(v).toLocaleString("en-US") : v.toFixed(1);
 const fmtX = (v: number | null | undefined): string =>
-  v == null || !isFinite(v) || v <= 0 ? "—" : v.toFixed(1) + "x";
+  v == null ? "—" : !isFinite(v) || v <= 0 ? "NM" : v.toFixed(1) + "x";
 const fmtPrice = (v: number | null | undefined): string =>
   v == null || !isFinite(v) ? "—" : v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const pct = (v: number | null | undefined): { text: string; color: string } => {
-  if (v == null || !isFinite(v)) return { text: "—", color: TEXT3 };
-  const color = v > 0.0005 ? GREEN : v < -0.0005 ? RED : TEXT2;
+  if (v == null) return { text: "—", color: NM_TEXT };
+  if (!isFinite(v)) return { text: "NM", color: NM_TEXT };
+  const color = v > 0.0005 ? POS : v < -0.0005 ? NEG : TEXT2;
   return { text: (v >= 0 ? "+" : "") + (v * 100).toFixed(1) + "%", color };
 };
 const yld = (v: number | null | undefined): string => (v == null || !isFinite(v) ? "—" : (v * 100).toFixed(1) + "%");
-const roePct = (v: number | null | undefined): string => (v == null || !isFinite(v) ? "—" : (v * 100).toFixed(1) + "%");
+const roePct = (v: number | null | undefined): string =>
+  v == null ? "—" : !isFinite(v) ? "NM" : (v * 100).toFixed(1) + "%";
 
 // ── conv() ───────────────────────────────────────────────────────────────────────
 function makeConv(tc: number) {
@@ -40,14 +58,25 @@ function makeConv(tc: number) {
     return null; // moneda no soportada (ej. GBp)
   };
 }
-const ratio = (n: number | null, d: number | null): number | null =>
-  n != null && d != null && d > 0 ? n / d : null;
+// Múltiplo (P/U, FV/EBITDA, P/BV…): sólo tiene sentido con numerador y denominador
+// positivos. Con utilidad/EBITDA/patrimonio negativo → NM (y ojo: dos negativos darían
+// un múltiplo positivo engañoso, por eso se chequean ambos lados).
+const mult = (n: number | null, d: number | null): number | null =>
+  n == null || d == null ? null : n <= 0 || d <= 0 ? NM : n / d;
+// Tasa (ROE, ROIC): NM con base ≤ 0 (patrimonio / capital invertido negativo) y
+// también con numerador negativo — un ROE negativo no se compara contra el resto
+// de la tabla, así que se marca NM igual que los múltiplos.
+const rate = (n: number | null, d: number | null): number | null =>
+  n == null || d == null ? null : d <= 0 || n < 0 ? NM : n / d;
+// Variación a/a: NM si la base es ≤ 0 o si el período actual es negativo.
+const varOf = (cur: number | null, base: number | null): number | null =>
+  cur == null || base == null ? null : base <= 0 || cur < 0 ? NM : cur / base - 1;
 
 // Recomendación: texto coloreado (Comprar=verde, Mantener=ámbar, Vender=rojo; free-text neutro).
 const REC_STYLE: Record<string, { label: string; color: string }> = {
-  comprar: { label: "Comprar", color: GREEN },
-  mantener: { label: "Mantener", color: AMBER },
-  vender: { label: "Vender", color: RED },
+  comprar: { label: "Comprar", color: POS },
+  mantener: { label: "Mantener", color: "#A16207" },
+  vender: { label: "Vender", color: NEG },
 };
 const recCell = (rec: string | null): { text: string; color: string; weight?: number } => {
   if (!rec) return { text: "—", color: TEXT3 };
@@ -117,22 +146,20 @@ function computeV(mcap: number | null, a: Alloc): Record<string, number | null> 
   const nopat = a.ebitLtmUsd != null ? a.ebitLtmUsd * (1 - 0.27) : null;
   const icN4 = a.equityN4Usd != null && a.debtN4Usd != null ? a.equityN4Usd + a.debtN4Usd + (a.minorityN4Usd ?? 0) : null;
   const icN = a.dn != null && a.equityNUsd != null ? a.dn + a.equityNUsd + (a.minorityNUsd ?? 0) : null;
-  const ebitdaVar = a.ebitdaN != null && a.ebitdaN4 != null && a.ebitdaN4 !== 0 ? a.ebitdaN / a.ebitdaN4 - 1 : null;
-  const utilVar = a.utilidadN != null && a.utilidadN4 != null && a.utilidadN4 !== 0 ? a.utilidadN / a.utilidadN4 - 1 : null;
   const dividendos = a.payout != null && a.util26Usd != null ? Math.max(a.payout * a.util26Usd, 0) : null;
   return {
     mcap, dn: a.dn, fv,
-    ebitdaN4: a.ebitdaN4, ebitdaN: a.ebitdaN, ebitdaVar,
-    utilidadN4: a.utilidadN4, utilidadN: a.utilidadN, utilVar,
+    ebitdaN4: a.ebitdaN4, ebitdaN: a.ebitdaN, ebitdaVar: varOf(a.ebitdaN, a.ebitdaN4),
+    utilidadN4: a.utilidadN4, utilidadN: a.utilidadN, utilVar: varOf(a.utilidadN, a.utilidadN4),
     ebitdaLtmUsd: a.ebitdaLtmUsd, ebitda26Usd: a.ebitda26Usd, ebitda27Usd: a.ebitda27Usd,
-    fvEbitdaLtm: ratio(fv, a.ebitdaLtmUsd), fvEbitda26: ratio(fv, a.ebitda26Usd), fvEbitda27: ratio(fv, a.ebitda27Usd),
+    fvEbitdaLtm: mult(fv, a.ebitdaLtmUsd), fvEbitda26: mult(fv, a.ebitda26Usd), fvEbitda27: mult(fv, a.ebitda27Usd),
     utilLtmUsd: a.utilLtmUsd, util26Usd: a.util26Usd, util27Usd: a.util27Usd,
-    puLtm: ratio(mcap, a.utilLtmUsd), pu26: ratio(mcap, a.util26Usd), pu27: ratio(mcap, a.util27Usd),
-    pbv: ratio(mcap, a.equityNUsd),
-    roeLtm: ratio(a.utilLtmUsd, a.equityN4Usd), roe26: ratio(a.util26Usd, a.equityNUsd),
-    fvs: ratio(fv, a.revLtmUsd),
+    puLtm: mult(mcap, a.utilLtmUsd), pu26: mult(mcap, a.util26Usd), pu27: mult(mcap, a.util27Usd),
+    pbv: mult(mcap, a.equityNUsd),
+    roeLtm: rate(a.utilLtmUsd, a.equityN4Usd), roe26: rate(a.util26Usd, a.equityNUsd),
+    fvs: mult(fv, a.revLtmUsd),
     divYield: dividendos != null && mcap != null && mcap > 0 ? dividendos / mcap : null,
-    roic: ratio(nopat, icN4), fvic: ratio(fv, icN),
+    roic: rate(nopat, icN4), fvic: mult(fv, icN),
   };
 }
 
@@ -220,7 +247,7 @@ interface ColDef {
   sortVal?: (r: DisplayRow) => number | string | null;
   align?: "left" | "right" | "center";
 }
-interface Group { id: string; title: string; hint?: string; accent: string; cols: ColDef[]; collapsible?: boolean; primary?: string }
+interface Group { id: string; title: string; hint?: string; cols: ColDef[]; collapsible?: boolean; primary?: string }
 const num = (id: string) => (r: DisplayRow) => r.v[id];
 // columnas visibles de un grupo: si es colapsable y está cerrado → solo la "primary" (o la 1ª)
 const visibleCols = (g: Group, expanded: Set<string>): ColDef[] =>
@@ -229,59 +256,51 @@ const visibleCols = (g: Group, expanded: Set<string>): ColDef[] =>
     : g.cols;
 
 function buildGroups(periodN: string | null, periodN4: string | null): Group[] {
+  // Retornos y variaciones: único lugar donde se usa color (verde/rojo).
   const retCol = (id: string, label: string): ColDef => ({
     id, label, align: "right", sortVal: num(id),
     render: (r) => { const p = pct(r.v[id]); return { text: p.text, color: p.color, weight: 600 }; },
   });
-  const mnCol = (id: string, label: string, color = "#475569"): ColDef => ({
-    id, label, align: "right", sortVal: num(id), render: (r) => ({ text: fmtMn(r.v[id]), color }),
-  });
-  const xCol = (id: string, label: string, color = BLUE): ColDef => ({
-    id, label, align: "right", sortVal: num(id), render: (r) => ({ text: fmtX(r.v[id]), color }),
-  });
-  const puCol = (id: string, label: string, denom: string): ColDef => ({
+  const mnCol = (id: string, label: string, color = NUM): ColDef => ({
     id, label, align: "right", sortVal: num(id),
-    render: (r) => {
-      if (r.v[id] != null) return { text: fmtX(r.v[id]), color: VIOLET };
-      const d = r.v[denom];
-      return d != null && d <= 0 ? { text: "NM", color: TEXT3 } : { text: "—", color: TEXT3 };
-    },
+    render: (r) => ({ text: fmtMn(r.v[id]), color: r.v[id] == null || isNM(r.v[id]) ? NM_TEXT : color }),
   });
-  const varCol = (id: string, label: string): ColDef => ({
+  // Múltiplos: monocromo. fmtX ya devuelve "NM" para valores no positivos.
+  const xCol = (id: string, label: string, color = TEXT1): ColDef => ({
     id, label, align: "right", sortVal: num(id),
-    render: (r) => { const p = pct(r.v[id]); return { text: p.text, color: p.color, weight: 600 }; },
+    render: (r) => ({ text: fmtX(r.v[id]), color: r.v[id] == null || isNM(r.v[id]) || (r.v[id] as number) <= 0 ? NM_TEXT : color }),
+  });
+  const pctCol = (id: string, label: string): ColDef => ({
+    id, label, align: "right", sortVal: num(id),
+    render: (r) => ({ text: roePct(r.v[id]), color: r.v[id] == null || isNM(r.v[id]) ? NM_TEXT : TEXT1 }),
   });
 
   return [
-    { id: "precRet", title: "Precios y Retornos", accent: "#0EA5E9", cols: [
+    { id: "precRet", title: "Precios y Retornos", hint: "Retorno total (con dividendos reinvertidos). L3Y y L5Y anualizados.", cols: [
       { id: "price", label: "Precio", align: "right", sortVal: num("price"), render: (r) => ({ text: fmtPrice(r.v.price), color: TEXT1, weight: 600 }) },
-      retCol("retMonth", "Mes"), retCol("retYtd", "YTD"), retCol("retYear", "Año"), retCol("ret3y", "L3Y"), retCol("ret5y", "L5Y"),
+      retCol("retMonth", "Mes"), retCol("retYtd", "YTD"), retCol("retYear", "Año"), retCol("ret3y", "L3Y a."), retCol("ret5y", "L5Y a."),
     ] },
-    { id: "size", title: "Tamaño / EV", hint: "M.Cap, deuda neta y firm value — USD mn", accent: "#475569", cols: [mnCol("mcap", "M.Cap"), mnCol("dn", "DN"), mnCol("fv", "FV", TEXT1)] },
-    { id: "ebitdaRep", title: "EBITDA a/a", hint: `EBITDA reportado, trimestre ${periodN4 ?? "n-4"} → ${periodN ?? "n"} — USD mn`, accent: "#0D9488", collapsible: true, primary: "ebitdaVar", cols: [mnCol("ebitdaN4", "Ac-1"), mnCol("ebitdaN", "Ac"), varCol("ebitdaVar", "Var%")] },
-    { id: "utilRep", title: "Utilidad a/a", hint: `Utilidad reportada, trimestre ${periodN4 ?? "n-4"} → ${periodN ?? "n"} — USD mn`, accent: "#9333EA", collapsible: true, primary: "utilVar", cols: [mnCol("utilidadN4", "Ac-1"), mnCol("utilidadN", "Ac"), varCol("utilVar", "Var%")] },
-    { id: "ebitdaUsd", title: "EBITDA", hint: "EBITDA LTM y estimado 2026E / 2027E — USD mn", accent: "#0D9488", collapsible: true, primary: "ebitdaLtmUsd", cols: [mnCol("ebitdaLtmUsd", "LTM"), mnCol("ebitda26Usd", "2026E"), mnCol("ebitda27Usd", "2027E")] },
-    { id: "fvEbitda", title: "FV/EBITDA", accent: BLUE, collapsible: true, primary: "fvEbitda26", cols: [xCol("fvEbitdaLtm", "LTM"), xCol("fvEbitda26", "2026E"), xCol("fvEbitda27", "2027E")] },
-    { id: "utilUsd", title: "Utilidad", hint: "Utilidad LTM y estimada 2026E / 2027E — USD mn", accent: "#9333EA", collapsible: true, primary: "utilLtmUsd", cols: [mnCol("utilLtmUsd", "LTM"), mnCol("util26Usd", "2026E"), mnCol("util27Usd", "2027E")] },
-    { id: "pu", title: "P/U", accent: VIOLET, collapsible: true, primary: "pu26", cols: [puCol("puLtm", "LTM", "utilLtmUsd"), puCol("pu26", "2026E", "util26Usd"), puCol("pu27", "2027E", "util27Usd")] },
-    { id: "otros", title: "Otros", hint: "Otros múltiplos: P/BV · ROE · FV/S", accent: "#475569", collapsible: true, primary: "pbv", cols: [
-      xCol("pbv", "P/BV", "#475569"),
-      { id: "roeLtm", label: "ROE LTM", align: "right", sortVal: num("roeLtm"), render: (r) => ({ text: roePct(r.v.roeLtm), color: TEXT1 }) },
-      { id: "roe26", label: "ROE 26E", align: "right", sortVal: num("roe26"), render: (r) => ({ text: roePct(r.v.roe26), color: TEXT1 }) },
-      xCol("fvs", "FV/S", "#475569"),
+    { id: "size", title: "Tamaño / EV", hint: "M.Cap, deuda neta y firm value — USD mn", cols: [mnCol("mcap", "M.Cap"), mnCol("dn", "DN"), mnCol("fv", "FV", TEXT1)] },
+    { id: "ebitdaRep", title: "EBITDA a/a", hint: `EBITDA reportado, trimestre ${periodN4 ?? "n-4"} → ${periodN ?? "n"} — USD mn`, collapsible: true, primary: "ebitdaVar", cols: [mnCol("ebitdaN4", "Ac-1"), mnCol("ebitdaN", "Ac"), retCol("ebitdaVar", "Var%")] },
+    { id: "utilRep", title: "Utilidad a/a", hint: `Utilidad reportada, trimestre ${periodN4 ?? "n-4"} → ${periodN ?? "n"} — USD mn`, collapsible: true, primary: "utilVar", cols: [mnCol("utilidadN4", "Ac-1"), mnCol("utilidadN", "Ac"), retCol("utilVar", "Var%")] },
+    { id: "ebitdaUsd", title: "EBITDA", hint: "EBITDA LTM y estimado 2026E / 2027E — USD mn", collapsible: true, primary: "ebitdaLtmUsd", cols: [mnCol("ebitdaLtmUsd", "LTM"), mnCol("ebitda26Usd", "2026E"), mnCol("ebitda27Usd", "2027E")] },
+    { id: "fvEbitda", title: "FV/EBITDA", collapsible: true, primary: "fvEbitda26", cols: [xCol("fvEbitdaLtm", "LTM"), xCol("fvEbitda26", "2026E"), xCol("fvEbitda27", "2027E")] },
+    { id: "utilUsd", title: "Utilidad", hint: "Utilidad LTM y estimada 2026E / 2027E — USD mn", collapsible: true, primary: "utilLtmUsd", cols: [mnCol("utilLtmUsd", "LTM"), mnCol("util26Usd", "2026E"), mnCol("util27Usd", "2027E")] },
+    { id: "pu", title: "P/U", collapsible: true, primary: "pu26", cols: [xCol("puLtm", "LTM"), xCol("pu26", "2026E"), xCol("pu27", "2027E")] },
+    { id: "otros", title: "Otros", hint: "Otros múltiplos: P/BV · ROE · FV/S", collapsible: true, primary: "pbv", cols: [
+      xCol("pbv", "P/BV"), pctCol("roeLtm", "ROE LTM"), pctCol("roe26", "ROE 26E"), xCol("fvs", "FV/S"),
     ] },
-    { id: "div", title: "Dividendos", accent: AMBER, collapsible: true, primary: "divYield", cols: [
-      { id: "polDiv", label: "Pol Div", align: "right", sortVal: (r) => r.payout, render: (r) => ({ text: r.payout != null ? (r.payout * 100).toFixed(0) + "%" : "—", color: r.payout != null ? TEXT2 : TEXT3 }) },
-      { id: "divYield", label: "Yield 26E", align: "right", sortVal: num("divYield"), render: (r) => ({ text: yld(r.v.divYield), color: AMBER, weight: 600 }) },
+    { id: "div", title: "Dividendos", collapsible: true, primary: "divYield", cols: [
+      { id: "polDiv", label: "Pol Div", align: "right", sortVal: (r) => r.payout, render: (r) => ({ text: r.payout != null ? (r.payout * 100).toFixed(0) + "%" : "—", color: r.payout != null ? NUM : NM_TEXT }) },
+      { id: "divYield", label: "Yield 26E", align: "right", sortVal: num("divYield"), render: (r) => ({ text: yld(r.v.divYield), color: r.v.divYield == null ? NM_TEXT : TEXT1, weight: 600 }) },
     ] },
-    { id: "roicG", title: "ROIC", hint: "Retorno sobre capital: ROIC LTM y FV/IC", accent: "#0D9488", collapsible: true, primary: "roic", cols: [
-      { id: "roic", label: "ROIC LTM", align: "right", sortVal: num("roic"), render: (r) => ({ text: roePct(r.v.roic), color: TEXT1 }) },
-      xCol("fvic", "FV/IC", "#475569"),
+    { id: "roicG", title: "ROIC", hint: "Retorno sobre capital: ROIC LTM y FV/IC", collapsible: true, primary: "roic", cols: [
+      pctCol("roic", "ROIC LTM"), xCol("fvic", "FV/IC"),
     ] },
-    { id: "rec", title: "Recomendación", accent: "#334155", collapsible: true, primary: "rec", cols: [
+    { id: "rec", title: "Recomendación", collapsible: true, primary: "rec", cols: [
       { id: "rec", label: "Rec.", align: "left", sortVal: (r) => r.rec, render: (r) => recCell(r.rec) },
-      { id: "recDate", label: "Date", align: "center", sortVal: (r) => r.recDate, render: (r) => ({ text: fmtDate(r.recDate), color: r.recDate ? TEXT2 : TEXT3 }) },
-      { id: "tp", label: "TP", align: "right", sortVal: (r) => r.tp, render: (r) => ({ text: r.tp != null ? fmtPrice(r.tp) : "—", color: r.tp != null ? TEXT1 : TEXT3, weight: 600 }) },
+      { id: "recDate", label: "Date", align: "center", sortVal: (r) => r.recDate, render: (r) => ({ text: fmtDate(r.recDate), color: r.recDate ? TEXT2 : NM_TEXT }) },
+      { id: "tp", label: "TP", align: "right", sortVal: (r) => r.tp, render: (r) => ({ text: r.tp != null ? fmtPrice(r.tp) : "—", color: r.tp != null ? TEXT1 : NM_TEXT, weight: 600 }) },
     ] },
   ];
 }
@@ -302,6 +321,18 @@ export default function StockSelectionV1() {
   const [selPeriod, setSelPeriod] = useState<string | null>(null); // "fy-q"; null = más reciente
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(["fvEbitda", "pu"])); // grupos colapsables abiertos (los múltiplos clave parten desplegados)
   const fixedMode = sortKey === FIXED_KEY;
+  // Alto real de la 1ª fila del encabezado → es el `top` de la 2ª, para que ambas
+  // queden fijas al hacer scroll (se mide porque depende de la fuente del navegador).
+  const headRowRef = useRef<HTMLTableRowElement | null>(null);
+  const [headRowH, setHeadRowH] = useState(22);
+  useLayoutEffect(() => {
+    const el = headRowRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setHeadRowH(el.getBoundingClientRect().height));
+    ro.observe(el);
+    setHeadRowH(el.getBoundingClientRect().height);
+    return () => ro.disconnect();
+  }, []);
   const toggleGroup = (id: string) =>
     setExpandedGroups((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
@@ -345,10 +376,12 @@ export default function StockSelectionV1() {
       const col = colById.get(sortKey);
       const sv = col?.sortVal ?? ((r: DisplayRow) => r.v[sortKey] ?? null);
       list.sort((a, b) => {
+        // NM (sentinela no finito) ordena junto a los vacíos: siempre al final.
+        const nil = (x: number | string | null | undefined) => x == null || (typeof x === "number" && !isFinite(x));
         const av = sv(a.cons), bv = sv(b.cons);
-        if (av == null && bv == null) return 0;
-        if (av == null) return 1;
-        if (bv == null) return -1;
+        if (nil(av) && nil(bv)) return 0;
+        if (nil(av)) return 1;
+        if (nil(bv)) return -1;
         const cmp = typeof av === "string" && typeof bv === "string" ? av.localeCompare(bv) : (av as number) - (bv as number);
         return sortDir === "asc" ? cmp : -cmp;
       });
@@ -369,7 +402,7 @@ export default function StockSelectionV1() {
 
   if (loading) {
     return <div className="flex items-center justify-center" style={{ padding: 60 }}>
-      <div className="w-8 h-8 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(43,92,224,0.15)", borderTopColor: BLUE }} /></div>;
+      <div className="w-8 h-8 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(15,23,42,0.12)", borderTopColor: INK }} /></div>;
   }
   if (error || !data) {
     return <div style={{ textAlign: "center", padding: 40, color: TEXT3, fontSize: 13 }}>
@@ -383,60 +416,68 @@ export default function StockSelectionV1() {
   // ── Metodología (una tarjeta por grupo de columnas) ──────────────────────────
   const pN = data.periodN ?? "n", pN4 = data.periodN4 ?? "n-4", ltmLbl = data.ltmLabels.join(" + ");
   type MethItem = { k: string; f?: string; v?: string };
-  const methodology: { title: string; accent: string; wide?: boolean; items: MethItem[] }[] = [
-    { title: "Convenciones y fuentes", accent: BLUE, wide: true, items: [
+  const methodology: { title: string; wide?: boolean; items: MethItem[] }[] = [
+    { title: "Convenciones y fuentes", wide: true, items: [
+      { k: "“NM” vs “—”", v: "“—” = dato no disponible. “NM” = no significativo: múltiplos con numerador o denominador ≤ 0 (utilidad, EBITDA, patrimonio o capital invertido negativo), ROE / ROIC negativos o sobre base ≤ 0, y variaciones a/a sobre base ≤ 0 o con período actual negativo. Las filas con NM se ordenan al final." },
       { k: "Fuentes", v: "stock_selection_v1 (fundamentales reportados, en millones, moneda local) · proyecciones_financieras (estimaciones + payout) · empresas_industrias_v2 (homologación nombre → ticker Bloomberg / Yahoo y sector) · Yahoo Finance (precios y retornos) · AnalystRecommendationHistory (recomendaciones)." },
       { k: "Moneda", f: "USD → USD · CLP → ÷ TC", v: "todos los montos quedan en USD millones; el TC USD/CLP es editable arriba. Monedas no soportadas (p. ej. GBp) → “—”." },
       { k: "Períodos", v: `n = ${pN} (último trimestre cargado) · n-4 = ${pN4} (mismo trimestre, año previo) · LTM = suma de los últimos 4 trimestres (${ltmLbl}).` },
       { k: "Series A/B", v: "cada serie usa su propio precio y nº de acciones; las filas A/B prorratean los fundamentales por su % de acciones; la consolidada usa el fundamental completo contra el M.Cap total (Σ de las series)." },
       { k: "Orden", v: "por defecto, orden fijo por sector (los bordes separan secciones; las dobles van A → B → consolidada). Clic en una columna para reordenar; “Orden por sector” vuelve al fijo. Compañías fuera del listado → al final." },
     ] },
-    { title: "Precios y retornos", accent: "#0EA5E9", items: [
+    { title: "Precios y retornos", items: [
       { k: "Precio", v: "último precio de Yahoo (regularMarketPrice), en la moneda de cotización; cada serie con su propio ticker." },
-      { k: "Retornos", f: "precio actual / precio base − 1", v: "sobre precio ajustado (incluye dividendos y splits). Bases — Mes: −30 días · YTD: cierre del 31-dic previo · Año: −365 días · L3Y: −3 años · L5Y: −5 años." },
+      { k: "Retorno total", v: "se reconstruye a partir del cierre y de los dividendos pagados (cada dividendo se reinvierte al cierre previo a su ex-date). NO se usa el adjclose de Yahoo: en varias acciones chilenas sólo trae aplicado el último dividendo (BLUMAR.SN ajusta 1,7% habiendo repartido 40 CLP en 5 años), lo que subestimaba los retornos largos y los hacía no comparables entre compañías." },
+      { k: "Mes · YTD · Año", f: "valor actual / valor base − 1", v: "retorno acumulado. Bases — Mes: −30 días · YTD: cierre del 31-dic previo · Año: −1 año calendario." },
+      { k: "L3Y a. · L5Y a.", f: "(actual / base)^(1/n) − 1", v: "retorno total ANUALIZADO (CAGR) a 3 y 5 años calendario, que es la convención de mercado para horizontes de varios años. Ojo: no es el retorno acumulado del período." },
+      { k: "Limitación", v: "el historial de dividendos de Yahoo tiene huecos en los años más antiguos de algunas acciones (p. ej. Andina figura con 3 pagos/año en 2024 donde hubo 4). Eso hace que L3Y y sobre todo L5Y queden algo SUBESTIMADOS — del orden de 1 a 4 puntos anuales en los casos detectados. Mes, YTD y Año no se ven afectados. Para cifras de 3-5 años auditables conviene contrastar contra Bloomberg." },
     ] },
-    { title: "Tamaño / EV (USD mn)", accent: "#475569", items: [
+    { title: "Tamaño / EV (USD mn)", items: [
       { k: "M.Cap", f: "Precio × nº de acciones", v: "convertido a USD. Doble serie: consolidada = Σ M.Cap de cada serie." },
       { k: "DN", v: "deuda neta del período n (campo debt de stock_selection_v1), → USD." },
       { k: "FV", f: "M.Cap + DN", v: "firm value (enterprise value)." },
     ] },
-    { title: `EBITDA Y/Y — ${pN4} → ${pN} (USD mn)`, accent: "#0D9488", items: [
+    { title: `EBITDA Y/Y — ${pN4} → ${pN} (USD mn)`, items: [
       { k: "Ac-1 / Ac", v: `EBITDA reportado del trimestre ${pN4} y del trimestre ${pN}, convertidos a USD (÷ TC si CLP).` },
-      { k: "Var%", f: "Ac / Ac-1 − 1", v: "variación interanual (neutra al TC)." },
+      { k: "Var%", f: "Ac / Ac-1 − 1", v: "variación interanual (neutra al TC). “NM” si la base es ≤ 0 o si el período actual es negativo: el % no tiene sentido económico." },
     ] },
-    { title: `Utilidad Y/Y — ${pN4} → ${pN} (USD mn)`, accent: "#9333EA", items: [
+    { title: `Utilidad Y/Y — ${pN4} → ${pN} (USD mn)`, items: [
       { k: "Ac-1 / Ac", v: `utilidad neta reportada del trimestre ${pN4} y del trimestre ${pN}, convertidas a USD (÷ TC si CLP).` },
-      { k: "Var%", f: "Ac / Ac-1 − 1", v: "variación interanual (neutra al TC)." },
+      { k: "Var%", f: "Ac / Ac-1 − 1", v: "variación interanual (neutra al TC). “NM” si la base es ≤ 0 o si el período actual es negativo: el % no tiene sentido económico." },
     ] },
-    { title: "EBITDA (USD mn)", accent: "#0D9488", items: [
+    { title: "EBITDA (USD mn)", items: [
       { k: "LTM", f: "Σ EBITDA últimos 4T", v: "convertido a USD." },
       { k: "2026E / 2027E", v: "EBITDA estimado (proyecciones_financieras) para ese año calendario, → USD." },
     ] },
-    { title: "FV/EBITDA", accent: BLUE, items: [
+    { title: "FV/EBITDA", items: [
       { k: "LTM · 2026E · 2027E", f: "FV / EBITDA del período", v: "menor = más barato." },
     ] },
-    { title: "Utilidad (USD mn)", accent: "#9333EA", items: [
+    { title: "Utilidad (USD mn)", items: [
       { k: "LTM", f: "Σ utilidad últimos 4T", v: "convertido a USD." },
       { k: "2026E / 2027E", v: "utilidad estimada (proyecciones_financieras), → USD." },
     ] },
-    { title: "P/U (precio / utilidad)", accent: VIOLET, items: [
+    { title: "P/U (precio / utilidad)", items: [
       { k: "LTM · 2026E · 2027E", f: "M.Cap / Utilidad del período", v: "“NM” cuando la utilidad del período es ≤ 0." },
     ] },
-    { title: "Otros múltiplos", accent: "#475569", items: [
+    { title: "Múltiplos negativos", items: [
+      { k: "Criterio", v: "todo múltiplo (P/U, FV/EBITDA, P/BV, FV/S, FV/IC) exige numerador y denominador positivos. Con ambos negativos el cociente daría un múltiplo positivo engañoso, así que también se marca “NM”." },
+      { k: "ROE / ROIC", v: "“NM” tanto si la base (patrimonio o capital invertido) es ≤ 0 como si el resultado es negativo: un retorno negativo sobre capital no se compara con el resto de la tabla." },
+    ] },
+    { title: "Otros múltiplos", items: [
       { k: "P/BV", f: "M.Cap / Patrimonio (n)", v: "precio / valor libro." },
       { k: "ROE LTM", f: "Utilidad LTM / Patrimonio (n-4)", v: "sobre patrimonio inicial." },
       { k: "ROE 26E", f: "Utilidad 2026E / Patrimonio (n)" },
       { k: "FV/S", f: "FV / Ventas LTM" },
     ] },
-    { title: "Dividendos", accent: AMBER, items: [
+    { title: "Dividendos", items: [
       { k: "Pol Div", v: "payout objetivo (proyecciones_financieras.pool_div), en %." },
       { k: "Yield 26E", f: "máx(payout × Utilidad 2026E, 0) / M.Cap", v: "dividendo estimado sobre el M.Cap." },
     ] },
-    { title: "ROIC — retorno sobre capital", accent: "#0D9488", items: [
+    { title: "ROIC — retorno sobre capital", items: [
       { k: "ROIC LTM", f: "NOPAT / Capital invertido (n-4)", v: "NOPAT = EBIT LTM × (1 − 27%). Capital invertido (n-4) = Patrimonio + Deuda neta + Interés minoritario, todo del período n-4 y en USD." },
       { k: "FV/IC", f: "FV / Capital invertido (n)", v: "Capital invertido (n) = Patrimonio + Deuda neta + Interés minoritario del período n." },
     ] },
-    { title: "Recomendación", accent: "#334155", items: [
+    { title: "Recomendación", items: [
       { k: "Rec.", v: "última recomendación del analista por fecha (Comprar / Mantener / Vender). Cruce: AnalystRecommendationHistory.company → company_isins.company_name → isin → ticker_bloomberg (cada serie por el BBG de su clase)." },
       { k: "Date", v: "fecha de esa recomendación." },
       { k: "TP", v: "precio objetivo, en la moneda de cotización (sin convertir por TC)." },
@@ -444,12 +485,12 @@ export default function StockSelectionV1() {
   ];
 
   const renderCells = (r: DisplayRow, topBorder = false) =>
-    groupDefs.map((g) =>
+    groupDefs.map((g, gIdx) =>
       visibleCols(g, expandedGroups).map((col, i) => {
         const out = col.render(r);
         return (
           <td key={col.id}
-            style={{ padding: r.kind === "series" ? "3px 6px" : "5px 6px", textAlign: col.align ?? "right", fontFamily: "JetBrains Mono, monospace", fontSize: r.kind === "series" ? 10 : 10.5, color: out.color ?? TEXT1, fontWeight: out.weight ?? 400, borderBottom: `1px solid ${BORDER}`, borderTop: topBorder ? SECTION_BORDER : undefined, borderLeft: i === 0 ? `1px solid ${BORDER}` : "none", whiteSpace: "nowrap", opacity: r.kind === "series" ? 0.92 : 1 }}>
+            style={{ padding: r.kind === "series" ? "3px 7px" : "5px 7px", textAlign: col.align ?? "right", fontFamily: "JetBrains Mono, monospace", fontSize: r.kind === "series" ? 10 : 10.5, color: out.color ?? TEXT1, fontWeight: out.weight ?? 400, borderBottom: `1px solid ${BORDER}`, borderTop: topBorder ? SECTION_BORDER : undefined, borderLeft: i === 0 ? `1px solid ${BORDER}` : "none", background: gIdx % 2 === 1 ? BAND : undefined, whiteSpace: "nowrap" }}>
             {out.text}
           </td>
         );
@@ -462,26 +503,26 @@ export default function StockSelectionV1() {
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 3, height: 22, background: BLUE, borderRadius: 2 }} />
+            <div style={{ width: 3, height: 22, background: INK, borderRadius: 2 }} />
             <h2 style={{ fontSize: 16, fontWeight: 700, color: TEXT1, letterSpacing: "-0.02em", margin: 0 }}>Stock Selection</h2>
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 8px", borderRadius: 8, border: `1px solid ${BORDER}`, background: "#F8FAFF" }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 8px", borderRadius: 6, border: `1px solid ${BORDER}`, background: SURFACE }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: TEXT2 }}>Período</span>
             <select value={activeKey} onChange={(e) => changePeriod(e.target.value)} disabled={loading || pricesLoading}
-              style={{ padding: "3px 6px", fontSize: 12, fontFamily: "JetBrains Mono, monospace", border: `1px solid ${BORDER}`, borderRadius: 5, background: "#fff", color: TEXT1, outline: "none", cursor: "pointer" }}>
+              style={{ padding: "3px 6px", fontSize: 12, fontFamily: "JetBrains Mono, monospace", border: `1px solid ${BORDER}`, borderRadius: 4, background: "#fff", color: TEXT1, outline: "none", cursor: "pointer" }}>
               {data.periods.map((p) => <option key={`${p.fy}-${p.q}`} value={`${p.fy}-${p.q}`}>{p.label}</option>)}
             </select>
           </div>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 8px", borderRadius: 8, border: `1px solid ${BORDER}`, background: "#F8FAFF" }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 8px", borderRadius: 6, border: `1px solid ${BORDER}`, background: SURFACE }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: TEXT2 }}>TC USD/CLP</span>
             <input type="text" inputMode="decimal" value={tcInput} onChange={(e) => setTcInput(e.target.value)} onBlur={applyTc}
               onKeyDown={(e) => { if (e.key === "Enter") applyTc(); }}
-              style={{ width: 64, padding: "3px 6px", fontSize: 12, fontFamily: "JetBrains Mono, monospace", textAlign: "right", border: `1px solid ${BORDER}`, borderRadius: 5, background: "#fff", color: TEXT1, outline: "none" }} />
+              style={{ width: 64, padding: "3px 6px", fontSize: 12, fontFamily: "JetBrains Mono, monospace", textAlign: "right", border: `1px solid ${BORDER}`, borderRadius: 4, background: "#fff", color: TEXT1, outline: "none" }} />
           </div>
           <button onClick={() => load(true, selPeriod)} disabled={pricesLoading}
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: pricesLoading ? "default" : "pointer", color: "#fff", background: BLUE, border: "none", opacity: pricesLoading ? 0.7 : 1, boxShadow: "0 1px 3px rgba(43,92,224,0.30)" }}>
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: pricesLoading ? "default" : "pointer", color: "#fff", background: INK, border: "none", opacity: pricesLoading ? 0.7 : 1 }}>
             <RefreshCw size={13} style={pricesLoading ? { animation: "spin 0.8s linear infinite" } : undefined} />
             {pricesLoading ? "Trayendo…" : priced ? "Actualizar precios" : "Traer precios (Yahoo)"}
           </button>
@@ -491,14 +532,14 @@ export default function StockSelectionV1() {
       {/* Filtros */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
         <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar empresa / ticker…"
-          style={{ flex: "1 1 200px", minWidth: 160, padding: "7px 12px", borderRadius: 7, background: "#F8FAFF", border: `1px solid ${BORDER}`, color: TEXT1, fontSize: 13, outline: "none" }} />
+          style={{ flex: "1 1 200px", minWidth: 160, padding: "7px 12px", borderRadius: 6, background: SURFACE, border: `1px solid ${BORDER}`, color: TEXT1, fontSize: 13, outline: "none" }} />
         <select value={sector} onChange={(e) => setSector(e.target.value)}
-          style={{ padding: "7px 12px", borderRadius: 7, background: "#F8FAFF", border: `1px solid ${BORDER}`, color: sector === "all" ? TEXT2 : TEXT1, fontSize: 13, cursor: "pointer", outline: "none", minWidth: 160 }}>
+          style={{ padding: "7px 12px", borderRadius: 6, background: SURFACE, border: `1px solid ${BORDER}`, color: sector === "all" ? TEXT2 : TEXT1, fontSize: 13, cursor: "pointer", outline: "none", minWidth: 160 }}>
           <option value="all">Todas las industrias</option>
           {sectors.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
         <button onClick={() => setSortKey(FIXED_KEY)} title="Volver al orden fijo por sector"
-          style={{ padding: "7px 12px", borderRadius: 7, border: `1px solid ${fixedMode ? BLUE : BORDER}`, background: fixedMode ? "rgba(43,92,224,0.08)" : "#F8FAFF", color: fixedMode ? BLUE : TEXT2, fontSize: 12, fontWeight: 600, cursor: "pointer", outline: "none", whiteSpace: "nowrap" }}>
+          style={{ padding: "7px 12px", borderRadius: 6, border: `1px solid ${fixedMode ? "rgba(15,23,42,0.30)" : BORDER}`, background: fixedMode ? "rgba(15,23,42,0.06)" : SURFACE, color: fixedMode ? TEXT1 : TEXT2, fontSize: 12, fontWeight: 600, cursor: "pointer", outline: "none", whiteSpace: "nowrap" }}>
           Orden por sector
         </button>
         <span style={{ fontSize: 11, color: TEXT3, fontFamily: "JetBrains Mono, monospace" }}>{groups.length} empresas · {totalRows} filas</span>
@@ -511,36 +552,37 @@ export default function StockSelectionV1() {
       )}
 
       <div style={{ fontSize: 10.5, color: TEXT3, marginBottom: 6 }}>
-        Montos en USD mn (÷ TC si es CLP) · Los grupos con <span style={{ color: TEXT2, fontWeight: 700 }}>▸</span> muestran 1 columna — clic en el encabezado para desplegar el resto.
+        Montos en USD mn (÷ TC si es CLP) · Retornos = retorno total; <strong style={{ color: TEXT2 }}>L3Y y L5Y anualizados</strong> · <strong style={{ color: TEXT2 }}>NM</strong> = no significativo · Los grupos con <span style={{ color: TEXT2, fontWeight: 700 }}>▸</span> muestran 1 columna — clic en el encabezado para desplegar el resto.
       </div>
 
-      {/* Tabla */}
-      <div style={{ overflowX: "auto", border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 1px 4px rgba(15,23,42,0.06)" }}>
-        <table style={{ borderCollapse: "collapse", fontSize: 11, width: "100%" }}>
+      {/* Tabla — el contenedor tiene alto acotado y scroll propio: así el encabezado
+          (2 filas) queda fijo arriba y la columna Empresa fija a la izquierda. */}
+      <div style={{ overflow: "auto", maxHeight: "calc(100vh - 230px)", minHeight: 320, border: "1px solid rgba(30,58,95,0.18)", borderRadius: 8, background: "#fff" }}>
+        <table style={{ borderCollapse: "separate", borderSpacing: 0, fontSize: 11, width: "100%" }}>
           <thead>
-            <tr style={{ background: "#F0F4FA" }}>
-              <th style={{ ...stickyTh, top: 0, zIndex: 6 }} rowSpan={2}>Empresa</th>
-              {groupDefs.map((g) => {
+            <tr ref={headRowRef}>
+              <th style={{ ...stickyTh, top: 0, zIndex: 40 }} rowSpan={2}>Empresa</th>
+              {groupDefs.map((g, gIdx) => {
                 const open = !g.collapsible || expandedGroups.has(g.id);
                 return (
                   <th key={g.id} colSpan={visibleCols(g, expandedGroups).length}
                     onClick={() => g.collapsible && toggleGroup(g.id)}
                     title={[g.hint, g.collapsible ? (open ? "Clic para contraer" : "Clic para desplegar") : null].filter(Boolean).join(" · ") || undefined}
-                    style={{ padding: "4px 6px", textAlign: "center", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: g.accent, borderBottom: `1px solid ${BORDER}`, borderLeft: `1px solid ${BORDER}`, whiteSpace: "nowrap", background: "#F0F4FA", cursor: g.collapsible ? "pointer" : "default", userSelect: "none" }}>
-                    {g.collapsible && <span style={{ fontSize: 8, marginRight: 3, opacity: 0.6 }}>{open ? "▾" : "▸"}</span>}
+                    style={{ position: "sticky", top: 0, zIndex: 30, padding: "5px 7px", textAlign: "center", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: NAVY_TEXT, borderLeft: "1px solid rgba(255,255,255,0.14)", whiteSpace: "nowrap", background: gIdx % 2 === 1 ? NAVY_BAND : NAVY, cursor: g.collapsible ? "pointer" : "default", userSelect: "none" }}>
+                    {g.collapsible && <span style={{ fontSize: 8, marginRight: 3, opacity: 0.7 }}>{open ? "▾" : "▸"}</span>}
                     {g.title}
                   </th>
                 );
               })}
             </tr>
-            <tr style={{ background: "#F0F4FA" }}>
-              {groupDefs.map((g) =>
+            <tr>
+              {groupDefs.map((g, gIdx) =>
                 visibleCols(g, expandedGroups).map((col, i) => {
                   const active = sortKey === col.id;
                   return (
                     <th key={col.id} onClick={() => col.sortVal && sortBy(col.id)}
-                      style={{ padding: "4px 6px", textAlign: col.align ?? "right", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", color: active ? BLUE : TEXT2, borderBottom: `1px solid ${BORDER}`, borderLeft: i === 0 ? `1px solid ${BORDER}` : "none", whiteSpace: "nowrap", cursor: col.sortVal ? "pointer" : "default", userSelect: "none", background: "#F0F4FA" }}>
-                      {col.label}{col.sortVal && <span style={{ fontSize: 9, opacity: active ? 1 : 0.35, marginLeft: 2 }}>{active ? (sortDir === "asc" ? "▲" : "▼") : "↕"}</span>}
+                      style={{ position: "sticky", top: headRowH, zIndex: 30, padding: "5px 7px", textAlign: col.align ?? "right", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: active ? "#fff" : HEAD2_TEXT, borderBottom: `2px solid ${NAVY}`, borderLeft: i === 0 ? "1px solid rgba(30,58,95,0.22)" : "none", whiteSpace: "nowrap", cursor: col.sortVal ? "pointer" : "default", userSelect: "none", background: active ? NAVY_BAND : gIdx % 2 === 1 ? HEAD2_BAND : HEAD2_BG }}>
+                      {col.label}{col.sortVal && <span style={{ fontSize: 8, opacity: active ? 1 : 0.45, marginLeft: 3 }}>{active ? (sortDir === "asc" ? "▲" : "▼") : "↕"}</span>}
                     </th>
                   );
                 })
@@ -554,10 +596,10 @@ export default function StockSelectionV1() {
               return rows.map((r, ri) => {
                 const isSeries = r.kind === "series";
                 const topBorder = sectionStart && ri === 0;
-                const bg = gi % 2 === 0 ? "#fff" : "rgba(248,250,255,0.6)";
+                const bg = isSeries ? "#F4F6F9" : gi % 2 === 0 ? "#fff" : ZEBRA;
                 return (
-                  <tr key={`${r.company}-${r.label || "cons"}`} style={{ background: isSeries ? "rgba(248,250,255,0.85)" : bg }}>
-                    <td style={{ ...stickyTd, borderTop: topBorder ? SECTION_BORDER : undefined, background: isSeries ? "#F4F8FF" : (gi % 2 === 0 ? "#fff" : "#F6F9FF"), paddingLeft: isSeries ? 18 : 8 }}>
+                  <tr key={`${r.company}-${r.label || "cons"}`} style={{ background: bg }}>
+                    <td style={{ ...stickyTd, borderTop: topBorder ? SECTION_BORDER : undefined, background: bg, paddingLeft: isSeries ? 18 : 8 }}>
                       {isSeries ? (
                         <>
                           <div style={{ fontSize: 10, fontWeight: 600, color: TEXT2, whiteSpace: "nowrap" }}>
@@ -592,7 +634,7 @@ export default function StockSelectionV1() {
       {/* Metodología */}
       <div style={{ marginTop: 16 }}>
         <button onClick={() => setShowMethod((s) => !s)}
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, border: `1px solid ${BORDER}`, background: "#F8FAFF", color: TEXT1, fontSize: 12.5, fontWeight: 700, cursor: "pointer", outline: "none" }}>
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 6, border: `1px solid ${BORDER}`, background: SURFACE, color: TEXT1, fontSize: 12.5, fontWeight: 700, cursor: "pointer", outline: "none" }}>
           Metodología — cómo se calcula cada valor
           <span style={{ fontSize: 10, color: TEXT2 }}>{showMethod ? "▴" : "▾"}</span>
         </button>
@@ -600,15 +642,15 @@ export default function StockSelectionV1() {
           <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 10 }}>
             {methodology.map((sec) => (
               <div key={sec.title}
-                style={{ gridColumn: sec.wide ? "1 / -1" : undefined, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "11px 13px", background: "#FBFCFF" }}>
+                style={{ gridColumn: sec.wide ? "1 / -1" : undefined, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "11px 13px", background: SURFACE }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 7 }}>
-                  <span style={{ width: 3, height: 13, borderRadius: 2, background: sec.accent }} />
-                  <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: sec.accent }}>{sec.title}</span>
+                  <span style={{ width: 3, height: 13, borderRadius: 2, background: NAVY }} />
+                  <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: NAVY }}>{sec.title}</span>
                 </div>
                 {sec.items.map((it, idx) => (
                   <div key={idx} style={{ fontSize: 11.5, color: TEXT2, lineHeight: 1.55, marginTop: idx === 0 ? 0 : 6 }}>
                     <span style={{ fontWeight: 700, color: TEXT1 }}>{it.k}</span>
-                    {it.f && <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 10.5, color: BLUE, background: "rgba(43,92,224,0.07)", borderRadius: 4, padding: "1px 5px", margin: "0 5px", whiteSpace: "nowrap" }}>{it.f}</span>}
+                    {it.f && <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 10.5, color: NAVY, background: "rgba(30,58,95,0.08)", borderRadius: 3, padding: "1px 5px", margin: "0 5px", whiteSpace: "nowrap" }}>{it.f}</span>}
                     {it.v && <span>{it.f ? "" : " — "}{it.v}</span>}
                   </div>
                 ))}
@@ -622,8 +664,9 @@ export default function StockSelectionV1() {
 }
 
 // ── Style helpers ────────────────────────────────────────────────────────────────
-const stickyTh: React.CSSProperties = { position: "sticky", left: 0, padding: "4px 8px", textAlign: "left", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: TEXT2, background: "#F0F4FA", borderBottom: `1px solid ${BORDER}`, borderRight: `1px solid ${BORDER}`, whiteSpace: "nowrap" };
-const stickyTd: React.CSSProperties = { position: "sticky", left: 0, zIndex: 1, padding: "4px 8px", borderBottom: `1px solid ${BORDER}`, borderRight: `1px solid ${BORDER}`, verticalAlign: "middle" };
-const retryBtn: React.CSSProperties = { marginTop: 10, padding: "6px 16px", borderRadius: 6, background: "rgba(43,92,224,0.08)", border: "1px solid rgba(43,92,224,0.20)", color: BLUE, cursor: "pointer", fontSize: 13 };
-const ccyBadge = (ccy: "CLP" | "USD"): React.CSSProperties => ({ marginLeft: 5, fontSize: 9, fontWeight: 700, color: ccy === "USD" ? "#B45309" : TEXT3, background: ccy === "USD" ? "rgba(180,83,9,0.12)" : "rgba(100,116,139,0.10)", borderRadius: 4, padding: "1px 4px" });
-const consBadge: React.CSSProperties = { marginLeft: 6, fontSize: 8.5, fontWeight: 700, color: BLUE, background: "rgba(43,92,224,0.10)", borderRadius: 4, padding: "1px 5px", textTransform: "uppercase", letterSpacing: "0.04em" };
+const stickyTh: React.CSSProperties = { position: "sticky", left: 0, padding: "4px 8px", textAlign: "left", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: NAVY_TEXT, background: NAVY, borderBottom: `2px solid ${NAVY}`, borderRight: "1px solid rgba(30,58,95,0.20)", whiteSpace: "nowrap" };
+const stickyTd: React.CSSProperties = { position: "sticky", left: 0, zIndex: 10, padding: "4px 8px", borderBottom: `1px solid ${BORDER}`, borderRight: "1px solid rgba(30,58,95,0.20)", verticalAlign: "middle" };
+const retryBtn: React.CSSProperties = { marginTop: 10, padding: "6px 16px", borderRadius: 6, background: SURFACE, border: `1px solid ${BORDER}`, color: TEXT1, cursor: "pointer", fontSize: 13 };
+// USD se marca algo más fuerte que CLP (es la excepción en un listado mayormente CLP).
+const ccyBadge = (ccy: "CLP" | "USD"): React.CSSProperties => ({ marginLeft: 5, fontSize: 9, fontWeight: 700, color: ccy === "USD" ? TEXT1 : TEXT3, background: ccy === "USD" ? "rgba(15,23,42,0.09)" : "rgba(15,23,42,0.05)", borderRadius: 3, padding: "1px 4px" });
+const consBadge: React.CSSProperties = { marginLeft: 6, fontSize: 8.5, fontWeight: 700, color: NAVY, background: "rgba(30,58,95,0.10)", borderRadius: 3, padding: "1px 5px", textTransform: "uppercase", letterSpacing: "0.04em" };

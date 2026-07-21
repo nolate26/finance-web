@@ -121,33 +121,68 @@ function priceAsOf(series: ChartPoint[], targetMs: number): number | null {
   return res;
 }
 const retOf = (cur: number, base: number | null): number | null => (base != null && base > 0 ? cur / base - 1 : null);
+// Fecha calendario n años atrás (no 365·n días: eso se corre 1-2 días por los bisiestos).
+const yearsAgo = (ms: number, years: number): number => {
+  const d = new Date(ms);
+  d.setUTCFullYear(d.getUTCFullYear() - years);
+  return d.getTime();
+};
 
 interface YChartQuote { date: Date; close: number | null; adjclose?: number | null; }
-interface YChart { meta?: { currency?: string; regularMarketPrice?: number }; quotes: YChartQuote[]; }
+interface YChartDiv { date: Date; amount?: number | null; }
+interface YChart { meta?: { currency?: string; regularMarketPrice?: number }; quotes: YChartQuote[]; events?: { dividends?: YChartDiv[] }; }
 interface PriceData { price: number | null; currency: string | null; retMonth: number | null; retYtd: number | null; retYear: number | null; ret3y: number | null; ret5y: number | null; }
 
 async function fetchPrice(ticker: string): Promise<PriceData | null> {
   try {
     const period2 = new Date();
-    const period1 = new Date(period2.getTime() - (5 * 365 + 21) * DAY);
-    const chart = (await yf.chart(ticker, { period1, period2, interval: "1d" })) as YChart;
-    const series: ChartPoint[] = [];
+    const period1 = new Date(yearsAgo(period2.getTime(), 5) - 45 * DAY);
+    const chart = (await yf.chart(ticker, { period1, period2, interval: "1d", events: "div" })) as YChart;
+
+    // Cierre crudo. NO usamos adjclose: en varios .SN Yahoo sólo aplica el último
+    // dividendo (BLUMAR.SN ajusta 1.7% habiendo repartido 40 CLP en 5 años, mientras
+    // CENCOSUD.SN sí ajusta el 29%), así que los retornos no eran comparables entre
+    // compañías. Reconstruimos el retorno total con los eventos de dividendos.
+    const px: ChartPoint[] = [];
     for (const q of chart.quotes ?? []) {
-      const v = q.adjclose ?? q.close;
-      if (v != null && isFinite(v) && q.date) series.push({ t: new Date(q.date).getTime(), v });
+      if (q.close != null && isFinite(q.close) && q.date) px.push({ t: new Date(q.date).getTime(), v: q.close });
     }
-    series.sort((a, b) => a.t - b.t);
-    if (!series.length) return null;
-    const last = series[series.length - 1], cur = last.v, curT = last.t;
+    px.sort((a, b) => a.t - b.t);
+    if (!px.length) return null;
+
+    const divs = (chart.events?.dividends ?? [])
+      .map((e) => ({ t: new Date(e.date).getTime(), amt: e.amount ?? 0 }))
+      .filter((e) => e.amt > 0 && isFinite(e.amt))
+      .sort((a, b) => a.t - b.t);
+
+    // Serie de retorno total: en cada ex-date el dividendo se reinvierte al cierre previo.
+    const tr: ChartPoint[] = [];
+    let acc = 1, di = 0;
+    for (let i = 0; i < px.length; i++) {
+      while (di < divs.length && divs[di].t <= px[i].t) {
+        const prev = px[i - 1]?.v ?? px[i].v;
+        if (prev > 0) acc *= (prev + divs[di].amt) / prev;
+        di++;
+      }
+      tr.push({ t: px[i].t, v: px[i].v * acc });
+    }
+
+    const lastPx = px[px.length - 1], curT = lastPx.t, cur = tr[tr.length - 1].v;
     const yearStart = Date.UTC(new Date(curT).getUTCFullYear(), 0, 1) - 1;
+    // Hasta 1 año: retorno acumulado. L3Y / L5Y: anualizado (CAGR), que es la
+    // convención de mercado para horizontes de varios años.
+    const cagr = (base: number | null, years: number): number | null => {
+      const r = retOf(cur, base);
+      return r == null ? null : Math.pow(1 + r, 1 / years) - 1;
+    };
     return {
-      price: chart.meta?.regularMarketPrice ?? (chart.quotes?.[chart.quotes.length - 1]?.close ?? null),
+      price: chart.meta?.regularMarketPrice ?? lastPx.v,
       currency: chart.meta?.currency ?? null,
-      retMonth: retOf(cur, priceAsOf(series, curT - 30 * DAY)),
-      retYtd: retOf(cur, priceAsOf(series, yearStart)),
-      retYear: retOf(cur, priceAsOf(series, curT - 365 * DAY)),
-      ret3y: retOf(cur, priceAsOf(series, curT - 3 * 365 * DAY)),
-      ret5y: retOf(cur, priceAsOf(series, curT - 5 * 365 * DAY)),
+      retMonth: retOf(cur, priceAsOf(tr, curT - 30 * DAY)),
+      retYtd: retOf(cur, priceAsOf(tr, yearStart)),
+      retYear: retOf(cur, priceAsOf(tr, yearsAgo(curT, 1))),
+      ret3y: cagr(priceAsOf(tr, yearsAgo(curT, 3)), 3),
+      ret5y: cagr(priceAsOf(tr, yearsAgo(curT, 5)), 5),
     };
   } catch {
     return null;
