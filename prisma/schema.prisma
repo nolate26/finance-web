@@ -921,3 +921,37 @@ model StockSelectionV1 {
   @@index([fiscalYear, quarter])
   @@map("stock_selection_v1")
 }
+
+// Capa de overrides manuales (admin) sobre los inputs del modelo de Stock Selection.
+// NO se edita stock_selection_v1 (la repuebla el proceso de carga): esta tabla es la
+// fuente de verdad de los cambios, auditable y reversible. Se aplica por período (fy,q):
+// un override hecho mirando 1Q 2026 sólo aplica cuando ese trimestre está seleccionado.
+// `field` = campo del modelo (sharesTotal, sharesA, sharesB, ebitdaN, ebitdaLtm, debtN,
+// equityN, utilidad2026E, …). value null = celda "borrada" (se trata como sin override).
+model StockSelectionOverride {
+  company    String   @db.VarChar(120)
+  field      String   @db.VarChar(40)
+  fiscalYear Int      @map("fiscal_year")
+  quarter    Int
+  value      Float?
+  editedBy   String?  @map("edited_by") @db.VarChar(200)
+  editedAt   DateTime @default(now()) @updatedAt @map("edited_at")
+  note       String?  @db.VarChar(500)
+
+  @@id([company, field, fiscalYear, quarter])
+  @@index([company, fiscalYear, quarter])
+  @@map("stock_selection_override")
+}
+
+model IndexMembership {
+  indexName   String  @map("index_name") @db.VarChar(40)   // "IPSA", "IGPA MC", ...
+  company     String  @db.VarChar(120)                     // nombre tal como en Pivotes
+  weight      Float   @default(1)                          // 1 = pertenece (sumaproducto)
+ 
+  @@id([indexName, company])
+  @@index([indexName])
+  @@index([company])
+  @@map("index_membership")
+}
+
+

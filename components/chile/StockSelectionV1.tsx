@@ -1,8 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { RefreshCw } from "lucide-react";
-import type { SsV1Company, SsV1Payload, SsV1Series } from "@/app/api/chile/stock-selection-v1/route";
+import { RefreshCw, LayoutGrid, X, Check, Plus, Save, Search, Pencil, RotateCcw } from "lucide-react";
+import { useIsAdmin } from "@/lib/useIsAdmin";
+import { OVERRIDE_FIELDS, FIELD_AFFECTS } from "@/lib/ssOverrideFields";
+import type { SsV1Company, SsV1Payload, SsV1Series, IndexLevel } from "@/app/api/chile/stock-selection-v1/route";
+import type { IndexMembershipPayload } from "@/app/api/chile/index-membership/route";
+
+// Amarillo para celdas editadas por admin (override) y sus dependientes.
+const EDIT_BG = "rgba(250,204,21,0.30)";
+const EDIT_BORDER = "#CA8A04";
+// Columnas afectadas (a pintar) dada la lista de campos overrideados de una compañía.
+const affectedCols = (overrides: string[] | undefined): Set<string> => {
+  const s = new Set<string>();
+  for (const f of overrides ?? []) for (const c of FIELD_AFFECTS[f] ?? []) s.add(c);
+  return s;
+};
 
 // ── Design tokens ────────────────────────────────────────────────────────────────
 // Paleta sobria (grises pizarra). El único color con significado es verde/rojo en
@@ -27,6 +40,12 @@ const POS = "#15803D";
 const NEG = "#B91C1C";
 const NUM = "#334155";       // números neutros
 const NM_TEXT = "#A8B2C1";   // "NM" / "—"
+// Tabla de índices (sumaproducto): tono teal para distinguirla de la de empresas.
+const IDX_HEAD = "#1F5B57";
+const IDX_HEAD_BAND = "#276B66";
+const IDX_HEAD_TEXT = "#E9F3F2";
+const IDX_TINT = "#F0F6F5";   // fondo de la tabla de índices
+const IDX_ZEBRA = "#E7F0EF";  // fila alterna
 
 // ── Formatters ──────────────────────────────────────────────────────────────────
 // Sentinela para "no significativo": múltiplos y variaciones sobre bases ≤ 0.
@@ -175,8 +194,18 @@ interface DisplayRow {
   kind: "single" | "consolidated" | "series";
   seriesBBG: string | null;
   v: Record<string, number | null>;
+  overrides?: string[];     // campos con override de admin (para pintar)
 }
-interface CompanyGroup { cons: DisplayRow; series: DisplayRow[] }
+// Unidad agregable para el sumaproducto por índice: los primitivos aditivos (Alloc en
+// USD mn) + su M.Cap + su dividendo estimado. `key` = nombre normalizado (single/consol
+// por nombre base; series por "nombre-a"/"nombre-b").
+const RET_FIELDS = ["retMonth", "retYtd", "retYear", "ret3y", "ret5y"] as const;
+interface AggUnit { alloc: Alloc; mcap: number | null; dividendos: number | null }
+interface UnitEntry { key: string; u: AggUnit }
+interface CompanyGroup { cons: DisplayRow; series: DisplayRow[]; units: UnitEntry[] }
+
+const dividendosOf = (a: Alloc): number | null =>
+  a.payout != null && a.util26Usd != null ? Math.max(a.payout * a.util26Usd, 0) : null;
 
 function mcapOf(s: SsV1Series, tc: number): number | null {
   if (s.price == null || s.shares == null) return null;
@@ -217,28 +246,110 @@ function computeGroup(c: SsV1Company, tc: number): CompanyGroup {
     ret3y: s?.ret3y ?? null, ret5y: s?.ret5y ?? null,
   });
 
+  const base = normName(c.company);
+
+  const ovr = c.overrides;
   if (!c.dual) {
     const s = c.series[0];
     const v = withPriceFields(computeV(seriesMcaps[0], whole), s);
     return {
-      cons: { company: c.company, tickerBBG: c.tickerBBG, ssCurrency: ss, industria: c.industria, divLabel: c.divLabel, payout: c.payout, rec: c.rec, recDate: c.recDate, tp: c.tp, label: "", kind: "single", seriesBBG: c.tickerBBG, v },
+      cons: { company: c.company, tickerBBG: c.tickerBBG, ssCurrency: ss, industria: c.industria, divLabel: c.divLabel, payout: c.payout, rec: c.rec, recDate: c.recDate, tp: c.tp, label: "", kind: "single", seriesBBG: c.tickerBBG, v, overrides: ovr },
       series: [],
+      units: [{ key: base, u: { alloc: whole, mcap: seriesMcaps[0], dividendos: dividendosOf(whole) } }],
     };
   }
 
   // Consolidada (whole, M.Cap = Σ series)
   const consV = withPriceFields(computeV(mcapConsol, whole), null);
-  const cons: DisplayRow = { company: c.company, tickerBBG: c.tickerBBG, ssCurrency: ss, industria: c.industria, divLabel: c.divLabel, payout: c.payout, rec: c.rec, recDate: c.recDate, tp: c.tp, label: "", kind: "consolidated", seriesBBG: c.tickerBBG, v: consV };
+  const cons: DisplayRow = { company: c.company, tickerBBG: c.tickerBBG, ssCurrency: ss, industria: c.industria, divLabel: c.divLabel, payout: c.payout, rec: c.rec, recDate: c.recDate, tp: c.tp, label: "", kind: "consolidated", seriesBBG: c.tickerBBG, v: consV, overrides: ovr };
 
-  // Series A/B (prorateadas por acciones)
+  // Series A/B (prorateadas por acciones). Cada serie es también una unidad agregable.
+  const seriesUnits: UnitEntry[] = [];
   const series: DisplayRow[] = c.series.map((s, i) => {
     const w = s.shares != null && c.sharesTotal ? s.shares / c.sharesTotal : 0;
-    const v = withPriceFields(computeV(seriesMcaps[i], scaleAlloc(w)), s);
-    return { company: c.company, tickerBBG: c.tickerBBG, ssCurrency: ss, industria: c.industria, divLabel: c.divLabel, payout: c.payout, rec: s.rec ?? null, recDate: s.recDate ?? null, tp: s.tp ?? null, label: s.label, kind: "series", seriesBBG: s.bbg, v };
+    const sAlloc = scaleAlloc(w);
+    const v = withPriceFields(computeV(seriesMcaps[i], sAlloc), s);
+    seriesUnits.push({ key: `${base}-${s.label.toLowerCase()}`, u: { alloc: sAlloc, mcap: seriesMcaps[i], dividendos: dividendosOf(sAlloc) } });
+    return { company: c.company, tickerBBG: c.tickerBBG, ssCurrency: ss, industria: c.industria, divLabel: c.divLabel, payout: c.payout, rec: s.rec ?? null, recDate: s.recDate ?? null, tp: s.tp ?? null, label: s.label, kind: "series", seriesBBG: s.bbg, v, overrides: ovr };
   });
 
-  return { cons, series };
+  // Unidades: consolidada (por nombre base) + cada serie (nombre-a / nombre-b).
+  const units: UnitEntry[] = [{ key: base, u: { alloc: whole, mcap: mcapConsol, dividendos: dividendosOf(whole) } }, ...seriesUnits];
+
+  return { cons, series, units };
 }
+
+// ── Agregación por índice (sumaproducto) ────────────────────────────────────────
+// Cada índice = "compañía consolidada" = Σ (unidad × peso) de sus miembros. Se suman
+// los primitivos aditivos (Alloc, M.Cap, dividendos) y los múltiplos salen de esas sumas
+// con el mismo computeV que usa cada fila. Alias sqm→soquimich para machear los nombres
+// de index_membership con las unidades de Stock Selection.
+const ALLOC_SUM_FIELDS: (keyof Alloc)[] = [
+  "dn", "debtN4Usd", "equityNUsd", "equityN4Usd", "minorityNUsd", "minorityN4Usd",
+  "ebitdaLtmUsd", "ebitda26Usd", "ebitda27Usd", "utilLtmUsd", "util26Usd", "util27Usd",
+  "revLtmUsd", "ebitLtmUsd", "ebitdaN", "ebitdaN4", "utilidadN", "utilidadN4",
+];
+const emptyAlloc = (): Alloc => {
+  const a = { payout: null } as Alloc;
+  for (const f of ALLOC_SUM_FIELDS) a[f] = null;
+  return a;
+};
+const addAlloc = (target: Alloc, src: Alloc, w: number): void => {
+  for (const f of ALLOC_SUM_FIELDS) {
+    const add = src[f] != null ? (src[f] as number) * w : 0;
+    if (add !== 0 || target[f] != null) target[f] = (target[f] ?? 0) + add;
+  }
+};
+const UNIT_ALIAS: Record<string, string> = { sqm: "soquimich" };
+const toUnitKey = (imCompany: string): string => {
+  let k = normName(imCompany);
+  for (const a in UNIT_ALIAS) if (k === a || k.startsWith(a + "-")) k = UNIT_ALIAS[a] + k.slice(a.length);
+  return k;
+};
+
+interface IndexAggRow { index: string; count: number; v: Record<string, number | null> }
+
+function computeIndexAggregates(
+  membership: IndexMembershipPayload | null,
+  unitMap: Map<string, AggUnit>,
+  indexLevels?: Record<string, IndexLevel>,
+): IndexAggRow[] {
+  if (!membership) return [];
+  interface Acc { alloc: Alloc; mcap: number | null; div: number; count: number }
+  const acc = new Map<string, Acc>();
+  for (const key of Object.keys(membership.weights)) {
+    let parsed: [string, string];
+    try { parsed = JSON.parse(key) as [string, string]; } catch { continue; }
+    const [idx, co] = parsed;
+    const w = membership.weights[key];
+    if (!(w > 0)) continue;
+    const unit = unitMap.get(toUnitKey(co));
+    if (!unit) continue;
+    let a = acc.get(idx);
+    if (!a) { a = { alloc: emptyAlloc(), mcap: null, div: 0, count: 0 }; acc.set(idx, a); }
+    addAlloc(a.alloc, unit.alloc, w);
+    if (unit.mcap != null) a.mcap = (a.mcap ?? 0) + unit.mcap * w;
+    if (unit.dividendos != null) a.div += unit.dividendos * w;
+    a.count++;
+  }
+  return membership.indices.map((idx) => {
+    const a = acc.get(idx);
+    const lvl = indexLevels?.[idx];
+    if (!a) return { index: idx, count: 0, v: {} };
+    const v = computeV(a.mcap, a.alloc);
+    v.divYield = a.mcap != null && a.mcap > 0 ? a.div / a.mcap : null; // payout no agrega; se usa Σdividendos
+    // Precio y crecimientos: nivel real del índice + retornos con la metodología de las
+    // compañías (sólo IPSA/IGPA los tienen; el resto queda en blanco). NO se aproximan.
+    v.price = lvl?.price ?? null;
+    for (const f of RET_FIELDS) v[f] = lvl?.[f] ?? null;
+    return { index: idx, count: a.count, v };
+  });
+}
+
+// Grupos de columnas de la tabla de índices: las mismas que la de empresas salvo
+// Recomendación (no agrega). "Precio" queda "—" (un índice no tiene precio único); los
+// retornos van ponderados por M.Cap. Se reusan las definiciones de columnas de buildGroups.
+const IDX_GROUP_IDS = ["precRet", "size", "ebitdaRep", "utilRep", "ebitdaUsd", "fvEbitda", "utilUsd", "pu", "otros", "div", "roicG"];
 
 // ── Column model ─────────────────────────────────────────────────────────────────
 interface ColDef {
@@ -320,7 +431,20 @@ export default function StockSelectionV1() {
   const [showMethod, setShowMethod] = useState(true);
   const [selPeriod, setSelPeriod] = useState<string | null>(null); // "fy-q"; null = más reciente
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(["fvEbitda", "pu"])); // grupos colapsables abiertos (los múltiplos clave parten desplegados)
+  const [showIndexEditor, setShowIndexEditor] = useState(false); // editor de membresía de índices (solo admin)
+  const [membership, setMembership] = useState<IndexMembershipPayload | null>(null); // matriz índice↔empresa (para el sumaproducto)
+  const [editMode, setEditMode] = useState(false); // modo edición de valores (solo admin)
+  const [editCompany, setEditCompany] = useState<SsV1Company | null>(null); // compañía con panel de edición abierto
+  const isAdmin = useIsAdmin();
   const fixedMode = sortKey === FIXED_KEY;
+
+  const loadMembership = useCallback(() => {
+    fetch("/api/chile/index-membership")
+      .then((r) => r.json())
+      .then((d: IndexMembershipPayload & { error?: string }) => { if (!d.error) setMembership(d); })
+      .catch(() => {/* la tabla de índices simplemente no se muestra */});
+  }, []);
+  useEffect(() => { loadMembership(); }, [loadMembership]);
   // Alto real de la 1ª fila del encabezado → es el `top` de la 2ª, para que ambas
   // queden fijas al hacer scroll (se mide porque depende de la fuente del navegador).
   const headRowRef = useRef<HTMLTableRowElement | null>(null);
@@ -333,6 +457,17 @@ export default function StockSelectionV1() {
     setHeadRowH(el.getBoundingClientRect().height);
     return () => ro.disconnect();
   }, []);
+  // Igual que headRowH, pero para la tabla de índices (su encabezado tiene otro alto).
+  const idxHeadRef = useRef<HTMLTableRowElement | null>(null);
+  const [idxHeadTop, setIdxHeadTop] = useState(24);
+  useLayoutEffect(() => {
+    const el = idxHeadRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setIdxHeadTop(el.getBoundingClientRect().height));
+    ro.observe(el);
+    setIdxHeadTop(el.getBoundingClientRect().height);
+    return () => ro.disconnect();
+  }, [membership]); // se remide cuando la tabla de índices aparece
   const toggleGroup = (id: string) =>
     setExpandedGroups((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
@@ -363,8 +498,23 @@ export default function StockSelectionV1() {
     return Array.from(s).sort();
   }, [data]);
 
+  // Se computa una sola vez el universo completo (sin filtrar); de ahí salen tanto las
+  // filas mostradas (groups) como las unidades para el sumaproducto (unitMap).
+  const allComputed = useMemo<CompanyGroup[]>(() => (data?.companies ?? []).map((c) => computeGroup(c, tc)), [data, tc]);
+  const unitMap = useMemo(() => {
+    const m = new Map<string, AggUnit>();
+    for (const g of allComputed) for (const e of g.units) m.set(e.key, e.u);
+    return m;
+  }, [allComputed]);
+  const indexAggregates = useMemo(() => computeIndexAggregates(membership, unitMap, data?.indexLevels), [membership, unitMap, data]);
+  const companyByName = useMemo(() => {
+    const m = new Map<string, SsV1Company>();
+    for (const c of data?.companies ?? []) m.set(normName(c.company), c);
+    return m;
+  }, [data]);
+
   const groups = useMemo<CompanyGroup[]>(() => {
-    let list = (data?.companies ?? []).map((c) => computeGroup(c, tc));
+    let list = [...allComputed];
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter((g) => g.cons.company.toLowerCase().includes(q) || (g.cons.tickerBBG ?? "").toLowerCase().includes(q));
@@ -387,7 +537,7 @@ export default function StockSelectionV1() {
       });
     }
     return list;
-  }, [data, tc, search, sector, sortKey, sortDir, colById]);
+  }, [allComputed, search, sector, sortKey, sortDir, colById]);
 
   const totalRows = useMemo(() => groups.reduce((n, g) => n + 1 + g.series.length, 0), [groups]);
 
@@ -426,11 +576,12 @@ export default function StockSelectionV1() {
       { k: "Orden", v: "por defecto, orden fijo por sector (los bordes separan secciones; las dobles van A → B → consolidada). Clic en una columna para reordenar; “Orden por sector” vuelve al fijo. Compañías fuera del listado → al final." },
     ] },
     { title: "Precios y retornos", items: [
-      { k: "Precio", v: "último precio de Yahoo (regularMarketPrice), en la moneda de cotización; cada serie con su propio ticker." },
+      { k: "Precio", v: "regularMarketPrice de Yahoo, en la moneda de cotización y con el ticker propio de cada serie. Se valida contra el último cierre: si difiere más de 15% se usa el cierre, porque en papeles sin volumen Yahoo devuelve ahí un precio indicativo irreal (AFP Capital informaba 310 contra un cierre de 247,5 tras 14 ruedas sin operar)." },
       { k: "Retorno total", v: "se reconstruye a partir del cierre y de los dividendos pagados (cada dividendo se reinvierte al cierre previo a su ex-date). NO se usa el adjclose de Yahoo: en varias acciones chilenas sólo trae aplicado el último dividendo (BLUMAR.SN ajusta 1,7% habiendo repartido 40 CLP en 5 años), lo que subestimaba los retornos largos y los hacía no comparables entre compañías." },
       { k: "Mes · YTD · Año", f: "valor actual / valor base − 1", v: "retorno acumulado. Bases — Mes: −30 días · YTD: cierre del 31-dic previo · Año: −1 año calendario." },
       { k: "L3Y a. · L5Y a.", f: "(actual / base)^(1/n) − 1", v: "retorno total ANUALIZADO (CAGR) a 3 y 5 años calendario, que es la convención de mercado para horizontes de varios años. Ojo: no es el retorno acumulado del período." },
-      { k: "Limitación", v: "el historial de dividendos de Yahoo tiene huecos en los años más antiguos de algunas acciones (p. ej. Andina figura con 3 pagos/año en 2024 donde hubo 4). Eso hace que L3Y y sobre todo L5Y queden algo SUBESTIMADOS — del orden de 1 a 4 puntos anuales en los casos detectados. Mes, YTD y Año no se ven afectados. Para cifras de 3-5 años auditables conviene contrastar contra Bloomberg." },
+      { k: "Control de dividendos", v: "se descarta el dividendo que supera el precio de la acción: es imposible y delata un dato corrupto de Yahoo (Soquicom traía 23.842 CLP sobre un precio de 408, que disparaba el YTD a +5.608%). El mayor dividendo legítimo del universo es Colbún con 42,6% del precio." },
+      { k: "Precisión", v: "contrastado contra una fuente externa sobre 88 papeles: el desvío mediano es de 0,03 pp en Mes, 0,13 en Año, 0,39 en L3Y y 0,63 en L5Y. La cola que queda viene de huecos en el historial de dividendos de Yahoo (a Andina le falta 1 pago de 4 en varios años), por lo que L3Y y L5Y quedan levemente SUBESTIMADOS — la mediana del sesgo es −0,2 pp en L3Y y −0,4 pp en L5Y, con casos puntuales de 5 a 7 pp. Para cifras auditables a 3-5 años conviene contrastar contra Bloomberg." },
     ] },
     { title: "Tamaño / EV (USD mn)", items: [
       { k: "M.Cap", f: "Precio × nº de acciones", v: "convertido a USD. Doble serie: consolidada = Σ M.Cap de cada serie." },
@@ -482,20 +633,29 @@ export default function StockSelectionV1() {
       { k: "Date", v: "fecha de esa recomendación." },
       { k: "TP", v: "precio objetivo, en la moneda de cotización (sin convertir por TC)." },
     ] },
+    { title: "Cobertura del universo y datos de mercado", wide: true, items: [
+      { k: "Qué empresas aparecen", v: "una compañía sólo se muestra si su nombre en stock_selection_v1 homologa a un ticker Yahoo vivo (vía empresas_industrias_v2, con fallback por ISIN en company_isins). Si el nombre no homologa o el ticker está deslistado, la fila se descarta sin aviso. De las 98 compañías de la tabla, 6 no resolvían; ver detalle abajo." },
+      { k: "Tickers corregidos (jul-2026)", v: "empresas_industrias_v2 / company_isins traían símbolos Yahoo deslistados que dejaban la fila sin precio. Corregidos y verificados contra el precio de referencia: Bicecorp → BICE.SN · Cencosud Shopping → CENCOMALLS.SN · Concha y Toro → CONCHATORO.SN · Itaú Chile → ITAUCL.SN · MultiX → MULTI-X.SN · La Polar → ABC.SN · Oro Blanco → ORO-BLANCO.SN · Clínica Las Condes → LAS-CONDES.SN · Viña Santa Rita → SANTA-RITA.SN · Potasios A/B → POTASIOS-A/B.SN · Cementos (Bío Bío) → CEM.SN." },
+      { k: "Excluidas a propósito / pendientes", v: "Grupo Security: deslistada (fusión con Bicecorp, 2024). AES Andes (ex AES Gener): tiene ticker vivo (AESANDES.SN) pero le falta la fila de homologación en empresas_industrias_v2, por eso no aparece. Pampa Calichera y Nitratos: sin ticker Yahoo vivo (probablemente deslistadas / muy ilíquidas). “HF”: nombre sin identificar. Estas 5 no se muestran hasta cargar su homologación." },
+      { k: "Advertencia de fuente", v: "estos tickers los escribe el proceso que puebla empresas_industrias_v2 / company_isins; si ese cargador no se corrige en origen, volverá a romperlos. La corrección de acá es sobre la base, no sobre el cargador." },
+    ] },
   ];
 
-  const renderCells = (r: DisplayRow, topBorder = false) =>
-    groupDefs.map((g, gIdx) =>
+  const renderCells = (r: DisplayRow, topBorder = false) => {
+    const aff = r.overrides?.length ? affectedCols(r.overrides) : null;
+    return groupDefs.map((g, gIdx) =>
       visibleCols(g, expandedGroups).map((col, i) => {
         const out = col.render(r);
+        const edited = aff?.has(col.id);
         return (
           <td key={col.id}
-            style={{ padding: r.kind === "series" ? "3px 7px" : "5px 7px", textAlign: col.align ?? "right", fontFamily: "JetBrains Mono, monospace", fontSize: r.kind === "series" ? 10 : 10.5, color: out.color ?? TEXT1, fontWeight: out.weight ?? 400, borderBottom: `1px solid ${BORDER}`, borderTop: topBorder ? SECTION_BORDER : undefined, borderLeft: i === 0 ? `1px solid ${BORDER}` : "none", background: gIdx % 2 === 1 ? BAND : undefined, whiteSpace: "nowrap" }}>
+            style={{ padding: r.kind === "series" ? "3px 7px" : "5px 7px", textAlign: col.align ?? "right", fontFamily: "JetBrains Mono, monospace", fontSize: r.kind === "series" ? 10 : 10.5, color: out.color ?? TEXT1, fontWeight: edited ? 700 : out.weight ?? 400, borderBottom: `1px solid ${BORDER}`, borderTop: topBorder ? SECTION_BORDER : undefined, borderLeft: i === 0 ? `1px solid ${BORDER}` : "none", background: edited ? EDIT_BG : gIdx % 2 === 1 ? BAND : undefined, boxShadow: edited ? `inset 0 0 0 1px ${EDIT_BORDER}55` : undefined, whiteSpace: "nowrap" }}>
             {out.text}
           </td>
         );
-      })
+      }),
     );
+  };
 
   return (
     <div>
@@ -526,8 +686,28 @@ export default function StockSelectionV1() {
             <RefreshCw size={13} style={pricesLoading ? { animation: "spin 0.8s linear infinite" } : undefined} />
             {pricesLoading ? "Trayendo…" : priced ? "Actualizar precios" : "Traer precios (Yahoo)"}
           </button>
+          {isAdmin && (
+            <button onClick={() => setShowIndexEditor(true)} title="Editar la pertenencia de cada empresa a los índices (admin)"
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", color: NAVY, background: "#fff", border: `1px solid ${NAVY}` }}>
+              <LayoutGrid size={13} /> Índices
+            </button>
+          )}
+          {isAdmin && (
+            <button onClick={() => setEditMode((e) => !e)} title="Editar valores de las compañías (override de admin). Clic en el nombre de una empresa para abrir su panel."
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", color: editMode ? "#fff" : EDIT_BORDER, background: editMode ? EDIT_BORDER : "#fff", border: `1px solid ${EDIT_BORDER}` }}>
+              <Pencil size={13} /> {editMode ? "Editando valores" : "Editar valores"}
+            </button>
+          )}
         </div>
       </div>
+
+      {isAdmin && editCompany && (
+        <SsV1OverrideEditor company={editCompany} fy={data.selFy} q={data.selQ}
+          onClose={() => setEditCompany(null)}
+          onSaved={() => { setEditCompany(null); load(priced, selPeriod); }} />
+      )}
+
+      {isAdmin && showIndexEditor && <IndexMembershipEditor onClose={() => setShowIndexEditor(false)} onSaved={loadMembership} />}
 
       {/* Filtros */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
@@ -599,7 +779,9 @@ export default function StockSelectionV1() {
                 const bg = isSeries ? "#F4F6F9" : gi % 2 === 0 ? "#fff" : ZEBRA;
                 return (
                   <tr key={`${r.company}-${r.label || "cons"}`} style={{ background: bg }}>
-                    <td style={{ ...stickyTd, borderTop: topBorder ? SECTION_BORDER : undefined, background: bg, paddingLeft: isSeries ? 18 : 8 }}>
+                    <td onClick={editMode && !isSeries ? () => { const c = companyByName.get(normName(r.company)); if (c) setEditCompany(c); } : undefined}
+                      title={editMode && !isSeries ? "Editar valores de esta compañía" : undefined}
+                      style={{ ...stickyTd, borderTop: topBorder ? SECTION_BORDER : undefined, background: editMode && !isSeries ? "rgba(250,204,21,0.10)" : bg, paddingLeft: isSeries ? 18 : 8, cursor: editMode && !isSeries ? "pointer" : undefined }}>
                       {isSeries ? (
                         <>
                           <div style={{ fontSize: 10, fontWeight: 600, color: TEXT2, whiteSpace: "nowrap" }}>
@@ -609,9 +791,11 @@ export default function StockSelectionV1() {
                         </>
                       ) : (
                         <>
-                          <div style={{ fontSize: 11, fontWeight: 600, color: TEXT1, whiteSpace: "nowrap" }}>
+                          <div style={{ fontSize: 11, fontWeight: 600, color: TEXT1, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 5 }}>
+                            {editMode && <Pencil size={11} color={EDIT_BORDER} />}
                             {r.company}
                             {r.kind === "consolidated" && <span style={consBadge}>consol.</span>}
+                            {r.overrides?.length ? <span style={editedBadge}>{r.overrides.length} ed.</span> : null}
                           </div>
                           <div style={{ fontSize: 9, color: TEXT3, fontFamily: "JetBrains Mono, monospace", whiteSpace: "nowrap" }}>
                             {r.tickerBBG ?? "—"}<span style={ccyBadge(r.ssCurrency)}>{r.ssCurrency}</span>
@@ -630,6 +814,77 @@ export default function StockSelectionV1() {
           </tbody>
         </table>
       </div>
+
+      {/* Sumaproducto por índice — tabla aparte, tono teal */}
+      {membership && indexAggregates.length > 0 && (() => {
+        const idxGroupDefs = groupDefs.filter((g) => IDX_GROUP_IDS.includes(g.id));
+        // Mismo formato que compañías, TODAS las columnas (sin respetar el colapso), salvo
+        // Pol Div (dentro de "div") y el grupo Recomendación (Rec/Date/TP, ya excluido).
+        const idxCols = (g: Group): ColDef[] => (g.id === "div" ? g.cols.filter((c) => c.id !== "polDiv") : g.cols);
+        const idxRow = (agg: (typeof indexAggregates)[number]): DisplayRow => ({
+          company: agg.index, tickerBBG: null, ssCurrency: "USD", industria: null, divLabel: null,
+          payout: null, rec: null, recDate: null, tp: null, label: "", kind: "single", seriesBBG: null, v: agg.v,
+        });
+        return (
+          <div style={{ marginTop: 22 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <div style={{ width: 3, height: 18, background: IDX_HEAD, borderRadius: 2 }} />
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: IDX_HEAD, letterSpacing: "-0.01em", margin: 0 }}>Índices — sumaproducto de sus miembros</h3>
+              <span style={{ fontSize: 10.5, color: TEXT3 }}>
+                Cada índice = Σ (M.Cap y fundamentales × peso); los múltiplos salen de esas sumas. Precio y retornos: nivel real y crecimientos del índice (solo IPSA/IGPA); el resto en blanco. {priced ? "" : "Traé precios para llenar."}
+              </span>
+            </div>
+            <div style={{ overflow: "auto", maxHeight: "60vh", border: `1px solid ${IDX_HEAD}33`, borderRadius: 8, background: IDX_TINT }}>
+              <table style={{ borderCollapse: "separate", borderSpacing: 0, fontSize: 11, width: "100%" }}>
+                <thead>
+                  <tr ref={idxHeadRef}>
+                    <th style={{ position: "sticky", left: 0, top: 0, zIndex: 5, textAlign: "left", padding: "5px 10px", background: IDX_HEAD, color: IDX_HEAD_TEXT, fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }} rowSpan={2}>Índice</th>
+                    {idxGroupDefs.map((g, gi) => (
+                      <th key={g.id} colSpan={idxCols(g).length}
+                        style={{ position: "sticky", top: 0, zIndex: 4, padding: "5px 7px", textAlign: "center", fontSize: 9, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: IDX_HEAD_TEXT, background: gi % 2 === 1 ? IDX_HEAD_BAND : IDX_HEAD, borderLeft: "1px solid rgba(255,255,255,0.12)", whiteSpace: "nowrap" }}>
+                        {g.title}
+                      </th>
+                    ))}
+                  </tr>
+                  <tr>
+                    {idxGroupDefs.map((g, gi) =>
+                      idxCols(g).map((col, i) => (
+                        <th key={col.id} style={{ position: "sticky", top: idxHeadTop, zIndex: 4, padding: "4px 7px", textAlign: col.align ?? "right", fontSize: 9, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: IDX_HEAD, background: gi % 2 === 1 ? IDX_ZEBRA : IDX_TINT, borderBottom: `2px solid ${IDX_HEAD}`, borderLeft: i === 0 ? `1px solid ${IDX_HEAD}22` : "none", whiteSpace: "nowrap" }}>
+                          {col.label}
+                        </th>
+                      )),
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {indexAggregates.map((agg, ri) => {
+                    const r = idxRow(agg);
+                    const bg = ri % 2 === 0 ? IDX_TINT : IDX_ZEBRA;
+                    return (
+                      <tr key={agg.index} style={{ background: bg }}>
+                        <td style={{ position: "sticky", left: 0, zIndex: 2, background: bg, padding: "5px 10px", borderRight: `1px solid ${IDX_HEAD}22`, borderBottom: `1px solid ${IDX_HEAD}18`, whiteSpace: "nowrap" }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: IDX_HEAD }}>{agg.index}</span>
+                          <span style={{ fontSize: 9, color: TEXT3, marginLeft: 6, fontFamily: "JetBrains Mono, monospace" }}>{agg.count}</span>
+                        </td>
+                        {idxGroupDefs.map((g, gi) =>
+                          idxCols(g).map((col, i) => {
+                            const out = col.render(r);
+                            return (
+                              <td key={col.id} style={{ padding: "5px 7px", textAlign: col.align ?? "right", fontFamily: "JetBrains Mono, monospace", fontSize: 10.5, color: out.color ?? TEXT1, fontWeight: out.weight ?? 400, borderBottom: `1px solid ${IDX_HEAD}18`, borderLeft: i === 0 ? `1px solid ${IDX_HEAD}18` : "none", background: gi % 2 === 1 ? "rgba(31,91,87,0.04)" : undefined, whiteSpace: "nowrap" }}>
+                                {out.text}
+                              </td>
+                            );
+                          }),
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Metodología */}
       <div style={{ marginTop: 16 }}>
@@ -663,10 +918,327 @@ export default function StockSelectionV1() {
   );
 }
 
+// ── Editor de membresía de índices (solo admin) ─────────────────────────────────
+// Matriz editable: columnas = fondos/índices, filas = compañías, celda = pertenece (1)
+// o no (0). Los cambios se acumulan localmente y se persisten en batch con "Guardar".
+// La tabla index_membership es sparse: marcar crea la fila (weight 1), desmarcar la borra.
+const memberKeyC = (indexName: string, company: string) => JSON.stringify([indexName, company]);
+
+function IndexMembershipEditor({ onClose, onSaved }: { onClose: () => void; onSaved?: () => void }) {
+  const [data, setData] = useState<IndexMembershipPayload | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState<string | null>(null);
+  const [members, setMembers] = useState<Set<string>>(new Set());
+  const [orig, setOrig] = useState<Set<string>>(new Set());
+  const [extraCompanies, setExtraCompanies] = useState<string[]>([]);
+  const [extraIndices, setExtraIndices] = useState<string[]>([]);
+  const [search, setSearch] = useState("");
+  const [newCompany, setNewCompany] = useState("");
+  const [newIndex, setNewIndex] = useState("");
+
+  const load = useCallback(() => {
+    setLoading(true); setError(null); // savedMsg se preserva: tras guardar, load() refresca sin borrar el aviso
+    fetch("/api/chile/index-membership")
+      .then((r) => r.json())
+      .then((d: IndexMembershipPayload & { error?: string }) => {
+        if (d.error) { setError(d.error); return; }
+        setData(d);
+        setMembers(new Set(d.members)); setOrig(new Set(d.members));
+        setExtraCompanies([]); setExtraIndices([]);
+      })
+      .catch(() => setError("No se pudo cargar la membresía."))
+      .finally(() => setLoading(false));
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const indices = useMemo(() => [...(data?.indices ?? []), ...extraIndices], [data, extraIndices]);
+  const companies = useMemo(
+    () => [...(data?.companies ?? []), ...extraCompanies].sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" })),
+    [data, extraCompanies],
+  );
+  const filteredCompanies = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return q ? companies.filter((c) => c.toLowerCase().includes(q)) : companies;
+  }, [companies, search]);
+
+  const toggle = (i: string, c: string) => {
+    const k = memberKeyC(i, c);
+    setMembers((prev) => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n; });
+    setSavedMsg(null);
+  };
+
+  // Diff completo (working vs original) → sólo las celdas que cambiaron.
+  const changes = useMemo(() => {
+    const out: { indexName: string; company: string; member: boolean }[] = [];
+    for (const c of companies) for (const i of indices) {
+      const k = memberKeyC(i, c), now = members.has(k), was = orig.has(k);
+      if (now !== was) out.push({ indexName: i, company: c, member: now });
+    }
+    return out;
+  }, [companies, indices, members, orig]);
+
+  const memberCount = (i: string) => companies.reduce((n, c) => n + (members.has(memberKeyC(i, c)) ? 1 : 0), 0);
+
+  const save = () => {
+    if (!changes.length || saving) return;
+    setSaving(true); setError(null); setSavedMsg(null);
+    fetch("/api/chile/index-membership", {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ changes }),
+    })
+      .then(async (r) => { const d = await r.json(); if (!r.ok) throw new Error(d.error || "Error al guardar"); return d as { applied: number }; })
+      .then((d) => { setSavedMsg(`Guardado: ${d.applied} ${d.applied === 1 ? "cambio" : "cambios"}.`); load(); onSaved?.(); })
+      .catch((e: Error) => setError(e.message))
+      .finally(() => setSaving(false));
+  };
+
+  const addCompany = () => {
+    const c = newCompany.trim(); if (!c) return;
+    const exists = companies.some((x) => x.toLowerCase() === c.toLowerCase());
+    if (!exists) setExtraCompanies((p) => [...p, c]);
+    setNewCompany(""); setSearch(c);
+  };
+  const addIndex = () => {
+    const i = newIndex.trim(); if (!i) return;
+    if (!indices.some((x) => x.toLowerCase() === i.toLowerCase())) setExtraIndices((p) => [...p, i]);
+    setNewIndex("");
+  };
+
+  const tryClose = () => {
+    if (changes.length && !window.confirm(`Hay ${changes.length} cambios sin guardar. ¿Cerrar y descartarlos?`)) return;
+    onClose();
+  };
+
+  const stickyLeft: React.CSSProperties = { position: "sticky", left: 0, zIndex: 2, background: "#fff", borderRight: `1px solid ${BORDER}` };
+
+  return (
+    <div onClick={tryClose}
+      style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div onClick={(e) => e.stopPropagation()}
+        style={{ background: "#fff", borderRadius: 12, width: "min(1100px, 96vw)", maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 12px 48px rgba(15,23,42,0.35)", overflow: "hidden" }}>
+        {/* Encabezado */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "13px 16px", background: NAVY, color: NAVY_TEXT }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+            <LayoutGrid size={16} />
+            <span style={{ fontSize: 14, fontWeight: 700 }}>Membresía de índices</span>
+            <span style={{ fontSize: 11, opacity: 0.75 }}>{indices.length} fondos · {companies.length} empresas</span>
+          </div>
+          <button onClick={tryClose} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: 6, border: "1px solid rgba(255,255,255,0.25)", background: "transparent", color: NAVY_TEXT, cursor: "pointer" }}>
+            <X size={15} />
+          </button>
+        </div>
+
+        {/* Controles */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "10px 16px", borderBottom: `1px solid ${BORDER}`, background: SURFACE }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, flex: "1 1 200px", minWidth: 160, padding: "6px 10px", borderRadius: 6, background: "#fff", border: `1px solid ${BORDER}` }}>
+            <Search size={13} color={TEXT3} />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar empresa…"
+              style={{ border: "none", outline: "none", fontSize: 13, color: TEXT1, background: "transparent", width: "100%" }} />
+          </div>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <input value={newCompany} onChange={(e) => setNewCompany(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addCompany(); }} placeholder="+ empresa"
+              style={{ width: 130, padding: "6px 8px", fontSize: 12, borderRadius: 6, border: `1px solid ${BORDER}`, outline: "none", color: TEXT1, background: "#fff" }} />
+            <button onClick={addCompany} title="Agregar empresa (fila)" style={miniBtn}><Plus size={14} /></button>
+          </div>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <input value={newIndex} onChange={(e) => setNewIndex(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addIndex(); }} placeholder="+ índice"
+              style={{ width: 100, padding: "6px 8px", fontSize: 12, borderRadius: 6, border: `1px solid ${BORDER}`, outline: "none", color: TEXT1, background: "#fff" }} />
+            <button onClick={addIndex} title="Agregar índice (columna)" style={miniBtn}><Plus size={14} /></button>
+          </div>
+          <div style={{ flex: 1 }} />
+          {savedMsg && <span style={{ fontSize: 12, color: POS, fontWeight: 600 }}>{savedMsg}</span>}
+          {error && <span style={{ fontSize: 12, color: NEG, fontWeight: 600 }}>{error}</span>}
+          <span style={{ fontSize: 12, color: changes.length ? AMBER_INK : TEXT3, fontWeight: 600, fontFamily: "JetBrains Mono, monospace" }}>
+            {changes.length ? `${changes.length} sin guardar` : "sin cambios"}
+          </span>
+          <button onClick={save} disabled={!changes.length || saving}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6, fontSize: 12.5, fontWeight: 600, border: "none", cursor: changes.length && !saving ? "pointer" : "default", color: "#fff", background: changes.length ? NAVY : "#94A3B8", opacity: saving ? 0.7 : 1 }}>
+            <Save size={13} /> {saving ? "Guardando…" : "Guardar"}
+          </button>
+        </div>
+
+        {/* Matriz */}
+        <div style={{ overflow: "auto", flex: 1 }}>
+          {loading ? (
+            <div style={{ padding: 48, textAlign: "center", color: TEXT3, fontSize: 13 }}>Cargando…</div>
+          ) : !data ? (
+            <div style={{ padding: 48, textAlign: "center", color: NEG, fontSize: 13 }}>{error ?? "No se pudo cargar."}</div>
+          ) : (
+            <table style={{ borderCollapse: "separate", borderSpacing: 0, fontSize: 11, width: "100%" }}>
+              <thead>
+                <tr>
+                  <th style={{ ...stickyLeft, top: 0, zIndex: 4, textAlign: "left", padding: "7px 10px", background: NAVY, color: NAVY_TEXT, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    Empresa
+                  </th>
+                  {indices.map((i) => (
+                    <th key={i} title={i} style={{ position: "sticky", top: 0, zIndex: 3, padding: "7px 6px", background: NAVY, color: NAVY_TEXT, fontSize: 9.5, fontWeight: 700, textAlign: "center", whiteSpace: "nowrap", borderLeft: "1px solid rgba(255,255,255,0.12)" }}>
+                      <div>{i}</div>
+                      <div style={{ fontSize: 8.5, opacity: 0.6, fontWeight: 600 }}>{memberCount(i)}</div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredCompanies.map((c, ri) => (
+                  <tr key={c} style={{ background: ri % 2 === 0 ? "#fff" : ZEBRA }}>
+                    <td style={{ ...stickyLeft, background: ri % 2 === 0 ? "#fff" : ZEBRA, padding: "4px 10px", fontSize: 11, fontWeight: 600, color: TEXT1, whiteSpace: "nowrap", borderBottom: `1px solid ${BORDER}` }}>
+                      {c}
+                    </td>
+                    {indices.map((i) => {
+                      const k = memberKeyC(i, c), on = members.has(k), dirty = on !== orig.has(k);
+                      return (
+                        <td key={i} style={{ padding: 0, textAlign: "center", borderLeft: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}`, background: dirty ? "rgba(217,119,6,0.10)" : undefined }}>
+                          <button onClick={() => toggle(i, c)} title={`${c} · ${i} → ${on ? "quitar" : "agregar"}`}
+                            style={{ width: "100%", height: 26, display: "inline-flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", cursor: "pointer" }}>
+                            <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 17, height: 17, borderRadius: 4, border: on ? `1px solid ${NAVY}` : `1px solid ${BORDER}`, background: on ? NAVY : "#fff", color: "#fff" }}>
+                              {on && <Check size={12} strokeWidth={3} />}
+                            </span>
+                          </button>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+                {filteredCompanies.length === 0 && (
+                  <tr><td colSpan={1 + indices.length} style={{ padding: 28, textAlign: "center", color: TEXT3, fontSize: 13 }}>Sin empresas para “{search}”.</td></tr>
+                )}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Pie */}
+        <div style={{ padding: "8px 16px", borderTop: `1px solid ${BORDER}`, background: SURFACE, fontSize: 10.5, color: TEXT3 }}>
+          Celda marcada = pertenece al índice. Los cambios (resaltados) se guardan recién al apretar <strong style={{ color: TEXT2 }}>Guardar</strong>. Marcar una empresa nueva en algún índice la crea en la tabla.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Panel de edición de valores de una compañía (solo admin) ────────────────────
+// Override sobre los inputs del modelo (acciones, deuda, EBITDA, …) para el período
+// activo. Vacío = revertir al valor base. Al guardar, la vista recomputa y pinta de
+// amarillo lo editado y lo que depende.
+const curFieldValue = (co: SsV1Company, key: string): number | null => {
+  if (key === "sharesTotal") return co.sharesTotal;
+  if (key === "sharesA") return co.series[0]?.shares ?? null;
+  if (key === "sharesB") return co.series[1]?.shares ?? null;
+  return (co as unknown as Record<string, number | null>)[key] ?? null;
+};
+const numStr = (n: number | null | undefined): string => (n == null ? "" : String(n));
+
+function SsV1OverrideEditor({ company, fy, q, onClose, onSaved }: { company: SsV1Company; fy: number; q: number; onClose: () => void; onSaved: () => void }) {
+  const fields = useMemo(
+    () => OVERRIDE_FIELDS.filter((f) => f.scope === "both" || (f.scope === "single" && !company.dual) || (f.scope === "dual" && company.dual)),
+    [company],
+  );
+  const overridden = useMemo(() => new Set(company.overrides ?? []), [company]);
+  // Valor "actual" = base salvo override; para overrideados, base viene aparte en baseValues.
+  const initial = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const f of fields) m[f.key] = numStr(curFieldValue(company, f.key));
+    return m;
+  }, [fields, company]);
+  const [edits, setEdits] = useState<Record<string, string>>(initial);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const changes = useMemo(() => {
+    const out: { company: string; field: string; value: number | null }[] = [];
+    for (const f of fields) {
+      const cur = (edits[f.key] ?? "").trim(), init = (initial[f.key] ?? "").trim();
+      if (cur === init) continue;
+      if (cur === "") { out.push({ company: company.company, field: f.key, value: null }); continue; }
+      const v = Number(cur.replace(",", "."));
+      if (Number.isFinite(v)) out.push({ company: company.company, field: f.key, value: v });
+    }
+    return out;
+  }, [edits, initial, fields, company]);
+
+  const save = () => {
+    if (!changes.length || saving) return;
+    setSaving(true); setError(null);
+    fetch("/api/chile/stock-selection-v1/overrides", {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fiscalYear: fy, quarter: q, changes }),
+    })
+      .then(async (r) => { const d = await r.json(); if (!r.ok) throw new Error(d.error || "Error al guardar"); return d; })
+      .then(() => onSaved())
+      .catch((e: Error) => { setError(e.message); setSaving(false); });
+  };
+
+  // Agrupar por f.group manteniendo el orden.
+  const groupsOrder: string[] = [];
+  const byGroup = new Map<string, typeof fields>();
+  for (const f of fields) { if (!byGroup.has(f.group)) { byGroup.set(f.group, []); groupsOrder.push(f.group); } byGroup.get(f.group)!.push(f); }
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, width: "min(560px, 96vw)", maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 12px 48px rgba(15,23,42,0.35)", overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "13px 16px", background: EDIT_BORDER, color: "#fff" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+            <Pencil size={15} />
+            <span style={{ fontSize: 14, fontWeight: 700 }}>Editar valores · {company.company}</span>
+            <span style={{ fontSize: 11, opacity: 0.85 }}>{fy} Q{q} · {company.ssCurrency} mn</span>
+          </div>
+          <button onClick={onClose} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: 6, border: "1px solid rgba(255,255,255,0.3)", background: "transparent", color: "#fff", cursor: "pointer" }}><X size={15} /></button>
+        </div>
+
+        <div style={{ overflow: "auto", flex: 1, padding: "8px 16px 14px" }}>
+          {groupsOrder.map((gname) => (
+            <div key={gname} style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: TEXT2, marginBottom: 4 }}>{gname}</div>
+              {byGroup.get(gname)!.map((f) => {
+                const isOv = overridden.has(f.key);
+                const baseVal = isOv ? company.baseValues?.[f.key] ?? null : curFieldValue(company, f.key);
+                return (
+                  <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0" }}>
+                    <div style={{ flex: 1, fontSize: 12, color: TEXT1 }}>
+                      {f.label}
+                      <span style={{ fontSize: 10, color: TEXT3, marginLeft: 6 }}>base {baseVal == null ? "—" : baseVal.toLocaleString("en-US")}</span>
+                    </div>
+                    <input value={edits[f.key] ?? ""} inputMode="decimal"
+                      onChange={(e) => setEdits((p) => ({ ...p, [f.key]: e.target.value }))}
+                      placeholder="—"
+                      style={{ width: 120, padding: "5px 8px", fontSize: 12, fontFamily: "JetBrains Mono, monospace", textAlign: "right", borderRadius: 6, border: `1px solid ${isOv ? EDIT_BORDER : BORDER}`, background: isOv ? EDIT_BG : "#fff", color: TEXT1, outline: "none" }} />
+                    <button onClick={() => setEdits((p) => ({ ...p, [f.key]: "" }))} title="Revertir al valor base"
+                      disabled={(edits[f.key] ?? "") === ""}
+                      style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 6, border: `1px solid ${BORDER}`, background: "#fff", color: (edits[f.key] ?? "") === "" ? TEXT3 : EDIT_BORDER, cursor: (edits[f.key] ?? "") === "" ? "default" : "pointer" }}>
+                      <RotateCcw size={13} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+          <div style={{ fontSize: 10.5, color: TEXT3, marginTop: 12, lineHeight: 1.5 }}>
+            Valores en la moneda reportada (millones), igual que el dato base. Vaciar un campo = revertir al valor base. Los cambios no tocan la tabla fuente; viven en una capa de overrides por período.
+          </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "10px 16px", borderTop: `1px solid ${BORDER}`, background: SURFACE }}>
+          {error && <span style={{ fontSize: 12, color: NEG, fontWeight: 600, marginRight: "auto" }}>{error}</span>}
+          <span style={{ fontSize: 12, color: changes.length ? EDIT_BORDER : TEXT3, fontWeight: 600, fontFamily: "JetBrains Mono, monospace" }}>{changes.length ? `${changes.length} sin guardar` : "sin cambios"}</span>
+          <button onClick={onClose} style={{ padding: "7px 14px", borderRadius: 6, fontSize: 12.5, fontWeight: 600, border: `1px solid ${BORDER}`, background: "#fff", color: TEXT2, cursor: "pointer" }}>Cancelar</button>
+          <button onClick={save} disabled={!changes.length || saving}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 16px", borderRadius: 6, fontSize: 12.5, fontWeight: 600, border: "none", cursor: changes.length && !saving ? "pointer" : "default", color: "#fff", background: changes.length ? EDIT_BORDER : "#94A3B8", opacity: saving ? 0.7 : 1 }}>
+            <Save size={13} /> {saving ? "Guardando…" : "Guardar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Style helpers ────────────────────────────────────────────────────────────────
+const AMBER_INK = "#B45309"; // acento ámbar para "cambios sin guardar"
+const miniBtn: React.CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 6, border: `1px solid ${BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" };
 const stickyTh: React.CSSProperties = { position: "sticky", left: 0, padding: "4px 8px", textAlign: "left", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: NAVY_TEXT, background: NAVY, borderBottom: `2px solid ${NAVY}`, borderRight: "1px solid rgba(30,58,95,0.20)", whiteSpace: "nowrap" };
 const stickyTd: React.CSSProperties = { position: "sticky", left: 0, zIndex: 10, padding: "4px 8px", borderBottom: `1px solid ${BORDER}`, borderRight: "1px solid rgba(30,58,95,0.20)", verticalAlign: "middle" };
 const retryBtn: React.CSSProperties = { marginTop: 10, padding: "6px 16px", borderRadius: 6, background: SURFACE, border: `1px solid ${BORDER}`, color: TEXT1, cursor: "pointer", fontSize: 13 };
 // USD se marca algo más fuerte que CLP (es la excepción en un listado mayormente CLP).
 const ccyBadge = (ccy: "CLP" | "USD"): React.CSSProperties => ({ marginLeft: 5, fontSize: 9, fontWeight: 700, color: ccy === "USD" ? TEXT1 : TEXT3, background: ccy === "USD" ? "rgba(15,23,42,0.09)" : "rgba(15,23,42,0.05)", borderRadius: 3, padding: "1px 4px" });
 const consBadge: React.CSSProperties = { marginLeft: 6, fontSize: 8.5, fontWeight: 700, color: NAVY, background: "rgba(30,58,95,0.10)", borderRadius: 3, padding: "1px 5px", textTransform: "uppercase", letterSpacing: "0.04em" };
+const editedBadge: React.CSSProperties = { marginLeft: 6, fontSize: 8.5, fontWeight: 700, color: "#854D0E", background: "rgba(250,204,21,0.35)", borderRadius: 3, padding: "1px 5px", letterSpacing: "0.02em" };

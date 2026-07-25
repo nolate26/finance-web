@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import YahooFinance from "yahoo-finance2";
+import { OVERRIDE_FIELD_KEYS } from "@/lib/ssOverrideFields";
 
 export const dynamic = "force-dynamic";
 
@@ -72,9 +73,21 @@ export interface SsV1Company {
   rec:     string | null;
   recDate: string | null;   // YYYY-MM-DD
   tp:      number | null;    // target price, moneda del listado (sin conv)
+
+  // Campos con override de admin aplicado en este período (para pintarlos en la vista).
+  overrides?: string[];
+  // Valor base (previo al override) de esos campos, para mostrarlo en el panel de edición.
+  baseValues?: Record<string, number | null>;
 }
 
 export interface SsV1Period { fy: number; q: number; label: string; }
+
+export interface IndexLevel {
+  price: number | null; currency: string | null;
+  // Retornos con la MISMA metodología que las compañías (fetchPrice sobre el símbolo del
+  // índice). El chart de estos índices suele venir vacío en Yahoo → quedan en null.
+  retMonth: number | null; retYtd: number | null; retYear: number | null; ret3y: number | null; ret5y: number | null;
+}
 
 export interface SsV1Payload {
   withPrices: boolean;
@@ -85,6 +98,9 @@ export interface SsV1Payload {
   selFy:      number;       // período n activo
   selQ:       number;
   companies:  SsV1Company[];
+  // Nivel real de cada índice (solo con ?withPrices). Sólo los que Yahoo sirve por quote:
+  // IPSA (^IPSA) e IGPA (IGPA.SN). Los sub-índices IGPA y los "Mon" no existen en Yahoo.
+  indexLevels?: Record<string, IndexLevel>;
 }
 
 // ── Homologación / overrides ───────────────────────────────────────────────────
@@ -107,9 +123,17 @@ const SERIES_NAMES: Record<string, { A: string; B: string }> = {
 
 // Correcciones de tickers Yahoo mal cargados en empresas_industrias_v2.yahoo_finance_ticker
 // (clave = valor en la tabla, en MAYÚSCULAS). Reportar al usuario para que arregle la fuente.
+// Los 6 de abajo devolvían "No data found, symbol may be delisted" → la fila quedaba sin
+// precio ni retornos. Los símbolos nuevos fueron verificados contra el precio de referencia.
 const YAHOO_OVERRIDE: Record<string, string> = {
   "POTASIO-A.SN": "POTASIOS-A.SN",
   "POTASIO-B.SN": "POTASIOS-B.SN",
+  "BICECORP.SN": "BICE.SN",           // Bicecorp
+  "CENCOMALL.SN": "CENCOMALLS.SN",    // Cencosud Shopping
+  "OROBLANCO.SN": "ORO-BLANCO.SN",    // Oro Blanco
+  "MULTIX.SN": "MULTI-X.SN",          // MultiX (ex Multiexport Foods)
+  "LASCONDES.SN": "LAS-CONDES.SN",    // Clínica Las Condes
+  "SANTARITA.SN": "SANTA-RITA.SN",    // Viña Santa Rita
 };
 
 // ── Precios / retornos (Yahoo) ──────────────────────────────────────────────────
@@ -156,12 +180,17 @@ async function fetchPrice(ticker: string): Promise<PriceData | null> {
       .sort((a, b) => a.t - b.t);
 
     // Serie de retorno total: en cada ex-date el dividendo se reinvierte al cierre previo.
+    // Guarda de sanidad: se descarta el dividendo que supera el precio de la acción — es
+    // imposible en la realidad y delata un dato corrupto de Yahoo. Caso real: SOQUICOM.SN
+    // trae 23.842,6 CLP el 2026-05-11 sobre un precio de 408 (5.840%), que sin este filtro
+    // disparaba el YTD a +5.608%. El mayor dividendo legítimo del universo es Colbún con
+    // 42,6% del precio, así que el umbral de 100% deja un margen amplio.
     const tr: ChartPoint[] = [];
     let acc = 1, di = 0;
     for (let i = 0; i < px.length; i++) {
       while (di < divs.length && divs[di].t <= px[i].t) {
         const prev = px[i - 1]?.v ?? px[i].v;
-        if (prev > 0) acc *= (prev + divs[di].amt) / prev;
+        if (prev > 0 && divs[di].amt <= prev) acc *= (prev + divs[di].amt) / prev;
         di++;
       }
       tr.push({ t: px[i].t, v: px[i].v * acc });
@@ -175,8 +204,15 @@ async function fetchPrice(ticker: string): Promise<PriceData | null> {
       const r = retOf(cur, base);
       return r == null ? null : Math.pow(1 + r, 1 / years) - 1;
     };
+    // Precio: meta.regularMarketPrice suele ir un día más adelante que la serie de cierres
+    // y es el que calza con la referencia, así que se prefiere. Pero en papeles sin volumen
+    // Yahoo devuelve ahí un precio indicativo que no corresponde: AFPCAPITAL.SN informa 310
+    // contra un último cierre real de 247,5 (+25%) tras 14 ruedas sin operar. Por eso se
+    // acepta sólo si está dentro de ±15% del último cierre; si no, se cae al cierre.
+    const meta = chart.meta?.regularMarketPrice;
+    const metaOk = meta != null && isFinite(meta) && meta > 0 && lastPx.v > 0 && Math.abs(meta / lastPx.v - 1) <= 0.15;
     return {
-      price: chart.meta?.regularMarketPrice ?? lastPx.v,
+      price: metaOk ? meta : lastPx.v,
       currency: chart.meta?.currency ?? null,
       retMonth: retOf(cur, priceAsOf(tr, curT - 30 * DAY)),
       retYtd: retOf(cur, priceAsOf(tr, yearStart)),
@@ -187,6 +223,36 @@ async function fetchPrice(ticker: string): Promise<PriceData | null> {
   } catch {
     return null;
   }
+}
+// Nivel de índice: sólo los que Yahoo sirve por quote (chart viene vacío para éstos, así
+// que no hay retornos históricos, sólo el nivel actual). Sub-índices IGPA y "Mon" no existen.
+const INDEX_TICKERS: Record<string, string> = {
+  IPSA: "^IPSA",
+  IGPA: "IGPA.SN",
+};
+async function fetchIndexLevels(): Promise<Record<string, IndexLevel>> {
+  const out: Record<string, IndexLevel> = {};
+  await Promise.all(
+    Object.entries(INDEX_TICKERS).map(async ([name, tk]) => {
+      // Retornos por la misma vía que las compañías (fetchPrice). Para estos índices el
+      // chart suele venir vacío → retornos null.
+      const pd = await fetchPrice(tk);
+      // Nivel actual por quote: más confiable que el chart para índices.
+      let level: number | null = null, ccy: string | null = null;
+      try {
+        const q = await yf.quote(tk);
+        if (q?.regularMarketPrice != null && isFinite(q.regularMarketPrice)) { level = q.regularMarketPrice; ccy = q.currency ?? null; }
+      } catch { /* sin quote */ }
+      if (pd == null && level == null) return;
+      out[name] = {
+        price: level ?? pd?.price ?? null,
+        currency: ccy ?? pd?.currency ?? null,
+        retMonth: pd?.retMonth ?? null, retYtd: pd?.retYtd ?? null, retYear: pd?.retYear ?? null,
+        ret3y: pd?.ret3y ?? null, ret5y: pd?.ret5y ?? null,
+      };
+    }),
+  );
+  return out;
 }
 async function fetchPricesChunked(tickers: string[]): Promise<Map<string, PriceData>> {
   const out = new Map<string, PriceData>();
@@ -308,6 +374,52 @@ export async function GET(request: NextRequest) {
     }
     const nKey = qKey(selFy, selQ), n4Key = qKey(selFy - 1, selQ);
     const ltmKeys: number[] = []; { let f = selFy, q = selQ; for (let i = 0; i < 4; i++) { ltmKeys.push(qKey(f, q)); q--; if (q === 0) { q = 4; f--; } } }
+
+    // ── Overrides de admin para el período activo (norm(company) → field → value) ──
+    // Resiliente: si la tabla aún no existe (falta `prisma db push`), se ignora y la vista
+    // funciona igual sin overrides.
+    let overrideRows: { company: string; field: string; value: number | null }[] = [];
+    try {
+      overrideRows = await prisma.stockSelectionOverride.findMany({
+        where: { fiscalYear: selFy, quarter: selQ },
+        select: { company: true, field: true, value: true },
+      });
+    } catch (e) {
+      console.warn("[stock-selection-v1] overrides no disponibles (¿falta db push?):", String(e).slice(0, 120));
+    }
+    const overridesByCompany = new Map<string, Map<string, number>>();
+    for (const o of overrideRows) {
+      if (o.value == null || !OVERRIDE_FIELD_KEYS.has(o.field)) continue;
+      const k = norm(o.company);
+      let m = overridesByCompany.get(k); if (!m) { m = new Map(); overridesByCompany.set(k, m); }
+      m.set(o.field, o.value);
+    }
+    // Campos numéricos que se asignan directo al objeto compañía (los demás son shares).
+    const DIRECT_FIELDS = new Set(["debtN", "debtN4", "equityN", "equityN4", "minorityN", "minorityN4", "ebitdaN", "ebitdaN4", "ebitdaLtm", "ebitda2026E", "ebitda2027E", "utilidadN", "utilidadN4", "utilidadLtm", "utilidad2026E", "utilidad2027E", "revenueLtm", "ebitLtm"]);
+    const applyOverrides = (co: SsV1Company): void => {
+      const ov = overridesByCompany.get(norm(co.company));
+      if (!ov || !ov.size) return;
+      const applied: string[] = [];
+      const baseValues: Record<string, number | null> = {};
+      for (const [field, value] of ov) {
+        if (field === "sharesTotal") {
+          if (!co.dual) { baseValues[field] = co.sharesTotal; co.sharesTotal = value; if (co.series[0]) co.series[0].shares = value; applied.push(field); }
+        } else if (field === "sharesA") {
+          if (co.dual && co.series[0]) { baseValues[field] = co.series[0].shares; co.series[0].shares = value; applied.push(field); }
+        } else if (field === "sharesB") {
+          if (co.dual && co.series[1]) { baseValues[field] = co.series[1].shares; co.series[1].shares = value; applied.push(field); }
+        } else if (DIRECT_FIELDS.has(field)) {
+          const rec = co as unknown as Record<string, number | null>;
+          baseValues[field] = rec[field] ?? null; rec[field] = value; applied.push(field);
+        }
+      }
+      // Doble serie: sharesTotal coherente con A+B tras editar acciones (prorrateo).
+      if (co.dual && (ov.has("sharesA") || ov.has("sharesB"))) {
+        const a = co.series[0]?.shares, b = co.series[1]?.shares;
+        if (a != null && b != null) co.sharesTotal = a + b;
+      }
+      if (applied.length) { co.overrides = applied; co.baseValues = baseValues; }
+    };
     const ltmLabels = (() => { const o: string[] = []; let f = selFy, q = selQ; for (let i = 0; i < 4; i++) { o.push(labelOf(f, q)); q--; if (q === 0) { q = 4; f--; } } return o.reverse(); })();
 
     // ── Fundamentales (serie TOTAL) + shares por serie ────────────────────────
@@ -394,7 +506,7 @@ export async function GET(request: NextRequest) {
       for (const s of series) { const ri = recOf(s.bbg); s.rec = ri?.rec ?? null; s.recDate = ri?.recDate ?? null; s.tp = ri?.tp ?? null; }
       const coRec = recOf(resolved.tickerBBG);
 
-      companies.push({
+      const co: SsV1Company = {
         company: r.company, tickerBBG: resolved.tickerBBG, industria: resolved.industria, gics: resolved.gics, dual,
         ssCurrency: f.currency, projCurrency: pick?.moneda ?? null,
         series, sharesTotal,
@@ -408,14 +520,18 @@ export async function GET(request: NextRequest) {
         ebitda2026E: projYear(pick, "ebitda", 2026), ebitda2027E: projYear(pick, "ebitda", 2027),
         utilidad2026E: projYear(pick, "utilidad", 2026), utilidad2027E: projYear(pick, "utilidad", 2027),
         divLabel: pick?.div ?? null, payout: pick?.pool_div ?? null,
-      });
+      };
+      applyOverrides(co); // capa de overrides de admin (in place)
+      companies.push(co);
     }
     companies.sort((a, b) => a.company.localeCompare(b.company));
 
     // ── Precios (Yahoo, on-demand) ────────────────────────────────────────────
+    let indexLevels: Record<string, IndexLevel> | undefined;
     if (withPrices) {
       const tickers = [...new Set(companies.flatMap((c) => c.series.map((s) => s.yahooTicker)).filter((t): t is string => !!t))];
-      const priceMap = await fetchPricesChunked(tickers);
+      const [priceMap, levels] = await Promise.all([fetchPricesChunked(tickers), fetchIndexLevels()]);
+      indexLevels = levels;
       for (const c of companies)
         for (const s of c.series) {
           const pd = s.yahooTicker ? priceMap.get(s.yahooTicker) ?? null : null;
@@ -429,7 +545,7 @@ export async function GET(request: NextRequest) {
       withPrices,
       periodN: selFy ? labelOf(selFy, selQ) : null,
       periodN4: selFy ? labelOf(selFy - 1, selQ) : null,
-      ltmLabels, periods, selFy, selQ, companies,
+      ltmLabels, periods, selFy, selQ, companies, indexLevels,
     };
     return NextResponse.json(payload);
   } catch (e) {
