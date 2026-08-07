@@ -955,3 +955,14 @@ model IndexMembership {
 }
 
 
+model BetaSensitivity {
+  company         String   @map("company") @db.VarChar(120) // Ticker de la accion ej "NUTRESA CB Equity"
+  factor          String   @map("factor") @db.VarChar(40)   // ej "USDCLP", "IPSA"
+  beta            Float    @map("beta")                     // Coeficiente beta calculado
+  calculationDate DateTime @map("calculation_date")         // Fecha del cálculo
+ 
+  @@id([company, factor])
+  @@index([company])
+  @@index([factor])
+  @@map("beta_sensitivity")
+}

@@ -458,6 +458,15 @@ export async function POST(request: Request) {
           skipDuplicates: true // Evita duplicados si corres el script 2 veces el mismo día
         });
         break;
+
+
+      case 'BetaSensitivity':
+        await prisma.betaSensitivity.createMany({ 
+          data: rows, 
+          skipDuplicates: true 
+        });
+        break;
+        
       case 'BenchmarkMxla':
         const benchRows = rows.map((r: any) => ({
           date: new Date(r.date),
