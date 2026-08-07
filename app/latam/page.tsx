@@ -10,10 +10,11 @@ import SectorAttributionPanel from "@/components/attribution/SectorAttributionPa
 import MatrixAttributionPanel from "@/components/attribution/MatrixAttributionPanel";
 import EarningsDashboard from "@/components/earnings/EarningsDashboard";
 import ConsensusCheckTable from "@/components/latam/ConsensusCheckTable";
+import BetaExposurePanel from "@/components/latam/BetaExposurePanel";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type ActiveTab = "stock-selection" | "top-picks" | "attribution" | "earnings" | "consensus-check";
+type ActiveTab = "stock-selection" | "top-picks" | "attribution" | "earnings" | "consensus-check" | "beta-exposure";
 type FundFilter = "all" | "MLE" | "MSC" | "others";
 
 interface SortOption {
@@ -294,6 +295,7 @@ export default function LatAmPage() {
             { key: "consensus-check",  label: "Moneda Estimates"   },
             { key: "earnings",         label: "Earnings Surprises" },
             { key: "attribution",      label: "Perf. Attribution"  },
+            { key: "beta-exposure",    label: "Beta Exposure"      },
             { key: "top-picks",        label: "Top Picks"          },
             { key: "stock-selection",  label: "Stock Selection"    },
           ] as { key: ActiveTab; label: string }[]
@@ -495,6 +497,16 @@ export default function LatAmPage() {
 
       {/* ── Performance Attribution ──────────────────────────────────────────── */}
       {activeTab === "attribution" && <AttributionSection />}
+
+      {/* ── Beta / Factor Exposure ───────────────────────────────────────────── */}
+      {activeTab === "beta-exposure" && (
+        <div>
+          <p style={{ fontSize: 12, color: "#64748B", marginBottom: 14, fontFamily: "Inter, sans-serif" }}>
+            Portfolio vs benchmark exposure to risk factors — weighted sum-product of position betas.
+          </p>
+          <BetaExposurePanel />
+        </div>
+      )}
 
       {/* ── Earnings Surprises ───────────────────────────────────────────────── */}
       {activeTab === "earnings" && <EarningsDashboard />}
