@@ -2,6 +2,29 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 // ❌ ELIMINADO: import { table } from 'console'; (Esto rompe la API en producción)
 
+// createMany necesita que todas las filas tengan el mismo set de claves:
+// rellenamos con null las que falten en alguna fila del payload.
+// Además así sale un solo INSERT multi-fila, y Postgres asigna los id en el
+// orden del array → los lectores que hacen orderBy:{id:"asc"} sobre los KPIs
+// (app/api/companies/[ticker]/model|bank-model) conservan el orden de la planilla.
+function normalizeRows(rows: Record<string, any>[]): any[] {
+  const keys = new Set<string>();
+  for (const r of rows) for (const k of Object.keys(r)) keys.add(k);
+  return rows.map((r) => {
+    const out: Record<string, any> = {};
+    for (const k of keys) out[k] = r[k] ?? null;
+    return out;
+  });
+}
+
+// Replica el "último gana" del loop de upsert ante claves repetidas:
+// createMany explotaría contra el índice único.
+function dedupeBy<T>(rows: T[], key: (r: T) => string): T[] {
+  const map = new Map<string, T>();
+  for (const r of rows) map.set(key(r), r);
+  return [...map.values()];
+}
+
 export async function POST(request: Request) {
   // Declaramos la variable afuera para que sobreviva si ocurre un error
   let tableName = 'Desconocida';
@@ -97,7 +120,9 @@ export async function POST(request: Request) {
         }
         break;
 
-      case 'BankModel':
+      // El payload es SIEMPRE el snapshot completo de un (ticker, updateDate),
+      // así que reemplazamos financials y KPIs enteros: 5 queries en vez de N.
+      case 'BankModel': {
         const { header: bHeader, financials: bFinancials, kpis: bKpis } = data;
 
         if (!bHeader || !bFinancials) {
@@ -108,94 +133,68 @@ export async function POST(request: Request) {
         }
 
         const bankDate = new Date(bHeader.updateDate);
+        const bankKey = { ticker: bHeader.ticker, updateDate: bankDate };
 
-        // 1. Header
-        await prisma.bankHeader.upsert({
-          where: {
-            ticker_updateDate: {
-              ticker: bHeader.ticker,
-              updateDate: bankDate
-            }
-          },
-          update: {
-            recc:     bHeader.recc,
-            tp:       bHeader.tp,
-            analyst:  bHeader.analyst,
-            currency: bHeader.currency,
-            thesis:   bHeader.thesis,
-            link:     bHeader.link
-          },
-          create: {
-            ticker:     bHeader.ticker,
-            updateDate: bankDate,
-            recc:       bHeader.recc,
-            tp:         bHeader.tp,
-            analyst:    bHeader.analyst,
-            currency:   bHeader.currency,
-            thesis:     bHeader.thesis,
-            link:       bHeader.link
-          }
-        });
+        const bankFinRows = normalizeRows(
+          bFinancials.map((f: any) => ({ ...bankKey, ...f }))
+        );
 
-        // 2. Financials
-        const bankFinUpserts = bFinancials.map((f: any) => {
-          const { year, ...metricas } = f;
-          return prisma.bankFinancials.upsert({
-            where: {
-              ticker_updateDate_year: {
-                ticker:     bHeader.ticker,
-                updateDate: bankDate,
-                year:       year
-              }
+        // Unicidad por kpiOrder, no por kpiName: la planilla repite nombres como "Var %".
+        const bankKpiRows = normalizeRows(
+          dedupeBy(
+            (Array.isArray(bKpis) ? bKpis : []).map((k: any) => ({
+              ...bankKey,
+              year:        k.year,
+              sectionName: k.sectionName,
+              kpiName:     k.kpiName,
+              kpiOrder:    k.kpiOrder,
+              value:       k.value,
+            })),
+            (r) => `${r.year}|${r.sectionName}|${r.kpiOrder}`
+          )
+        );
+
+        await prisma.$transaction(async (tx) => {
+          // 1. Header — dentro del tx: financials y KPIs tienen FK contra él.
+          await tx.bankHeader.upsert({
+            where: { ticker_updateDate: bankKey },
+            update: {
+              recc:     bHeader.recc,
+              tp:       bHeader.tp,
+              analyst:  bHeader.analyst,
+              currency: bHeader.currency,
+              thesis:   bHeader.thesis,
+              link:     bHeader.link
             },
-            update: metricas,
             create: {
-              ticker:     bHeader.ticker,
-              updateDate: bankDate,
-              year:       year,
-              ...metricas
+              ...bankKey,
+              recc:       bHeader.recc,
+              tp:         bHeader.tp,
+              analyst:    bHeader.analyst,
+              currency:   bHeader.currency,
+              thesis:     bHeader.thesis,
+              link:       bHeader.link
             }
           });
-        });
 
-        await prisma.$transaction(bankFinUpserts);
+          // 2. Financials
+          await tx.bankFinancials.deleteMany({ where: bankKey });
+          if (bankFinRows.length > 0) {
+            await tx.bankFinancials.createMany({ data: bankFinRows });
+          }
 
-        // 3. KPIs — upsert por kpiOrder (permite nombres repetidos como "Var %")
-        if (bKpis && Array.isArray(bKpis) && bKpis.length > 0) {
-          const bankKpiUpserts = bKpis.map((k: any) => {
-            return prisma.bankKPI.upsert({
-              where: {
-                ticker_updateDate_year_sectionName_kpiOrder: {
-                  ticker:      bHeader.ticker,
-                  updateDate:  bankDate,
-                  year:        k.year,
-                  sectionName: k.sectionName,
-                  kpiOrder:    k.kpiOrder
-                }
-              },
-              update: {
-                value:   k.value,
-                kpiName: k.kpiName
-              },
-              create: {
-                ticker:      bHeader.ticker,
-                updateDate:  bankDate,
-                year:        k.year,
-                sectionName: k.sectionName,
-                kpiName:     k.kpiName,
-                kpiOrder:    k.kpiOrder,
-                value:       k.value
-              }
-            });
-          });
-
-          await prisma.$transaction(bankKpiUpserts);
-        }
+          // 3. KPIs
+          await tx.bankKPI.deleteMany({ where: bankKey });
+          if (bankKpiRows.length > 0) {
+            await tx.bankKPI.createMany({ data: bankKpiRows });
+          }
+        }, { timeout: 20_000 });
 
         return NextResponse.json({
           success: true,
-          message: `Snapshot de banco ${bHeader.ticker} guardado: ${bFinancials.length} años + ${bKpis?.length ?? 0} KPIs.`
+          message: `Snapshot de banco ${bHeader.ticker} guardado: ${bankFinRows.length} años + ${bankKpiRows.length} KPIs.`
         });
+      }
 
 
       // --- TABLA TOTAL RETURN INDEX (UPSERT) ---
@@ -296,107 +295,82 @@ export async function POST(request: Request) {
         });
         break;
       // 👆 HASTA AQUÍ 👆
-      case 'AnalystModel':
+      // Mismo criterio que BankModel: snapshot completo → reemplazo total.
+      case 'AnalystModel': {
         const { header, financials, kpis } = data;
-        
+
         if (!header || !financials) {
           return NextResponse.json(
-            { error: 'Payload inválido: Faltan datos del modelo' }, 
+            { error: 'Payload inválido: Faltan datos del modelo' },
             { status: 400 }
           );
         }
 
         const modelDate = new Date(header.updateDate);
+        const modelKey = { ticker: header.ticker, updateDate: modelDate };
 
-        // 1. Header — ahora incluye currency y thesis
-        await prisma.modelHeader.upsert({
-          where: { 
-            ticker_updateDate: {
-              ticker: header.ticker,
-              updateDate: modelDate
-            }
-          },
-          update: {
-            recc:     header.recc,
-            tp:       header.tp,
-            analyst:  header.analyst,
-            currency: header.currency,  // ← NUEVO
-            unit:     header.unit,        // ← NUEVO
-            thesis:   header.thesis,    // ← NUEVO
-            link:     header.link
-          },
-          create: {
-            ticker:     header.ticker,
-            updateDate: modelDate,
-            recc:       header.recc,
-            tp:         header.tp,
-            analyst:    header.analyst,
-            currency:   header.currency,  // ← NUEVO
-            unit:       header.unit,        // ← NUEVO
-            thesis:     header.thesis,    // ← NUEVO
-            link:       header.link
-          }
-        });
+        const modelFinRows = normalizeRows(
+          financials.map((f: any) => ({ ...modelKey, ...f }))
+        );
 
-        // 2. Financials — igual que antes
-        const modelUpserts = financials.map((f: any) => {
-          const { year, ...metricas } = f;
-          return prisma.modelFinancials.upsert({
-            where: {
-              ticker_updateDate_year: {
-                ticker:     header.ticker,
-                updateDate: modelDate,
-                year:       year
-              }
+        // Acá la unicidad es por kpiName (a diferencia de BankKPI, que usa kpiOrder).
+        const modelKpiRows = normalizeRows(
+          dedupeBy(
+            (Array.isArray(kpis) ? kpis : []).map((k: any) => ({
+              ...modelKey,
+              year:        k.year,
+              sectionName: k.sectionName,
+              kpiName:     k.kpiName,
+              kpiOrder:    k.kpiOrder,
+              value:       k.value,
+            })),
+            (r) => `${r.year}|${r.sectionName}|${r.kpiName}`
+          )
+        );
+
+        await prisma.$transaction(async (tx) => {
+          // 1. Header — dentro del tx: financials y KPIs tienen FK contra él.
+          await tx.modelHeader.upsert({
+            where: { ticker_updateDate: modelKey },
+            update: {
+              recc:     header.recc,
+              tp:       header.tp,
+              analyst:  header.analyst,
+              currency: header.currency,
+              unit:     header.unit,
+              thesis:   header.thesis,
+              link:     header.link
             },
-            update: metricas,
             create: {
-              ticker:     header.ticker,
-              updateDate: modelDate,
-              year:       year,
-              ...metricas
+              ...modelKey,
+              recc:       header.recc,
+              tp:         header.tp,
+              analyst:    header.analyst,
+              currency:   header.currency,
+              unit:       header.unit,
+              thesis:     header.thesis,
+              link:       header.link
             }
           });
+
+          // 2. Financials
+          await tx.modelFinancials.deleteMany({ where: modelKey });
+          if (modelFinRows.length > 0) {
+            await tx.modelFinancials.createMany({ data: modelFinRows });
+          }
+
+          // 3. KPIs
+          await tx.modelKPI.deleteMany({ where: modelKey });
+          if (modelKpiRows.length > 0) {
+            await tx.modelKPI.createMany({ data: modelKpiRows });
+          }
+        }, { timeout: 20_000 });
+
+        return NextResponse.json({
+          success: true,
+          message: `Snapshot de ${header.ticker} guardado: ${modelFinRows.length} años + ${modelKpiRows.length} KPIs.`
         });
-
-        await prisma.$transaction(modelUpserts);
-
-        // 3. KPIs — ESTO ES LO QUE FALTABA
-        if (kpis && Array.isArray(kpis) && kpis.length > 0) {
-          const kpiUpserts = kpis.map((k: any) => {
-            return prisma.modelKPI.upsert({
-              where: {
-                ticker_updateDate_year_sectionName_kpiName: {
-                  ticker:      header.ticker,
-                  updateDate:  modelDate,
-                  year:        k.year,
-                  sectionName: k.sectionName,
-                  kpiName:     k.kpiName
-                }
-              },
-              update: {
-                value:    k.value,
-                kpiOrder: k.kpiOrder
-              },
-              create: {
-                ticker:      header.ticker,
-                updateDate:  modelDate,
-                year:        k.year,
-                sectionName: k.sectionName,
-                kpiName:     k.kpiName,
-                kpiOrder:    k.kpiOrder,
-                value:       k.value
-              }
-            });
-          });
-
-          await prisma.$transaction(kpiUpserts);
-        }
-
-        return NextResponse.json({ 
-          success: true, 
-          message: `Snapshot de ${header.ticker} guardado: ${financials.length} años + ${kpis?.length ?? 0} KPIs.`
-        });
+      }
       // 👆 HASTA AQUÍ 👆
       case 'LastRun':
         await prisma.lastRun.createMany({ data: rows, skipDuplicates: true });
