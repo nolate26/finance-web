@@ -120,6 +120,32 @@ export interface FactorDetailPayload {
   };
 }
 
+/** One company's numbers for a single factor, in the all-factors export */
+export interface CellExposure {
+  beta:             number | null;
+  portfolioContrib: number;
+  benchmarkContrib: number;
+  activeContrib:    number;
+  tickersUsed:      string;
+}
+
+export interface CompanyExposureRow {
+  company:         string;
+  portfolioWeight: number;
+  benchmarkWeight: number;
+  activeWeight:    number;
+  byFactor:        Record<string, CellExposure>;
+}
+
+/** `?factor=*` — every position against every factor, for the Excel export */
+export interface AllFactorsDetailPayload {
+  fundName:   string;
+  reportDate: string;
+  factors:    string[];
+  rows:       CompanyExposureRow[];
+  totals:     Record<string, { portfolioBeta: number; benchmarkBeta: number; activeBeta: number }>;
+}
+
 export interface FundOption {
   fundName:    string;
   displayName: string;
@@ -244,6 +270,108 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: `No holdings found for fund '${fundName}'` }, { status: 404 });
       }
       dateStr = latest.reportDate.toISOString().slice(0, 10);
+    }
+
+    // ── Mode 4: `factor=*` — every position × every factor, for the export ──
+    // Same collapse rules as everywhere else, but pivoted company × factor so
+    // the workbook can carry the full drill-down instead of just the open tab.
+    if (factorParam === "*") {
+      const rows = await prisma.$queryRaw<{
+        company: string;
+        w_p: number | string | null;
+        w_b: number | string | null;
+        factor: string;
+        beta: number | string | null;
+        tickers_used: string | null;
+      }[]>`
+        WITH holdings AS (
+          SELECT
+            fpw.company                       AS company,
+            LOWER(TRIM(fpw.company))          AS name_key,
+            COALESCE(fpw.portfolio_weight, 0) AS w_p,
+            COALESCE(fpw.benchmark_weight, 0) AS w_b
+          FROM fund_portfolio_weights fpw
+          WHERE fpw.fund_name   = ${fundName}
+            AND fpw.report_date = ${dateStr}::date
+        ),
+        listing_beta AS (
+          SELECT
+            LOWER(TRIM(ei.nombre_latam)) AS name_key,
+            ei.ticker_bloomberg          AS ticker,
+            bs.factor                    AS factor,
+            bs.beta                      AS beta,
+            ABS(bs.beta) > ${betaLimit}                        AS outlier,
+            UPPER(TRIM(ei.ticker_bloomberg)) = ANY(${dropped}) AS user_dropped
+          FROM empresas_industrias_v2 ei
+          JOIN beta_sensitivity bs
+            ON UPPER(TRIM(bs.company)) = UPPER(TRIM(ei.ticker_bloomberg))
+          WHERE ei.nombre_latam     IS NOT NULL AND ei.nombre_latam     <> ''
+            AND ei.ticker_bloomberg IS NOT NULL AND ei.ticker_bloomberg <> ''
+        )
+        SELECT
+          h.company   AS company,
+          h.w_p       AS w_p,
+          h.w_b       AS w_b,
+          lb.factor   AS factor,
+          AVG(lb.beta) FILTER (WHERE NOT lb.outlier AND NOT lb.user_dropped) AS beta,
+          STRING_AGG(lb.ticker, ', ' ORDER BY lb.ticker)
+            FILTER (WHERE NOT lb.outlier AND NOT lb.user_dropped)            AS tickers_used
+        FROM holdings h
+        JOIN listing_beta lb ON lb.name_key = h.name_key
+        GROUP BY h.company, h.w_p, h.w_b, lb.factor
+      `;
+
+      const byCompany = new Map<string, CompanyExposureRow>();
+      const factorSet = new Set<string>();
+      const totals: AllFactorsDetailPayload["totals"] = {};
+
+      for (const r of rows) {
+        factorSet.add(r.factor);
+        const wp = num(r.w_p);
+        const wb = num(r.w_b);
+
+        let row = byCompany.get(r.company);
+        if (!row) {
+          row = {
+            company:         r.company,
+            portfolioWeight: wp,
+            benchmarkWeight: wb,
+            activeWeight:    wp - wb,
+            byFactor:        {},
+          };
+          byCompany.set(r.company, row);
+        }
+
+        const beta = r.beta === null ? null : num(r.beta);
+        const cell: CellExposure = {
+          beta,
+          portfolioContrib: beta === null ? 0 : wp * beta,
+          benchmarkContrib: beta === null ? 0 : wb * beta,
+          activeContrib:    beta === null ? 0 : (wp - wb) * beta,
+          tickersUsed:      r.tickers_used ?? "",
+        };
+        row.byFactor[r.factor] = cell;
+
+        const t = totals[r.factor] ?? { portfolioBeta: 0, benchmarkBeta: 0, activeBeta: 0 };
+        t.portfolioBeta += cell.portfolioContrib;
+        t.benchmarkBeta += cell.benchmarkContrib;
+        t.activeBeta    += cell.activeContrib;
+        totals[r.factor] = t;
+      }
+
+      // Match the on-screen ordering: biggest absolute exposure first
+      const factors = Array.from(factorSet).sort(
+        (a, b) => Math.abs(totals[b]?.portfolioBeta ?? 0) - Math.abs(totals[a]?.portfolioBeta ?? 0)
+      );
+
+      const payload: AllFactorsDetailPayload = {
+        fundName,
+        reportDate: dateStr,
+        factors,
+        rows: Array.from(byCompany.values()).sort((a, b) => b.portfolioWeight - a.portfolioWeight),
+        totals,
+      };
+      return NextResponse.json(payload);
     }
 
     // ── Mode 3: drill-down — every position behind one factor ───────────────

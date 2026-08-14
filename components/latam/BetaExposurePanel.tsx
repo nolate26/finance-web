@@ -21,6 +21,7 @@ import type {
   BetaExposurePayload,
   BetaExposureFundsPayload,
   FactorDetailPayload,
+  AllFactorsDetailPayload,
   FactorExposure,
   PositionExposure,
   FundOption,
@@ -540,6 +541,8 @@ export default function BetaExposurePanel() {
   const [dropped, setDropped] = useState<Set<string>>(new Set());
   const droppedParam = useMemo(() => Array.from(dropped).join(","), [dropped]);
 
+  const [exporting, setExporting] = useState(false);
+
   // ── Load fund catalogue ────────────────────────────────────────────────────
   useEffect(() => {
     fetch("/api/latam/beta-exposure")
@@ -620,46 +623,113 @@ export default function BetaExposurePanel() {
     data.coverage.portfolioWeight > 0 &&
     data.coverage.portfolioCovered / data.coverage.portfolioWeight < 0.9;
 
-  function handleExport() {
+  // Excel sheet names: max 31 chars, and : \ / ? * [ ] are illegal
+  const sheetName = (s: string) => s.replace(/[:\\/?*[\]]/g, "-").slice(0, 31);
+
+  async function handleExport() {
     if (!data) return;
-    downloadExcel(
-      [
-        {
-          name: "Beta Exposure",
-          headers: ["Risk Factor", "Beta Portfolio", "Beta Benchmark", "Active Beta", "Positions", "Port. Coverage", "Bench. Coverage"],
-          rows: data.factors.map((f) => [
-            f.factor, f.portfolioBeta, f.benchmarkBeta, f.activeBeta,
-            f.nPositions, f.portfolioCoverage, f.benchmarkCoverage,
-          ]),
-        },
-        {
-          name: "Unmapped",
-          headers: ["Company", "Portfolio Weight", "Benchmark Weight", "Reason"],
-          rows: data.unmapped.map((u) => [
-            u.company, u.portfolioWeight, u.benchmarkWeight,
-            u.reason === "no_ticker" ? "No Bloomberg ticker mapping" : "No beta data",
-          ]),
-        },
-        {
-          name: "Blended listings",
-          headers: ["Company", "Listings averaged", "Tickers"],
-          rows: data.blended.map((b) => [b.company, b.nListings, b.tickers]),
-        },
-        // Whatever factor is open travels with the export
-        ...(detail
-          ? [{
-              name: `Detail ${detail.factor}`.slice(0, 31),
-              headers: ["Company", "Beta", "Port Weight", "Bench Weight", "Active Weight", "Contrib Port Beta", "Contrib Active Beta", "Listings used"],
-              rows: detail.positions.map((p) => [
-                p.company, p.beta, p.portfolioWeight, p.benchmarkWeight, p.activeWeight,
-                p.portfolioContrib, p.activeContrib,
-                p.listings.filter((l) => !l.excluded).map((l) => `${l.ticker} (${l.beta.toFixed(3)})`).join(", "),
+    setExporting(true);
+    try {
+      // Pull every factor's per-company detail — the export carries the whole
+      // drill-down, not just whichever tab happens to be open.
+      const qs = new URLSearchParams({ fundName, reportDate, factor: "*" });
+      if (!guard) qs.set("maxAbsBeta", "0");
+      if (droppedParam) qs.set("excludeTickers", droppedParam);
+      const all: AllFactorsDetailPayload | { error?: string } =
+        await fetch(`/api/latam/beta-exposure?${qs}`).then((r) => r.json());
+      const bulk = "error" in all && all.error ? null : (all as AllFactorsDetailPayload);
+
+      const sheets: Parameters<typeof downloadExcel>[0] = [];
+
+      // 1 ── Factor summary
+      sheets.push({
+        name: "Summary",
+        headers: ["Risk Factor", "Beta Portfolio", "Beta Benchmark", "Active Beta", "Positions", "Port. Coverage", "Bench. Coverage"],
+        rows: data.factors.map((f) => [
+          f.factor, f.portfolioBeta, f.benchmarkBeta, f.activeBeta,
+          f.nPositions, f.portfolioCoverage, f.benchmarkCoverage,
+        ]),
+      });
+
+      if (bulk) {
+        // 2 ── Wide matrix: one row per company, one β column per factor
+        sheets.push({
+          name: "Beta by company",
+          headers: [
+            "Company", "Port W%", "Bench W%", "Active W%",
+            ...bulk.factors.map((f) => `β ${f}`),
+          ],
+          rows: [
+            ...bulk.rows.map((r) => [
+              r.company, r.portfolioWeight, r.benchmarkWeight, r.activeWeight,
+              ...bulk.factors.map((f) => r.byFactor[f]?.beta ?? null),
+            ]),
+            // Weighted totals tie back to the summary sheet
+            [
+              "PORTFOLIO β (Σ w×β)", null, null, null,
+              ...bulk.factors.map((f) => bulk.totals[f]?.portfolioBeta ?? null),
+            ],
+            [
+              "BENCHMARK β (Σ w×β)", null, null, null,
+              ...bulk.factors.map((f) => bulk.totals[f]?.benchmarkBeta ?? null),
+            ],
+            [
+              "ACTIVE β", null, null, null,
+              ...bulk.factors.map((f) => bulk.totals[f]?.activeBeta ?? null),
+            ],
+          ],
+        });
+
+        // 3 ── One sheet per factor: the click-through view, company by company
+        for (const f of bulk.factors) {
+          const benchBeta = bulk.totals[f]?.benchmarkBeta ?? 0;
+          sheets.push({
+            name: sheetName(f),
+            headers: [
+              "Company", "Listings used", "Beta", "Benchmark β (fund)", "Beta vs Bench",
+              "Port W%", "Bench W%", "Active W%",
+              "Contrib Port β", "Contrib Bench β", "Contrib Active β",
+            ],
+            rows: bulk.rows
+              .map((r) => ({ r, c: r.byFactor[f] }))
+              .filter((x) => x.c)
+              .sort((a, b) => Math.abs(b.c.portfolioContrib) - Math.abs(a.c.portfolioContrib))
+              .map(({ r, c }) => [
+                r.company, c.tickersUsed, c.beta, benchBeta,
+                c.beta === null ? null : c.beta - benchBeta,
+                r.portfolioWeight, r.benchmarkWeight, r.activeWeight,
+                c.portfolioContrib, c.benchmarkContrib, c.activeContrib,
               ]),
-            }]
-          : []),
-      ],
-      `beta_exposure_${data.fundName}_${data.reportDate}`
-    );
+          });
+        }
+      }
+
+      // 4 ── Diagnostics
+      sheets.push({
+        name: "Unmapped",
+        headers: ["Company", "Portfolio Weight", "Benchmark Weight", "Reason"],
+        rows: data.unmapped.map((u) => [
+          u.company, u.portfolioWeight, u.benchmarkWeight,
+          u.reason === "no_ticker" ? "No Bloomberg ticker mapping" : "No beta data",
+        ]),
+      });
+      sheets.push({
+        name: "Blended listings",
+        headers: ["Company", "Listings averaged", "Tickers"],
+        rows: data.blended.map((b) => [b.company, b.nListings, b.tickers]),
+      });
+      if (data.excluded.length > 0) {
+        sheets.push({
+          name: "Excluded outliers",
+          headers: ["Company", "Ticker", "Factor", "Beta"],
+          rows: data.excluded.map((x) => [x.company, x.ticker, x.factor, x.beta]),
+        });
+      }
+
+      await downloadExcel(sheets, `beta_exposure_${data.fundName}_${data.reportDate}`);
+    } finally {
+      setExporting(false);
+    }
   }
 
   return (
@@ -713,15 +783,18 @@ export default function BetaExposurePanel() {
             </span>
             <button
               onClick={handleExport}
+              disabled={exporting}
+              title="Summary + one sheet per factor with every company's beta"
               style={{
                 display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600,
                 color: GREEN, background: "rgba(5,150,105,0.07)", border: "1px solid rgba(5,150,105,0.22)",
-                borderRadius: 7, padding: "5px 14px", cursor: "pointer", transition: "all 0.12s",
+                borderRadius: 7, padding: "5px 14px", cursor: exporting ? "wait" : "pointer",
+                transition: "all 0.12s", opacity: exporting ? 0.6 : 1,
               }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(5,150,105,0.13)"; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(5,150,105,0.07)"; }}
             >
-              <Download size={12} /> Excel
+              <Download size={12} /> {exporting ? "Building…" : "Excel (full detail)"}
             </button>
           </span>
         )}
