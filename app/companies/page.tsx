@@ -16,35 +16,24 @@ import ModelExplorer from "@/components/deep-dive/ModelExplorer";
 import BankModelExplorer from "@/components/deep-dive/BankModelExplorer";
 import type { CompanyListItem } from "@/app/api/companies/list/route";
 import type { DeepDivePayload, PortfolioWeightSnap } from "@/app/api/companies/[ticker]/route";
+import { PATRIA, FONT_PRIMARY, FONT_SECONDARY, TEXT_ON_DARK } from "@/lib/patriaTheme";
+import { PatriaTitle } from "@/components/patria/PatriaTitle";
 
 // ── Shared card style ─────────────────────────────────────────────────────────
 const CARD: React.CSSProperties = {
   background: "#fff",
-  border: "1px solid rgba(15,23,42,0.08)",
+  border: "1px solid rgba(13,13,56,0.08)",
   borderRadius: 12,
   padding: "18px 20px",
-  boxShadow: "0 1px 4px rgba(15,23,42,0.06)",
+  boxShadow: "0 1px 4px rgba(13,13,56,0.06)",
 };
 
 // ── Section label ─────────────────────────────────────────────────────────────
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      style={{
-        fontSize: 10,
-        fontWeight: 700,
-        letterSpacing: "0.10em",
-        color: "#64748B",
-        textTransform: "uppercase",
-        marginBottom: 14,
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-      }}
-    >
-      <span style={{ display: "inline-block", width: 3, height: 12, borderRadius: 2, background: "#2B5CE0" }} />
+    <PatriaTitle style={{ marginBottom: 14, borderRadius: 6, fontSize: 10 }}>
       {children}
-    </div>
+    </PatriaTitle>
   );
 }
 
@@ -57,8 +46,8 @@ function Spinner({ small }: { small?: boolean }) {
         width: size,
         height: size,
         borderRadius: "50%",
-        border: `2px solid rgba(43,92,224,0.15)`,
-        borderTopColor: "#2B5CE0",
+        border: `2px solid rgba(32,68,220,0.15)`,
+        borderTopColor: "#2044DC",
         animation: "spin 0.8s linear infinite",
       }}
     />
@@ -76,18 +65,18 @@ function EmptyState() {
         alignItems: "center",
         justifyContent: "center",
         gap: 12,
-        color: "#94A3B8",
+        color: "rgba(13,13,56,0.45)",
       }}
     >
       <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-        <circle cx="24" cy="24" r="20" stroke="#E2E8F0" strokeWidth="2" />
-        <path d="M16 24h16M24 16v16" stroke="#CBD5E1" strokeWidth="2" strokeLinecap="round" />
+        <circle cx="24" cy="24" r="20" stroke="rgba(13,13,56,0.10)" strokeWidth="2" />
+        <path d="M16 24h16M24 16v16" stroke="rgba(13,13,56,0.28)" strokeWidth="2" strokeLinecap="round" />
       </svg>
       <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: "#64748B", marginBottom: 4 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "rgba(13,13,56,0.62)", marginBottom: 4 }}>
           Select a company
         </div>
-        <div style={{ fontSize: 12, color: "#94A3B8" }}>
+        <div style={{ fontSize: 12, color: "rgba(13,13,56,0.45)" }}>
           Choose a ticker from the sidebar to explore its deep dive
         </div>
       </div>
@@ -122,10 +111,10 @@ function fmtFundPct(v: number | null): string {
 
 function owColor(v: number | null): { text: string; bg: string; border: string } {
   const n = v == null ? null : Number(v);
-  if (n == null || n === 0) return { text: "#475569", bg: "rgba(100,116,139,0.10)", border: "rgba(100,116,139,0.22)" };
+  if (n == null || n === 0) return { text: "rgba(13,13,56,0.62)", bg: "rgba(13,13,56,0.10)", border: "rgba(13,13,56,0.22)" };
   return n > 0
-    ? { text: "#15803D", bg: "rgba(22,163,74,0.10)",  border: "rgba(22,163,74,0.25)"  }
-    : { text: "#B91C1C", bg: "rgba(220,38,38,0.10)",  border: "rgba(220,38,38,0.25)"  };
+    ? { text: "#001EAF", bg: "rgba(0,30,175,0.10)",  border: "rgba(0,30,175,0.25)"  }
+    : { text: "#F8485E", bg: "rgba(248,72,94,0.10)",  border: "rgba(248,72,94,0.25)"  };
 }
 
 function ActiveWeightBadge({ weights }: { weights: PortfolioWeightSnap[] }) {
@@ -136,15 +125,16 @@ function ActiveWeightBadge({ weights }: { weights: PortfolioWeightSnap[] }) {
       display:       "flex",
       flexDirection: "column",
       gap:           6,
-      fontFamily:    "JetBrains Mono, monospace",
-      background:    "#F8FAFC",
-      border:        "1px solid rgba(15,23,42,0.08)",
+      fontFamily:    FONT_SECONDARY,
+      fontVariantNumeric: "tabular-nums",
+      background:    "#F5F7FD",
+      border:        "1px solid rgba(13,13,56,0.08)",
       borderRadius:  10,
       padding:       "10px 14px",
       minWidth:      0,
     }}>
       {/* Label */}
-      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.10em", color: "#94A3B8", textTransform: "uppercase" }}>
+      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.10em", color: "rgba(13,13,56,0.45)", textTransform: "uppercase" }}>
         Portfolio Positioning
       </div>
 
@@ -152,23 +142,23 @@ function ActiveWeightBadge({ weights }: { weights: PortfolioWeightSnap[] }) {
       <div style={{ display: "grid", gridTemplateColumns: `80px repeat(${weights.length}, 1fr)`, gap: "3px 10px", alignItems: "center" }}>
 
         {/* Header row — fund display names */}
-        <div style={{ fontSize: 9, color: "#94A3B8" }} />
+        <div style={{ fontSize: 9, color: "rgba(13,13,56,0.45)" }} />
         {weights.map((w) => (
-          <div key={w.fundName} style={{ fontSize: 10, fontWeight: 700, color: "#64748B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textAlign: "center" }}>
+          <div key={w.fundName} style={{ fontSize: 10, fontWeight: 700, color: "rgba(13,13,56,0.62)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textAlign: "center" }}>
             {FUND_DISPLAY_NAMES[w.fundName] ?? w.fundName.replace(/_/g, " ")}
           </div>
         ))}
 
         {/* Fund weight row */}
-        <div style={{ fontSize: 11, color: "#94A3B8", whiteSpace: "nowrap" }}>Fund %</div>
+        <div style={{ fontSize: 11, color: "rgba(13,13,56,0.45)", whiteSpace: "nowrap" }}>Fund %</div>
         {weights.map((w) => (
-          <div key={w.fundName} style={{ fontSize: 10, color: "#475569", fontWeight: 600, textAlign: "center" }}>
+          <div key={w.fundName} style={{ fontSize: 10, color: "rgba(13,13,56,0.62)", fontWeight: 600, textAlign: "center" }}>
             {fmtFundPct(w.portfolioWeight)}
           </div>
         ))}
 
         {/* Active weight row */}
-        <div style={{ fontSize: 11, color: "#94A3B8", whiteSpace: "nowrap" }}>OW/UW</div>
+        <div style={{ fontSize: 11, color: "rgba(13,13,56,0.45)", whiteSpace: "nowrap" }}>OW/UW</div>
         {weights.map((w) => {
           const c = owColor(w.overweight);
           return (
@@ -306,7 +296,7 @@ function CompaniesPageContent() {
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
                 <Spinner />
-                <span style={{ fontSize: 12, color: "#94A3B8", fontFamily: "JetBrains Mono, monospace" }}>
+                <span style={{ fontSize: 12, color: "rgba(13,13,56,0.45)", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
                   Loading {selectedItem?.ticker}...
                 </span>
               </div>
@@ -325,17 +315,17 @@ function CompaniesPageContent() {
             >
               <div
                 style={{
-                  background: "rgba(220,38,38,0.06)",
-                  border: "1px solid rgba(220,38,38,0.15)",
+                  background: "rgba(248,72,94,0.06)",
+                  border: "1px solid rgba(248,72,94,0.15)",
                   borderRadius: 10,
                   padding: "20px 28px",
                   textAlign: "center",
                 }}
               >
-                <div style={{ color: "#DC2626", fontSize: 13, marginBottom: 8 }}>
+                <div style={{ color: "#F8485E", fontSize: 13, marginBottom: 8 }}>
                   Failed to load data for {selectedItem?.ticker}
                 </div>
-                <div style={{ color: "#94A3B8", fontSize: 11 }}>{diveError}</div>
+                <div style={{ color: "rgba(13,13,56,0.45)", fontSize: 11 }}>{diveError}</div>
               </div>
             </div>
           )}
@@ -345,14 +335,14 @@ function CompaniesPageContent() {
             <div style={{
               display: "flex", alignItems: "center", justifyContent: "space-between",
               gap: 12, marginBottom: 16, padding: "10px 16px", borderRadius: 9,
-              background: "rgba(217,119,6,0.07)", border: "1px solid rgba(217,119,6,0.28)",
+              background: "rgba(255,107,6,0.07)", border: "1px solid rgba(255,107,6,0.28)",
             }}>
-              <span style={{ fontSize: 12, color: "#78350F" }}>
-                Ticker <strong style={{ fontFamily: "JetBrains Mono, monospace" }}>{tickerNotFound}</strong> was not found in Company Profiles — no deep dive data available.
+              <span style={{ fontSize: 12, color: "#FF6B06" }}>
+                Ticker <strong style={{ fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>{tickerNotFound}</strong> was not found in Company Profiles — no deep dive data available.
               </span>
               <button
                 onClick={() => setTickerNotFound(null)}
-                style={{ background: "transparent", border: "none", cursor: "pointer", color: "#92400E", fontSize: 16, lineHeight: 1, padding: "0 4px" }}
+                style={{ background: "transparent", border: "none", cursor: "pointer", color: "#FF6B06", fontSize: 16, lineHeight: 1, padding: "0 4px" }}
               >
                 ×
               </button>
@@ -371,18 +361,20 @@ function CompaniesPageContent() {
                   alignItems: "center",
                   gap: 16,
                   flexWrap: "wrap",
-                  paddingBottom: 16,
+                  background: PATRIA.darkBlue,
+                  borderRadius: 10,
+                  padding: "14px 18px",
                   marginBottom: 16,
-                  borderBottom: "1px solid rgba(15,23,42,0.07)",
                 }}>
 
                   {/* Ticker */}
                   <h1 style={{
                     fontSize: 28,
-                    fontWeight: 800,
-                    color: "#0F172A",
-                    letterSpacing: "-0.03em",
-                    fontFamily: "JetBrains Mono, monospace",
+                    fontWeight: 700,
+                    color: PATRIA.white,
+                    letterSpacing: "0.01em",
+                    textTransform: "uppercase",
+                    fontFamily: FONT_PRIMARY,
                     lineHeight: 1,
                     margin: 0,
                   }}>
@@ -395,14 +387,14 @@ function CompaniesPageContent() {
                       display: "inline-flex",
                       alignItems: "center",
                       gap: 7,
-                      background: "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)",
-                      border: "1px solid rgba(255,255,255,0.07)",
+                      background: "rgba(255,255,255,0.10)",
+                      border: "1px solid rgba(255,255,255,0.18)",
                       borderRadius: 9,
                       padding: "4px 12px 4px 9px",
-                      boxShadow: "0 2px 10px rgba(15,23,42,0.16), inset 0 1px 0 rgba(255,255,255,0.05)",
                     }}>
-                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981", boxShadow: "0 0 6px #10B981", flexShrink: 0 }} />
-                      <span style={{ fontSize: 22, fontWeight: 700, fontFamily: "JetBrains Mono, monospace", color: "#F1F5F9", lineHeight: 1, letterSpacing: "-0.02em" }}>
+                      {/* Punto de dato vivo: sobre fondo oscuro el positivo es turquesa. */}
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: PATRIA.turquoise, boxShadow: `0 0 6px ${PATRIA.turquoise}`, flexShrink: 0 }} />
+                      <span style={{ fontSize: 22, fontWeight: 700, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", color: PATRIA.white, lineHeight: 1, letterSpacing: "-0.02em" }}>
                         {fmtHeaderPrice(latestPrice)}
                       </span>
                     </span>
@@ -411,10 +403,10 @@ function CompaniesPageContent() {
                   {/* "As of" badge */}
                   {latestPriceDate && (
                     <span style={{
-                      fontSize: 11, fontWeight: 600, color: "#64748B",
-                      background: "#F1F5F9", border: "1px solid #E2E8F0",
+                      fontSize: 11, fontWeight: 600, color: TEXT_ON_DARK.label,
+                      background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.16)",
                       borderRadius: 6, padding: "3px 9px",
-                      fontFamily: "Inter, sans-serif", letterSpacing: "0.01em",
+                      fontFamily: FONT_SECONDARY, letterSpacing: "0.01em",
                       whiteSpace: "nowrap",
                     }}>
                       As of {fmtHeaderDate(latestPriceDate)}
@@ -423,7 +415,7 @@ function CompaniesPageContent() {
 
                   {/* Separator dot */}
                   {selectedItem?.nombre && (
-                    <span style={{ width: 4, height: 4, borderRadius: "50%", background: "#CBD5E1", flexShrink: 0 }} />
+                    <span style={{ width: 4, height: 4, borderRadius: "50%", background: "rgba(255,255,255,0.35)", flexShrink: 0 }} />
                   )}
 
                   {/* Company full name */}
@@ -431,9 +423,9 @@ function CompaniesPageContent() {
                     <span style={{
                       fontSize: 18,
                       fontWeight: 600,
-                      color: "#334155",
+                      color: TEXT_ON_DARK.label,
                       letterSpacing: "-0.01em",
-                      fontFamily: "Inter, sans-serif",
+                      fontFamily: FONT_SECONDARY,
                     }}>
                       {deepDive.ticker}
                     </span>
@@ -447,11 +439,11 @@ function CompaniesPageContent() {
                   {/* Description — 7 cols */}
                   <div className={deepDive.portfolioWeights.length > 0 ? "col-span-7" : "col-span-12"}>
                     {deepDive.companyDescription ? (
-                      <p style={{ fontSize: 14, color: "#475569", margin: 0, lineHeight: 1.8 }}>
+                      <p style={{ fontSize: 14, color: "rgba(13,13,56,0.62)", margin: 0, lineHeight: 1.8 }}>
                         {deepDive.companyDescription}
                       </p>
                     ) : (
-                      <p style={{ fontSize: 13, color: "#CBD5E1", margin: 0, fontStyle: "italic" }}>
+                      <p style={{ fontSize: 13, color: "rgba(13,13,56,0.28)", margin: 0, fontStyle: "italic" }}>
                         No description available.
                       </p>
                     )}
@@ -468,7 +460,7 @@ function CompaniesPageContent() {
                 {/* Attached reports */}
                 {(companyDocs[selectedItem?.ticker ?? ""] ?? []).length > 0 && (
                   <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.10em", color: "#94A3B8", textTransform: "uppercase" }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.10em", color: "rgba(13,13,56,0.45)", textTransform: "uppercase" }}>
                       Attached
                     </span>
                     {(companyDocs[selectedItem?.ticker ?? ""] ?? []).map((doc) => (
@@ -479,8 +471,8 @@ function CompaniesPageContent() {
                         rel="noopener noreferrer"
                         style={{
                           display: "inline-flex", alignItems: "center", gap: 5,
-                          fontSize: 11, fontWeight: 600, color: "#2B5CE0",
-                          background: "rgba(43,92,224,0.07)", border: "1px solid rgba(43,92,224,0.18)",
+                          fontSize: 11, fontWeight: 600, color: "#2044DC",
+                          background: "rgba(32,68,220,0.07)", border: "1px solid rgba(32,68,220,0.18)",
                           borderRadius: 6, padding: "3px 10px", textDecoration: "none",
                           maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                         }}
@@ -499,7 +491,7 @@ function CompaniesPageContent() {
               <div style={{
                 display:      "flex",
                 gap:          0,
-                borderBottom: "1px solid rgba(15,23,42,0.08)",
+                borderBottom: "1px solid rgba(13,13,56,0.08)",
                 marginBottom: 20,
               }}>
                 {(["scorecard", "model", "consensus", "reports", "research"] as const).map((tab) => {
@@ -514,10 +506,10 @@ function CompaniesPageContent() {
                         padding:         "9px 20px",
                         fontSize:        12,
                         fontWeight:      active ? 700 : 500,
-                        color:           active ? "#1D4ED8" : "#64748B",
+                        color:           active ? "#2044DC" : "rgba(13,13,56,0.62)",
                         background:      "transparent",
                         border:          "none",
-                        borderBottom:    active ? "2px solid #1D4ED8" : "2px solid transparent",
+                        borderBottom:    active ? "2px solid #2044DC" : "2px solid transparent",
                         cursor:          "pointer",
                         outline:         "none",
                         transition:      "all 0.12s",
@@ -567,7 +559,7 @@ function CompaniesPageContent() {
                       <ValuationChart data={deepDive.valuationHistory} />
                     </div>
                   ) : (
-                    <div style={{ height: 260, display: "flex", alignItems: "center", justifyContent: "center", color: "#CBD5E1", fontSize: 12 }}>
+                    <div style={{ height: 260, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(13,13,56,0.28)", fontSize: 12 }}>
                       No valuation history data
                     </div>
                   )}

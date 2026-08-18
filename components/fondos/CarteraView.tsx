@@ -1,5 +1,7 @@
 "use client";
 
+import { PATRIA } from "@/lib/patriaTheme";
+
 import { useState, useMemo } from "react";
 import {
   BarChart,
@@ -49,21 +51,21 @@ function fmtPct(v: number, signed = false): string {
 }
 
 function activeColor(v: number): string {
-  return v > 0 ? "#059669" : v < 0 ? "#DC2626" : "#94A3B8";
+  return v > 0 ? "#001EAF" : v < 0 ? "#F8485E" : "rgba(13,13,56,0.45)";
 }
 
 function activeBg(v: number): string {
-  return v > 0 ? "rgba(5,150,105,0.10)" : v < 0 ? "rgba(220,38,38,0.10)" : "transparent";
+  return v > 0 ? "rgba(0,30,175,0.10)" : v < 0 ? "rgba(248,72,94,0.10)" : "transparent";
 }
 
 function fmtDelta(v: number | null): { text: string; color: string; bg: string } {
-  if (v === null) return { text: "—", color: "#CBD5E1", bg: "transparent" };
+  if (v === null) return { text: "—", color: "rgba(13,13,56,0.28)", bg: "transparent" };
   const p = v * 100;
-  if (Math.abs(p) < 0.005) return { text: "0.00%", color: "#94A3B8", bg: "transparent" };
+  if (Math.abs(p) < 0.005) return { text: "0.00%", color: "rgba(13,13,56,0.45)", bg: "transparent" };
   return {
     text: (p > 0 ? "+" : "") + p.toFixed(2) + "%",
-    color: p > 0 ? "#059669" : "#DC2626",
-    bg: p > 0 ? "rgba(5,150,105,0.08)" : "rgba(220,38,38,0.08)",
+    color: p > 0 ? "#001EAF" : "#F8485E",
+    bg: p > 0 ? "rgba(0,30,175,0.08)" : "rgba(248,72,94,0.08)",
   };
 }
 
@@ -84,7 +86,7 @@ function SectorTooltip({
     <div
       style={{
         background: "#fff",
-        border: "1px solid #E2E8F0",
+        border: "1px solid rgba(13,13,56,0.10)",
         borderRadius: 8,
         padding: "8px 12px",
         fontSize: 12,
@@ -92,18 +94,18 @@ function SectorTooltip({
         minWidth: 180,
       }}
     >
-      <div style={{ fontWeight: 700, color: "#0F172A", marginBottom: 6 }}>{d.sector}</div>
+      <div style={{ fontWeight: 700, color: "#0D0D38", marginBottom: 6 }}>{d.sector}</div>
       <div style={{ display: "grid", gap: 3 }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
-          <span style={{ color: "#64748B" }}>Fund</span>
-          <span style={{ fontWeight: 600, color: "#0F172A" }}>{fmtPct(d.fundWeight)}</span>
+          <span style={{ color: "rgba(13,13,56,0.62)" }}>Fund</span>
+          <span style={{ fontWeight: 600, color: "#0D0D38" }}>{fmtPct(d.fundWeight)}</span>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
-          <span style={{ color: "#64748B" }}>Benchmark</span>
-          <span style={{ fontWeight: 600, color: "#64748B" }}>{fmtPct(d.benchWeight)}</span>
+          <span style={{ color: "rgba(13,13,56,0.62)" }}>Benchmark</span>
+          <span style={{ fontWeight: 600, color: "rgba(13,13,56,0.62)" }}>{fmtPct(d.benchWeight)}</span>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
-          <span style={{ color: "#64748B" }}>Active</span>
+          <span style={{ color: "rgba(13,13,56,0.62)" }}>Active</span>
           <span style={{ fontWeight: 700, color: activeColor(d.activeWeight) }}>
             {fmtPct(d.activeWeight, true)}
           </span>
@@ -175,8 +177,8 @@ function HoldingsTable({
   const hasDelta1M = holdings.some((r) => r.delta1M !== null);
 
   const thStyle = {
-    color: "#64748B",
-    borderBottom: "1px solid rgba(15,23,42,0.07)",
+    color: "rgba(13,13,56,0.62)",
+    borderBottom: "1px solid rgba(13,13,56,0.07)",
   } as const;
 
   function thBtn(col: SortCol, label: string, align: "left" | "right" = "right") {
@@ -186,7 +188,7 @@ function HoldingsTable({
         className={`px-3 py-2.5 font-medium cursor-pointer select-none ${
           align === "left" ? "text-left" : "text-right"
         }`}
-        style={{ ...thStyle, color: active ? "#2B5CE0" : "#64748B" }}
+        style={{ ...thStyle, color: active ? "#2044DC" : "rgba(13,13,56,0.62)" }}
         onClick={() => handleSort(col)}
       >
         <span className="inline-flex items-center gap-1">
@@ -204,7 +206,7 @@ function HoldingsTable({
       {/* Header */}
       <div
         className="px-4 py-3 border-b flex items-center justify-between gap-3 flex-wrap"
-        style={{ borderColor: "rgba(15,23,42,0.07)" }}
+        style={{ borderColor: "rgba(13,13,56,0.07)" }}
       >
         <div className="flex items-center gap-3">
           {selectedSector ? (
@@ -213,47 +215,47 @@ function HoldingsTable({
                 onClick={onClear}
                 className="text-xs font-semibold px-2.5 py-1 rounded-lg transition-all"
                 style={{
-                  background: "rgba(15,23,42,0.06)",
-                  color: "#475569",
-                  border: "1px solid rgba(15,23,42,0.10)",
+                  background: "rgba(13,13,56,0.06)",
+                  color: "rgba(13,13,56,0.62)",
+                  border: "1px solid rgba(13,13,56,0.10)",
                 }}
                 onMouseEnter={(e) => {
                   const b = e.currentTarget as HTMLButtonElement;
-                  b.style.color = "#2B5CE0";
-                  b.style.borderColor = "rgba(43,92,224,0.3)";
+                  b.style.color = "#2044DC";
+                  b.style.borderColor = "rgba(32,68,220,0.3)";
                 }}
                 onMouseLeave={(e) => {
                   const b = e.currentTarget as HTMLButtonElement;
-                  b.style.color = "#475569";
-                  b.style.borderColor = "rgba(15,23,42,0.10)";
+                  b.style.color = "rgba(13,13,56,0.62)";
+                  b.style.borderColor = "rgba(13,13,56,0.10)";
                 }}
               >
                 ← All
               </button>
-              <span className="text-sm font-bold" style={{ color: "#0F172A" }}>
+              <span className="text-sm font-bold" style={{ color: "#0D0D38" }}>
                 {selectedSector}
               </span>
               <span
-                className="text-xs font-mono px-2 py-0.5 rounded"
-                style={{ background: "rgba(43,92,224,0.08)", color: "#2B5CE0" }}
+                className="text-xs font-secondary tabular-nums px-2 py-0.5 rounded"
+                style={{ background: "rgba(32,68,220,0.08)", color: "#2044DC" }}
               >
                 {fmtPct(totalSectorFundWeight)} of portfolio
               </span>
             </>
           ) : (
             <>
-              <h2 className="text-sm font-semibold" style={{ color: "#0F172A" }}>
+              <h2 className="text-sm font-bold font-primary uppercase tracking-wide" style={{ color: PATRIA.white }}>
                 Portfolio Holdings
               </h2>
-              <p className="text-xs" style={{ color: "#64748B" }}>
+              <p className="text-xs font-secondary" style={{ color: "rgba(255,255,255,0.72)" }}>
                 Click a sector block to filter · Click again to clear
               </p>
             </>
           )}
         </div>
         <span
-          className="text-xs font-mono px-2 py-0.5 rounded"
-          style={{ background: "rgba(43,92,224,0.08)", color: "#2B5CE0" }}
+          className="text-xs font-secondary tabular-nums px-2 py-0.5 rounded"
+          style={{ background: "rgba(32,68,220,0.08)", color: "#2044DC" }}
         >
           {sorted.length}{selectedSector ? ` / ${allCount}` : ""} positions
         </span>
@@ -262,7 +264,7 @@ function HoldingsTable({
       {/* Holdings table */}
       <div className="overflow-x-auto">
         <table className="w-full text-xs whitespace-nowrap">
-          <thead className="sticky top-0 z-10" style={{ background: "#F0F4FA" }}>
+          <thead className="sticky top-0 z-10" style={{ background: "#F5F7FD" }}>
             <tr>
               <th
                 className="px-3 py-2.5 text-left font-medium w-7"
@@ -280,8 +282,8 @@ function HoldingsTable({
                   className="px-3 py-2.5 text-right font-medium cursor-pointer select-none"
                   style={{
                     ...thStyle,
-                    color: sortCol === "sectorWeight" ? "#2B5CE0" : "#2B5CE0",
-                    background: "rgba(43,92,224,0.04)",
+                    color: sortCol === "sectorWeight" ? "#2044DC" : "#2044DC",
+                    background: "rgba(32,68,220,0.04)",
                   }}
                   onClick={() => handleSort("sectorWeight")}
                 >
@@ -312,22 +314,22 @@ function HoldingsTable({
                 <tr
                   key={row.company}
                   className="border-t transition-colors"
-                  style={{ borderColor: "rgba(15,23,42,0.05)" }}
+                  style={{ borderColor: "rgba(13,13,56,0.05)" }}
                   onMouseEnter={(e) =>
                     ((e.currentTarget as HTMLElement).style.background =
-                      "rgba(43,92,224,0.03)")
+                      "rgba(32,68,220,0.03)")
                   }
                   onMouseLeave={(e) =>
                     ((e.currentTarget as HTMLElement).style.background = "transparent")
                   }
                 >
                   {/* # */}
-                  <td className="px-3 py-2 font-mono" style={{ color: "#94A3B8" }}>
+                  <td className="px-3 py-2 font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.45)" }}>
                     {i + 1}
                   </td>
 
                   {/* Company */}
-                  <td className="px-3 py-2 font-medium" style={{ color: "#0F172A" }}>
+                  <td className="px-3 py-2 font-medium" style={{ color: "#0D0D38" }}>
                     {row.company}
                   </td>
 
@@ -336,8 +338,8 @@ function HoldingsTable({
                     <span
                       className="px-1.5 py-0.5 rounded text-[10px] font-medium"
                       style={{
-                        background: "rgba(15,23,42,0.055)",
-                        color: "#475569",
+                        background: "rgba(13,13,56,0.055)",
+                        color: "rgba(13,13,56,0.62)",
                         whiteSpace: "nowrap",
                       }}
                     >
@@ -350,19 +352,19 @@ function HoldingsTable({
                     <div className="flex items-center justify-end gap-2">
                       <div
                         className="w-10 h-1.5 rounded-full"
-                        style={{ background: "rgba(43,92,224,0.10)" }}
+                        style={{ background: "rgba(32,68,220,0.10)" }}
                       >
                         <div
                           className="h-full rounded-full"
                           style={{
                             width: `${Math.min(100, row.portfolioPct * 500)}%`,
-                            background: "linear-gradient(90deg,#2B5CE0,#3D6FE8)",
+                            background: "linear-gradient(90deg,#2044DC,#2044DC)",
                           }}
                         />
                       </div>
                       <span
-                        className="font-mono font-semibold"
-                        style={{ color: "#0F172A" }}
+                        className="font-secondary tabular-nums font-semibold"
+                        style={{ color: "#0D0D38" }}
                       >
                         {fmtPct(row.portfolioPct)}
                       </span>
@@ -371,8 +373,8 @@ function HoldingsTable({
 
                   {/* Benchmark % */}
                   <td
-                    className="px-3 py-2 font-mono text-right"
-                    style={{ color: "#64748B" }}
+                    className="px-3 py-2 font-secondary tabular-nums text-right"
+                    style={{ color: "rgba(13,13,56,0.62)" }}
                   >
                     {fmtPct(row.benchmarkPct)}
                   </td>
@@ -380,7 +382,7 @@ function HoldingsTable({
                   {/* Active Weight */}
                   <td className="px-3 py-2 text-right">
                     <span
-                      className="font-mono font-bold text-[11px] px-2 py-0.5 rounded-full"
+                      className="font-secondary tabular-nums font-bold text-[11px] px-2 py-0.5 rounded-full"
                       style={{
                         color: overColor,
                         background: activeBg(row.overweight),
@@ -395,32 +397,32 @@ function HoldingsTable({
                   {hasSectorWeight && (
                     <td
                       className="px-3 py-2 text-right"
-                      style={{ background: "rgba(43,92,224,0.025)" }}
+                      style={{ background: "rgba(32,68,220,0.025)" }}
                     >
                       {sectorWt !== null ? (
                         <div className="flex items-center justify-end gap-1.5">
                           <div
                             className="w-10 h-1.5 rounded-full"
-                            style={{ background: "rgba(43,92,224,0.12)" }}
+                            style={{ background: "rgba(32,68,220,0.12)" }}
                           >
                             <div
                               className="h-full rounded-full"
                               style={{
                                 width: `${Math.min(100, sectorWt * 100)}%`,
                                 background:
-                                  "linear-gradient(90deg,#2B5CE0,#6D9EEB)",
+                                  "linear-gradient(90deg,#2044DC,#88AAFF)",
                               }}
                             />
                           </div>
                           <span
-                            className="font-mono font-bold"
-                            style={{ color: "#2B5CE0" }}
+                            className="font-secondary tabular-nums font-bold"
+                            style={{ color: "#2044DC" }}
                           >
                             {fmtPct(sectorWt)}
                           </span>
                         </div>
                       ) : (
-                        <span style={{ color: "#94A3B8" }}>—</span>
+                        <span style={{ color: "rgba(13,13,56,0.45)" }}>—</span>
                       )}
                     </td>
                   )}
@@ -429,7 +431,7 @@ function HoldingsTable({
                   {hasDelta1W && (
                     <td className="px-3 py-2 text-right">
                       <span
-                        className="font-mono font-semibold text-[11px] px-1.5 py-0.5 rounded"
+                        className="font-secondary tabular-nums font-semibold text-[11px] px-1.5 py-0.5 rounded"
                         style={{ color: d1w.color, background: d1w.bg }}
                       >
                         {d1w.text}
@@ -441,7 +443,7 @@ function HoldingsTable({
                   {hasDelta1M && (
                     <td className="px-3 py-2 text-right">
                       <span
-                        className="font-mono font-semibold text-[11px] px-1.5 py-0.5 rounded"
+                        className="font-secondary tabular-nums font-semibold text-[11px] px-1.5 py-0.5 rounded"
                         style={{ color: d1m.color, background: d1m.bg }}
                       >
                         {d1m.text}
@@ -493,7 +495,7 @@ export default function CarteraView({
   if (sectorSummary.length === 0) {
     return (
       <div className="flex items-center justify-center h-48 card">
-        <p style={{ color: "#64748B" }}>No sector data available</p>
+        <p style={{ color: "rgba(13,13,56,0.62)" }}>No sector data available</p>
       </div>
     );
   }
@@ -506,12 +508,12 @@ export default function CarteraView({
       <div className="card p-4">
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <div>
-            <p className="text-sm font-semibold" style={{ color: "#0F172A" }}>
+            <p className="text-sm font-semibold" style={{ color: "#0D0D38" }}>
               Sector Allocation — Active Weight
             </p>
-            <p className="text-xs mt-0.5" style={{ color: "#64748B" }}>
-              <span style={{ color: "#059669", fontWeight: 600 }}>Green</span> = overweight &nbsp;·&nbsp;{" "}
-              <span style={{ color: "#DC2626", fontWeight: 600 }}>Red</span> = underweight &nbsp;·&nbsp; Click to filter
+            <p className="text-xs mt-0.5 font-secondary" style={{ color: "rgba(255,255,255,0.72)" }}>
+              <span style={{ color: "#001EAF", fontWeight: 600 }}>Green</span> = overweight &nbsp;·&nbsp;{" "}
+              <span style={{ color: "#F8485E", fontWeight: 600 }}>Red</span> = underweight &nbsp;·&nbsp; Click to filter
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -520,17 +522,17 @@ export default function CarteraView({
                 onClick={() => setSelectedSector(null)}
                 className="text-xs font-semibold px-2.5 py-1 rounded-lg transition-colors"
                 style={{
-                  background: "rgba(43,92,224,0.08)",
-                  color: "#2B5CE0",
-                  border: "1px solid rgba(43,92,224,0.22)",
+                  background: "rgba(32,68,220,0.08)",
+                  color: "#2044DC",
+                  border: "1px solid rgba(32,68,220,0.22)",
                 }}
               >
                 × {selectedSector}
               </button>
             )}
             <span
-              className="text-xs font-mono px-2 py-0.5 rounded"
-              style={{ background: "rgba(43,92,224,0.08)", color: "#2B5CE0" }}
+              className="text-xs font-secondary tabular-nums px-2 py-0.5 rounded"
+              style={{ background: "rgba(32,68,220,0.08)", color: "#2044DC" }}
             >
               {sectorSummary.length} sectors
             </span>
@@ -553,7 +555,7 @@ export default function CarteraView({
               type="number"
               dataKey="activeWeight"
               tickFormatter={(v) => fmtPct(v as number, true)}
-              tick={{ fontSize: 10, fill: "#94A3B8" }}
+              tick={{ fontSize: 10, fill: "rgba(13,13,56,0.45)" }}
               axisLine={false}
               tickLine={false}
             />
@@ -561,12 +563,12 @@ export default function CarteraView({
               type="category"
               dataKey="sector"
               width={160}
-              tick={{ fontSize: 11, fill: "#334155" }}
+              tick={{ fontSize: 11, fill: "#0D0D38" }}
               axisLine={false}
               tickLine={false}
             />
-            <Tooltip content={<SectorTooltip />} cursor={{ fill: "rgba(15,23,42,0.04)" }} />
-            <ReferenceLine x={0} stroke="#CBD5E1" strokeWidth={1} />
+            <Tooltip content={<SectorTooltip />} cursor={{ fill: "rgba(13,13,56,0.04)" }} />
+            <ReferenceLine x={0} stroke="rgba(13,13,56,0.28)" strokeWidth={1} />
             <Bar dataKey="activeWeight" radius={[0, 3, 3, 0]} isAnimationActive={false}>
               {barData.map((entry, index) => (
                 <Cell
@@ -574,13 +576,13 @@ export default function CarteraView({
                   fill={
                     selectedSector === entry.sector
                       ? entry.activeWeight >= 0
-                        ? "#059669"
-                        : "#DC2626"
+                        ? "#001EAF"
+                        : "#F8485E"
                       : entry.activeWeight >= 0
-                      ? "rgba(5,150,105,0.75)"
-                      : "rgba(220,38,38,0.75)"
+                      ? "rgba(0,30,175,0.75)"
+                      : "rgba(248,72,94,0.75)"
                   }
-                  stroke={selectedSector === entry.sector ? (entry.activeWeight >= 0 ? "#059669" : "#DC2626") : "none"}
+                  stroke={selectedSector === entry.sector ? (entry.activeWeight >= 0 ? "#001EAF" : "#F8485E") : "none"}
                   strokeWidth={selectedSector === entry.sector ? 2 : 0}
                 />
               ))}

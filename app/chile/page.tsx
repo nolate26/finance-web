@@ -16,10 +16,10 @@ export default function ChilePage() {
       {/* Page header */}
       <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", letterSpacing: "-0.035em", lineHeight: 1.15, margin: 0 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0D0D38", letterSpacing: "-0.035em", lineHeight: 1.15, margin: 0 }}>
             Chile Equities
           </h1>
-          <p style={{ fontSize: 12, marginTop: 5, color: "#64748B", fontWeight: 500, letterSpacing: "0.01em" }}>
+          <p style={{ fontSize: 12, marginTop: 5, color: "rgba(13,13,56,0.62)", fontWeight: 500, letterSpacing: "0.01em" }}>
             Chilean equity universe · AGF coverage
           </p>
         </div>
@@ -30,8 +30,8 @@ export default function ChilePage() {
         className="flex items-center mb-5"
         style={{
           gap: 2, padding: "3px", borderRadius: 10,
-          background: "rgba(15,23,42,0.04)",
-          border: "1px solid rgba(15,23,42,0.08)",
+          background: "rgba(13,13,56,0.04)",
+          border: "1px solid rgba(13,13,56,0.08)",
           width: "fit-content",
         }}
       >
@@ -48,9 +48,9 @@ export default function ChilePage() {
               className="px-5 py-1.5 rounded-lg text-sm transition-all"
               style={{
                 background: active ? "#FFFFFF"  : "transparent",
-                color:      active ? "#1B2E7E"  : "#475569",
-                border:     active ? "1px solid rgba(15,23,42,0.11)" : "1px solid transparent",
-                boxShadow:  active ? "0 1px 3px rgba(15,23,42,0.09)" : "none",
+                color:      active ? "#0D0D38"  : "rgba(13,13,56,0.62)",
+                border:     active ? "1px solid rgba(13,13,56,0.11)" : "1px solid transparent",
+                boxShadow:  active ? "0 1px 3px rgba(13,13,56,0.09)" : "none",
                 fontWeight: active ? 700 : 500,
                 cursor: "pointer",
               }}

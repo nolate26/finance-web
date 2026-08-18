@@ -1,5 +1,7 @@
 "use client";
 
+import { PATRIA } from "@/lib/patriaTheme";
+
 import { useMemo } from "react";
 import type { ConsensusPoint, TotalReturnSnap , PriceRange52wSnap} from "@/app/api/companies/[ticker]/route";
 
@@ -7,9 +9,9 @@ import type { ConsensusPoint, TotalReturnSnap , PriceRange52wSnap} from "@/app/a
 // ── Card config ───────────────────────────────────────────────────────────────
 
 const CARDS = [
-  { label: "Revenue",    aliases: ["REVENUE", "SALES"], color: "#059669", bg: "rgba(5,150,105,0.04)",   border: "rgba(5,150,105,0.13)"   },
-  { label: "EBITDA",     aliases: ["EBITDA"],            color: "#2B5CE0", bg: "rgba(43,92,224,0.04)",  border: "rgba(43,92,224,0.13)"   },
-  { label: "Net Income", aliases: ["NET_INCOME"],        color: "#7C3AED", bg: "rgba(124,58,237,0.04)", border: "rgba(124,58,237,0.13)"  },
+  { label: "Revenue",    aliases: ["REVENUE", "SALES"], color: PATRIA.darkBlue, bg: "rgba(13,13,56,0.04)",  border: "rgba(13,13,56,0.13)"  },
+  { label: "EBITDA",     aliases: ["EBITDA"],            color: PATRIA.kingBlue, bg: "rgba(32,68,220,0.04)", border: "rgba(32,68,220,0.13)" },
+  { label: "Net Income", aliases: ["NET_INCOME"],        color: PATRIA.orange,   bg: "rgba(255,107,6,0.04)", border: "rgba(255,107,6,0.13)" },
 ] as const;
 
 // Delta columns: label shown in header + months to look back
@@ -33,10 +35,10 @@ function fmtCompact(v: number): string {
 }
 
 function fmtChg(chgPct: number | null): { text: string; color: string } {
-  if (chgPct === null) return { text: "—", color: "#CBD5E1" };
-  if (chgPct >  0.05)  return { text: `+${chgPct.toFixed(0)}%`, color: "#059669" };
-  if (chgPct < -0.05)  return { text: `${chgPct.toFixed(0)}%`,  color: "#DC2626" };
-  return { text: `${chgPct.toFixed(1)}%`, color: "#94A3B8" };
+  if (chgPct === null) return { text: "—", color: "rgba(13,13,56,0.28)" };
+  if (chgPct >  0.05)  return { text: `+${chgPct.toFixed(0)}%`, color: "#001EAF" };
+  if (chgPct < -0.05)  return { text: `${chgPct.toFixed(0)}%`,  color: "#F8485E" };
+  return { text: `${chgPct.toFixed(1)}%`, color: "rgba(13,13,56,0.45)" };
 }
 
 // ── Data helpers ──────────────────────────────────────────────────────────────
@@ -66,16 +68,16 @@ function findValueNear(
 }
 
 function fmtTriPrice(v: number | null): { text: string; color: string } {
-  if (v === null) return { text: "—", color: "#CBD5E1" };
-  return { text: v.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }), color: "#7C3AED" };
+  if (v === null) return { text: "—", color: "rgba(13,13,56,0.28)" };
+  return { text: v.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }), color: "#001EAF" };
 }
 
 function fmtTriPct(current: number | null, past: number | null): { text: string; color: string } {
-  if (current === null || past === null || past === 0) return { text: "—", color: "#CBD5E1" };
+  if (current === null || past === null || past === 0) return { text: "—", color: "rgba(13,13,56,0.28)" };
   const pct = (current / past - 1) * 100;
-  if (pct >  0.5) return { text: `+${Math.round(pct)}%`, color: "#059669" };
-  if (pct < -0.5) return { text: `${Math.round(pct)}%`,  color: "#DC2626" };
-  return               { text: `${Math.round(pct)}%`,    color: "#94A3B8" };
+  if (pct >  0.5) return { text: `+${Math.round(pct)}%`, color: "#001EAF" };
+  if (pct < -0.5) return { text: `${Math.round(pct)}%`,  color: "#F8485E" };
+  return               { text: `${Math.round(pct)}%`,    color: "rgba(13,13,56,0.45)" };
 }
 
 /** `((current / past) - 1) * 100` — returns null when past is 0 or missing. */
@@ -228,7 +230,7 @@ export default function ConsensusMomentumCards({ data, totalReturn, priceRange }
 
   if (!hasAnyData) {
     return (
-      <div className="flex items-center justify-center h-full text-xs text-gray-300">
+      <div className="flex items-center justify-center h-full text-xs text-patria-dark-blue/28">
         No consensus data available
       </div>
     );
@@ -260,14 +262,14 @@ export default function ConsensusMomentumCards({ data, totalReturn, priceRange }
               <table className="w-full border-collapse">
                 <thead>
                   <tr>
-                    <th className="text-[8px] font-semibold uppercase text-slate-400 text-left pb-1.5 pr-2 w-9">
+                    <th className="text-[8px] font-semibold uppercase text-patria-dark-blue/45 text-left pb-1.5 pr-2 w-9">
                       Year
                     </th>
-                    <th className="text-[8px] font-semibold uppercase text-slate-400 text-right pb-1.5 pr-2">
+                    <th className="text-[8px] font-semibold uppercase text-patria-dark-blue/45 text-right pb-1.5 pr-2">
                       Now
                     </th>
                     {DELTAS.map(({ label }) => (
-                      <th key={label} className="text-[8px] font-semibold uppercase text-slate-400 text-right pb-1.5 pr-1">
+                      <th key={label} className="text-[8px] font-semibold uppercase text-patria-dark-blue/45 text-right pb-1.5 pr-1">
                         {label}
                       </th>
                     ))}
@@ -279,17 +281,17 @@ export default function ConsensusMomentumCards({ data, totalReturn, priceRange }
                     return (
                       <tr
                         key={year}
-                        className={i < availableYears.length - 1 ? "border-b border-slate-100" : ""}
+                        className={i < availableYears.length - 1 ? "border-b border-patria-dark-blue/[0.06]" : ""}
                       >
                         {/* Year */}
-                        <td className="text-[11px] font-mono font-semibold text-slate-500 py-2 pr-2">
+                        <td className="text-[11px] font-secondary tabular-nums font-semibold text-patria-dark-blue/60 py-2 pr-2">
                           {year}
                         </td>
 
                         {/* Current value */}
                         <td
-                          className="text-[10px] font-mono font-bold text-right py-2 pr-2"
-                          style={{ color: m?.current != null ? card.color : "#CBD5E1" }}
+                          className="text-[10px] font-secondary tabular-nums font-bold text-right py-2 pr-2"
+                          style={{ color: m?.current != null ? card.color : "rgba(13,13,56,0.28)" }}
                         >
                           {m?.current != null ? fmtCompact(m.current) : "—"}
                         </td>
@@ -300,7 +302,7 @@ export default function ConsensusMomentumCards({ data, totalReturn, priceRange }
                           return (
                             <td
                               key={label}
-                              className="text-[10px] font-mono font-bold text-right py-2 pr-1"
+                              className="text-[10px] font-secondary tabular-nums font-bold text-right py-2 pr-1"
                               style={{ color }}
                             >
                               {text}
@@ -313,23 +315,23 @@ export default function ConsensusMomentumCards({ data, totalReturn, priceRange }
 
                   {availableYears.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="text-[10px] text-slate-300 text-center py-2">—</td>
+                      <td colSpan={6} className="text-[10px] text-patria-dark-blue/28 text-center py-2">—</td>
                     </tr>
                   )}
 
                   {/* Total Return row — only in Net Income card */}
                   {card.label === "Net Income" && totalReturn && priceRange && (
-                    <tr style={{ borderTop: "1px solid rgba(124,58,237,0.15)" }}>
-                      <td className="text-[10px] font-mono font-semibold text-slate-400 py-2 pr-2">
+                    <tr style={{ borderTop: "1px solid rgba(0,30,175,0.15)" }}>
+                      <td className="text-[10px] font-secondary tabular-nums font-semibold text-patria-dark-blue/45 py-2 pr-2">
                         TRLC 
                       </td>
-                      <td className="text-[10px] font-mono font-bold text-right py-2 pr-2" style={{ color: fmtTriPrice(totalReturn.triToday).color }}>
+                      <td className="text-[10px] font-secondary tabular-nums font-bold text-right py-2 pr-2" style={{ color: fmtTriPrice(totalReturn.triToday).color }}>
                         {fmtTriPrice(priceRange.pxLast).text}
                       </td>
                       {([totalReturn.tri1m, totalReturn.tri3m, totalReturn.tri1y, totalReturn.tri2y] as (number | null)[]).map((v, i) => {
                         const { text, color } = fmtTriPct(totalReturn.triToday, v);
                         return (
-                          <td key={i} className="text-[10px] font-mono font-bold text-right py-2 pr-1" style={{ color }}>
+                          <td key={i} className="text-[10px] font-secondary tabular-nums font-bold text-right py-2 pr-1" style={{ color }}>
                             {text}
                           </td>
                         );
@@ -345,20 +347,20 @@ export default function ConsensusMomentumCards({ data, totalReturn, priceRange }
 
       {/* ── 3-Month Trend Analysis panel ──────────────────────────────────── */}
       {trends && trendYear && (
-        <div className="rounded-lg bg-slate-50 border border-slate-100 px-4 py-3">
+        <div className="rounded-lg bg-patria-dark-blue/[0.03] border border-patria-dark-blue/[0.06] px-4 py-3">
           <div className="flex items-center gap-2 mb-3">
             <span
               className="text-[10px] font-bold tracking-widest uppercase"
-              style={{ color: "#64748B" }}
+              style={{ color: "rgba(13,13,56,0.62)" }}
             >
               3-Month Trend Analysis
             </span>
             <span
-              className="text-[10px] font-mono"
+              className="text-[10px] font-secondary tabular-nums"
               style={{
-                color: "#64748B",
-                background: "rgba(15,23,42,0.04)",
-                border: "1px solid rgba(15,23,42,0.07)",
+                color: "rgba(13,13,56,0.62)",
+                background: "rgba(13,13,56,0.04)",
+                border: "1px solid rgba(13,13,56,0.07)",
                 borderRadius: 3,
                 padding: "0px 5px",
               }}
@@ -370,13 +372,13 @@ export default function ConsensusMomentumCards({ data, totalReturn, priceRange }
           <div className="grid grid-cols-3 gap-3">
             {trends.map(({ card, trend }) => {
               const dirColor =
-                trend.direction === "up"   ? "#059669" :
-                trend.direction === "down" ? "#DC2626" : "#94A3B8";
+                trend.direction === "up"   ? "#001EAF" :
+                trend.direction === "down" ? "#F8485E" : "rgba(13,13,56,0.45)";
 
               const dirBg =
-                trend.direction === "up"   ? "rgba(5,150,105,0.07)"  :
-                trend.direction === "down" ? "rgba(220,38,38,0.07)"  :
-                                             "rgba(15,23,42,0.04)";
+                trend.direction === "up"   ? "rgba(0,30,175,0.07)"  :
+                trend.direction === "down" ? "rgba(248,72,94,0.07)"  :
+                                             "rgba(13,13,56,0.04)";
 
               const arrow =
                 trend.direction === "up"   ? "↑" :
@@ -403,13 +405,13 @@ export default function ConsensusMomentumCards({ data, totalReturn, priceRange }
                     <span className="text-[11px] font-bold leading-none" style={{ color: dirColor }}>
                       {arrow}
                     </span>
-                    <span className="text-[9px] font-bold font-mono capitalize" style={{ color: dirColor }}>
+                    <span className="text-[9px] font-bold font-secondary tabular-nums capitalize" style={{ color: dirColor }}>
                       {trend.label}
                     </span>
                   </div>
 
                   {/* Sentence */}
-                  <span className="text-[9px] text-slate-400 leading-tight">
+                  <span className="text-[9px] text-patria-dark-blue/45 leading-tight">
                     Estimates trended{" "}
                     <span style={{ color: dirColor, fontWeight: 700 }}>{trend.label}</span>{" "}
                     {trend.sentence}

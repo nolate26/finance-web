@@ -1,5 +1,7 @@
 "use client";
 
+import { PATRIA, FONT_SECONDARY } from "@/lib/patriaTheme";
+
 import {
   ResponsiveContainer,
   LineChart,
@@ -92,16 +94,16 @@ const CustomTooltip = ({ active, payload, label }: any) => {
       className="rounded-lg px-3 py-2 text-xs"
       style={{
         background: "#FFFFFF",
-        border: "1px solid rgba(15,23,42,0.12)",
-        boxShadow: "0 4px 16px rgba(15,23,42,0.12)",
+        border: "1px solid rgba(13,13,56,0.12)",
+        boxShadow: "0 4px 16px rgba(13,13,56,0.12)",
         minWidth: 160,
       }}
     >
-      <div className="font-mono mb-2" style={{ color: "#64748B" }}>{label}</div>
+      <div className="font-secondary tabular-nums mb-2" style={{ color: "rgba(13,13,56,0.62)" }}>{label}</div>
       {payload.map((p: { name: string; value: number; color: string }) => (
         <div key={p.name} className="flex items-center justify-between gap-4 mb-0.5">
           <span style={{ color: p.color }}>{p.name}</span>
-          <span className="font-mono font-semibold" style={{ color: "#0F172A" }}>
+          <span className="font-secondary tabular-nums font-semibold" style={{ color: "#0D0D38" }}>
             {typeof p.value === "number" ? p.value.toFixed(3) : "—"}
           </span>
         </div>
@@ -126,12 +128,12 @@ export default function TenYearChart({ history, country }: Props) {
     <div className="card flex flex-col overflow-hidden h-full">
       {/* Header */}
       <div
-        className="px-5 py-3 border-b flex items-center justify-between"
-        style={{ borderColor: "rgba(15,23,42,0.07)" }}
+        className="px-5 py-3 flex items-center justify-between"
+        style={{ background: PATRIA.darkBlue }}
       >
         <div>
-          <h3 className="text-sm font-semibold" style={{ color: "#0F172A" }}>{title}</h3>
-          <p className="text-xs mt-0.5" style={{ color: "#64748B" }}>
+          <h3 className="text-sm font-bold font-primary uppercase tracking-wide" style={{ color: PATRIA.white }}>{title}</h3>
+          <p className="text-xs mt-0.5 font-secondary" style={{ color: "rgba(255,255,255,0.72)" }}>
             Eje izquierdo: Yield % · Eje derecho: {fxLabel}
           </p>
         </div>
@@ -142,17 +144,17 @@ export default function TenYearChart({ history, country }: Props) {
         {chartData.length === 0 ? (
           <div
             className="flex items-center justify-center h-full"
-            style={{ color: "#64748B", fontSize: 13 }}
+            style={{ color: "rgba(13,13,56,0.62)", fontSize: 13 }}
           >
             No hay datos para {country}
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ top: 8, right: 52, left: 0, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.06)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(13,13,56,0.06)" />
               <XAxis
                 dataKey="date"
-                tick={{ fill: "#64748B", fontSize: 11, fontFamily: "monospace", dy: 10 }}
+                tick={{ fill: "rgba(13,13,56,0.62)", fontSize: 11, fontFamily: FONT_SECONDARY, dy: 10 }}
                 axisLine={false}
                 tickLine={false}
                 interval="preserveStartEnd"
@@ -164,7 +166,7 @@ export default function TenYearChart({ history, country }: Props) {
               <YAxis
                 yAxisId="left"
                 domain={["auto", "auto"]}
-                tick={{ fill: "#1E3A8A", fontSize: 9, fontFamily: "monospace" }}
+                tick={{ fill: PATRIA.darkBlue, fontSize: 9, fontFamily: FONT_SECONDARY }}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(v) => `${v}%`}
@@ -176,7 +178,7 @@ export default function TenYearChart({ history, country }: Props) {
                 yAxisId="right"
                 orientation="right"
                 domain={["auto", "auto"]}
-                tick={{ fill: "#DC2626", fontSize: 9, fontFamily: "monospace" }}
+                tick={{ fill: PATRIA.orange, fontSize: 9, fontFamily: FONT_SECONDARY }}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(v) =>
@@ -189,7 +191,7 @@ export default function TenYearChart({ history, country }: Props) {
 
               <Tooltip content={<CustomTooltip />} />
               <Legend
-                wrapperStyle={{ fontSize: 10, color: "#64748B", paddingTop: 4 }}
+                wrapperStyle={{ fontSize: 10, color: "rgba(13,13,56,0.62)", paddingTop: 4 }}
                 formatter={(value) => (value === "yield" ? "10Y Yield (%)" : fxLabel)}
               />
 
@@ -199,10 +201,10 @@ export default function TenYearChart({ history, country }: Props) {
                 type="monotone"
                 dataKey="yield"
                 name="yield"
-                stroke="#1E3A8A"
+                stroke={PATRIA.darkBlue}
                 strokeWidth={1.5}
                 dot={false}
-                activeDot={{ r: 4, fill: "#1E3A8A", stroke: "#FFFFFF", strokeWidth: 2 }}
+                activeDot={{ r: 4, fill: PATRIA.darkBlue, stroke: "#FFFFFF", strokeWidth: 2 }}
               />
 
               {/* FX line — red */}
@@ -211,10 +213,10 @@ export default function TenYearChart({ history, country }: Props) {
                 type="monotone"
                 dataKey="fx"
                 name="fx"
-                stroke="#EF4444"
+                stroke={PATRIA.orange}
                 strokeWidth={1.5}
                 dot={false}
-                activeDot={{ r: 4, fill: "#EF4444", stroke: "#FFFFFF", strokeWidth: 2 }}
+                activeDot={{ r: 4, fill: PATRIA.orange, stroke: "#FFFFFF", strokeWidth: 2 }}
               />
             </LineChart>
           </ResponsiveContainer>
@@ -222,7 +224,7 @@ export default function TenYearChart({ history, country }: Props) {
       </div>
 
       <div className="flex justify-end px-5 pb-3">
-        <span className="text-xs" style={{ color: "#CBD5E1" }}>Fuente: Bloomberg</span>
+        <span className="text-xs" style={{ color: "rgba(13,13,56,0.28)" }}>Fuente: Bloomberg</span>
       </div>
     </div>
   );

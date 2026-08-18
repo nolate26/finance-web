@@ -5,13 +5,16 @@ import { Download } from "lucide-react";
 import type { ModelHistoryPayload, ModelFinancialRow } from "@/app/api/companies/[ticker]/model/route";
 import { downloadExcel } from "@/lib/exportExcel";
 import { ccySuffix } from "@/lib/ccySuffix";
+import { PATRIA, FONT_PRIMARY, FONT_SECONDARY } from "@/lib/patriaTheme";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
-const BLUE   = "#1D4ED8";
-const NEG    = "#B91C1C";
-const BORDER = "rgba(15,23,42,0.08)";
-const TEXT1  = "#0F172A";
-const TEXT2  = "#64748B";
+// Manual de Identidad PATRIA.
+const BLUE   = PATRIA.blue;        // positivo
+const NEG    = PATRIA.pink;        // negativo
+const BORDER = "rgba(13,13,56,0.08)";
+const TEXT1  = PATRIA.darkBlue;    // Regla 4
+const TEXT2  = "rgba(13,13,56,0.62)";
+const IND    = PATRIA.kingBlue;    // Regla 5 — columna de indicadores
 
 // ── Safe math helpers ─────────────────────────────────────────────────────────
 function div(a: number | null, b: number | null): number | null {
@@ -243,10 +246,10 @@ function buildTableRows(financials: ModelFinancialRow[]): { years: number[]; row
 
 // ── Cell value renderer ───────────────────────────────────────────────────────
 function renderValue(value: number | null, format: Format, colorize: boolean): { text: string; color: string } {
-  if (value === null) return { text: "—", color: "#CBD5E1" };
+  if (value === null) return { text: "—", color: "rgba(13,13,56,0.28)" };
 
   let text: string;
-  let color = TEXT1;
+  let color: string = TEXT1;
 
   switch (format) {
     case "abs":
@@ -276,9 +279,9 @@ function ReccBadge({ recc }: { recc: string | null }) {
   const upper = recc.toUpperCase();
   const isBuy  = upper.includes("BUY")  || upper === "OW";
   const isSell = upper.includes("SELL") || upper === "UW";
-  const bg     = isBuy ? "rgba(29,78,216,0.10)" : isSell ? "rgba(185,28,28,0.10)" : "rgba(100,116,139,0.10)";
+  const bg     = isBuy ? "rgba(32,68,220,0.10)" : isSell ? "rgba(248,72,94,0.10)" : "rgba(13,13,56,0.10)";
   const color  = isBuy ? BLUE : isSell ? NEG : TEXT2;
-  const border = isBuy ? "rgba(29,78,216,0.25)" : isSell ? "rgba(185,28,28,0.25)" : "rgba(100,116,139,0.22)";
+  const border = isBuy ? "rgba(32,68,220,0.25)" : isSell ? "rgba(248,72,94,0.25)" : "rgba(13,13,56,0.22)";
   return (
     <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.06em", padding: "3px 9px", borderRadius: 5, background: bg, color, border: `1px solid ${border}` }}>
       {upper}
@@ -400,8 +403,8 @@ export default function ModelTable({ ticker }: { ticker: string }) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "80px 0", gap: 10 }}>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-        <div style={{ width: 22, height: 22, borderRadius: "50%", border: "2px solid rgba(29,78,216,0.18)", borderTopColor: BLUE, animation: "spin 0.8s linear infinite" }} />
-        <span style={{ fontSize: 12, color: TEXT2, fontFamily: "JetBrains Mono, monospace" }}>Loading model…</span>
+        <div style={{ width: 22, height: 22, borderRadius: "50%", border: "2px solid rgba(32,68,220,0.18)", borderTopColor: BLUE, animation: "spin 0.8s linear infinite" }} />
+        <span style={{ fontSize: 12, color: TEXT2, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>Loading model…</span>
       </div>
     );
   }
@@ -435,7 +438,7 @@ export default function ModelTable({ ticker }: { ticker: string }) {
         gap:          16,
         flexWrap:     "wrap",
         padding:      "12px 16px",
-        background:   "#F8FAFC",
+        background:   "#F5F7FD",
         border:       `1px solid ${BORDER}`,
         borderRadius: 10,
       }}>
@@ -444,7 +447,7 @@ export default function ModelTable({ ticker }: { ticker: string }) {
         {header.tp !== null && (
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
             <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", color: TEXT2, textTransform: "uppercase" }}>Target Price</span>
-            <span style={{ fontSize: 14, fontWeight: 800, color: TEXT1, fontFamily: "JetBrains Mono, monospace" }}>
+            <span style={{ fontSize: 14, fontWeight: 800, color: TEXT1, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
               {header.tp.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
@@ -459,7 +462,7 @@ export default function ModelTable({ ticker }: { ticker: string }) {
 
         <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
           <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", color: TEXT2, textTransform: "uppercase" }}>Updated</span>
-          <span style={{ fontSize: 11, color: TEXT2, fontFamily: "JetBrains Mono, monospace" }}>{header.updateDate}</span>
+          <span style={{ fontSize: 11, color: TEXT2, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>{header.updateDate}</span>
         </div>
 
         {/* Download Excel */}
@@ -472,17 +475,17 @@ export default function ModelTable({ ticker }: { ticker: string }) {
             gap:          5,
             fontSize:     11,
             fontWeight:   600,
-            color:        "#059669",
-            background:   "rgba(5,150,105,0.07)",
-            border:       "1px solid rgba(5,150,105,0.22)",
+            color:        "#001EAF",
+            background:   "rgba(0,30,175,0.07)",
+            border:       "1px solid rgba(0,30,175,0.22)",
             borderRadius: 6,
             padding:      "4px 12px",
             cursor:       "pointer",
             transition:   "all 0.12s",
             marginLeft:   header.link ? undefined : "auto",
           }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(5,150,105,0.12)"; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(5,150,105,0.07)"; }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,30,175,0.12)"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,30,175,0.07)"; }}
         >
           <Download size={11} /> Excel
         </button>
@@ -500,8 +503,8 @@ export default function ModelTable({ ticker }: { ticker: string }) {
               fontSize:     11,
               fontWeight:   600,
               color:        BLUE,
-              background:   "rgba(29,78,216,0.07)",
-              border:       "1px solid rgba(29,78,216,0.18)",
+              background:   "rgba(32,68,220,0.07)",
+              border:       "1px solid rgba(32,68,220,0.18)",
               borderRadius: 6,
               padding:      "4px 12px",
               textDecoration: "none",
@@ -520,7 +523,7 @@ export default function ModelTable({ ticker }: { ticker: string }) {
         background:   "#FFFFFF",
         border:       `1px solid ${BORDER}`,
         borderRadius: 12,
-        boxShadow:    "0 1px 4px rgba(15,23,42,0.06)",
+        boxShadow:    "0 1px 4px rgba(13,13,56,0.06)",
         overflowX:    "auto",
       }}>
         <table style={{ borderCollapse: "collapse", fontSize: 12, width: "100%" }}>
@@ -535,8 +538,9 @@ export default function ModelTable({ ticker }: { ticker: string }) {
                 zIndex:      3,
                 padding:     "10px 16px",
                 textAlign:   "left",
-                background:  "#1e3a8a",
-                color:       "white",
+                background:  PATRIA.darkBlue,
+                color:       PATRIA.white,
+                fontFamily:  FONT_PRIMARY,
                 fontWeight:  700,
                 fontSize:    11,
                 letterSpacing: "0.08em",
@@ -552,13 +556,13 @@ export default function ModelTable({ ticker }: { ticker: string }) {
                   top:         0,
                   zIndex:      2,
                   padding:     "10px 14px",
-                  background:  "#1e3a8a",
-                  color:       "white",
+                  background:  PATRIA.darkBlue,
+                  color:       PATRIA.white,
                   fontWeight:  700,
                   fontSize:    12,
                   letterSpacing: "0.04em",
                   borderBottom:  "1px solid rgba(255,255,255,0.12)",
-                  fontFamily:  "JetBrains Mono, monospace",
+                  fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
                 }}>
                   {yr}
                 </th>
@@ -578,8 +582,9 @@ export default function ModelTable({ ticker }: { ticker: string }) {
                         position:      "sticky",
                         left:          0,
                         padding:       "8px 16px",
-                        background:    "#334155",
-                        color:         "white",
+                        background:    PATRIA.kingBlue,
+                        color:         PATRIA.white,
+                        fontFamily:    FONT_SECONDARY,
                         fontWeight:    700,
                         fontSize:      10,
                         letterSpacing: "0.10em",
@@ -595,14 +600,14 @@ export default function ModelTable({ ticker }: { ticker: string }) {
 
               const isEven = rowIdx % 2 === 0;
               const rowBg  = row.isDerived
-                ? "rgba(248,250,252,1)"
-                : isEven ? "#FFFFFF" : "rgba(15,23,42,0.015)";
+                ? "#F5F7FD"
+                : isEven ? "#FFFFFF" : "rgba(13,13,56,0.015)";
 
               return (
                 <tr
                   key={row.key}
                   style={{ borderBottom: `1px solid ${BORDER}` }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(29,78,216,0.03)"; }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.03)"; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
                 >
                   {/* Label cell */}
@@ -610,8 +615,9 @@ export default function ModelTable({ ticker }: { ticker: string }) {
                     ...labelColStyle,
                     padding:    "7px 16px",
                     background: rowBg,
-                    color:      row.isDerived ? TEXT2 : TEXT1,
-                    fontWeight: row.isDerived ? 400 : 500,
+                    fontFamily: FONT_SECONDARY,
+                    color:      row.isDerived ? TEXT2 : IND,
+                    fontWeight: row.isDerived ? 400 : 700,
                     fontSize:   row.isDerived ? 11 : 12,
                     fontStyle:  row.isDerived ? "italic" : "normal",
                     paddingLeft: row.isDerived ? 24 : 16,
@@ -629,7 +635,7 @@ export default function ModelTable({ ticker }: { ticker: string }) {
                         color,
                         fontWeight: row.isDerived ? 500 : 600,
                         fontSize:   row.isDerived ? 11 : 12,
-                        fontFamily: "JetBrains Mono, monospace",
+                        fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
                         borderLeft: `1px solid ${BORDER}`,
                       }}>
                         {text}

@@ -1,5 +1,7 @@
 "use client";
 
+import { PATRIA, FONT_SECONDARY } from "@/lib/patriaTheme";
+
 import React, { useState } from "react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -62,13 +64,13 @@ export interface LatamTableProps {
 
 function formatPct(val: number | null): { text: string; color: string; bold: boolean } {
   if (val === null || val === undefined) {
-    return { text: "—", color: "#94A3B8", bold: false };
+    return { text: "—", color: "rgba(13,13,56,0.45)", bold: false };
   }
   const pct  = val * 100;
   const sign = pct >= 0 ? "+" : "";
   return {
     text:  `${sign}${pct.toFixed(1)}%`,
-    color: pct > 0 ? "#16a34a" : pct < 0 ? "#dc2626" : "#64748B",
+    color: pct > 0 ? "#001EAF" : pct < 0 ? "#F8485E" : "rgba(13,13,56,0.62)",
     bold:  Math.abs(pct) >= 5,
   };
 }
@@ -102,7 +104,7 @@ function PctCell({ val }: { val: number | null }) {
 }
 
 function NumCell({ children }: { children: React.ReactNode }) {
-  return <span style={{ color: "#0F172A" }}>{children}</span>;
+  return <span style={{ color: "#0D0D38" }}>{children}</span>;
 }
 
 // ── Column definitions ────────────────────────────────────────────────────────
@@ -312,23 +314,23 @@ const W_COMPANY = 200; // only Company is sticky
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 
-const BG_HEADER     = "#F1F5F9";
-const BG_HEADER_ACC = "#E8EEF9";
-const BG_BODY_ODD   = "#FFFFFF";
-const BG_BODY_EVEN  = "#F8FAFF";
-const BG_BODY_ACC   = "rgba(43,92,224,0.025)";
-const BORDER        = "rgba(15,23,42,0.07)";
-const STICKY_SHADOW = "3px 0 8px rgba(15,23,42,0.07)";
+const BG_HEADER     = "#F5F7FD";
+const BG_HEADER_ACC = "rgba(32,68,220,0.08)";
+const BG_BODY_ODD   = PATRIA.white;
+const BG_BODY_EVEN  = "#F5F7FD";
+const BG_BODY_ACC   = "rgba(32,68,220,0.025)";
+const BORDER        = "rgba(13,13,56,0.07)";
+const STICKY_SHADOW = "3px 0 8px rgba(13,13,56,0.07)";
 
 const TH_BASE: React.CSSProperties = {
   padding:      "6px 10px",
   fontSize:     11,
   fontWeight:   600,
-  fontFamily:   "JetBrains Mono, monospace",
+  fontFamily:   FONT_SECONDARY,
   whiteSpace:   "nowrap",
   borderBottom: `1px solid ${BORDER}`,
   borderRight:  `1px solid ${BORDER}`,
-  color:        "#475569",
+  color:        "rgba(13,13,56,0.62)",
   background:   BG_HEADER,
   cursor:       "pointer",
   userSelect:   "none",
@@ -337,7 +339,7 @@ const TH_BASE: React.CSSProperties = {
 const TD_BASE: React.CSSProperties = {
   padding:      "5px 10px",
   fontSize:     12,
-  fontFamily:   "JetBrains Mono, monospace",
+  fontFamily:   FONT_SECONDARY,
   whiteSpace:   "nowrap",
   borderBottom: `1px solid ${BORDER}`,
   borderRight:  `1px solid ${BORDER}`,
@@ -366,7 +368,7 @@ export default function LatamTable({
   function SortIndicator({ colKey }: { colKey: string }) {
     if (sortBy !== colKey) return null;
     return (
-      <span style={{ fontSize: 9, color: "#2B5CE0", marginLeft: 2 }}>
+      <span style={{ fontSize: 9, color: "#2044DC", marginLeft: 2 }}>
         {sortOrder === "asc" ? "▲" : "▼"}
       </span>
     );
@@ -379,7 +381,7 @@ export default function LatamTable({
         overflowY:    "auto",
         borderRadius: 10,
         border:       `1px solid ${BORDER}`,
-        boxShadow:    "0 2px 12px rgba(15,23,42,0.07)",
+        boxShadow:    "0 2px 12px rgba(13,13,56,0.07)",
         background:   BG_BODY_ODD,
         maxHeight:    "calc(100vh - 320px)",
       }}
@@ -415,7 +417,7 @@ export default function LatamTable({
                 maxWidth:      W_COMPANY,
                 textAlign:     "left",
                 background:    BG_HEADER,
-                borderRight:   `2px solid rgba(43,92,224,0.22)`,
+                borderRight:   `2px solid rgba(32,68,220,0.22)`,
                 boxShadow:     STICKY_SHADOW,
                 verticalAlign: "bottom",
                 paddingBottom: 8,
@@ -436,14 +438,14 @@ export default function LatamTable({
                   zIndex:        41,
                   textAlign:     "center",
                   background:    g.accent ? BG_HEADER_ACC : BG_HEADER,
-                  color:         g.accent ? "#1E40AF" : "#64748B",
+                  color:         g.accent ? "#001EAF" : "rgba(13,13,56,0.62)",
                   fontSize:      10,
                   fontWeight:    700,
                   letterSpacing: "0.05em",
                   cursor:        "default",
                   paddingTop:    5,
                   paddingBottom: 5,
-                  borderBottom:  `1px solid rgba(43,92,224,0.15)`,
+                  borderBottom:  `1px solid rgba(32,68,220,0.15)`,
                 }}
               >
                 {g.label.toUpperCase()}
@@ -468,11 +470,11 @@ export default function LatamTable({
                     textAlign: col.align,
                     minWidth:  col.minW,
                     background: isActive
-                      ? "rgba(43,92,224,0.12)"
+                      ? "rgba(32,68,220,0.12)"
                       : accent
                       ? BG_HEADER_ACC
                       : BG_HEADER,
-                    color: isActive ? "#1E3A8A" : "#475569",
+                    color: isActive ? "#001EAF" : "rgba(13,13,56,0.62)",
                   }}
                 >
                   <span
@@ -501,7 +503,7 @@ export default function LatamTable({
                 style={{
                   ...TD_BASE,
                   textAlign: "center",
-                  color:     "#94A3B8",
+                  color:     "rgba(13,13,56,0.45)",
                   padding:   "36px 16px",
                   fontSize:  13,
                 }}
@@ -514,8 +516,8 @@ export default function LatamTable({
           {companies.map((company, idx) => {
             const isHovered = hoveredRow === idx;
             const baseRowBg = idx % 2 === 0 ? BG_BODY_ODD : BG_BODY_EVEN;
-            const rowBg     = isHovered ? "rgba(43,92,224,0.05)" : baseRowBg;
-            const stickyBg  = isHovered ? "rgba(43,92,224,0.05)" : baseRowBg;
+            const rowBg     = isHovered ? "rgba(32,68,220,0.05)" : baseRowBg;
+            const stickyBg  = isHovered ? "rgba(32,68,220,0.05)" : baseRowBg;
 
             return (
               <tr
@@ -536,10 +538,10 @@ export default function LatamTable({
                     minWidth:     W_COMPANY,
                     maxWidth:     W_COMPANY,
                     fontWeight:   500,
-                    color:        "#0F172A",
+                    color:        "#0D0D38",
                     fontSize:     12,
-                    borderRight:  `2px solid rgba(43,92,224,0.15)`,
-                    boxShadow:    isHovered ? "3px 0 8px rgba(43,92,224,0.10)" : STICKY_SHADOW,
+                    borderRight:  `2px solid rgba(32,68,220,0.15)`,
+                    boxShadow:    isHovered ? "3px 0 8px rgba(32,68,220,0.10)" : STICKY_SHADOW,
                     overflow:     "hidden",
                     textOverflow: "ellipsis",
                     transition:   "background 0.1s",
@@ -554,7 +556,7 @@ export default function LatamTable({
                   const isActiveCol = sortBy === col.key;
                   const accent      = COL_TO_ACCENT.get(col.key) ?? false;
                   let cellBg: string | undefined;
-                  if (!isHovered && isActiveCol) cellBg = "rgba(43,92,224,0.04)";
+                  if (!isHovered && isActiveCol) cellBg = "rgba(32,68,220,0.04)";
                   else if (!isHovered && accent)  cellBg = BG_BODY_ACC;
 
                   return (

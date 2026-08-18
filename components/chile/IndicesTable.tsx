@@ -1,3 +1,4 @@
+import { FONT_SECONDARY } from "@/lib/patriaTheme";
 "use client";
 
 type IndexRow = Record<string, unknown>;
@@ -23,12 +24,12 @@ function fmt(v: unknown, type: "pct" | "mult"): string {
 }
 
 function pctColor(v: unknown): string {
-  if (v === null || v === undefined) return "#64748B";
+  if (v === null || v === undefined) return "rgba(13,13,56,0.62)";
   const n = typeof v === "number" ? v : parseFloat(String(v));
-  if (isNaN(n)) return "#64748B";
-  if (n > 0.02) return "#059669";
-  if (n < -0.02) return "#DC2626";
-  return "#64748B";
+  if (isNaN(n)) return "rgba(13,13,56,0.62)";
+  if (n > 0.02) return "#001EAF";
+  if (n < -0.02) return "#F8485E";
+  return "rgba(13,13,56,0.62)";
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -43,7 +44,7 @@ export default function IndicesTable({ indices }: { indices: IndexRow[] }) {
   const COLUMN_GROUPS = [
     {
       label: "EBITDA Growth",
-      color: "#059669",
+      color: "#001EAF",
       cols: [
         { key: "ebitda_ltm",  header: "LTM",          fmt: "pct" as const },
         { key: "ebitda_yr1e", header: `${yr1e}E`,     fmt: "pct" as const },
@@ -52,7 +53,7 @@ export default function IndicesTable({ indices }: { indices: IndexRow[] }) {
     },
     {
       label: "FV/EBITDA",
-      color: "#2B5CE0",
+      color: "#2044DC",
       cols: [
         { key: "fv_ebitda_ltm",  header: "LTM",      fmt: "mult" as const },
         { key: "fv_ebitda_yr1e", header: `${yr1e}E`, fmt: "mult" as const },
@@ -61,7 +62,7 @@ export default function IndicesTable({ indices }: { indices: IndexRow[] }) {
     },
     {
       label: "NI",
-      color: "#059669",
+      color: "#001EAF",
       cols: [
         { key: "ni_ltm",  header: "LTM",          fmt: "pct" as const },
         { key: "ni_yr1e", header: `${yr1e}E`,     fmt: "pct" as const },
@@ -70,7 +71,7 @@ export default function IndicesTable({ indices }: { indices: IndexRow[] }) {
     },
     {
       label: "P/E",
-      color: "#7C3AED",
+      color: "#001EAF",
       cols: [
         { key: "pe_ltm",  header: "LTM",          fmt: "mult" as const },
         { key: "pe_yr1e", header: `${yr1e}E`,     fmt: "mult" as const },
@@ -79,7 +80,7 @@ export default function IndicesTable({ indices }: { indices: IndexRow[] }) {
     },
     {
       label: "Other Multiples",
-      color: "#475569",
+      color: "rgba(13,13,56,0.62)",
       cols: [
         { key: "p_bv_ltm", header: "P/BV",     fmt: "mult" as const },
         { key: "fv_s_ltm", header: "FV/S LTM", fmt: "mult" as const },
@@ -87,7 +88,7 @@ export default function IndicesTable({ indices }: { indices: IndexRow[] }) {
     },
     {
       label: "Returns & Quality",
-      color: "#D97706",
+      color: "#FF6B06",
       cols: [
         { key: "div_yield", header: "Div Yield",    fmt: "pct"  as const },
         { key: "roic_ltm",  header: "ROIC",         fmt: "pct"  as const },
@@ -105,16 +106,16 @@ export default function IndicesTable({ indices }: { indices: IndexRow[] }) {
       <div
         style={{
           padding: "10px 16px",
-          borderBottom: "1px solid rgba(15,23,42,0.07)",
+          borderBottom: "1px solid rgba(13,13,56,0.07)",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
         }}
       >
-        <span style={{ fontSize: 11, fontWeight: 600, color: "#64748B", letterSpacing: "0.08em" }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: "rgba(13,13,56,0.62)", letterSpacing: "0.08em" }}>
           BENCHMARK INDICES
         </span>
-        <span style={{ fontSize: 10, color: "#94A3B8" }}>
+        <span style={{ fontSize: 10, color: "rgba(13,13,56,0.45)" }}>
           Crecimiento YoY · Múltiplos consolidados
         </span>
       </div>
@@ -123,7 +124,7 @@ export default function IndicesTable({ indices }: { indices: IndexRow[] }) {
         <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
           <thead>
             {/* Row 1 — group labels */}
-            <tr style={{ background: "#F0F4FA" }}>
+            <tr style={{ background: "#F5F7FD" }}>
               <th
                 rowSpan={2}
                 style={{
@@ -131,9 +132,9 @@ export default function IndicesTable({ indices }: { indices: IndexRow[] }) {
                   textAlign: "left",
                   fontSize: 10,
                   fontWeight: 600,
-                  color: "#475569",
+                  color: "rgba(13,13,56,0.62)",
                   letterSpacing: "0.06em",
-                  borderRight: "2px solid rgba(15,23,42,0.08)",
+                  borderRight: "2px solid rgba(13,13,56,0.08)",
                   verticalAlign: "middle",
                   minWidth: 120,
                 }}
@@ -152,8 +153,8 @@ export default function IndicesTable({ indices }: { indices: IndexRow[] }) {
                     color: g.color,
                     letterSpacing: "0.08em",
                     textTransform: "uppercase",
-                    borderLeft: "1px solid rgba(15,23,42,0.06)",
-                    borderBottom: "1px solid rgba(15,23,42,0.08)",
+                    borderLeft: "1px solid rgba(13,13,56,0.06)",
+                    borderBottom: "1px solid rgba(13,13,56,0.08)",
                   }}
                 >
                   {g.label}
@@ -161,7 +162,7 @@ export default function IndicesTable({ indices }: { indices: IndexRow[] }) {
               ))}
             </tr>
             {/* Row 2 — column sub-labels */}
-            <tr style={{ background: "#F8FAFC" }}>
+            <tr style={{ background: "#F5F7FD" }}>
               {COLUMN_GROUPS.map((g) =>
                 g.cols.map((col, ci) => (
                   <th
@@ -171,10 +172,10 @@ export default function IndicesTable({ indices }: { indices: IndexRow[] }) {
                       textAlign: "center",
                       fontSize: 9,
                       fontWeight: 600,
-                      color: "#64748B",
+                      color: "rgba(13,13,56,0.62)",
                       letterSpacing: "0.06em",
-                      borderLeft: ci === 0 ? "1px solid rgba(15,23,42,0.06)" : undefined,
-                      borderBottom: "1px solid rgba(15,23,42,0.10)",
+                      borderLeft: ci === 0 ? "1px solid rgba(13,13,56,0.06)" : undefined,
+                      borderBottom: "1px solid rgba(13,13,56,0.10)",
                       whiteSpace: "nowrap",
                     }}
                   >
@@ -191,8 +192,8 @@ export default function IndicesTable({ indices }: { indices: IndexRow[] }) {
                 <tr
                   key={name || i}
                   style={{
-                    background: i % 2 === 0 ? "transparent" : "rgba(15,23,42,0.02)",
-                    borderBottom: "1px solid rgba(15,23,42,0.05)",
+                    background: i % 2 === 0 ? "transparent" : "rgba(13,13,56,0.02)",
+                    borderBottom: "1px solid rgba(13,13,56,0.05)",
                   }}
                 >
                   <td
@@ -200,8 +201,8 @@ export default function IndicesTable({ indices }: { indices: IndexRow[] }) {
                       padding: "8px 14px",
                       fontSize: 12,
                       fontWeight: 600,
-                      color: "#0F172A",
-                      borderRight: "2px solid rgba(15,23,42,0.08)",
+                      color: "#0D0D38",
+                      borderRight: "2px solid rgba(13,13,56,0.08)",
                       whiteSpace: "nowrap",
                     }}
                   >
@@ -211,18 +212,18 @@ export default function IndicesTable({ indices }: { indices: IndexRow[] }) {
                     g.cols.map((col, ci) => {
                       const v = row[col.key];
                       const cellColor =
-                        col.fmt === "pct" ? pctColor(v) : "#334155";
+                        col.fmt === "pct" ? pctColor(v) : "#0D0D38";
                       return (
                         <td
                           key={col.key}
                           style={{
                             padding: "8px 8px",
                             textAlign: "center",
-                            fontFamily: "monospace",
+                            fontFamily: FONT_SECONDARY,
                             fontSize: 11,
                             fontWeight: col.fmt === "mult" ? 500 : 600,
                             color: cellColor,
-                            borderLeft: ci === 0 ? "1px solid rgba(15,23,42,0.06)" : undefined,
+                            borderLeft: ci === 0 ? "1px solid rgba(13,13,56,0.06)" : undefined,
                           }}
                         >
                           {fmt(v, col.fmt)}
@@ -234,7 +235,7 @@ export default function IndicesTable({ indices }: { indices: IndexRow[] }) {
               );
             })}
             {/* Spacer at the bottom */}
-            <tr style={{ height: 0, borderTop: `1px solid rgba(15,23,42,0.08)` }}>
+            <tr style={{ height: 0, borderTop: `1px solid rgba(13,13,56,0.08)` }}>
               <td colSpan={1 + totalCols} style={{ padding: 0 }} />
             </tr>
           </tbody>
@@ -242,7 +243,7 @@ export default function IndicesTable({ indices }: { indices: IndexRow[] }) {
       </div>
 
       <div className="flex justify-end px-4 py-2">
-        <span className="text-xs" style={{ color: "#CBD5E1" }}>Fuente: Bloomberg</span>
+        <span className="text-xs" style={{ color: "rgba(13,13,56,0.28)" }}>Fuente: Bloomberg</span>
       </div>
     </div>
   );

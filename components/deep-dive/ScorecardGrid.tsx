@@ -4,6 +4,7 @@ import { useMemo, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { DeepDivePayload } from "@/app/api/companies/[ticker]/route";
 import type { TickerSignalPayload, TickerSignalData, TickerMomentumData } from "@/app/api/quant/ticker-signal/route";
+import { PATRIA, FONT_PRIMARY, FONT_SECONDARY } from "@/lib/patriaTheme";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SCORING FUNCTIONS
@@ -53,19 +54,19 @@ function pctScoreTo5(v: number | null): number | null {
 // STYLE HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
-const T1    = "#0F172A";
-const T2    = "#64748B";
-const T3    = "#94A3B8";
-const BORDER = "rgba(15,23,42,0.08)";
-const GREEN  = "#059669";
-const RED    = "#DC2626";
-const AMBER  = "#D97706";
+const T1    = "#0D0D38";
+const T2    = "rgba(13,13,56,0.62)";
+const T3    = "rgba(13,13,56,0.45)";
+const BORDER = "rgba(13,13,56,0.08)";
+const GREEN  = "#001EAF";
+const RED    = "#F8485E";
+const AMBER  = "#FF6B06";
 
 function scoreTheme(s: number | null): { text: string; bg: string; border: string } {
-  if (s == null) return { text: T3,   bg: "rgba(148,163,184,0.10)", border: "rgba(148,163,184,0.22)" };
-  if (s >= 4)    return { text: GREEN, bg: "rgba(5,150,105,0.10)",  border: "rgba(5,150,105,0.28)"   };
-  if (s >= 2.5)  return { text: AMBER, bg: "rgba(217,119,6,0.10)",  border: "rgba(217,119,6,0.28)"   };
-  return          { text: RED,   bg: "rgba(220,38,38,0.10)",  border: "rgba(220,38,38,0.28)"   };
+  if (s == null) return { text: T3,   bg: "rgba(13,13,56,0.10)", border: "rgba(13,13,56,0.22)" };
+  if (s >= 4)    return { text: PATRIA.darkBlue, bg: PATRIA.lightTurquoise, border: PATRIA.turquoise   };
+  if (s >= 2.5)  return { text: PATRIA.darkBlue, bg: PATRIA.lightOrange,    border: PATRIA.orange      };
+  return          { text: PATRIA.darkBlue, bg: PATRIA.lightPink,      border: PATRIA.pink        };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -80,7 +81,7 @@ interface CardShellProps {
   onClick?: () => void;
 }
 
-function CardShell({ title, score, children, accent = "#2563EB", onClick }: CardShellProps) {
+function CardShell({ title, score, children, accent = PATRIA.skyBlue, onClick }: CardShellProps) {
   const theme = scoreTheme(score);
   const clickable = onClick != null;
   return (
@@ -97,29 +98,34 @@ function CardShell({ title, score, children, accent = "#2563EB", onClick }: Card
       } : undefined}
       onMouseLeave={clickable ? (e) => {
         const el = e.currentTarget as HTMLElement;
-        el.style.boxShadow = "0 1px 4px rgba(15,23,42,0.06)";
+        el.style.boxShadow = "0 1px 4px rgba(13,13,56,0.06)";
         el.style.transform = "translateY(0)";
         el.style.borderColor = BORDER;
       } : undefined}
       style={{
         background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12,
-        boxShadow: "0 1px 4px rgba(15,23,42,0.06)", display: "flex",
+        boxShadow: "0 1px 4px rgba(13,13,56,0.06)", display: "flex",
         flexDirection: "column", overflow: "hidden",
         cursor: clickable ? "pointer" : "default",
         transition: "box-shadow 0.16s, transform 0.16s, border-color 0.16s",
         outline: "none",
       }}
     >
-      <div style={{ height: 4, background: accent, borderRadius: "12px 12px 0 0" }} />
-      <div style={{ padding: "20px 22px", flex: 1, display: "flex", flexDirection: "column", gap: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.07em", color: T2, textTransform: "uppercase" }}>
+      <div style={{ height: 4, background: accent }} />
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        background: PATRIA.darkBlue, padding: "9px 22px",
+      }}>
+          <span style={{
+            fontSize: 13, fontWeight: 700, letterSpacing: "0.07em",
+            color: PATRIA.white, fontFamily: FONT_PRIMARY, textTransform: "uppercase",
+          }}>
             {title}
           </span>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {score != null && (
               <span style={{
-                fontSize: 14, fontWeight: 800, fontFamily: "JetBrains Mono, monospace",
+                fontSize: 14, fontWeight: 800, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
                 color: theme.text, background: theme.bg, border: `1px solid ${theme.border}`,
                 borderRadius: 6, padding: "3px 11px",
               }}>
@@ -132,7 +138,8 @@ function CardShell({ title, score, children, accent = "#2563EB", onClick }: Card
               </svg>
             )}
           </div>
-        </div>
+      </div>
+      <div style={{ padding: "20px 22px", flex: 1, display: "flex", flexDirection: "column", gap: 16 }}>
         <div style={{ flex: 1 }}>{children}</div>
       </div>
     </div>
@@ -146,13 +153,13 @@ function CardShell({ title, score, children, accent = "#2563EB", onClick }: Card
 function FactorGauge({ value }: { value: number | null }) {
   const g    = goodness(value);
   const pct  = g != null ? Math.max(0, Math.min(100, g * 100)) : null;
-  const col  = pct == null ? T3 : pct > 70 ? "#1E40AF" : pct > 40 ? "#3B82F6" : "#93C5FD";
+  const col  = pct == null ? T3 : pct > 70 ? "#001EAF" : pct > 40 ? "#2044DC" : "#88AAFF";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {/* Big number */}
       <div style={{
-        fontSize: 52, fontWeight: 900, fontFamily: "JetBrains Mono, monospace",
+        fontSize: 52, fontWeight: 900, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
         color: col, letterSpacing: "-0.04em", lineHeight: 1,
       }}>
         {pct != null ? Math.round(pct) + "%" : "—"}
@@ -160,7 +167,7 @@ function FactorGauge({ value }: { value: number | null }) {
 
       {/* Progress bar */}
       {pct != null && (
-        <div style={{ height: 6, borderRadius: 3, background: "rgba(15,23,42,0.07)", overflow: "hidden" }}>
+        <div style={{ height: 6, borderRadius: 3, background: "rgba(13,13,56,0.07)", overflow: "hidden" }}>
           <div style={{ width: `${pct}%`, height: "100%", background: col, borderRadius: 3, transition: "width 0.4s" }} />
         </div>
       )}
@@ -178,7 +185,7 @@ function FactorGauge({ value }: { value: number | null }) {
 function ValueCard({ data, onClick }: { data: TickerSignalData | null; onClick?: () => void }) {
   const score = factorTo5(data?.value ?? null);
   return (
-    <CardShell title="Value Factor" score={score} accent="#0891B2" onClick={onClick}>
+    <CardShell title="Value Factor" score={score} accent={PATRIA.skyBlue} onClick={onClick}>
       {data ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <FactorGauge value={data.value} />
@@ -194,7 +201,7 @@ function ValueCard({ data, onClick }: { data: TickerSignalData | null; onClick?:
             ].map(({ label, val }) => (
               <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: `1px solid ${BORDER}` }}>
                 <span style={{ fontSize: 11, color: T3 }}>{label}</span>
-                <span style={{ fontSize: 11, fontFamily: "JetBrains Mono, monospace", fontWeight: 600, color: T1 }}>{val}</span>
+                <span style={{ fontSize: 11, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontWeight: 600, color: T1 }}>{val}</span>
               </div>
             ))}
           </div>
@@ -220,7 +227,7 @@ function QualityCard({ data, onClick }: { data: TickerSignalData | null; onClick
   }
 
   return (
-    <CardShell title="Quality Factor" score={score} accent="#7C3AED" onClick={onClick}>
+    <CardShell title="Quality Factor" score={score} accent={PATRIA.turquoise} onClick={onClick}>
       {data ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <FactorGauge value={data.quality} />
@@ -236,7 +243,7 @@ function QualityCard({ data, onClick }: { data: TickerSignalData | null; onClick
             ].map(({ label, val, colored, v }) => (
               <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: `1px solid ${BORDER}` }}>
                 <span style={{ fontSize: 11, color: T3 }}>{label}</span>
-                <span style={{ fontSize: 11, fontFamily: "JetBrains Mono, monospace", fontWeight: 600,
+                <span style={{ fontSize: 11, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontWeight: 600,
                   color: colored && v != null ? (v > 0 ? GREEN : v < 0 ? RED : T1) : T1 }}>
                   {val}
                 </span>
@@ -257,34 +264,34 @@ function QualityCard({ data, onClick }: { data: TickerSignalData | null; onClick
 
 // z-score → visual emphasis (matches the Momentum Ranking table)
 function momZTheme(z: number | null): { text: string; bg: string; border: string; label: string | null } {
-  if (z == null) return { text: T3, bg: "rgba(148,163,184,0.10)", border: "rgba(148,163,184,0.22)", label: null };
+  if (z == null) return { text: T3, bg: "rgba(13,13,56,0.10)", border: "rgba(13,13,56,0.22)", label: null };
   if (z >= 3)   return { text: "#fff",    bg: RED,                       border: RED,                       label: "EXTREME" };
-  if (z >= 2)   return { text: "#B45309", bg: "rgba(217,119,6,0.14)",   border: "rgba(217,119,6,0.45)",   label: "OUTLIER" };
-  if (z >= 1)   return { text: "#0F766E", bg: "rgba(13,148,136,0.12)",  border: "rgba(13,148,136,0.32)",  label: null };
-  if (z <= -1)  return { text: T2,        bg: "rgba(100,116,139,0.10)", border: "rgba(100,116,139,0.24)", label: null };
-  return          { text: T2,             bg: "rgba(100,116,139,0.08)", border: "rgba(100,116,139,0.18)", label: null };
+  if (z >= 2)   return { text: "#FF6B06", bg: "rgba(255,107,6,0.14)",   border: "rgba(255,107,6,0.45)",   label: "OUTLIER" };
+  if (z >= 1)   return { text: "#001EAF", bg: "rgba(0,30,175,0.12)",  border: "rgba(0,30,175,0.32)",  label: null };
+  if (z <= -1)  return { text: T2,        bg: "rgba(13,13,56,0.10)", border: "rgba(13,13,56,0.24)", label: null };
+  return          { text: T2,             bg: "rgba(13,13,56,0.08)", border: "rgba(13,13,56,0.18)", label: null };
 }
 
 function PricingMomentumCard({ data, onClick }: { data: TickerMomentumData | null; onClick?: () => void }) {
   const score  = pctScoreTo5(data?.score ?? null);
   const pct    = data?.score != null ? Math.max(0, Math.min(100, data.score)) : null;
-  const col    = pct == null ? T3 : pct > 70 ? "#0F766E" : pct > 40 ? "#0D9488" : "#5EEAD4";
+  const col    = pct == null ? T3 : pct > 70 ? "#001EAF" : pct > 40 ? "#001EAF" : "#B6FFE3";
   const zt     = momZTheme(data?.zscore ?? null);
 
   return (
-    <CardShell title="Pricing Momentum" score={score} accent="#0D9488" onClick={onClick}>
+    <CardShell title="Pricing Momentum" score={score} accent={PATRIA.lightOrange} onClick={onClick}>
       {data ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {/* Big score number — same % format as the other factor gauges */}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <div style={{
-              fontSize: 52, fontWeight: 900, fontFamily: "JetBrains Mono, monospace",
+              fontSize: 52, fontWeight: 900, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
               color: col, letterSpacing: "-0.04em", lineHeight: 1,
             }}>
               {pct != null ? Math.round(pct) + "%" : "—"}
             </div>
             {pct != null && (
-              <div style={{ height: 6, borderRadius: 3, background: "rgba(15,23,42,0.07)", overflow: "hidden" }}>
+              <div style={{ height: 6, borderRadius: 3, background: "rgba(13,13,56,0.07)", overflow: "hidden" }}>
                 <div style={{ width: `${pct}%`, height: "100%", background: col, borderRadius: 3, transition: "width 0.4s" }} />
               </div>
             )}
@@ -317,7 +324,7 @@ function PricingMomentumCard({ data, onClick }: { data: TickerMomentumData | nul
                 </span>
               )}
               <span style={{
-                fontSize: 18, fontWeight: 800, fontFamily: "JetBrains Mono, monospace",
+                fontSize: 18, fontWeight: 800, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
                 color: zt.text === "#fff" ? RED : zt.text,
               }}>
                 {data.zscore != null ? (data.zscore >= 0 ? "+" : "") + data.zscore.toFixed(2) + "σ" : "—"}
@@ -336,7 +343,7 @@ function PricingMomentumCard({ data, onClick }: { data: TickerMomentumData | nul
             ].map(({ label, val, green }) => (
               <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: `1px solid ${BORDER}` }}>
                 <span style={{ fontSize: 11, color: T3 }}>{label}</span>
-                <span style={{ fontSize: 11, fontFamily: "JetBrains Mono, monospace", fontWeight: 600, color: green ? GREEN : T1 }}>{val}</span>
+                <span style={{ fontSize: 11, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontWeight: 600, color: green ? GREEN : T1 }}>{val}</span>
               </div>
             ))}
           </div>
@@ -394,7 +401,7 @@ export default function ScorecardGrid({ deepDive, latestPrice: _latestPrice, onV
       {/* ── Master Header ─────────────────────────────────────────────────────── */}
       <div style={{
         background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 14,
-        padding: "20px 24px", boxShadow: "0 1px 4px rgba(15,23,42,0.06)",
+        padding: "20px 24px", boxShadow: "0 1px 4px rgba(13,13,56,0.06)",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
 
@@ -404,7 +411,7 @@ export default function ScorecardGrid({ deepDive, latestPrice: _latestPrice, onV
             background: masterTheme.bg, border: `3px solid ${masterTheme.border}`,
             display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0,
           }}>
-            <span style={{ fontSize: 30, fontWeight: 900, fontFamily: "JetBrains Mono, monospace", color: masterTheme.text, lineHeight: 1 }}>
+            <span style={{ fontSize: 30, fontWeight: 900, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", color: masterTheme.text, lineHeight: 1 }}>
               {master != null ? master.toFixed(1) : "—"}
             </span>
             <span style={{ fontSize: 11, color: T3, marginTop: 3 }}>/ 5.0</span>
@@ -415,7 +422,7 @@ export default function ScorecardGrid({ deepDive, latestPrice: _latestPrice, onV
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: T3, textTransform: "uppercase" }}>
               Investment Scorecard
             </div>
-            <span style={{ fontSize: 20, fontWeight: 800, color: masterTheme.text, letterSpacing: "0.06em", textTransform: "uppercase", fontFamily: "JetBrains Mono, monospace" }}>
+            <span style={{ fontSize: 20, fontWeight: 800, color: masterTheme.text, letterSpacing: "0.06em", textTransform: "uppercase", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
               {masterLabel}
             </span>
             <span style={{ fontSize: 12, color: T3 }}>
@@ -432,7 +439,7 @@ export default function ScorecardGrid({ deepDive, latestPrice: _latestPrice, onV
                 const t = scoreTheme(s);
                 return (
                   <span key={label} style={{
-                    fontSize: 12, fontWeight: 700, fontFamily: "JetBrains Mono, monospace",
+                    fontSize: 12, fontWeight: 700, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
                     color: t.text, background: t.bg, border: `1px solid ${t.border}`,
                     borderRadius: 5, padding: "2px 9px", whiteSpace: "nowrap",
                   }}>
@@ -458,11 +465,11 @@ export default function ScorecardGrid({ deepDive, latestPrice: _latestPrice, onV
           onClick={onViewDetail}
           style={{
             display: "inline-flex", alignItems: "center", gap: 8,
-            background: "linear-gradient(135deg, #1E3A8A 0%, #2563EB 100%)",
+            background: "linear-gradient(135deg, #001EAF 0%, #2044DC 100%)",
             color: "#fff", border: "none", borderRadius: 10, padding: "11px 28px",
-            fontSize: 13, fontWeight: 700, fontFamily: "Inter, sans-serif",
+            fontSize: 13, fontWeight: 700, fontFamily: FONT_SECONDARY,
             cursor: "pointer", letterSpacing: "0.02em",
-            boxShadow: "0 2px 12px rgba(37,99,235,0.30)",
+            boxShadow: "0 2px 12px rgba(32,68,220,0.30)",
           }}
         >
           View Full Analysis

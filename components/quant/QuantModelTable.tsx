@@ -2,17 +2,18 @@
 
 import { useState, useEffect, useMemo } from "react";
 import type { ModelPayload, ModelRow } from "@/app/api/quant/model/route";
+import { PATRIA, FONT_SECONDARY, TEXT } from "@/lib/patriaTheme";
 
 // ── Design tokens (match app) ─────────────────────────────────────────────────
-const TEXT1 = "#0F172A";
-const TEXT2 = "#64748B";
-const TEXT3 = "#94A3B8";
-const BORDER = "rgba(15,23,42,0.08)";
-const BLUE   = "#2B5CE0";
-const GREEN  = "#15803D";
-const RED    = "#B91C1C";
-const GROUP_HDR_BG = "#EEF2FD";
-const GROUP_BORDER = "rgba(43,92,224,0.22)";
+const TEXT1 = PATRIA.darkBlue;   // Regla 4
+const TEXT2 = TEXT.label;
+const TEXT3 = TEXT.muted;
+const BORDER = "rgba(13,13,56,0.08)";
+const BLUE   = PATRIA.kingBlue;   // Regla 5 / interactivo
+const GREEN  = PATRIA.blue;       // positivo
+const RED    = PATRIA.pink;       // negativo
+const GROUP_HDR_BG = "#F5F7FD";
+const GROUP_BORDER = "rgba(32,68,220,0.22)";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type SortCol =
@@ -43,14 +44,14 @@ function goodnessPct(raw: number | null): number | null {
 function ScoreBar({ value, main = false }: { value: number | null; main?: boolean }) {
   if (value == null) return <span style={{ color: TEXT3 }}>—</span>;
   const pct   = Math.max(0, Math.min(100, value));
-  const color = pct > 70 ? "#1E40AF" : pct > 40 ? "#3B82F6" : pct > 20 ? "#93C5FD" : "#CBD5E1";
-  const textColor = pct > 70 ? "#1E3A8A" : pct > 40 ? "#1D4ED8" : TEXT2;
+  const color = pct > 70 ? "#001EAF" : pct > 40 ? "#2044DC" : pct > 20 ? "#88AAFF" : "rgba(13,13,56,0.28)";
+  const textColor = pct > 70 ? "#001EAF" : pct > 40 ? "#2044DC" : TEXT2;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 78 }}>
-      <div style={{ flex: 1, height: main ? 4 : 3, background: "rgba(15,23,42,0.07)", borderRadius: 2, overflow: "hidden", minWidth: 34 }}>
+      <div style={{ flex: 1, height: main ? 4 : 3, background: "rgba(13,13,56,0.07)", borderRadius: 2, overflow: "hidden", minWidth: 34 }}>
         <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 2, transition: "width 0.3s" }} />
       </div>
-      <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: main ? 11.5 : 11, fontWeight: main ? 800 : 700, color: textColor, minWidth: 32, textAlign: "right" }}>
+      <span style={{ fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: main ? 11.5 : 11, fontWeight: main ? 800 : 700, color: textColor, minWidth: 32, textAlign: "right" }}>
         {Math.round(pct)}%
       </span>
     </div>
@@ -63,7 +64,7 @@ function OwCell({ v }: { v: number | null }) {
     return (
       <span style={{
         fontSize: 9, fontWeight: 700, color: TEXT3, letterSpacing: "0.04em",
-        background: "rgba(15,23,42,0.04)", border: `1px solid ${BORDER}`,
+        background: "rgba(13,13,56,0.04)", border: `1px solid ${BORDER}`,
         borderRadius: 4, padding: "1px 6px", whiteSpace: "nowrap",
       }}>
         Off-Index
@@ -73,7 +74,7 @@ function OwCell({ v }: { v: number | null }) {
   const pct = v * 100;
   const pos = pct > 0;
   return (
-    <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, fontWeight: 700, color: pos ? GREEN : RED }}>
+    <span style={{ fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, fontWeight: 700, color: pos ? GREEN : RED }}>
       {pos ? "+" : ""}{pct.toFixed(2)}%
     </span>
   );
@@ -125,7 +126,7 @@ function Lh({
         whiteSpace:    "nowrap",
         cursor:        clickable ? "pointer" : "default",
         borderBottom:  `1px solid ${BORDER}`,
-        background:    "rgba(248,250,255,0.95)",
+        background:    "#F5F7FD",
         borderLeft:    groupStart ? `2px solid ${GROUP_BORDER}` : undefined,
         minWidth,
         userSelect:    "none",
@@ -148,11 +149,11 @@ function Chip({ label, value, accent }: { label: string; value: string | number;
   return (
     <div style={{
       display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 6,
-      background: accent ? "rgba(43,92,224,0.07)" : "rgba(15,23,42,0.04)",
-      border: `1px solid ${accent ? "rgba(43,92,224,0.15)" : BORDER}`,
+      background: accent ? "rgba(32,68,220,0.07)" : "rgba(13,13,56,0.04)",
+      border: `1px solid ${accent ? "rgba(32,68,220,0.15)" : BORDER}`,
     }}>
       <span style={{ fontSize: 10, color: accent ? BLUE : TEXT2, fontWeight: 600, letterSpacing: "0.04em" }}>{label}</span>
-      <span style={{ fontSize: 11, fontWeight: 700, color: accent ? BLUE : TEXT1, fontFamily: "JetBrains Mono, monospace" }}>{value}</span>
+      <span style={{ fontSize: 11, fontWeight: 700, color: accent ? BLUE : TEXT1, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>{value}</span>
     </div>
   );
 }
@@ -266,9 +267,9 @@ export default function QuantModelTable() {
   // ── Cell renderers ────────────────────────────────────────────────────────
   function pctCell(v: number | null, colored = false) {
     if (v == null) return <span style={{ color: TEXT3 }}>—</span>;
-    const color = colored ? (v > 0 ? "#059669" : v < 0 ? "#DC2626" : TEXT2) : TEXT1;
+    const color = colored ? (v > 0 ? "#001EAF" : v < 0 ? "#F8485E" : TEXT2) : TEXT1;
     return (
-      <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, color, fontWeight: colored ? 700 : 500 }}>
+      <span style={{ fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, color, fontWeight: colored ? 700 : 500 }}>
         {colored && v > 0 ? "+" : ""}{v.toFixed(1)}%
       </span>
     );
@@ -277,7 +278,7 @@ export default function QuantModelTable() {
   function numCell(v: number | null, suffix = "") {
     if (v == null) return <span style={{ color: TEXT3 }}>—</span>;
     return (
-      <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: TEXT2 }}>
+      <span style={{ fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, color: TEXT2 }}>
         {v.toFixed(1)}{suffix}
       </span>
     );
@@ -313,9 +314,9 @@ export default function QuantModelTable() {
               padding:      "5px 28px 5px 10px",
               borderRadius: 7,
               border:       `1px solid ${BORDER}`,
-              background:   "#F8FAFF",
+              background:   "#F5F7FD",
               fontSize:     12,
-              fontFamily:   "JetBrains Mono, monospace",
+              fontFamily:   FONT_SECONDARY,
               fontWeight:   600,
               color:        TEXT1,
               cursor:       "pointer",
@@ -339,12 +340,12 @@ export default function QuantModelTable() {
         border:       `1px solid ${BORDER}`,
         borderRadius: 12,
         overflow:     "hidden",
-        boxShadow:    "0 1px 4px rgba(15,23,42,0.06)",
+        boxShadow:    "0 1px 4px rgba(13,13,56,0.06)",
       }}>
 
         {/* ── Tabs (segmented control) ──────────────────────────────────────── */}
         <div style={{ padding: "12px 16px 0", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <div style={{ display: "inline-flex", background: "rgba(15,23,42,0.04)", border: `1px solid ${BORDER}`, borderRadius: 9, padding: 3 }}>
+          <div style={{ display: "inline-flex", background: "rgba(13,13,56,0.04)", border: `1px solid ${BORDER}`, borderRadius: 9, padding: 3 }}>
             {TABS.map(t => {
               const active = tab === t.key;
               return (
@@ -362,7 +363,7 @@ export default function QuantModelTable() {
                     cursor:       "pointer",
                     whiteSpace:   "nowrap",
                     transition:   "all 0.12s",
-                    boxShadow:    active ? "0 1px 3px rgba(43,92,224,0.30)" : "none",
+                    boxShadow:    active ? "0 1px 3px rgba(32,68,220,0.30)" : "none",
                   }}
                 >
                   {t.label}
@@ -386,13 +387,13 @@ export default function QuantModelTable() {
               fontSize:     11.5,
               fontWeight:   onlyPortfolio ? 700 : 600,
               color:        onlyPortfolio ? "#FFFFFF" : BLUE,
-              background:   onlyPortfolio ? BLUE : "rgba(43,92,224,0.07)",
-              border:       `1px solid ${onlyPortfolio ? BLUE : "rgba(43,92,224,0.25)"}`,
+              background:   onlyPortfolio ? BLUE : "rgba(32,68,220,0.07)",
+              border:       `1px solid ${onlyPortfolio ? BLUE : "rgba(32,68,220,0.25)"}`,
               borderRadius: 8,
               cursor:       "pointer",
               whiteSpace:   "nowrap",
               transition:   "all 0.12s",
-              boxShadow:    onlyPortfolio ? "0 1px 3px rgba(43,92,224,0.30)" : "none",
+              boxShadow:    onlyPortfolio ? "0 1px 3px rgba(32,68,220,0.30)" : "none",
             }}
           >
             <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
@@ -434,7 +435,7 @@ export default function QuantModelTable() {
               padding:      "5px 28px 5px 10px",
               borderRadius: 7,
               border:       `1px solid ${BORDER}`,
-              background:   "#F8FAFF",
+              background:   "#F5F7FD",
               fontSize:     11,
               color:        TEXT1,
               cursor:       "pointer",
@@ -466,7 +467,7 @@ export default function QuantModelTable() {
                 padding:      "5px 10px 5px 26px",
                 borderRadius: 7,
                 border:       `1px solid ${BORDER}`,
-                background:   "#F8FAFF",
+                background:   "#F5F7FD",
                 fontSize:     11,
                 color:        TEXT1,
                 outline:      "none",
@@ -480,7 +481,7 @@ export default function QuantModelTable() {
         <div style={{ overflowX: "auto" }}>
           {loading ? (
             <div style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: "48px 0", gap: 10, color: TEXT2, fontSize: 13 }}>
-              <div style={{ width: 18, height: 18, borderRadius: "50%", border: `2px solid rgba(43,92,224,0.15)`, borderTopColor: BLUE, animation: "spin 0.8s linear infinite" }} />
+              <div style={{ width: 18, height: 18, borderRadius: "50%", border: `2px solid rgba(32,68,220,0.15)`, borderTopColor: BLUE, animation: "spin 0.8s linear infinite" }} />
               Loading model data…
             </div>
           ) : filtered.length === 0 ? (
@@ -492,7 +493,7 @@ export default function QuantModelTable() {
               <thead>
                 {/* ── Row 1: top-level columns + group labels ── */}
                 <tr>
-                  <th rowSpan={2} style={{ padding: "7px 10px", fontSize: 10, fontWeight: 700, color: TEXT2, textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: `1px solid ${BORDER}`, background: "rgba(248,250,255,0.95)", textAlign: "center", position: "sticky", top: 0, zIndex: 3, width: 36 }}>#</th>
+                  <th rowSpan={2} style={{ padding: "7px 10px", fontSize: 10, fontWeight: 700, color: TEXT2, textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: `1px solid ${BORDER}`, background: "#F5F7FD", textAlign: "center", position: "sticky", top: 0, zIndex: 3, width: 36 }}>#</th>
                   <Lh label="Ticker"     col="ticker"   {...thProps} rowSpan={2} minWidth={90}  zIndex={3} />
                   <Lh label="Name"       col="name"     {...thProps} rowSpan={2} minWidth={150} zIndex={3} />
                   <Lh label="Industry"   col="industry" {...thProps} rowSpan={2} minWidth={130} zIndex={3} />
@@ -528,25 +529,25 @@ export default function QuantModelTable() {
                       key={row.ticker}
                       style={{
                         borderLeft: isTop ? `3px solid ${BLUE}` : "3px solid transparent",
-                        background: isTop ? "#EFF6FF" : idx % 2 === 0 ? "#FFFFFF" : "rgba(248,250,255,0.5)",
+                        background: isTop ? "rgba(32,68,220,0.06)" : idx % 2 === 0 ? "#FFFFFF" : "rgba(13,13,56,0.022)",
                         transition: "background 0.08s",
                       }}
-                      onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = isTop ? "#DBEAFE" : "rgba(43,92,224,0.04)"}
-                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = isTop ? "#EFF6FF" : idx % 2 === 0 ? "#FFFFFF" : "rgba(248,250,255,0.5)"}
+                      onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = isTop ? "rgba(32,68,220,0.10)" : "rgba(32,68,220,0.04)"}
+                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = isTop ? "rgba(32,68,220,0.06)" : idx % 2 === 0 ? "#FFFFFF" : "rgba(13,13,56,0.022)"}
                     >
                       {/* # */}
-                      <td style={{ padding: "7px 10px", textAlign: "center", color: TEXT3, fontSize: 11, fontFamily: "JetBrains Mono, monospace", borderBottom: `1px solid ${BORDER}` }}>
+                      <td style={{ padding: "7px 10px", textAlign: "center", color: TEXT3, fontSize: 11, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", borderBottom: `1px solid ${BORDER}` }}>
                         {idx + 1}
                       </td>
 
                       {/* Ticker */}
                       <td style={{ padding: "7px 10px", borderBottom: `1px solid ${BORDER}`, whiteSpace: "nowrap" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                          <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 12, fontWeight: 700, color: isTop ? BLUE : TEXT1 }}>
+                          <span style={{ fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 12, fontWeight: 700, color: isTop ? BLUE : TEXT1 }}>
                             {row.ticker}
                           </span>
                           {isTop && (
-                            <span style={{ fontSize: 9, fontWeight: 800, fontFamily: "JetBrains Mono, monospace", padding: "1px 5px", borderRadius: 4, background: "rgba(43,92,224,0.12)", color: BLUE, border: "1px solid rgba(43,92,224,0.22)", letterSpacing: "0.06em" }}>
+                            <span style={{ fontSize: 9, fontWeight: 800, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", padding: "1px 5px", borderRadius: 4, background: "rgba(32,68,220,0.12)", color: BLUE, border: "1px solid rgba(32,68,220,0.22)", letterSpacing: "0.06em" }}>
                               TOP
                             </span>
                           )}
@@ -561,7 +562,7 @@ export default function QuantModelTable() {
                       {/* Industry */}
                       <td style={{ padding: "7px 10px", borderBottom: `1px solid ${BORDER}`, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {row.industry ? (
-                          <span style={{ fontSize: 10, fontWeight: 600, color: TEXT2, padding: "2px 7px", borderRadius: 4, background: "rgba(15,23,42,0.05)", border: `1px solid ${BORDER}`, whiteSpace: "nowrap" }}>
+                          <span style={{ fontSize: 10, fontWeight: 600, color: TEXT2, padding: "2px 7px", borderRadius: 4, background: "rgba(13,13,56,0.05)", border: `1px solid ${BORDER}`, whiteSpace: "nowrap" }}>
                             {row.industry}
                           </span>
                         ) : <span style={{ color: TEXT3 }}>—</span>}
@@ -618,12 +619,12 @@ export default function QuantModelTable() {
 
         {/* ── Footer ────────────────────────────────────────────────────────── */}
         {!loading && filtered.length > 0 && (
-          <div style={{ padding: "8px 16px", borderTop: `1px solid ${BORDER}`, background: "rgba(248,250,255,0.6)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ padding: "8px 16px", borderTop: `1px solid ${BORDER}`, background: "#F5F7FD", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontSize: 10, color: TEXT3 }}>
               {filtered.length} name{filtered.length !== 1 ? "s" : ""}{industry !== "all" ? ` in ${industry}` : ""}{search ? ` matching "${search}"` : ""}
             </span>
             {data?.date && (
-              <span style={{ fontSize: 10, color: TEXT3, fontFamily: "JetBrains Mono, monospace" }}>
+              <span style={{ fontSize: 10, color: TEXT3, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
                 Signal date: {fmtDate(data.date)}
               </span>
             )}

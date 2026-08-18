@@ -10,19 +10,20 @@ import type { DeepDivePayload } from "@/app/api/companies/[ticker]/route";
 import type { UniverseItem } from "@/app/api/analysis/universe/route";
 import { computeBands } from "@/lib/stats";
 import AnalystTrackRecord from "@/components/quant/AnalystTrackRecord";
+import { FONT_SECONDARY } from "@/lib/patriaTheme";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
-const PALETTE  = ["#2563EB", "#DC2626", "#16A34A", "#D97706", "#7C3AED", "#0891B2"];
-const TEXT1    = "#0F172A";
-const TEXT2    = "#64748B";
-const TEXT3    = "#94A3B8";
-const BLUE     = "#2563EB";
-const BORDER   = "rgba(15,23,42,0.08)";
+const PALETTE  = ["#2044DC", "#F8485E", "#001EAF", "#FF6B06", "#001EAF", "#2044DC"];
+const TEXT1    = "#0D0D38";
+const TEXT2    = "rgba(13,13,56,0.62)";
+const TEXT3    = "rgba(13,13,56,0.45)";
+const BLUE     = "#2044DC";
+const BORDER   = "rgba(13,13,56,0.08)";
 const CARD: React.CSSProperties = {
   background:   "#FFFFFF",
   border:       `1px solid ${BORDER}`,
   borderRadius: 12,
-  boxShadow:    "0 1px 4px rgba(15,23,42,0.06)",
+  boxShadow:    "0 1px 4px rgba(13,13,56,0.06)",
 };
 
 const MAX_COMPANIES = 5;
@@ -160,13 +161,13 @@ function ChartTooltip({
   return (
     <div style={{
       background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 8,
-      padding: "10px 14px", boxShadow: "0 4px 16px rgba(15,23,42,0.10)", minWidth: 160,
+      padding: "10px 14px", boxShadow: "0 4px 16px rgba(13,13,56,0.10)", minWidth: 160,
     }}>
-      <p style={{ fontSize: 11, color: TEXT2, marginBottom: 8, fontFamily: "JetBrains Mono, monospace" }}>
+      <p style={{ fontSize: 11, color: TEXT2, marginBottom: 8, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
         {label}
       </p>
       {items.map((p: { name: string; value: number; color: string }) => (
-        <p key={p.name} style={{ fontSize: 12, color: p.color, fontFamily: "JetBrains Mono, monospace", marginBottom: 3 }}>
+        <p key={p.name} style={{ fontSize: 12, color: p.color, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", marginBottom: 3 }}>
           <span style={{ fontWeight: 700 }}>
             {p.name.replace(/ Equity$/i, "").replace(/ MM$/i, "").trim()}
           </span>
@@ -252,7 +253,7 @@ export default function AnalysisPage() {
 
   // ── Median ± 1σ bands — computed from a single company's own time series ──
   const bandsColorIdx = bandsFor ? companies.findIndex(c => c.ticker === bandsFor) : -1;
-  const bandsColor    = bandsColorIdx >= 0 ? PALETTE[bandsColorIdx] : "#64748B";
+  const bandsColor    = bandsColorIdx >= 0 ? PALETTE[bandsColorIdx] : "rgba(13,13,56,0.62)";
 
   const bands = useMemo(() => {
     if (!bandsFor || chartData.length === 0) return null;
@@ -273,7 +274,7 @@ export default function AnalysisPage() {
           <h1 style={{ fontSize: 22, fontWeight: 800, color: TEXT1, letterSpacing: "-0.035em", lineHeight: 1.15, margin: 0 }}>
             Analysis
           </h1>
-          <p style={{ fontSize: 12, color: "#64748B", marginTop: 5, fontWeight: 500, letterSpacing: "0.01em" }}>
+          <p style={{ fontSize: 12, color: "rgba(13,13,56,0.62)", marginTop: 5, fontWeight: 500, letterSpacing: "0.01em" }}>
             {view === "analysis"
               ? "Multi-company comparison · Valuation multiples · Price performance · Consensus revisions"
               : "Analyst Track Record · Backtested total return of historical analyst recommendations"}
@@ -285,7 +286,7 @@ export default function AnalysisPage() {
           style={{
             display: "flex", gap: 2, marginBottom: 20,
             padding: "3px", borderRadius: 10,
-            background: "rgba(15,23,42,0.04)",
+            background: "rgba(13,13,56,0.04)",
             border: `1px solid ${BORDER}`,
             width: "fit-content",
           }}
@@ -302,14 +303,14 @@ export default function AnalysisPage() {
                 style={{
                   padding:      "6px 18px",
                   borderRadius: 8,
-                  border:     active ? "1px solid rgba(15,23,42,0.11)" : "1px solid transparent",
+                  border:     active ? "1px solid rgba(13,13,56,0.11)" : "1px solid transparent",
                   background:   active ? "#FFFFFF" : "transparent",
-                  color:        active ? "#1B2E7E" : "#475569",
+                  color:        active ? "#0D0D38" : "rgba(13,13,56,0.62)",
                   fontSize:     13,
                   fontWeight:   active ? 700 : 500,
                   cursor:       "pointer",
                   whiteSpace:   "nowrap",
-                  boxShadow:    active ? "0 1px 3px rgba(15,23,42,0.09)" : "none",
+                  boxShadow:    active ? "0 1px 3px rgba(13,13,56,0.09)" : "none",
                   transition:   "all 0.15s",
                 }}
               >
@@ -362,7 +363,7 @@ export default function AnalysisPage() {
                       outline:      "none",
                       fontSize:     12,
                       color:        TEXT1,
-                      background:   "#F8FAFF",
+                      background:   "#F5F7FD",
                       boxSizing:    "border-box",
                     }}
                   />
@@ -373,7 +374,7 @@ export default function AnalysisPage() {
               <div style={{ flex: 1, overflowY: "auto" }}>
                 {univLoading ? (
                   <div style={{ display: "flex", justifyContent: "center", padding: 24 }}>
-                    <div style={{ width: 18, height: 18, borderRadius: "50%", border: "2px solid rgba(37,99,235,0.15)", borderTopColor: BLUE, animation: "spin 0.8s linear infinite" }} />
+                    <div style={{ width: 18, height: 18, borderRadius: "50%", border: "2px solid rgba(32,68,220,0.15)", borderTopColor: BLUE, animation: "spin 0.8s linear infinite" }} />
                   </div>
                 ) : filtered.length === 0 ? (
                   <p style={{ textAlign: "center", padding: 24, color: TEXT3, fontSize: 12 }}>No results</p>
@@ -403,7 +404,7 @@ export default function AnalysisPage() {
                           transition:   "background 0.08s",
                         }}
                         onMouseEnter={e => {
-                          if (!isSel && !disabled) (e.currentTarget as HTMLElement).style.background = "rgba(15,23,42,0.03)";
+                          if (!isSel && !disabled) (e.currentTarget as HTMLElement).style.background = "rgba(13,13,56,0.03)";
                         }}
                         onMouseLeave={e => {
                           if (!isSel) (e.currentTarget as HTMLElement).style.background = "transparent";
@@ -415,7 +416,7 @@ export default function AnalysisPage() {
                           height:   8,
                           borderRadius: "50%",
                           flexShrink: 0,
-                          background:  isSel ? (color ?? BLUE) : "rgba(15,23,42,0.10)",
+                          background:  isSel ? (color ?? BLUE) : "rgba(13,13,56,0.10)",
                         }} />
 
                         {/* Text */}
@@ -424,7 +425,7 @@ export default function AnalysisPage() {
                             fontSize:   12,
                             fontWeight: 700,
                             color:      isSel ? (color ?? BLUE) : TEXT1,
-                            fontFamily: "JetBrains Mono, monospace",
+                            fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
                             lineHeight: 1.2,
                           }}>
                             {shortName(item.ticker)}
@@ -472,7 +473,7 @@ export default function AnalysisPage() {
               }}>
                 <div style={{
                   width: 52, height: 52, borderRadius: 14,
-                  background: "rgba(37,99,235,0.07)", border: `1px solid rgba(37,99,235,0.13)`,
+                  background: "rgba(32,68,220,0.07)", border: `1px solid rgba(32,68,220,0.13)`,
                   display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24,
                 }}>
                   📈
@@ -507,7 +508,7 @@ export default function AnalysisPage() {
                           ? <div style={{ width: 8, height: 8, borderRadius: "50%", border: `1.5px solid ${PALETTE[i]}40`, borderTopColor: PALETTE[i], animation: "spin 0.8s linear infinite", flexShrink: 0 }} />
                           : <div style={{ width: 8, height: 8, borderRadius: "50%", background: PALETTE[i], flexShrink: 0 }} />
                         }
-                        <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 12, fontWeight: 700, color: PALETTE[i] }}>
+                        <span style={{ fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 12, fontWeight: 700, color: PALETTE[i] }}>
                           {shortName(c.ticker)}
                         </span>
                         {/* Per-company σ bands toggle */}
@@ -521,7 +522,7 @@ export default function AnalysisPage() {
                               color:        isBands ? PALETTE[i] : `${PALETTE[i]}80`,
                               fontSize:     10,
                               fontWeight:   700,
-                              fontFamily:   "JetBrains Mono, monospace",
+                              fontFamily:   FONT_SECONDARY,
                               padding:      "1px 5px",
                               borderRadius: 4,
                               cursor:       "pointer",
@@ -553,7 +554,7 @@ export default function AnalysisPage() {
                         borderRadius: 7,
                         border:       "1px solid",
                         borderColor:  activeMetric === m.key ? BLUE : BORDER,
-                        background:   activeMetric === m.key ? "rgba(37,99,235,0.09)" : "transparent",
+                        background:   activeMetric === m.key ? "rgba(32,68,220,0.09)" : "transparent",
                         color:        activeMetric === m.key ? BLUE : TEXT2,
                         fontSize:     12,
                         fontWeight:   activeMetric === m.key ? 700 : 500,
@@ -573,7 +574,7 @@ export default function AnalysisPage() {
                   <div style={{
                     display:      "flex",
                     gap:          2,
-                    background:   "rgba(15,23,42,0.04)",
+                    background:   "rgba(13,13,56,0.04)",
                     borderRadius: 8,
                     padding:      3,
                     border:       `1px solid ${BORDER}`,
@@ -591,7 +592,7 @@ export default function AnalysisPage() {
                           fontWeight:   timePeriod === tp.key ? 700      : 500,
                           fontSize:     11,
                           cursor:       "pointer",
-                          boxShadow:    timePeriod === tp.key ? "0 1px 3px rgba(15,23,42,0.10)" : "none",
+                          boxShadow:    timePeriod === tp.key ? "0 1px 3px rgba(13,13,56,0.10)" : "none",
                           transition:   "all 0.12s",
                         }}
                       >
@@ -613,7 +614,7 @@ export default function AnalysisPage() {
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 300 }}>
                     {someLoading ? (
                       <div style={{ display: "flex", alignItems: "center", gap: 10, color: TEXT2, fontSize: 13 }}>
-                        <div style={{ width: 20, height: 20, borderRadius: "50%", border: "2px solid rgba(37,99,235,0.18)", borderTopColor: BLUE, animation: "spin 0.8s linear infinite" }} />
+                        <div style={{ width: 20, height: 20, borderRadius: "50%", border: "2px solid rgba(32,68,220,0.18)", borderTopColor: BLUE, animation: "spin 0.8s linear infinite" }} />
                         Loading data…
                       </div>
                     ) : (
@@ -634,14 +635,14 @@ export default function AnalysisPage() {
                         <div style={{ position: "absolute", top: 0, right: 0, zIndex: 10, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2, pointerEvents: "none" }}>
                           <div style={{
                             padding: "3px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700,
-                            fontFamily: "JetBrains Mono, monospace",
-                            background: isDiscount ? "rgba(5,150,105,0.10)" : "rgba(220,38,38,0.10)",
-                            color:      isDiscount ? "#059669" : "#DC2626",
-                            border: `1px solid ${isDiscount ? "rgba(5,150,105,0.20)" : "rgba(220,38,38,0.20)"}`,
+                            fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
+                            background: isDiscount ? "rgba(0,30,175,0.10)" : "rgba(248,72,94,0.10)",
+                            color:      isDiscount ? "#001EAF" : "#F8485E",
+                            border: `1px solid ${isDiscount ? "rgba(0,30,175,0.20)" : "rgba(248,72,94,0.20)"}`,
                           }}>
                             {isDiscount ? "Discount" : "Premium"}: {pct >= 0 ? "+" : ""}{pct.toFixed(1)}%
                           </div>
-                          <div style={{ fontSize: 11, color: "#94A3B8", fontFamily: "JetBrains Mono, monospace" }}>
+                          <div style={{ fontSize: 11, color: "rgba(13,13,56,0.45)", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
                             vs. {timePeriod === "all" ? "all-time" : timePeriod} median
                           </div>
                         </div>
@@ -650,17 +651,17 @@ export default function AnalysisPage() {
 
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart data={chartData} margin={{ top: 6, right: 52, bottom: 0, left: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.05)" vertical={false} />
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(13,13,56,0.05)" vertical={false} />
                         <XAxis
                           dataKey="label"
-                          tick={{ fill: TEXT3, fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}
+                          tick={{ fill: TEXT3, fontSize: 10, fontFamily: FONT_SECONDARY }}
                           tickLine={false}
                           axisLine={false}
                           interval="preserveStartEnd"
                         />
                         <YAxis
                           domain={["auto", "auto"]}
-                          tick={{ fill: TEXT3, fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}
+                          tick={{ fill: TEXT3, fontSize: 10, fontFamily: FONT_SECONDARY }}
                           tickLine={false}
                           axisLine={false}
                           tickFormatter={v => activeCfg.fmt(v)}
@@ -669,7 +670,7 @@ export default function AnalysisPage() {
                         <Tooltip content={(props) => <ChartTooltip {...props} fmt={activeCfg.fmt} />} />
                         <Legend
                           wrapperStyle={{ fontSize: 11, paddingTop: 10 }}
-                          formatter={v => <span style={{ color: TEXT2, fontFamily: "JetBrains Mono, monospace" }}>{shortName(String(v))}</span>}
+                          formatter={v => <span style={{ color: TEXT2, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>{shortName(String(v))}</span>}
                         />
 
                         {/* ±1 SD band — must come before Line elements */}
@@ -687,14 +688,14 @@ export default function AnalysisPage() {
                         {bands && (
                           <ReferenceLine
                             y={bands.median}
-                            stroke="#94A3B8"
+                            stroke="rgba(13,13,56,0.45)"
                             strokeDasharray="5 3"
                             label={{
                               value: `Md ${activeCfg.fmt(bands.median)}`,
                               position: "insideTopRight",
                               fontSize: 11,
-                              fill: "#94A3B8",
-                              fontFamily: "JetBrains Mono, monospace",
+                              fill: "rgba(13,13,56,0.45)",
+                              fontFamily: FONT_SECONDARY,
                               fontWeight: 600,
                             }}
                           />

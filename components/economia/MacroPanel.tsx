@@ -1,5 +1,7 @@
 "use client";
 
+import { PATRIA, FONT_SECONDARY } from "@/lib/patriaTheme";
+
 import { useState } from "react";
 import TenYearChart from "./TenYearChart";
 
@@ -39,31 +41,31 @@ const METRICS = ["GDP Growth", "Inflation", "10Y Rate"] as const;
 type Metric = (typeof METRICS)[number];
 
 function metricColor(metric: Metric, value: number | null): string {
-  if (value === null) return "#94A3B8";
+  if (value === null) return "rgba(13,13,56,0.45)";
   if (metric === "GDP Growth") {
-    if (value >= 3) return "#059669";
-    if (value >= 2) return "#10B981";
-    if (value >= 1) return "#64748B";
-    return "#DC2626";
+    if (value >= 3) return "#001EAF";
+    if (value >= 2) return "#001EAF";
+    if (value >= 1) return "rgba(13,13,56,0.62)";
+    return "#F8485E";
   }
   if (metric === "Inflation") {
-    if (value <= 3) return "#059669";
-    if (value <= 5) return "#D97706";
-    if (value <= 15) return "#EA580C";
-    return "#DC2626";
+    if (value <= 3) return "#001EAF";
+    if (value <= 5) return "#FF6B06";
+    if (value <= 15) return "#FF6B06";
+    return "#F8485E";
   }
   // 10Y Rate — neutral blue scale
-  if (value <= 4) return "#2B5CE0";
-  if (value <= 7) return "#1E4ED8";
-  if (value <= 12) return "#7C3AED";
-  return "#DC2626";
+  if (value <= 4) return "#2044DC";
+  if (value <= 7) return "#2044DC";
+  if (value <= 12) return "#001EAF";
+  return "#F8485E";
 }
 
 function deltaColor(metric: Metric, delta: number | null): string {
-  if (delta === null || delta === 0) return "#94A3B8";
-  if (metric === "GDP Growth") return delta > 0 ? "#059669" : "#DC2626";
+  if (delta === null || delta === 0) return "rgba(13,13,56,0.45)";
+  if (metric === "GDP Growth") return delta > 0 ? "#001EAF" : "#F8485E";
   // Inflation and 10Y Rate: up = bad
-  return delta > 0 ? "#DC2626" : "#059669";
+  return delta > 0 ? "#F8485E" : "#001EAF";
 }
 
 function fmtVal(v: number | null): string {
@@ -127,7 +129,7 @@ export default function MacroPanel({ revisions = [], tenYearHistory = [] }: Prop
     <div>
       {/* Metric selector */}
       <div className="flex items-center gap-2 mb-5 flex-wrap">
-        <span className="text-xs font-medium mr-1" style={{ color: "#94A3B8" }}>
+        <span className="text-xs font-medium mr-1" style={{ color: "rgba(13,13,56,0.45)" }}>
           Metric:
         </span>
         {METRICS.map((m) => (
@@ -136,10 +138,10 @@ export default function MacroPanel({ revisions = [], tenYearHistory = [] }: Prop
             onClick={() => setSelectedMetric(m)}
             className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
             style={{
-              background: selectedMetric === m ? "rgba(43,92,224,0.10)" : "rgba(15,23,42,0.04)",
-              color: selectedMetric === m ? "#2B5CE0" : "#64748B",
+              background: selectedMetric === m ? "rgba(32,68,220,0.10)" : "rgba(13,13,56,0.04)",
+              color: selectedMetric === m ? "#2044DC" : "rgba(13,13,56,0.62)",
               border: `1px solid ${
-                selectedMetric === m ? "rgba(43,92,224,0.30)" : "rgba(15,23,42,0.08)"
+                selectedMetric === m ? "rgba(32,68,220,0.30)" : "rgba(13,13,56,0.08)"
               }`,
             }}
           >
@@ -155,18 +157,18 @@ export default function MacroPanel({ revisions = [], tenYearHistory = [] }: Prop
             <div
               style={{
                 padding: "10px 16px",
-                borderBottom: "1px solid rgba(15,23,42,0.07)",
+                borderBottom: "1px solid rgba(13,13,56,0.07)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
               }}
             >
               <span
-                style={{ fontSize: 11, fontWeight: 600, color: "#64748B", letterSpacing: "0.08em" }}
+                style={{ fontSize: 11, fontWeight: 600, color: "rgba(13,13,56,0.62)", letterSpacing: "0.08em" }}
               >
                 {selectedMetric.toUpperCase()} — FORECAST REVISIONS
               </span>
-              <span style={{ fontSize: 10, color: "#94A3B8" }}>
+              <span style={{ fontSize: 10, color: "rgba(13,13,56,0.45)" }}>
                 Current vs 3 months ago · All figures in %
               </span>
             </div>
@@ -174,23 +176,23 @@ export default function MacroPanel({ revisions = [], tenYearHistory = [] }: Prop
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
-                  <tr style={{ background: "#F0F4FA" }}>
-                    <th style={{ padding: "8px 16px", textAlign: "left", fontSize: 10, fontWeight: 600, color: "#64748B", letterSpacing: "0.08em", width: 190 }}>
+                  <tr style={{ background: "#F5F7FD" }}>
+                    <th style={{ padding: "8px 16px", textAlign: "left", fontSize: 10, fontWeight: 700, fontFamily: FONT_SECONDARY, color: PATRIA.kingBlue, letterSpacing: "0.08em", width: 190 }}>
                       COUNTRY / REGION
                     </th>
-                    <th style={{ padding: "8px 16px", textAlign: "center", fontSize: 10, fontWeight: 600, color: "#94A3B8", letterSpacing: "0.08em" }}>
+                    <th style={{ padding: "8px 16px", textAlign: "center", fontSize: 10, fontWeight: 700, fontFamily: FONT_SECONDARY, color: PATRIA.kingBlue, letterSpacing: "0.08em" }}>
                       3M AGO (2026)
                     </th>
-                    <th style={{ padding: "8px 16px", textAlign: "center", fontSize: 10, fontWeight: 600, color: "#475569", letterSpacing: "0.08em" }}>
+                    <th style={{ padding: "8px 16px", textAlign: "center", fontSize: 10, fontWeight: 700, fontFamily: FONT_SECONDARY, color: PATRIA.kingBlue, letterSpacing: "0.08em" }}>
                       CURRENT (2026)
                     </th>
-                    <th style={{ padding: "8px 16px", textAlign: "center", fontSize: 10, fontWeight: 600, color: "#2B5CE0", letterSpacing: "0.08em" }}>
+                    <th style={{ padding: "8px 16px", textAlign: "center", fontSize: 10, fontWeight: 700, fontFamily: FONT_SECONDARY, color: PATRIA.kingBlue, letterSpacing: "0.08em" }}>
                       REVISION Δ
                     </th>
-                    <th style={{ padding: "8px 16px", textAlign: "center", fontSize: 10, fontWeight: 600, color: "#64748B", letterSpacing: "0.08em" }}>
+                    <th style={{ padding: "8px 16px", textAlign: "center", fontSize: 10, fontWeight: 700, fontFamily: FONT_SECONDARY, color: PATRIA.kingBlue, letterSpacing: "0.08em" }}>
                       2027e
                     </th>
-                    <th style={{ padding: "8px 16px", textAlign: "center", fontSize: 10, fontWeight: 600, color: "#64748B", letterSpacing: "0.08em" }}>
+                    <th style={{ padding: "8px 16px", textAlign: "center", fontSize: 10, fontWeight: 700, fontFamily: FONT_SECONDARY, color: PATRIA.kingBlue, letterSpacing: "0.08em" }}>
                       2028e
                     </th>
                   </tr>
@@ -209,31 +211,31 @@ export default function MacroPanel({ revisions = [], tenYearHistory = [] }: Prop
                       <tr
                         key={row.country}
                         style={{
-                          background: i % 2 === 0 ? "transparent" : "rgba(15,23,42,0.02)",
+                          background: i % 2 === 0 ? "transparent" : "rgba(13,13,56,0.02)",
                           borderBottom:
                             isGroupLast && !isLastRow
-                              ? "2px solid rgba(15,23,42,0.12)"
-                              : "1px solid rgba(15,23,42,0.05)",
+                              ? "2px solid rgba(13,13,56,0.12)"
+                              : "1px solid rgba(13,13,56,0.05)",
                         }}
                       >
                         <td style={{ padding: "10px 16px" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <span style={{ fontSize: 16 }}>{FLAGS[row.country] ?? "🌎"}</span>
-                            <span style={{ fontSize: 12, fontWeight: 600, color: "#334155" }}>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: "#0D0D38" }}>
                               {row.country}
                             </span>
                           </div>
                         </td>
-                        <td style={{ padding: "10px 16px", textAlign: "center", fontFamily: "monospace", fontSize: 13, color: "#94A3B8" }}>
+                        <td style={{ padding: "10px 16px", textAlign: "center", fontFamily: FONT_SECONDARY, fontSize: 13, color: "rgba(13,13,56,0.45)" }}>
                           {fmtVal(row.ago2026)}
                         </td>
-                        <td style={{ padding: "10px 16px", textAlign: "center", fontFamily: "monospace", fontSize: 13, fontWeight: 600, color: metricColor(selectedMetric, row.current2026) }}>
+                        <td style={{ padding: "10px 16px", textAlign: "center", fontFamily: FONT_SECONDARY, fontSize: 13, fontWeight: 600, color: metricColor(selectedMetric, row.current2026) }}>
                           {fmtVal(row.current2026)}
                         </td>
                         <td style={{ padding: "10px 16px", textAlign: "center" }}>
                           {delta !== null ? (
                             <span
-                              className="font-mono"
+                              className="font-secondary tabular-nums"
                               style={{
                                 fontSize: 12,
                                 fontWeight: 700,
@@ -241,23 +243,23 @@ export default function MacroPanel({ revisions = [], tenYearHistory = [] }: Prop
                                 padding: "2px 6px",
                                 borderRadius: 4,
                                 background:
-                                  dColor === "#059669"
-                                    ? "rgba(5,150,105,0.08)"
-                                    : dColor === "#DC2626"
-                                    ? "rgba(220,38,38,0.08)"
-                                    : "rgba(148,163,184,0.08)",
+                                  dColor === "#001EAF"
+                                    ? "rgba(0,30,175,0.08)"
+                                    : dColor === "#F8485E"
+                                    ? "rgba(248,72,94,0.08)"
+                                    : "rgba(13,13,56,0.08)",
                               }}
                             >
                               {delta > 0 ? "+" : ""}{delta.toFixed(2)}pp
                             </span>
                           ) : (
-                            <span style={{ color: "#CBD5E1" }}>—</span>
+                            <span style={{ color: "rgba(13,13,56,0.28)" }}>—</span>
                           )}
                         </td>
-                        <td style={{ padding: "10px 16px", textAlign: "center", fontFamily: "monospace", fontSize: 13, color: metricColor(selectedMetric, row.current2027) }}>
+                        <td style={{ padding: "10px 16px", textAlign: "center", fontFamily: FONT_SECONDARY, fontSize: 13, color: metricColor(selectedMetric, row.current2027) }}>
                           {fmtVal(row.current2027)}
                         </td>
-                        <td style={{ padding: "10px 16px", textAlign: "center", fontFamily: "monospace", fontSize: 13, color: metricColor(selectedMetric, row.current2028) }}>
+                        <td style={{ padding: "10px 16px", textAlign: "center", fontFamily: FONT_SECONDARY, fontSize: 13, color: metricColor(selectedMetric, row.current2028) }}>
                           {fmtVal(row.current2028)}
                         </td>
                       </tr>
@@ -265,7 +267,7 @@ export default function MacroPanel({ revisions = [], tenYearHistory = [] }: Prop
                   })}
                   {sortedRows.length === 0 && (
                     <tr>
-                      <td colSpan={6} style={{ padding: "24px 16px", textAlign: "center", fontSize: 12, color: "#94A3B8" }}>
+                      <td colSpan={6} style={{ padding: "24px 16px", textAlign: "center", fontSize: 12, color: "rgba(13,13,56,0.45)" }}>
                         No data available for {selectedMetric}
                       </td>
                     </tr>
@@ -276,7 +278,7 @@ export default function MacroPanel({ revisions = [], tenYearHistory = [] }: Prop
           </div>
 
           <div className="flex justify-end mt-2">
-            <span className="text-xs" style={{ color: "#CBD5E1" }}>Fuente: Bloomberg</span>
+            <span className="text-xs" style={{ color: "rgba(13,13,56,0.28)" }}>Fuente: Bloomberg</span>
           </div>
         </>
       )}
@@ -289,24 +291,24 @@ export default function MacroPanel({ revisions = [], tenYearHistory = [] }: Prop
             <div
               style={{
                 padding: "10px 16px",
-                borderBottom: "1px solid rgba(15,23,42,0.07)",
+                borderBottom: "1px solid rgba(13,13,56,0.07)",
               }}
             >
-              <span style={{ fontSize: 11, fontWeight: 600, color: "#64748B", letterSpacing: "0.08em" }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: "rgba(13,13,56,0.62)", letterSpacing: "0.08em" }}>
                 10Y RATE — REVISIONS
               </span>
             </div>
 
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
-                <tr style={{ background: "#F0F4FA" }}>
-                  <th style={{ padding: "8px 16px", textAlign: "left", fontSize: 10, fontWeight: 600, color: "#64748B", letterSpacing: "0.08em" }}>
+                <tr style={{ background: "#F5F7FD" }}>
+                  <th style={{ padding: "8px 16px", textAlign: "left", fontSize: 10, fontWeight: 700, fontFamily: FONT_SECONDARY, color: PATRIA.kingBlue, letterSpacing: "0.08em" }}>
                     COUNTRY
                   </th>
-                  <th style={{ padding: "8px 16px", textAlign: "center", fontSize: 10, fontWeight: 600, color: "#94A3B8", letterSpacing: "0.08em" }}>
+                  <th style={{ padding: "8px 16px", textAlign: "center", fontSize: 10, fontWeight: 700, fontFamily: FONT_SECONDARY, color: PATRIA.kingBlue, letterSpacing: "0.08em" }}>
                     3M AGO
                   </th>
-                  <th style={{ padding: "8px 16px", textAlign: "center", fontSize: 10, fontWeight: 600, color: "#475569", letterSpacing: "0.08em" }}>
+                  <th style={{ padding: "8px 16px", textAlign: "center", fontSize: 10, fontWeight: 700, fontFamily: FONT_SECONDARY, color: PATRIA.kingBlue, letterSpacing: "0.08em" }}>
                     CURRENT
                   </th>
                 </tr>
@@ -323,16 +325,16 @@ export default function MacroPanel({ revisions = [], tenYearHistory = [] }: Prop
                       onClick={() => setSelectedCountry(row.country)}
                       style={{
                         cursor: "pointer",
-                        background: isActive ? "rgba(43,92,224,0.06)" : "transparent",
+                        background: isActive ? "rgba(32,68,220,0.06)" : "transparent",
                         borderBottom:
                           isGroupSep && !isLast
-                            ? "2px solid rgba(15,23,42,0.12)"
-                            : "1px solid rgba(15,23,42,0.05)",
+                            ? "2px solid rgba(13,13,56,0.12)"
+                            : "1px solid rgba(13,13,56,0.05)",
                         transition: "background 0.12s",
                       }}
                       onMouseEnter={(e) => {
                         if (!isActive)
-                          (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.03)";
+                          (e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.03)";
                       }}
                       onMouseLeave={(e) => {
                         if (!isActive)
@@ -345,7 +347,7 @@ export default function MacroPanel({ revisions = [], tenYearHistory = [] }: Prop
                             <span
                               style={{
                                 width: 6, height: 6, borderRadius: "50%",
-                                background: "#2B5CE0", flexShrink: 0,
+                                background: "#2044DC", flexShrink: 0,
                               }}
                             />
                           )}
@@ -354,17 +356,17 @@ export default function MacroPanel({ revisions = [], tenYearHistory = [] }: Prop
                             style={{
                               fontSize: 12,
                               fontWeight: 600,
-                              color: isActive ? "#1E3A8A" : "#334155",
+                              color: isActive ? "#001EAF" : "#0D0D38",
                             }}
                           >
                             {row.country}
                           </span>
                         </div>
                       </td>
-                      <td style={{ padding: "10px 16px", textAlign: "center", fontFamily: "monospace", fontSize: 13, color: "#94A3B8" }}>
+                      <td style={{ padding: "10px 16px", textAlign: "center", fontFamily: FONT_SECONDARY, fontSize: 13, color: "rgba(13,13,56,0.45)" }}>
                         {fmtVal(row.ago2026)}
                       </td>
-                      <td style={{ padding: "10px 16px", textAlign: "center", fontFamily: "monospace", fontSize: 13, fontWeight: 600, color: metricColor("10Y Rate", row.current2026) }}>
+                      <td style={{ padding: "10px 16px", textAlign: "center", fontFamily: FONT_SECONDARY, fontSize: 13, fontWeight: 600, color: metricColor("10Y Rate", row.current2026) }}>
                         {fmtVal(row.current2026)}
                       </td>
                     </tr>
@@ -374,7 +376,7 @@ export default function MacroPanel({ revisions = [], tenYearHistory = [] }: Prop
             </table>
 
             <div className="flex justify-end px-4 py-2">
-              <span className="text-xs" style={{ color: "#CBD5E1" }}>Fuente: Bloomberg</span>
+              <span className="text-xs" style={{ color: "rgba(13,13,56,0.28)" }}>Fuente: Bloomberg</span>
             </div>
           </div>
 

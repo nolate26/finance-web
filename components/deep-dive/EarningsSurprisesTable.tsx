@@ -1,13 +1,14 @@
 "use client";
 
 import type { EarningsSurpriseRow } from "@/app/api/companies/[ticker]/earnings-surprises/route";
+import { PATRIA, FONT_SECONDARY } from "@/lib/patriaTheme";
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
 function fmtPct(v: number | null, dec = 1): React.ReactNode {
-  if (v === null) return <span style={{ color: "#CBD5E1", fontSize: 10, fontStyle: "italic" }}>NR</span>;
+  if (v === null) return <span style={{ color: "rgba(13,13,56,0.28)", fontSize: 10, fontStyle: "italic" }}>NR</span>;
   const pct = v * 100;
-  const color = pct > 0 ? "#059669" : pct < 0 ? "#DC2626" : "#64748B";
+  const color = pct > 0 ? "#001EAF" : pct < 0 ? "#F8485E" : "rgba(13,13,56,0.62)";
   return (
     <span style={{ color, fontWeight: 700 }}>
       {pct > 0 ? "+" : ""}{pct.toFixed(dec)}%
@@ -16,13 +17,13 @@ function fmtPct(v: number | null, dec = 1): React.ReactNode {
 }
 
 function fmtBeatMiss(v: number | null): React.ReactNode {
-  if (v === null) return <span style={{ color: "#CBD5E1", fontSize: 10, fontStyle: "italic" }}>NR</span>;
+  if (v === null) return <span style={{ color: "rgba(13,13,56,0.28)", fontSize: 10, fontStyle: "italic" }}>NR</span>;
   const pct = v * 100;
   const pos = pct > 0;
   const zero = pct === 0;
-  const color  = zero ? "#64748B" : pos ? "#059669" : "#DC2626";
-  const bg     = zero ? "transparent" : pos ? "rgba(5,150,105,0.09)" : "rgba(220,38,38,0.09)";
-  const border = zero ? "transparent" : pos ? "rgba(5,150,105,0.25)" : "rgba(220,38,38,0.25)";
+  const color  = zero ? "rgba(13,13,56,0.62)" : pos ? "#001EAF" : "#F8485E";
+  const bg     = zero ? "transparent" : pos ? "rgba(0,30,175,0.09)" : "rgba(248,72,94,0.09)";
+  const border = zero ? "transparent" : pos ? "rgba(0,30,175,0.25)" : "rgba(248,72,94,0.25)";
   return (
     <span style={{
       color,
@@ -58,10 +59,11 @@ function GroupHeader({ label, accent, span }: GroupHeaderProps) {
         fontWeight: 800,
         letterSpacing: "0.10em",
         textTransform: "uppercase",
-        color: accent,
-        background: `${accent}10`,
-        borderBottom: `2px solid ${accent}30`,
-        borderRight: "1px solid rgba(15,23,42,0.08)",
+        color: PATRIA.white,
+        fontFamily: FONT_SECONDARY,
+        background: PATRIA.kingBlue,
+        borderBottom: `3px solid ${accent}`,
+        borderRight: "1px solid rgba(13,13,56,0.08)",
         whiteSpace: "nowrap",
       }}
     >
@@ -76,12 +78,13 @@ function ColHead({ children }: { children: React.ReactNode }) {
       padding: "5px 10px",
       textAlign: "center",
       fontSize: 9,
-      fontWeight: 600,
+      fontWeight: 700,
       letterSpacing: "0.07em",
       textTransform: "uppercase",
-      color: "#94A3B8",
-      background: "#F8FAFC",
-      borderBottom: "1px solid rgba(15,23,42,0.08)",
+      color: PATRIA.kingBlue,
+      fontFamily: FONT_SECONDARY,
+      background: "#F5F7FD",
+      borderBottom: "1px solid rgba(13,13,56,0.08)",
       whiteSpace: "nowrap",
     }}>
       {children}
@@ -101,14 +104,14 @@ export default function EarningsSurprisesTable({ data, ticker }: Props) {
     return (
       <div style={{
         display: "flex", flexDirection: "column", alignItems: "center",
-        justifyContent: "center", gap: 10, padding: "60px 0", color: "#94A3B8",
+        justifyContent: "center", gap: 10, padding: "60px 0", color: "rgba(13,13,56,0.45)",
       }}>
         <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-          <circle cx="20" cy="20" r="17" stroke="#E2E8F0" strokeWidth="2" />
-          <path d="M13 20h14M20 13v14" stroke="#CBD5E1" strokeWidth="1.8" strokeLinecap="round" />
+          <circle cx="20" cy="20" r="17" stroke="rgba(13,13,56,0.10)" strokeWidth="2" />
+          <path d="M13 20h14M20 13v14" stroke="rgba(13,13,56,0.28)" strokeWidth="1.8" strokeLinecap="round" />
         </svg>
-        <div style={{ fontSize: 13, fontWeight: 600, color: "#64748B" }}>No earnings data for {ticker}</div>
-        <div style={{ fontSize: 11, color: "#CBD5E1" }}>Data will appear once Bloomberg records are uploaded</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(13,13,56,0.62)" }}>No earnings data for {ticker}</div>
+        <div style={{ fontSize: 11, color: "rgba(13,13,56,0.28)" }}>Data will appear once Bloomberg records are uploaded</div>
       </div>
     );
   }
@@ -123,30 +126,30 @@ export default function EarningsSurprisesTable({ data, ticker }: Props) {
               colSpan={2}
               style={{
                 padding: "6px 14px",
-                background: "#F0F4FA",
-                borderBottom: "1px solid rgba(15,23,42,0.08)",
-                borderRight: "1px solid rgba(15,23,42,0.08)",
+                background: "#F5F7FD",
+                borderBottom: "1px solid rgba(13,13,56,0.08)",
+                borderRight: "1px solid rgba(13,13,56,0.08)",
               }}
             />
-            <GroupHeader label="Revenue" accent="#2B5CE0" span={3} />
-            <GroupHeader label="EBITDA"  accent="#7C3AED" span={3} />
-            <GroupHeader label="Net Income" accent="#D97706" span={3} />
+            <GroupHeader label="Revenue"    accent={PATRIA.skyBlue}       span={3} />
+            <GroupHeader label="EBITDA"     accent={PATRIA.turquoise}     span={3} />
+            <GroupHeader label="Net Income" accent={PATRIA.lightOrange}   span={3} />
           </tr>
 
           {/* ── Sub-header row ── */}
           <tr>
-            <th style={{ padding: "5px 14px", textAlign: "left", fontSize: 9, fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", color: "#94A3B8", background: "#F8FAFC", borderBottom: "1px solid rgba(15,23,42,0.08)", whiteSpace: "nowrap" }}>
+            <th style={{ padding: "5px 14px", textAlign: "left", fontSize: 9, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: PATRIA.kingBlue, fontFamily: FONT_SECONDARY, background: "#F5F7FD", borderBottom: "1px solid rgba(13,13,56,0.08)", whiteSpace: "nowrap" }}>
               Quarter
             </th>
-            <th style={{ padding: "5px 14px", textAlign: "left", fontSize: 9, fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", color: "#94A3B8", background: "#F8FAFC", borderBottom: "1px solid rgba(15,23,42,0.08)", borderRight: "1px solid rgba(15,23,42,0.08)", whiteSpace: "nowrap" }}>
+            <th style={{ padding: "5px 14px", textAlign: "left", fontSize: 9, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: PATRIA.kingBlue, fontFamily: FONT_SECONDARY, background: "#F5F7FD", borderBottom: "1px solid rgba(13,13,56,0.08)", borderRight: "1px solid rgba(13,13,56,0.08)", whiteSpace: "nowrap" }}>
               Report Date
             </th>
             <ColHead>Beat/Miss</ColHead>
             <ColHead>YoY</ColHead>
-            <th style={{ padding: "5px 10px", textAlign: "center", fontSize: 9, fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", color: "#94A3B8", background: "#F8FAFC", borderBottom: "1px solid rgba(15,23,42,0.08)", borderRight: "1px solid rgba(15,23,42,0.08)", whiteSpace: "nowrap" }}>QoQ</th>
+            <th style={{ padding: "5px 10px", textAlign: "center", fontSize: 9, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: PATRIA.kingBlue, fontFamily: FONT_SECONDARY, background: "#F5F7FD", borderBottom: "1px solid rgba(13,13,56,0.08)", borderRight: "1px solid rgba(13,13,56,0.08)", whiteSpace: "nowrap" }}>QoQ</th>
             <ColHead>Beat/Miss</ColHead>
             <ColHead>YoY</ColHead>
-            <th style={{ padding: "5px 10px", textAlign: "center", fontSize: 9, fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", color: "#94A3B8", background: "#F8FAFC", borderBottom: "1px solid rgba(15,23,42,0.08)", borderRight: "1px solid rgba(15,23,42,0.08)", whiteSpace: "nowrap" }}>QoQ</th>
+            <th style={{ padding: "5px 10px", textAlign: "center", fontSize: 9, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: PATRIA.kingBlue, fontFamily: FONT_SECONDARY, background: "#F5F7FD", borderBottom: "1px solid rgba(13,13,56,0.08)", borderRight: "1px solid rgba(13,13,56,0.08)", whiteSpace: "nowrap" }}>QoQ</th>
             <ColHead>Beat/Miss</ColHead>
             <ColHead>YoY</ColHead>
             <ColHead>QoQ</ColHead>
@@ -158,21 +161,21 @@ export default function EarningsSurprisesTable({ data, ticker }: Props) {
             <tr
               key={row.quarter}
               style={{
-                background: i % 2 === 0 ? "#FFFFFF" : "rgba(15,23,42,0.018)",
-                borderBottom: "1px solid rgba(15,23,42,0.05)",
+                background: i % 2 === 0 ? "#FFFFFF" : "rgba(13,13,56,0.018)",
+                borderBottom: "1px solid rgba(13,13,56,0.05)",
                 transition: "background 0.1s",
               }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.04)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = i % 2 === 0 ? "#FFFFFF" : "rgba(15,23,42,0.018)"; }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.04)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = i % 2 === 0 ? "#FFFFFF" : "rgba(13,13,56,0.018)"; }}
             >
               {/* Quarter */}
               <td style={{ padding: "9px 14px", whiteSpace: "nowrap" }}>
                 <span style={{
-                  fontFamily: "JetBrains Mono, monospace",
+                  fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
                   fontSize: 12,
-                  fontWeight: 800,
-                  color: "#0F172A",
-                  background: "rgba(15,23,42,0.05)",
+                  fontWeight: 700,
+                  color: PATRIA.kingBlue,
+                  background: "rgba(32,68,220,0.08)",
                   borderRadius: 5,
                   padding: "2px 8px",
                   letterSpacing: "0.04em",
@@ -182,40 +185,40 @@ export default function EarningsSurprisesTable({ data, ticker }: Props) {
               </td>
 
               {/* Report Date */}
-              <td style={{ padding: "9px 14px", fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: "#64748B", whiteSpace: "nowrap", borderRight: "1px solid rgba(15,23,42,0.06)" }}>
+              <td style={{ padding: "9px 14px", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, color: "rgba(13,13,56,0.62)", whiteSpace: "nowrap", borderRight: "1px solid rgba(13,13,56,0.06)" }}>
                 {row.reportDate}
               </td>
 
               {/* Revenue */}
-              <td style={{ padding: "9px 10px", textAlign: "center", fontFamily: "JetBrains Mono, monospace" }}>
+              <td style={{ padding: "9px 10px", textAlign: "center", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
                 {fmtBeatMiss(row.revBeatMiss)}
               </td>
-              <td style={{ padding: "9px 10px", textAlign: "center", fontFamily: "JetBrains Mono, monospace" }}>
+              <td style={{ padding: "9px 10px", textAlign: "center", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
                 {fmtPct(row.revYoy)}
               </td>
-              <td style={{ padding: "9px 10px", textAlign: "center", fontFamily: "JetBrains Mono, monospace", borderRight: "1px solid rgba(15,23,42,0.06)" }}>
+              <td style={{ padding: "9px 10px", textAlign: "center", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", borderRight: "1px solid rgba(13,13,56,0.06)" }}>
                 {fmtPct(row.revQoq)}
               </td>
 
               {/* EBITDA */}
-              <td style={{ padding: "9px 10px", textAlign: "center", fontFamily: "JetBrains Mono, monospace" }}>
+              <td style={{ padding: "9px 10px", textAlign: "center", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
                 {fmtBeatMiss(row.ebitdaBeatMiss)}
               </td>
-              <td style={{ padding: "9px 10px", textAlign: "center", fontFamily: "JetBrains Mono, monospace" }}>
+              <td style={{ padding: "9px 10px", textAlign: "center", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
                 {fmtPct(row.ebitdaYoy)}
               </td>
-              <td style={{ padding: "9px 10px", textAlign: "center", fontFamily: "JetBrains Mono, monospace", borderRight: "1px solid rgba(15,23,42,0.06)" }}>
+              <td style={{ padding: "9px 10px", textAlign: "center", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", borderRight: "1px solid rgba(13,13,56,0.06)" }}>
                 {fmtPct(row.ebitdaQoq)}
               </td>
 
               {/* Net Income */}
-              <td style={{ padding: "9px 10px", textAlign: "center", fontFamily: "JetBrains Mono, monospace" }}>
+              <td style={{ padding: "9px 10px", textAlign: "center", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
                 {fmtBeatMiss(row.niBeatMiss)}
               </td>
-              <td style={{ padding: "9px 10px", textAlign: "center", fontFamily: "JetBrains Mono, monospace" }}>
+              <td style={{ padding: "9px 10px", textAlign: "center", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
                 {fmtPct(row.niYoy)}
               </td>
-              <td style={{ padding: "9px 10px", textAlign: "center", fontFamily: "JetBrains Mono, monospace" }}>
+              <td style={{ padding: "9px 10px", textAlign: "center", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
                 {fmtPct(row.niQoq)}
               </td>
             </tr>
@@ -224,13 +227,13 @@ export default function EarningsSurprisesTable({ data, ticker }: Props) {
       </table>
 
       {/* Footer */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", borderTop: "1px solid rgba(15,23,42,0.06)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", borderTop: "1px solid rgba(13,13,56,0.06)" }}>
         <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-          <LegendItem color="#059669" label="Beat / Positive" />
-          <LegendItem color="#DC2626" label="Miss / Negative" />
-          <span style={{ fontSize: 10, color: "#CBD5E1", fontStyle: "italic" }}>NR = Not Reported</span>
+          <LegendItem color="#001EAF" label="Beat / Positive" />
+          <LegendItem color="#F8485E" label="Miss / Negative" />
+          <span style={{ fontSize: 10, color: "rgba(13,13,56,0.28)", fontStyle: "italic" }}>NR = Not Reported</span>
         </div>
-        <span style={{ fontSize: 10, color: "#CBD5E1" }}>Fuente: Bloomberg</span>
+        <span style={{ fontSize: 10, color: "rgba(13,13,56,0.28)" }}>Fuente: Bloomberg</span>
       </div>
     </div>
   );
@@ -240,7 +243,7 @@ function LegendItem({ color, label }: { color: string; label: string }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
       <span style={{ width: 8, height: 8, borderRadius: 2, background: color, opacity: 0.8, flexShrink: 0 }} />
-      <span style={{ fontSize: 10, color: "#94A3B8" }}>{label}</span>
+      <span style={{ fontSize: 10, color: "rgba(13,13,56,0.45)" }}>{label}</span>
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Upload, CheckCircle, XCircle, Copy, Check, FileText } from "lucide-react";
+import { FONT_SECONDARY } from "@/lib/patriaTheme";
 
 type UploadState = "idle" | "requesting" | "uploading" | "success" | "error";
 
@@ -134,7 +135,7 @@ export default function PptUploader({
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ fontFamily: "Inter, sans-serif" }}>
+    <div style={{ fontFamily: FONT_SECONDARY }}>
       {/* Hidden file input */}
       <input
         ref={inputRef}
@@ -154,17 +155,17 @@ export default function PptUploader({
             alignItems:     "center",
             gap:            8,
             padding:        "8px 16px",
-            background:     "rgba(43,92,224,0.08)",
-            border:         "1px solid rgba(43,92,224,0.22)",
+            background:     "rgba(32,68,220,0.08)",
+            border:         "1px solid rgba(32,68,220,0.22)",
             borderRadius:   8,
-            color:          "#2B5CE0",
+            color:          "#2044DC",
             fontSize:       13,
             fontWeight:     600,
             cursor:         "pointer",
             transition:     "background 0.15s",
           }}
-          onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "rgba(43,92,224,0.14)")}
-          onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "rgba(43,92,224,0.08)")}
+          onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "rgba(32,68,220,0.14)")}
+          onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "rgba(32,68,220,0.08)")}
         >
           <Upload size={15} />
           {label}
@@ -178,15 +179,15 @@ export default function PptUploader({
           flexDirection:  "column",
           gap:            8,
           padding:        "10px 14px",
-          background:     "#F8FAFC",
-          border:         "1px solid rgba(15,23,42,0.10)",
+          background:     "#F5F7FD",
+          border:         "1px solid rgba(13,13,56,0.10)",
           borderRadius:   8,
           minWidth:       240,
         }}>
           {/* File name row */}
           <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-            <FileText size={14} color="#64748B" />
-            <span style={{ fontSize: 12, color: "#475569", fontWeight: 500, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <FileText size={14} color="rgba(13,13,56,0.62)" />
+            <span style={{ fontSize: 12, color: "rgba(13,13,56,0.62)", fontWeight: 500, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {fileName}
             </span>
           </div>
@@ -195,12 +196,12 @@ export default function PptUploader({
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{
                 width: 14, height: 14, borderRadius: "50%",
-                border: "2px solid rgba(43,92,224,0.15)",
-                borderTopColor: "#2B5CE0",
+                border: "2px solid rgba(32,68,220,0.15)",
+                borderTopColor: "#2044DC",
                 animation: "spin 0.8s linear infinite",
                 flexShrink: 0,
               }} />
-              <span style={{ fontSize: 11, color: "#94A3B8", fontFamily: "JetBrains Mono, monospace" }}>
+              <span style={{ fontSize: 11, color: "rgba(13,13,56,0.45)", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
                 Requesting upload URL…
               </span>
             </div>
@@ -209,16 +210,16 @@ export default function PptUploader({
           {state === "uploading" && (
             <>
               {/* Progress bar */}
-              <div style={{ height: 4, borderRadius: 4, background: "rgba(43,92,224,0.12)", overflow: "hidden" }}>
+              <div style={{ height: 4, borderRadius: 4, background: "rgba(32,68,220,0.12)", overflow: "hidden" }}>
                 <div style={{
                   height: "100%",
                   width:  `${progress}%`,
-                  background: "linear-gradient(90deg, #2B5CE0, #60A5FA)",
+                  background: "linear-gradient(90deg, #2044DC, #88AAFF)",
                   borderRadius: 4,
                   transition: "width 0.2s ease",
                 }} />
               </div>
-              <span style={{ fontSize: 11, color: "#64748B", fontFamily: "JetBrains Mono, monospace", textAlign: "right" }}>
+              <span style={{ fontSize: 11, color: "rgba(13,13,56,0.62)", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", textAlign: "right" }}>
                 {progress}%
               </span>
             </>
@@ -233,24 +234,24 @@ export default function PptUploader({
           flexDirection: "column",
           gap:           8,
           padding:       "10px 14px",
-          background:    "rgba(22,163,74,0.06)",
-          border:        "1px solid rgba(22,163,74,0.20)",
+          background:    "rgba(0,30,175,0.06)",
+          border:        "1px solid rgba(0,30,175,0.20)",
           borderRadius:  8,
           minWidth:      240,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-            <CheckCircle size={15} color="#16A34A" />
-            <span style={{ fontSize: 12, fontWeight: 600, color: "#15803D" }}>Upload complete</span>
+            <CheckCircle size={15} color="#001EAF" />
+            <span style={{ fontSize: 12, fontWeight: 600, color: "#001EAF" }}>Upload complete</span>
           </div>
 
           {/* URL row */}
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{
-              flex: 1, fontSize: 11, color: "#475569",
-              fontFamily: "JetBrains Mono, monospace",
+              flex: 1, fontSize: 11, color: "rgba(13,13,56,0.62)",
+              fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              background: "#F1F5F9", borderRadius: 4, padding: "3px 7px",
-              border: "1px solid rgba(15,23,42,0.07)",
+              background: "#F5F7FD", borderRadius: 4, padding: "3px 7px",
+              border: "1px solid rgba(13,13,56,0.07)",
             }}>
               {fileUrl}
             </span>
@@ -263,9 +264,9 @@ export default function PptUploader({
                 gap:          4,
                 padding:      "4px 10px",
                 borderRadius: 6,
-                border:       "1px solid rgba(15,23,42,0.12)",
-                background:   copied ? "rgba(22,163,74,0.10)" : "#fff",
-                color:        copied ? "#15803D" : "#64748B",
+                border:       "1px solid rgba(13,13,56,0.12)",
+                background:   copied ? "rgba(0,30,175,0.10)" : "#fff",
+                color:        copied ? "#001EAF" : "rgba(13,13,56,0.62)",
                 fontSize:     11,
                 fontWeight:   600,
                 cursor:       "pointer",
@@ -287,7 +288,7 @@ export default function PptUploader({
               border:       "none",
               padding:      0,
               fontSize:     11,
-              color:        "#94A3B8",
+              color:        "rgba(13,13,56,0.45)",
               cursor:       "pointer",
               textDecoration: "underline",
             }}
@@ -304,17 +305,17 @@ export default function PptUploader({
           flexDirection: "column",
           gap:           7,
           padding:       "10px 14px",
-          background:    "rgba(220,38,38,0.05)",
-          border:        "1px solid rgba(220,38,38,0.18)",
+          background:    "rgba(248,72,94,0.05)",
+          border:        "1px solid rgba(248,72,94,0.18)",
           borderRadius:  8,
           minWidth:      240,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-            <XCircle size={15} color="#DC2626" />
-            <span style={{ fontSize: 12, fontWeight: 600, color: "#B91C1C" }}>Upload failed</span>
+            <XCircle size={15} color="#F8485E" />
+            <span style={{ fontSize: 12, fontWeight: 600, color: "#F8485E" }}>Upload failed</span>
           </div>
           {errorMsg && (
-            <span style={{ fontSize: 11, color: "#94A3B8", fontFamily: "JetBrains Mono, monospace" }}>
+            <span style={{ fontSize: 11, color: "rgba(13,13,56,0.45)", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
               {errorMsg}
             </span>
           )}
@@ -326,7 +327,7 @@ export default function PptUploader({
               border:       "none",
               padding:      0,
               fontSize:     11,
-              color:        "#2B5CE0",
+              color:        "#2044DC",
               cursor:       "pointer",
               fontWeight:   600,
             }}

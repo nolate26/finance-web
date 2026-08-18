@@ -1,5 +1,7 @@
 "use client";
 
+import { FONT_SECONDARY } from "@/lib/patriaTheme";
+
 import Image from "next/image";
 import { useState, useRef, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -23,7 +25,7 @@ const tabs = [
 ];
 
 const FONT = "var(--font-sans, 'Figtree', sans-serif)";
-const MONO = "var(--font-mono, 'JetBrains Mono', monospace)";
+const MONO = FONT_SECONDARY;   // Regla 4 — Arial, no monoespaciada
 
 // ── User menu (session + role + logout) ─────────────────────────────────────────
 function initialsOf(nameOrEmail: string): string {
@@ -62,48 +64,48 @@ function UserMenu() {
         className="flex items-center gap-2"
         style={{
           padding: "4px 8px 4px 4px", borderRadius: 9,
-          background: open ? "rgba(43,92,224,0.08)" : "transparent",
-          border: `1px solid ${open ? "rgba(43,92,224,0.22)" : "rgba(15,23,42,0.10)"}`,
+          background: open ? "rgba(32,68,220,0.08)" : "transparent",
+          border: `1px solid ${open ? "rgba(32,68,220,0.22)" : "rgba(13,13,56,0.10)"}`,
           cursor: "pointer", outline: "none", transition: "all 0.12s",
         }}
       >
         <span style={{
           width: 26, height: 26, borderRadius: 7, flexShrink: 0,
           display: "flex", alignItems: "center", justifyContent: "center",
-          background: isAdmin ? "linear-gradient(135deg,#1E3A8A,#2B5CE0)" : "rgba(15,23,42,0.10)",
-          color: isAdmin ? "#fff" : "#475569",
+          background: isAdmin ? "linear-gradient(135deg,#001EAF,#2044DC)" : "rgba(13,13,56,0.10)",
+          color: isAdmin ? "#fff" : "rgba(13,13,56,0.62)",
           fontSize: 11, fontWeight: 800, fontFamily: FONT,
         }}>
           {initialsOf(display)}
         </span>
-        <span style={{ fontSize: 11, fontWeight: 600, color: "#334155", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: "#0D0D38", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {display}
         </span>
-        <ChevronDown size={13} style={{ color: "#94A3B8", transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+        <ChevronDown size={13} style={{ color: "rgba(13,13,56,0.45)", transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
       </button>
 
       {open && (
         <div style={{
           position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 60,
           minWidth: 230, background: "#fff", borderRadius: 11,
-          border: "1px solid rgba(15,23,42,0.10)", boxShadow: "0 12px 34px rgba(15,23,42,0.16)",
+          border: "1px solid rgba(13,13,56,0.10)", boxShadow: "0 12px 34px rgba(13,13,56,0.16)",
           overflow: "hidden",
         }}>
           {/* Identity block */}
-          <div style={{ padding: "12px 14px", borderBottom: "1px solid rgba(15,23,42,0.07)", background: "#F8FAFF" }}>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: "#0F172A", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div style={{ padding: "12px 14px", borderBottom: "1px solid rgba(13,13,56,0.07)", background: "#F5F7FD" }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: "#0D0D38", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {user.name || "—"}
             </div>
-            <div style={{ fontSize: 11, color: "#64748B", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <div style={{ fontSize: 11, color: "rgba(13,13,56,0.62)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {user.email}
             </div>
             <span style={{
               display: "inline-flex", alignItems: "center", gap: 4, marginTop: 8,
               fontSize: 9.5, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase",
               padding: "2px 8px", borderRadius: 6,
-              background: isAdmin ? "rgba(43,92,224,0.10)" : "rgba(100,116,139,0.10)",
-              border: `1px solid ${isAdmin ? "rgba(43,92,224,0.28)" : "rgba(100,116,139,0.24)"}`,
-              color: isAdmin ? "#1E3A8A" : "#475569",
+              background: isAdmin ? "rgba(32,68,220,0.10)" : "rgba(13,13,56,0.10)",
+              border: `1px solid ${isAdmin ? "rgba(32,68,220,0.28)" : "rgba(13,13,56,0.24)"}`,
+              color: isAdmin ? "#001EAF" : "rgba(13,13,56,0.62)",
             }}>
               {isAdmin && <ShieldCheck size={10} />} {user.role}
             </span>
@@ -114,11 +116,11 @@ function UserMenu() {
             <button
               onClick={() => { setOpen(false); router.push("/admin"); }}
               className="flex items-center gap-2"
-              style={{ width: "100%", padding: "10px 14px", background: "transparent", border: "none", cursor: "pointer", fontSize: 12.5, fontWeight: 600, color: "#334155", textAlign: "left" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.06)"; }}
+              style={{ width: "100%", padding: "10px 14px", background: "transparent", border: "none", cursor: "pointer", fontSize: 12.5, fontWeight: 600, color: "#0D0D38", textAlign: "left" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.06)"; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
             >
-              <ShieldCheck size={14} style={{ color: "#2B5CE0" }} /> Administración
+              <ShieldCheck size={14} style={{ color: "#2044DC" }} /> Administración
             </button>
           )}
 
@@ -126,8 +128,8 @@ function UserMenu() {
           <button
             onClick={() => signOut({ callbackUrl: "/login" })}
             className="flex items-center gap-2"
-            style={{ width: "100%", padding: "10px 14px", background: "transparent", border: "none", borderTop: "1px solid rgba(15,23,42,0.06)", cursor: "pointer", fontSize: 12.5, fontWeight: 600, color: "#B91C1C", textAlign: "left" }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(185,28,28,0.05)"; }}
+            style={{ width: "100%", padding: "10px 14px", background: "transparent", border: "none", borderTop: "1px solid rgba(13,13,56,0.06)", cursor: "pointer", fontSize: 12.5, fontWeight: 600, color: "#F8485E", textAlign: "left" }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(248,72,94,0.05)"; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
           >
             <LogOut size={14} /> Cerrar sesión
@@ -147,10 +149,10 @@ export default function Navbar() {
       className="fixed top-0 left-0 right-0 z-50 h-16 flex items-center justify-between px-6"
       style={{
         background:          "rgba(255,255,255,0.98)",
-        borderBottom:        "1px solid rgba(15,23,42,0.09)",
+        borderBottom:        "1px solid rgba(13,13,56,0.09)",
         backdropFilter:      "blur(20px)",
         WebkitBackdropFilter:"blur(20px)",
-        boxShadow:           "0 1px 0 rgba(15,23,42,0.05), 0 4px 20px rgba(15,23,42,0.04)",
+        boxShadow:           "0 1px 0 rgba(13,13,56,0.05), 0 4px 20px rgba(13,13,56,0.04)",
       }}
     >
       {/* LEFT — logo */}
@@ -172,8 +174,8 @@ export default function Navbar() {
           gap:          2,
           padding:      "3px",
           borderRadius: 11,
-          background:   "rgba(15,23,42,0.045)",
-          border:       "1px solid rgba(15,23,42,0.08)",
+          background:   "rgba(13,13,56,0.045)",
+          border:       "1px solid rgba(13,13,56,0.08)",
         }}
       >
         {tabs.map(({ href, label, icon: Icon }) => {
@@ -185,13 +187,13 @@ export default function Navbar() {
               onClick={() => router.push(href)}
               className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs transition-all duration-150"
               style={{
-                color:      active ? "#1B2E7E"  : "#475569",
+                color:      active ? "#0D0D38"  : "rgba(13,13,56,0.62)",
                 background: active ? "#FFFFFF"  : "transparent",
                 border:     active
-                  ? "1px solid rgba(15,23,42,0.11)"
+                  ? "1px solid rgba(13,13,56,0.11)"
                   : "1px solid transparent",
                 boxShadow:  active
-                  ? "0 1px 3px rgba(15,23,42,0.10), 0 1px 2px rgba(15,23,42,0.06)"
+                  ? "0 1px 3px rgba(13,13,56,0.10), 0 1px 2px rgba(13,13,56,0.06)"
                   : "none",
                 fontWeight: active ? 700 : 500,
                 cursor:     "pointer",
@@ -203,14 +205,14 @@ export default function Navbar() {
               onMouseEnter={(e) => {
                 if (!active) {
                   const el = e.currentTarget as HTMLButtonElement;
-                  el.style.color      = "#1B2E7E";
-                  el.style.background = "rgba(43,92,224,0.06)";
+                  el.style.color      = "#0D0D38";
+                  el.style.background = "rgba(32,68,220,0.06)";
                 }
               }}
               onMouseLeave={(e) => {
                 if (!active) {
                   const el = e.currentTarget as HTMLButtonElement;
-                  el.style.color      = "#475569";
+                  el.style.color      = "rgba(13,13,56,0.62)";
                   el.style.background = "transparent";
                 }
               }}
@@ -225,13 +227,13 @@ export default function Navbar() {
       {/* RIGHT — date + BETA badge */}
       <div className="flex items-center gap-3 flex-shrink-0">
         {/* Thin divider */}
-        <div style={{ width: 1, height: 20, background: "rgba(15,23,42,0.09)" }} />
+        <div style={{ width: 1, height: 20, background: "rgba(13,13,56,0.09)" }} />
 
         <span
           style={{
             fontFamily:    MONO,
             fontSize:      10,
-            color:         "#64748B",
+            color:         "rgba(13,13,56,0.62)",
             letterSpacing: "0.05em",
           }}
         >
@@ -252,9 +254,9 @@ export default function Navbar() {
             fontFamily:    MONO,
             fontWeight:    600,
             letterSpacing: "0.07em",
-            background:    "rgba(43,92,224,0.08)",
-            color:         "#2B5CE0",
-            border:        "1px solid rgba(43,92,224,0.20)",
+            background:    "rgba(32,68,220,0.08)",
+            color:         "#2044DC",
+            border:        "1px solid rgba(32,68,220,0.20)",
             flexShrink:    0,
           }}
         >

@@ -13,6 +13,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import type { ConsensusPoint } from "@/app/api/companies/[ticker]/route";
+import { PATRIA, FONT_SECONDARY } from "@/lib/patriaTheme";
 
 // ── Metric config ─────────────────────────────────────────────────────────────
 
@@ -25,18 +26,21 @@ interface MetricCfg {
   gradId: string;
 }
 
+// Un color por slot de año (0, 1, 2…). Dentro de cada métrica los tres años
+// tienen que distinguirse entre sí, así que van de oscuro a claro sobre el
+// fondo blanco del gráfico.
 const METRICS: MetricCfg[] = [
   {
     key: "REVENUE", label: "Revenue", gradId: "cg_rev",
-    colors: ["#059669", "#0D9488", "#34D399"],
+    colors: [PATRIA.darkBlue, PATRIA.darkSkyBlue, PATRIA.skyBlue],
   },
   {
     key: "EBITDA", label: "EBITDA", gradId: "cg_ebd",
-    colors: ["#2B5CE0", "#1D4ED8", "#60A5FA"],
+    colors: [PATRIA.blue, PATRIA.kingBlue, PATRIA.skyBlue],
   },
   {
     key: "NET_INCOME", label: "Net Income", gradId: "cg_ni",
-    colors: ["#7C3AED", "#9333EA", "#A78BFA"],
+    colors: [PATRIA.orange, PATRIA.lightOrange, PATRIA.turquoise],
   },
 ];
 
@@ -154,18 +158,18 @@ function ConsTooltip({
   return (
     <div style={{
       background: "#fff",
-      border: "1px solid rgba(15,23,42,0.10)",
+      border: "1px solid rgba(13,13,56,0.10)",
       borderRadius: 6,
       padding: "8px 13px",
       fontSize: 11,
-      fontFamily: "JetBrains Mono, monospace",
-      boxShadow: "0 4px 16px rgba(15,23,42,0.12)",
+      fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
+      boxShadow: "0 4px 16px rgba(13,13,56,0.12)",
       minWidth: 160,
     }}>
       <div style={{
-        color: "#94A3B8", fontSize: 10,
+        color: "rgba(13,13,56,0.45)", fontSize: 10,
         marginBottom: 6, paddingBottom: 5,
-        borderBottom: "1px solid rgba(15,23,42,0.06)",
+        borderBottom: "1px solid rgba(13,13,56,0.06)",
       }}>
         {label}
       </div>
@@ -184,7 +188,7 @@ function ConsTooltip({
               ) : (
                 <span style={{ display: "inline-block", width: 12, height: 0, borderTop: `2px ${i === 1 ? "dashed" : "dotted"} ${color}`, marginTop: 2 }} />
               )}
-              <span style={{ color: "#64748B" }}>{year}</span>
+              <span style={{ color: "rgba(13,13,56,0.62)" }}>{year}</span>
             </span>
             <span style={{ color, fontWeight: 700 }}>
               {entry?.value != null ? fmtCompact(entry.value) : "—"}
@@ -202,8 +206,8 @@ function ConsLegend({ cfg, years }: { cfg: MetricCfg; years: string[] }) {
   return (
     <div style={{
       display: "flex", gap: 14, justifyContent: "flex-end",
-      fontSize: 10, color: "#94A3B8",
-      fontFamily: "JetBrains Mono, monospace",
+      fontSize: 10, color: "rgba(13,13,56,0.45)",
+      fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
       marginBottom: 6,
     }}>
       {years.map((year, i) => {
@@ -272,8 +276,8 @@ export default function ConsensusChart({ data }: Props) {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {lastDate && (
             <span style={{
-              fontSize: 9, color: "#94A3B8",
-              fontFamily: "JetBrains Mono, monospace",
+              fontSize: 9, color: "rgba(13,13,56,0.45)",
+              fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
               letterSpacing: "0.04em",
             }}>
               Last Update: {lastDate}
@@ -281,8 +285,8 @@ export default function ConsensusChart({ data }: Props) {
           )}
           <div style={{
             display: "flex", gap: 3, padding: 3,
-            borderRadius: 7, background: "#F0F4FA",
-            border: "1px solid rgba(15,23,42,0.07)",
+            borderRadius: 7, background: "#F5F7FD",
+            border: "1px solid rgba(13,13,56,0.07)",
           }}>
             {METRICS.map((m) => {
               const active = m.key === activeMetric;
@@ -299,8 +303,8 @@ export default function ConsensusChart({ data }: Props) {
                     border: "none",
                     outline: "none",
                     background: active ? "#fff" : "transparent",
-                    color: active ? m.colors[0] : "#94A3B8",
-                    boxShadow: active ? "0 1px 3px rgba(15,23,42,0.10)" : "none",
+                    color: active ? m.colors[0] : "rgba(13,13,56,0.45)",
+                    boxShadow: active ? "0 1px 3px rgba(13,13,56,0.10)" : "none",
                     transition: "all 0.12s",
                   }}
                 >
@@ -319,7 +323,7 @@ export default function ConsensusChart({ data }: Props) {
 
       {/* ── Chart ───────────────────────────────────────────────────────────── */}
       {!hasData ? (
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#CBD5E1", fontSize: 12 }}>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(13,13,56,0.28)", fontSize: 12 }}>
           No {cfg.label} consensus data
         </div>
       ) : (
@@ -335,18 +339,18 @@ export default function ConsensusChart({ data }: Props) {
                 </linearGradient>
               </defs>
 
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.05)" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(13,13,56,0.05)" vertical={false} />
 
               <XAxis
                 dataKey="date"
-                tick={{ fill: "#94A3B8", fontSize: 9, fontFamily: "JetBrains Mono, monospace" }}
+                tick={{ fill: "rgba(13,13,56,0.45)", fontSize: 9, fontFamily: FONT_SECONDARY }}
                 axisLine={false}
                 tickLine={false}
                 interval="preserveStartEnd"
               />
               <YAxis
                 domain={["auto", "auto"]}
-                tick={{ fill: "#94A3B8", fontSize: 9, fontFamily: "JetBrains Mono, monospace" }}
+                tick={{ fill: "rgba(13,13,56,0.45)", fontSize: 9, fontFamily: FONT_SECONDARY }}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={fmtCompact}
@@ -355,7 +359,7 @@ export default function ConsensusChart({ data }: Props) {
 
               <Tooltip
                 content={<ConsTooltip cfg={cfg} years={availableYears} />}
-                cursor={{ stroke: "rgba(15,23,42,0.08)", strokeWidth: 1 }}
+                cursor={{ stroke: "rgba(13,13,56,0.08)", strokeWidth: 1 }}
               />
 
               {/* Hide default Recharts legend */}

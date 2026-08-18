@@ -1,5 +1,7 @@
 "use client";
 
+import { FONT_SECONDARY } from "@/lib/patriaTheme";
+
 import { useState, FormEvent } from "react";
 import { signIn }              from "next-auth/react";
 import { useRouter }           from "next/navigation";
@@ -45,7 +47,7 @@ export default function LoginPage() {
         display:        "flex",
         alignItems:     "center",
         justifyContent: "center",
-        background:     "#F1F5FB",
+        background:     "#F5F7FD",
       }}
     >
       {/* Card */}
@@ -55,8 +57,8 @@ export default function LoginPage() {
           maxWidth:     420,
           background:   "#FFFFFF",
           borderRadius: 14,
-          border:       "1px solid rgba(15,23,42,0.09)",
-          boxShadow:    "0 8px 40px rgba(15,23,42,0.09)",
+          border:       "1px solid rgba(13,13,56,0.09)",
+          boxShadow:    "0 8px 40px rgba(13,13,56,0.09)",
           overflow:     "hidden",
         }}
       >
@@ -64,8 +66,8 @@ export default function LoginPage() {
         <div
           style={{
             padding:         "28px 36px 24px",
-            borderBottom:    "1px solid rgba(15,23,42,0.07)",
-            background:      "linear-gradient(135deg, #0F172A 0%, #1E3A8A 100%)",
+            borderBottom:    "1px solid rgba(13,13,56,0.07)",
+            background:      "linear-gradient(135deg, #0D0D38 0%, #001EAF 100%)",
           }}
         >
           <p
@@ -75,7 +77,7 @@ export default function LoginPage() {
               letterSpacing: "0.18em",
               color:         "rgba(255,255,255,0.50)",
               marginBottom:  8,
-              fontFamily:    "JetBrains Mono, monospace",
+              fontFamily:    FONT_SECONDARY,
             }}
           >
             AGF · RESEARCH HUB
@@ -105,7 +107,7 @@ export default function LoginPage() {
                 display:       "block",
                 fontSize:      11,
                 fontWeight:    600,
-                color:         "#64748B",
+                color:         "rgba(13,13,56,0.62)",
                 marginBottom:  6,
                 letterSpacing: "0.05em",
               }}
@@ -124,17 +126,17 @@ export default function LoginPage() {
                 width:        "100%",
                 padding:      "10px 14px",
                 borderRadius: 8,
-                border:       `1px solid ${status === "error" ? "rgba(220,38,38,0.40)" : "rgba(15,23,42,0.14)"}`,
-                background:   "#F8FAFF",
+                border:       `1px solid ${status === "error" ? "rgba(248,72,94,0.40)" : "rgba(13,13,56,0.14)"}`,
+                background:   "#F5F7FD",
                 fontSize:     13,
-                color:        "#0F172A",
+                color:        "#0D0D38",
                 outline:      "none",
-                fontFamily:   "Inter, sans-serif",
+                fontFamily:   FONT_SECONDARY,
                 boxSizing:    "border-box",
                 transition:   "border-color 0.15s",
               }}
-              onFocus={(e) => { if (status !== "error") (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.50)"; }}
-              onBlur={(e)  => { if (status !== "error") (e.currentTarget as HTMLElement).style.borderColor = "rgba(15,23,42,0.14)"; }}
+              onFocus={(e) => { if (status !== "error") (e.currentTarget as HTMLElement).style.borderColor = "rgba(32,68,220,0.50)"; }}
+              onBlur={(e)  => { if (status !== "error") (e.currentTarget as HTMLElement).style.borderColor = "rgba(13,13,56,0.14)"; }}
             />
           </div>
 
@@ -146,7 +148,7 @@ export default function LoginPage() {
                 display:       "block",
                 fontSize:      11,
                 fontWeight:    600,
-                color:         "#64748B",
+                color:         "rgba(13,13,56,0.62)",
                 marginBottom:  6,
                 letterSpacing: "0.05em",
               }}
@@ -165,17 +167,17 @@ export default function LoginPage() {
                 width:        "100%",
                 padding:      "10px 14px",
                 borderRadius: 8,
-                border:       `1px solid ${status === "error" ? "rgba(220,38,38,0.40)" : "rgba(15,23,42,0.14)"}`,
-                background:   "#F8FAFF",
+                border:       `1px solid ${status === "error" ? "rgba(248,72,94,0.40)" : "rgba(13,13,56,0.14)"}`,
+                background:   "#F5F7FD",
                 fontSize:     13,
-                color:        "#0F172A",
+                color:        "#0D0D38",
                 outline:      "none",
-                fontFamily:   "Inter, sans-serif",
+                fontFamily:   FONT_SECONDARY,
                 boxSizing:    "border-box",
                 transition:   "border-color 0.15s",
               }}
-              onFocus={(e) => { if (status !== "error") (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.50)"; }}
-              onBlur={(e)  => { if (status !== "error") (e.currentTarget as HTMLElement).style.borderColor = "rgba(15,23,42,0.14)"; }}
+              onFocus={(e) => { if (status !== "error") (e.currentTarget as HTMLElement).style.borderColor = "rgba(32,68,220,0.50)"; }}
+              onBlur={(e)  => { if (status !== "error") (e.currentTarget as HTMLElement).style.borderColor = "rgba(13,13,56,0.14)"; }}
             />
           </div>
 
@@ -188,13 +190,13 @@ export default function LoginPage() {
                 gap:          7,
                 padding:      "9px 12px",
                 borderRadius: 7,
-                background:   "rgba(220,38,38,0.06)",
-                border:       "1px solid rgba(220,38,38,0.18)",
+                background:   "rgba(248,72,94,0.06)",
+                border:       "1px solid rgba(248,72,94,0.18)",
                 marginBottom: 20,
               }}
             >
               <span style={{ fontSize: 14, lineHeight: 1 }}>⚠</span>
-              <span style={{ fontSize: 12, color: "#DC2626", fontWeight: 500 }}>
+              <span style={{ fontSize: 12, color: "#F8485E", fontWeight: 500 }}>
                 Invalid email or password.
               </span>
             </div>
@@ -210,15 +212,15 @@ export default function LoginPage() {
               borderRadius: 8,
               border:       "none",
               background:   status === "loading"
-                ? "rgba(43,92,224,0.55)"
-                : "linear-gradient(135deg, #1E3A8A 0%, #2B5CE0 100%)",
+                ? "rgba(32,68,220,0.55)"
+                : "linear-gradient(135deg, #001EAF 0%, #2044DC 100%)",
               color:        "#FFFFFF",
               fontSize:     13,
               fontWeight:   700,
               letterSpacing:"0.03em",
               cursor:       status === "loading" ? "not-allowed" : "pointer",
               transition:   "opacity 0.15s",
-              fontFamily:   "Inter, sans-serif",
+              fontFamily:   FONT_SECONDARY,
             }}
           >
             {status === "loading" ? "Authenticating…" : "Sign in"}
@@ -229,7 +231,7 @@ export default function LoginPage() {
             style={{
               marginTop:  20,
               fontSize:   11,
-              color:      "#94A3B8",
+              color:      "rgba(13,13,56,0.45)",
               textAlign:  "center",
               lineHeight: 1.5,
             }}

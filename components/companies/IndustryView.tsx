@@ -62,19 +62,19 @@ export default function IndustryView({ companies, onSectorClick, activeSector }:
               padding: "16px 18px",
               cursor: "pointer",
               border: isActive
-                ? "1px solid rgba(43,92,224,0.35)"
-                : "1px solid rgba(15,23,42,0.08)",
-              boxShadow: isActive ? "0 0 0 1px rgba(43,92,224,0.12)" : "none",
+                ? "1px solid rgba(32,68,220,0.35)"
+                : "1px solid rgba(13,13,56,0.08)",
+              boxShadow: isActive ? "0 0 0 1px rgba(32,68,220,0.12)" : "none",
               transition: "border-color 0.15s, box-shadow 0.15s",
             }}
             onMouseEnter={(e) => {
               if (!isActive) {
-                (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.20)";
+                (e.currentTarget as HTMLElement).style.borderColor = "rgba(32,68,220,0.20)";
               }
             }}
             onMouseLeave={(e) => {
               if (!isActive) {
-                (e.currentTarget as HTMLElement).style.borderColor = "rgba(15,23,42,0.08)";
+                (e.currentTarget as HTMLElement).style.borderColor = "rgba(13,13,56,0.08)";
               }
             }}
           >
@@ -91,21 +91,21 @@ export default function IndustryView({ companies, onSectorClick, activeSector }:
                 style={{
                   fontSize: 13,
                   fontWeight: 600,
-                  color: isActive ? "#1E3A8A" : "#334155",
+                  color: isActive ? "#001EAF" : "#0D0D38",
                 }}
               >
                 {industria}
               </div>
               <span
-                className="font-mono"
+                className="font-secondary tabular-nums"
                 style={{
                   fontSize: 10,
                   fontWeight: 700,
                   padding: "2px 7px",
                   borderRadius: 10,
-                  background: isActive ? "rgba(43,92,224,0.12)" : "rgba(43,92,224,0.06)",
-                  color: isActive ? "#2B5CE0" : "#64748B",
-                  border: `1px solid ${isActive ? "rgba(43,92,224,0.25)" : "rgba(43,92,224,0.10)"}`,
+                  background: isActive ? "rgba(32,68,220,0.12)" : "rgba(32,68,220,0.06)",
+                  color: isActive ? "#2044DC" : "rgba(13,13,56,0.62)",
+                  border: `1px solid ${isActive ? "rgba(32,68,220,0.25)" : "rgba(32,68,220,0.10)"}`,
                 }}
               >
                 {cos.length}
@@ -115,31 +115,31 @@ export default function IndustryView({ companies, onSectorClick, activeSector }:
             {/* Stats */}
             <div style={{ display: "flex", gap: 14, marginBottom: 12 }}>
               <div>
-                <div style={{ fontSize: 10, color: "#64748B", marginBottom: 2 }}>
+                <div style={{ fontSize: 10, color: "rgba(13,13,56,0.62)", marginBottom: 2 }}>
                   Median FV/EBITDA
                 </div>
                 <div
-                  className="font-mono"
-                  style={{ fontSize: 15, fontWeight: 700, color: "#334155" }}
+                  className="font-secondary tabular-nums"
+                  style={{ fontSize: 15, fontWeight: 700, color: "#0D0D38" }}
                 >
                   {medEbitda !== null ? medEbitda.toFixed(1) + "x" : "—"}
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: 10, color: "#64748B", marginBottom: 2 }}>
+                <div style={{ fontSize: 10, color: "rgba(13,13,56,0.62)", marginBottom: 2 }}>
                   Median 1Y Ret
                 </div>
                 <div
-                  className="font-mono"
+                  className="font-secondary tabular-nums"
                   style={{
                     fontSize: 15,
                     fontWeight: 700,
                     color:
                       medRet1y === null
-                        ? "#64748B"
+                        ? "rgba(13,13,56,0.62)"
                         : medRet1y >= 0
-                        ? "#059669"
-                        : "#DC2626",
+                        ? "#001EAF"
+                        : "#F8485E",
                   }}
                 >
                   {medRet1y !== null
@@ -158,9 +158,9 @@ export default function IndustryView({ companies, onSectorClick, activeSector }:
                     fontSize: 10,
                     padding: "2px 6px",
                     borderRadius: 4,
-                    background: "rgba(43,92,224,0.06)",
-                    color: "#2B5CE0",
-                    border: "1px solid rgba(43,92,224,0.12)",
+                    background: "rgba(32,68,220,0.06)",
+                    color: "#2044DC",
+                    border: "1px solid rgba(32,68,220,0.12)",
                     whiteSpace: "nowrap",
                   }}
                 >
@@ -173,9 +173,9 @@ export default function IndustryView({ companies, onSectorClick, activeSector }:
                     fontSize: 10,
                     padding: "2px 6px",
                     borderRadius: 4,
-                    background: "rgba(15,23,42,0.05)",
-                    color: "#64748B",
-                    border: "1px solid rgba(15,23,42,0.10)",
+                    background: "rgba(13,13,56,0.05)",
+                    color: "rgba(13,13,56,0.62)",
+                    border: "1px solid rgba(13,13,56,0.10)",
                   }}
                 >
                   +{overflow} more

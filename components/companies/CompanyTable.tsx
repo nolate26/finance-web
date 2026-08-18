@@ -2,6 +2,7 @@
 
 import { ChevronUp, ChevronDown } from "lucide-react";
 import { Company } from "@/lib/companies";
+import { PATRIA, FONT_SECONDARY } from "@/lib/patriaTheme";
 
 interface Props {
   companies: Company[];
@@ -22,8 +23,8 @@ function toNum(v: unknown): number | null {
 
 function fmtPct(v: unknown): { text: string; color: string } {
   const n = toNum(v);
-  if (n == null) return { text: "—", color: "#CBD5E1" };
-  const color = n > 0.001 ? "#059669" : n < -0.001 ? "#DC2626" : "#64748B";
+  if (n == null) return { text: "—", color: "rgba(13,13,56,0.28)" };
+  const color = n > 0.001 ? "#001EAF" : n < -0.001 ? "#F8485E" : "rgba(13,13,56,0.62)";
   return { text: (n >= 0 ? "+" : "") + (n * 100).toFixed(1) + "%", color };
 }
 
@@ -54,10 +55,10 @@ function fmtInt(v: unknown): string {
 function recBadge(rec: unknown) {
   const r = typeof rec === "string" ? rec : null;
   if (!r) return null;
-  if (r === "Comprar")  return { label: "Buy",  color: "#059669", bg: "rgba(5,150,105,0.08)",  border: "rgba(5,150,105,0.20)"  };
-  if (r === "Mantener") return { label: "Hold", color: "#D97706", bg: "rgba(217,119,6,0.08)",  border: "rgba(217,119,6,0.20)"  };
-  if (r === "Vender")   return { label: "Sell", color: "#DC2626", bg: "rgba(220,38,38,0.08)",  border: "rgba(220,38,38,0.20)"  };
-  return { label: r, color: "#475569", bg: "transparent", border: "transparent" };
+  if (r === "Comprar")  return { label: "Buy",  color: "#001EAF", bg: "rgba(0,30,175,0.08)",  border: "rgba(0,30,175,0.20)"  };
+  if (r === "Mantener") return { label: "Hold", color: "#FF6B06", bg: "rgba(255,107,6,0.08)",  border: "rgba(255,107,6,0.20)"  };
+  if (r === "Vender")   return { label: "Sell", color: "#F8485E", bg: "rgba(248,72,94,0.08)",  border: "rgba(248,72,94,0.20)"  };
+  return { label: r, color: "rgba(13,13,56,0.62)", bg: "transparent", border: "transparent" };
 }
 
 const CENTER_FROM = 2; // Company + Industry are left-aligned; rest centered (Thesis handled separately)
@@ -103,24 +104,24 @@ export default function CompanyTable({
   }
 
   function SortIcon({ col }: { col: string }) {
-    if (sortBy !== col) return <span style={{ color: "#CBD5E1", fontSize: 10, marginLeft: 3 }}>↕</span>;
+    if (sortBy !== col) return <span style={{ color: "rgba(13,13,56,0.28)", fontSize: 10, marginLeft: 3 }}>↕</span>;
     return sortOrder === "asc"
-      ? <ChevronUp   size={12} style={{ color: "#2B5CE0", marginLeft: 3, display: "inline" }} />
-      : <ChevronDown size={12} style={{ color: "#2B5CE0", marginLeft: 3, display: "inline" }} />;
+      ? <ChevronUp   size={12} style={{ color: "#2044DC", marginLeft: 3, display: "inline" }} />
+      : <ChevronDown size={12} style={{ color: "#2044DC", marginLeft: 3, display: "inline" }} />;
   }
 
-  const mono: React.CSSProperties = { fontFamily: "JetBrains Mono, monospace" };
+  const mono: React.CSSProperties = { fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" };
   function cell(center = true): React.CSSProperties {
     return { padding: "9px 10px", textAlign: center ? "center" : "left", ...mono, fontSize: 12 };
   }
-  const dash = <span style={{ color: "#CBD5E1" }}>—</span>;
+  const dash = <span style={{ color: "rgba(13,13,56,0.28)" }}>—</span>;
 
   return (
     <div className="card" style={{ overflow: "hidden" }}>
       <div className="overflow-x-auto w-full">
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
           <thead className="sticky top-0 z-10">
-            <tr style={{ background: "#F0F4FA" }}>
+            <tr style={{ background: "#F5F7FD" }}>
               {COLUMNS.map((col) => (
                 <th
                   key={col.key}
@@ -129,16 +130,17 @@ export default function CompanyTable({
                     padding: "10px 10px",
                     textAlign: col.leftAlign ? "left" : "center",
                     fontSize: 11,
-                    fontWeight: 600,
-                    color: sortBy === col.key ? "#2B5CE0" : "#64748B",
-                    borderBottom: "1px solid rgba(15,23,42,0.07)",
+                    fontWeight: 700,
+                    fontFamily: FONT_SECONDARY,
+                    color: sortBy === col.key ? PATRIA.darkBlue : PATRIA.kingBlue,
+                    borderBottom: "1px solid rgba(13,13,56,0.07)",
                     cursor: "pointer",
                     whiteSpace: "nowrap",
                     userSelect: "none",
-                    background: "#F0F4FA",
+                    background: "#F5F7FD",
                   }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#334155"; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = sortBy === col.key ? "#2B5CE0" : "#64748B"; }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = PATRIA.darkBlue; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = sortBy === col.key ? PATRIA.darkBlue : PATRIA.kingBlue; }}
                 >
                   {col.label}<SortIcon col={col.key} />
                 </th>
@@ -155,28 +157,28 @@ export default function CompanyTable({
                 <tr
                   key={i}
                   onClick={() => onSelect(c)}
-                  style={{ borderBottom: "1px solid rgba(15,23,42,0.05)", cursor: "pointer", transition: "background 0.1s" }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.04)"; }}
+                  style={{ borderBottom: "1px solid rgba(13,13,56,0.05)", cursor: "pointer", transition: "background 0.1s" }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.04)"; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
                 >
                   {/* Company */}
-                  <td style={{ padding: "9px 10px", fontWeight: 600, color: "#0F172A", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <td style={{ padding: "9px 10px", fontWeight: 600, color: "#0D0D38", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {c.company as string}
                   </td>
 
                   {/* Industry */}
                   <td style={{ padding: "9px 10px" }}>
                     {c.industria ? (
-                      <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "rgba(16,185,129,0.06)", color: "#065F46", border: "1px solid rgba(16,185,129,0.18)", whiteSpace: "nowrap" }}>
+                      <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "rgba(0,30,175,0.06)", color: "#001EAF", border: "1px solid rgba(0,30,175,0.18)", whiteSpace: "nowrap" }}>
                         {c.industria as string}
                       </span>
                     ) : (
-                      <span style={{ color: "#CBD5E1" }}>—</span>
+                      <span style={{ color: "rgba(13,13,56,0.28)" }}>—</span>
                     )}
                   </td>
 
                   {/* Price */}
-                  <td style={{ ...cell(), color: "#334155" }}>
+                  <td style={{ ...cell(), color: "#0D0D38" }}>
                     {fmtPrice(c.price) === "—" ? dash : fmtPrice(c.price)}
                   </td>
 
@@ -186,56 +188,56 @@ export default function CompanyTable({
                   </td>
 
                   {/* Mkt Cap */}
-                  <td style={{ ...cell(), color: "#475569" }}>
+                  <td style={{ ...cell(), color: "rgba(13,13,56,0.62)" }}>
                     {fmtInt(c.mkt_cap_bn) === "—" ? dash : fmtInt(c.mkt_cap_bn)}
                   </td>
 
                   {/* FV */}
-                  <td style={{ ...cell(), color: "#475569" }}>
+                  <td style={{ ...cell(), color: "rgba(13,13,56,0.62)" }}>
                     {fmtInt(c.FV) === "—" ? dash : fmtInt(c.FV)}
                   </td>
 
                   {/* FV/EBITDA yr1e */}
-                  <td style={{ ...cell(), color: "#2B5CE0" }}>
+                  <td style={{ ...cell(), color: "#2044DC" }}>
                     {fmtX(c.fv_ebitda_yr1e) === "—" ? dash : fmtX(c.fv_ebitda_yr1e)}
                   </td>
 
                   {/* FV/EBITDA yr2e */}
-                  <td style={{ ...cell(), color: "#2B5CE0" }}>
+                  <td style={{ ...cell(), color: "#2044DC" }}>
                     {fmtX(c.fv_ebitda_yr2e) === "—" ? dash : fmtX(c.fv_ebitda_yr2e)}
                   </td>
 
                   {/* P/E yr1e */}
-                  <td style={{ ...cell(), color: "#7C3AED" }}>
+                  <td style={{ ...cell(), color: "#001EAF" }}>
                     {fmtX(c.pe_yr1e) === "—" ? dash : fmtX(c.pe_yr1e)}
                   </td>
 
                   {/* P/E yr2e */}
-                  <td style={{ ...cell(), color: "#7C3AED" }}>
+                  <td style={{ ...cell(), color: "#001EAF" }}>
                     {fmtX(c.pe_yr2e) === "—" ? dash : fmtX(c.pe_yr2e)}
                   </td>
 
                   {/* P/BV LTM */}
-                  <td style={{ ...cell(), color: "#475569" }}>
+                  <td style={{ ...cell(), color: "rgba(13,13,56,0.62)" }}>
                     {fmtX(c.p_bv_ltm) === "—" ? dash : fmtX(c.p_bv_ltm)}
                   </td>
 
                   {/* Div Yield */}
-                  <td style={{ ...cell(), color: "#D97706", fontWeight: 600 }}>
+                  <td style={{ ...cell(), color: "#FF6B06", fontWeight: 600 }}>
                     {fmtYield(c.div_yield) === "—" ? dash : fmtYield(c.div_yield)}
                   </td>
 
                   {/* Rec */}
                   <td style={{ ...cell() }}>
                     {badge ? (
-                      <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 10, background: badge.bg, color: badge.color, border: `1px solid ${badge.border}`, fontFamily: "monospace" }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 10, background: badge.bg, color: badge.color, border: `1px solid ${badge.border}`, fontFamily: FONT_SECONDARY }}>
                         {badge.label}
                       </span>
                     ) : dash}
                   </td>
 
                   {/* Target */}
-                  <td style={{ ...cell(), color: "#64748B" }}>
+                  <td style={{ ...cell(), color: "rgba(13,13,56,0.62)" }}>
                     {fmtPrice(c.target_price) === "—" ? dash : fmtPrice(c.target_price)}
                   </td>
 
@@ -254,8 +256,8 @@ export default function CompanyTable({
                     padding: "9px 10px",
                     textAlign: "left",
                     fontSize: 11,
-                    fontFamily: "Inter, sans-serif",
-                    color: c.thesis ? "#374151" : "#CBD5E1",
+                    fontFamily: FONT_SECONDARY,
+                    color: c.thesis ? "#0D0D38" : "rgba(13,13,56,0.28)",
                     maxWidth: 260,
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -273,8 +275,8 @@ export default function CompanyTable({
       </div>
 
       {/* Row count footer */}
-      <div style={{ display: "flex", alignItems: "center", padding: "8px 16px", borderTop: "1px solid rgba(15,23,42,0.07)", background: "#F8FAFF" }}>
-        <span style={{ fontSize: 11, color: "#64748B", fontFamily: "JetBrains Mono, monospace" }}>
+      <div style={{ display: "flex", alignItems: "center", padding: "8px 16px", borderTop: "1px solid rgba(13,13,56,0.07)", background: "#F5F7FD" }}>
+        <span style={{ fontSize: 11, color: "rgba(13,13,56,0.62)", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
           {companies.length} compan{companies.length !== 1 ? "ies" : "y"}
         </span>
       </div>

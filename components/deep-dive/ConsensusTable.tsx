@@ -2,6 +2,8 @@
 
 import { useMemo } from "react";
 import type { ConsensusPoint } from "@/app/api/companies/[ticker]/route";
+import { PATRIA, FONT_SECONDARY } from "@/lib/patriaTheme";
+import { PatriaTitle } from "@/components/patria/PatriaTitle";
 
 interface Props {
   data: ConsensusPoint[];
@@ -85,7 +87,7 @@ export default function ConsensusTable({ data }: Props) {
 
   if (rows.length === 0) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#CBD5E1", fontSize: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "rgba(13,13,56,0.28)", fontSize: 12 }}>
         No consensus estimates available
       </div>
     );
@@ -95,9 +97,10 @@ export default function ConsensusTable({ data }: Props) {
     padding: "6px 12px",
     textAlign: "right",
     fontSize: 10,
-    fontWeight: 600,
-    color: "#64748B",
-    borderBottom: "1px solid rgba(15,23,42,0.08)",
+    fontFamily: FONT_SECONDARY,
+    fontWeight: 700,
+    color: PATRIA.kingBlue,
+    borderBottom: "1px solid rgba(13,13,56,0.08)",
     letterSpacing: "0.04em",
     whiteSpace: "nowrap",
   };
@@ -105,23 +108,21 @@ export default function ConsensusTable({ data }: Props) {
     padding: "6px 12px",
     textAlign: "right",
     fontSize: 11,
-    fontFamily: "JetBrains Mono, monospace",
-    color: "#334155",
-    borderBottom: "1px solid rgba(15,23,42,0.05)",
+    fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
+    color: "#0D0D38",
+    borderBottom: "1px solid rgba(13,13,56,0.05)",
   };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div style={{ marginBottom: 8 }}>
-        <span style={{ fontSize: 10, fontWeight: 600, color: "#64748B", letterSpacing: "0.06em" }}>
-          CONSENSUS ESTIMATES — LATEST SNAPSHOT
-        </span>
-      </div>
+      <PatriaTitle style={{ marginBottom: 8, borderRadius: 6 }}>
+        Consensus Estimates — Latest Snapshot
+      </PatriaTitle>
       <div style={{ overflowX: "auto", flex: 1 }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
           <thead>
-            <tr style={{ background: "#F0F4FA" }}>
-              <th style={{ ...thSt, textAlign: "left", color: "#94A3B8" }}>Metric</th>
+            <tr style={{ background: "#F5F7FD" }}>
+              <th style={{ ...thSt, textAlign: "left", color: PATRIA.kingBlue }}>Metric</th>
               {periods.map((p) => (
                 <th key={p} style={thSt}>{p}</th>
               ))}
@@ -131,22 +132,22 @@ export default function ConsensusTable({ data }: Props) {
             {rows.map((row, i) => (
               <tr
                 key={row.metric}
-                style={{ background: i % 2 === 1 ? "rgba(248,250,252,0.7)" : "transparent" }}
+                style={{ background: i % 2 === 1 ? "rgba(13,13,56,0.022)" : "transparent" }}
                 onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.04)";
+                  (e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.04)";
                 }}
                 onMouseLeave={(e) => {
                   (e.currentTarget as HTMLElement).style.background =
-                    i % 2 === 1 ? "rgba(248,250,252,0.7)" : "transparent";
+                    i % 2 === 1 ? "rgba(13,13,56,0.022)" : "transparent";
                 }}
               >
                 <td
                   style={{
                     ...tdSt,
                     textAlign: "left",
-                    fontFamily: "Inter, sans-serif",
-                    fontWeight: 600,
-                    color: "#64748B",
+                    fontFamily: FONT_SECONDARY,
+                    fontWeight: 700,
+                    color: PATRIA.kingBlue,
                     fontSize: 11,
                   }}
                 >
@@ -156,7 +157,7 @@ export default function ConsensusTable({ data }: Props) {
                   const v = row.values[p];
                   return (
                     <td key={p} style={tdSt}>
-                      {v !== null ? fmtVal(v) : <span style={{ color: "#CBD5E1" }}>—</span>}
+                      {v !== null ? fmtVal(v) : <span style={{ color: "rgba(13,13,56,0.28)" }}>—</span>}
                     </td>
                   );
                 })}

@@ -6,18 +6,19 @@ import { useSession } from "next-auth/react";
 import {
   ShieldCheck, UserPlus, Trash2, KeyRound, Loader2, X, Check, AlertTriangle,
 } from "lucide-react";
+import { FONT_SECONDARY } from "@/lib/patriaTheme";
 
 // ── Design tokens (match the app) ───────────────────────────────────────────────
-const TEXT1  = "#0F172A";
-const TEXT2  = "#64748B";
-const TEXT3  = "#94A3B8";
-const BORDER = "rgba(15,23,42,0.08)";
-const BLUE   = "#2B5CE0";
-const RED    = "#B91C1C";
-const GREEN  = "#15803D";
+const TEXT1  = "#0D0D38";
+const TEXT2  = "rgba(13,13,56,0.62)";
+const TEXT3  = "rgba(13,13,56,0.45)";
+const BORDER = "rgba(13,13,56,0.08)";
+const BLUE   = "#2044DC";
+const RED    = "#F8485E";
+const GREEN  = "#001EAF";
 const CARD: React.CSSProperties = {
   background: "#FFFFFF", border: `1px solid ${BORDER}`, borderRadius: 12,
-  boxShadow: "0 1px 4px rgba(15,23,42,0.06)",
+  boxShadow: "0 1px 4px rgba(13,13,56,0.06)",
 };
 
 interface AdminUser {
@@ -30,7 +31,7 @@ interface AdminUser {
 const inputStyle: React.CSSProperties = {
   width: "100%", boxSizing: "border-box",
   padding: "8px 11px", borderRadius: 8, border: `1px solid ${BORDER}`,
-  background: "#F8FAFF", fontSize: 13, color: TEXT1, outline: "none",
+  background: "#F5F7FD", fontSize: 13, color: TEXT1, outline: "none",
 };
 
 function RoleBadge({ role }: { role: string }) {
@@ -40,9 +41,9 @@ function RoleBadge({ role }: { role: string }) {
       display: "inline-flex", alignItems: "center", gap: 4,
       fontSize: 10, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase",
       padding: "3px 9px", borderRadius: 6,
-      background: admin ? "rgba(43,92,224,0.10)" : "rgba(100,116,139,0.10)",
-      border: `1px solid ${admin ? "rgba(43,92,224,0.28)" : "rgba(100,116,139,0.24)"}`,
-      color: admin ? "#1E3A8A" : "#475569",
+      background: admin ? "rgba(32,68,220,0.10)" : "rgba(13,13,56,0.10)",
+      border: `1px solid ${admin ? "rgba(32,68,220,0.28)" : "rgba(13,13,56,0.24)"}`,
+      color: admin ? "#001EAF" : "rgba(13,13,56,0.62)",
     }}>
       {admin && <ShieldCheck size={11} />}
       {role}
@@ -181,7 +182,7 @@ export default function AdminPage() {
         <div style={{ marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{
             width: 38, height: 38, borderRadius: 10, flexShrink: 0,
-            background: "rgba(43,92,224,0.08)", border: "1px solid rgba(43,92,224,0.16)",
+            background: "rgba(32,68,220,0.08)", border: "1px solid rgba(32,68,220,0.16)",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
             <ShieldCheck size={19} style={{ color: BLUE }} />
@@ -198,12 +199,12 @@ export default function AdminPage() {
 
         {/* Notice / error */}
         {notice && (
-          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14, padding: "9px 13px", borderRadius: 9, background: "rgba(21,128,61,0.07)", border: "1px solid rgba(21,128,61,0.20)", color: GREEN, fontSize: 12.5 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14, padding: "9px 13px", borderRadius: 9, background: "rgba(0,30,175,0.07)", border: "1px solid rgba(0,30,175,0.20)", color: GREEN, fontSize: 12.5 }}>
             <Check size={14} /> {notice}
           </div>
         )}
         {error && (
-          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14, padding: "9px 13px", borderRadius: 9, background: "rgba(185,28,28,0.06)", border: "1px solid rgba(185,28,28,0.20)", color: RED, fontSize: 12.5 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14, padding: "9px 13px", borderRadius: 9, background: "rgba(248,72,94,0.06)", border: "1px solid rgba(248,72,94,0.20)", color: RED, fontSize: 12.5 }}>
             <AlertTriangle size={14} /> {error}
             <button onClick={() => setError(null)} style={{ marginLeft: "auto", background: "none", border: "none", color: RED, cursor: "pointer", display: "flex" }}><X size={14} /></button>
           </div>
@@ -226,7 +227,7 @@ export default function AdminPage() {
             </div>
             <div>
               <label style={{ fontSize: 10, fontWeight: 700, color: TEXT2, letterSpacing: "0.05em", textTransform: "uppercase", display: "block", marginBottom: 5 }}>Contraseña</label>
-              <input type="text" value={nPassword} onChange={(e) => setNPassword(e.target.value)} placeholder="mín. 6" style={{ ...inputStyle, fontFamily: "JetBrains Mono, monospace" }} />
+              <input type="text" value={nPassword} onChange={(e) => setNPassword(e.target.value)} placeholder="mín. 6" style={{ ...inputStyle, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }} />
             </div>
             <div>
               <label style={{ fontSize: 10, fontWeight: 700, color: TEXT2, letterSpacing: "0.05em", textTransform: "uppercase", display: "block", marginBottom: 5 }}>Rol</label>
@@ -241,7 +242,7 @@ export default function AdminPage() {
               style={{
                 display: "inline-flex", alignItems: "center", gap: 7,
                 padding: "9px 18px", borderRadius: 8, border: "none",
-                background: creating ? "rgba(43,92,224,0.5)" : BLUE, color: "#fff",
+                background: creating ? "rgba(32,68,220,0.5)" : BLUE, color: "#fff",
                 fontSize: 13, fontWeight: 700, cursor: creating ? "not-allowed" : "pointer",
                 whiteSpace: "nowrap", height: 38,
               }}
@@ -254,7 +255,7 @@ export default function AdminPage() {
 
         {/* Users table */}
         <div style={{ ...CARD, overflow: "hidden" }}>
-          <div style={{ padding: "12px 20px", borderBottom: `1px solid ${BORDER}`, background: "#F8FAFF" }}>
+          <div style={{ padding: "12px 20px", borderBottom: `1px solid ${BORDER}`, background: "#F5F7FD" }}>
             <span style={{ fontSize: 12, fontWeight: 700, color: TEXT1 }}>
               Usuarios {users.length > 0 && <span style={{ color: TEXT3, fontWeight: 500 }}>· {users.length}</span>}
             </span>
@@ -283,7 +284,7 @@ export default function AdminPage() {
                   <div key={u.id} style={{ display: "contents" }}>
                     <div style={{ padding: "11px 20px", fontSize: 13, color: TEXT1, fontWeight: 600, borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
                       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.email}</span>
-                      {isSelf && <span style={{ fontSize: 9, color: TEXT3, background: "rgba(15,23,42,0.05)", padding: "1px 6px", borderRadius: 5, flexShrink: 0 }}>tú</span>}
+                      {isSelf && <span style={{ fontSize: 9, color: TEXT3, background: "rgba(13,13,56,0.05)", padding: "1px 6px", borderRadius: 5, flexShrink: 0 }}>tú</span>}
                     </div>
                     <div style={{ padding: "11px 20px", fontSize: 13, color: TEXT2, borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center" }}>
                       {u.name || <span style={{ color: TEXT3 }}>—</span>}
@@ -296,7 +297,7 @@ export default function AdminPage() {
                         title={isSelf ? "No puedes cambiar tu propio rol" : "Cambiar rol"}
                         style={{
                           appearance: "none", padding: "4px 8px", borderRadius: 6,
-                          border: `1px solid ${BORDER}`, background: isSelf ? "#F1F5F9" : "#fff",
+                          border: `1px solid ${BORDER}`, background: isSelf ? "#F5F7FD" : "#fff",
                           fontSize: 11, fontWeight: 600, color: TEXT1,
                           cursor: isSelf ? "not-allowed" : "pointer",
                         }}
@@ -321,8 +322,8 @@ export default function AdminPage() {
                         style={{
                           display: "inline-flex", alignItems: "center", justifyContent: "center",
                           width: 30, height: 30, borderRadius: 7,
-                          border: `1px solid ${isSelf ? BORDER : "rgba(185,28,28,0.20)"}`,
-                          background: isSelf ? "#F1F5F9" : "rgba(185,28,28,0.05)",
+                          border: `1px solid ${isSelf ? BORDER : "rgba(248,72,94,0.20)"}`,
+                          background: isSelf ? "#F5F7FD" : "rgba(248,72,94,0.05)",
                           color: isSelf ? TEXT3 : RED,
                           cursor: isSelf ? "not-allowed" : "pointer",
                         }}

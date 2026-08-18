@@ -2,6 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import { Upload, X, FileText, AlertCircle, ChevronDown } from "lucide-react";
+import { FONT_SECONDARY } from "@/lib/patriaTheme";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -74,13 +75,13 @@ function formatFileSize(bytes: number): string {
 
 const INPUT: React.CSSProperties = {
   width: "100%", padding: "8px 11px",
-  border: "1px solid rgba(15,23,42,0.14)", borderRadius: 7,
-  fontSize: 13, color: "#0F172A", background: "#F8FAFC",
-  outline: "none", fontFamily: "Inter, sans-serif", boxSizing: "border-box",
+  border: "1px solid rgba(13,13,56,0.14)", borderRadius: 7,
+  fontSize: 13, color: "#0D0D38", background: "#F5F7FD",
+  outline: "none", fontFamily: FONT_SECONDARY, boxSizing: "border-box",
 };
 
 const LABEL: React.CSSProperties = {
-  fontSize: 11, fontWeight: 600, color: "#64748B",
+  fontSize: 11, fontWeight: 600, color: "rgba(13,13,56,0.62)",
   textTransform: "uppercase", letterSpacing: "0.07em",
   marginBottom: 5, display: "block",
 };
@@ -185,14 +186,14 @@ function CompanyCombobox({
           <button
             type="button"
             onClick={handleClear}
-            style={{ position: "absolute", right: 28, background: "none", border: "none", cursor: "pointer", color: "#94A3B8", padding: 2, display: "flex" }}
+            style={{ position: "absolute", right: 28, background: "none", border: "none", cursor: "pointer", color: "rgba(13,13,56,0.45)", padding: 2, display: "flex" }}
           >
             <X size={12} />
           </button>
         )}
         <ChevronDown
           size={13}
-          style={{ position: "absolute", right: 10, color: "#94A3B8", pointerEvents: "none" }}
+          style={{ position: "absolute", right: 10, color: "rgba(13,13,56,0.45)", pointerEvents: "none" }}
         />
       </div>
 
@@ -200,9 +201,9 @@ function CompanyCombobox({
         <div style={{
           position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 100,
           background: "#fff",
-          border: "1px solid rgba(15,23,42,0.12)",
+          border: "1px solid rgba(13,13,56,0.12)",
           borderRadius: 8,
-          boxShadow: "0 8px 24px rgba(15,23,42,0.12)",
+          boxShadow: "0 8px 24px rgba(13,13,56,0.12)",
           maxHeight: 220,
           overflowY: "auto",
         }}>
@@ -215,14 +216,14 @@ function CompanyCombobox({
                 display: "flex", flexDirection: "column", alignItems: "flex-start",
                 width: "100%", padding: "8px 12px",
                 background: "none", border: "none", cursor: "pointer",
-                borderBottom: "1px solid rgba(15,23,42,0.05)",
+                borderBottom: "1px solid rgba(13,13,56,0.05)",
                 textAlign: "left",
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(43,92,224,0.05)")}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(32,68,220,0.05)")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
             >
-              <span style={{ fontSize: 12, fontWeight: 600, color: "#0F172A" }}>{opt.nombre}</span>
-              <span style={{ fontSize: 10, color: "#94A3B8", fontFamily: "JetBrains Mono, monospace" }}>{opt.ticker}</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: "#0D0D38" }}>{opt.nombre}</span>
+              <span style={{ fontSize: 10, color: "rgba(13,13,56,0.45)", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>{opt.ticker}</span>
             </button>
           ))}
         </div>
@@ -386,21 +387,21 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
 
       {/* Backdrop */}
       <div
-        style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backdropFilter: "blur(2px)" }}
+        style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(13,13,56,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backdropFilter: "blur(2px)" }}
         onClick={(e) => { if (!isSubmitting && e.target === e.currentTarget) onClose(); }}
       >
         {/* Card */}
-        <div style={{ background: "#fff", borderRadius: 14, boxShadow: "0 20px 60px rgba(15,23,42,0.22)", width: "100%", maxWidth: 560, maxHeight: "calc(100vh - 40px)", overflowY: "auto" }}>
+        <div style={{ background: "#fff", borderRadius: 14, boxShadow: "0 20px 60px rgba(13,13,56,0.22)", width: "100%", maxWidth: 560, maxHeight: "calc(100vh - 40px)", overflowY: "auto" }}>
 
           {/* Header */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 22px 16px", borderBottom: "1px solid rgba(15,23,42,0.07)", position: "sticky", top: 0, background: "#fff", zIndex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 22px 16px", borderBottom: "1px solid rgba(13,13,56,0.07)", position: "sticky", top: 0, background: "#fff", zIndex: 1 }}>
             <div>
-              <p style={{ fontSize: 15, fontWeight: 700, color: "#0F172A", margin: 0 }}>New Presentation</p>
-              <p style={{ fontSize: 11, color: "#94A3B8", margin: "3px 0 0", fontFamily: "JetBrains Mono, monospace" }}>
+              <p style={{ fontSize: 15, fontWeight: 700, color: "#0D0D38", margin: 0 }}>New Presentation</p>
+              <p style={{ fontSize: 11, color: "rgba(13,13,56,0.45)", margin: "3px 0 0", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
                 Select a file, fill in the details, then upload
               </p>
             </div>
-            <button onClick={onClose} disabled={isSubmitting} style={{ background: "none", border: "none", cursor: isSubmitting ? "not-allowed" : "pointer", color: isSubmitting ? "#CBD5E1" : "#94A3B8", padding: 4, borderRadius: 6 }}>
+            <button onClick={onClose} disabled={isSubmitting} style={{ background: "none", border: "none", cursor: isSubmitting ? "not-allowed" : "pointer", color: isSubmitting ? "rgba(13,13,56,0.28)" : "rgba(13,13,56,0.45)", padding: 4, borderRadius: 6 }}>
               <X size={18} />
             </button>
           </div>
@@ -417,53 +418,53 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
                   onClick={() => !isSubmitting && inputRef.current?.click()}
                   onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}
                   style={{
-                    border: `2px dashed ${isDragging ? "#2B5CE0" : "rgba(15,23,42,0.15)"}`,
+                    border: `2px dashed ${isDragging ? "#2044DC" : "rgba(13,13,56,0.15)"}`,
                     borderRadius: 10, padding: "24px 20px",
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
                     cursor: isSubmitting ? "not-allowed" : "pointer",
-                    background: isDragging ? "rgba(43,92,224,0.04)" : "#FAFAFA",
+                    background: isDragging ? "rgba(32,68,220,0.04)" : "#F5F7FD",
                     transition: "border-color 0.15s, background 0.15s", userSelect: "none",
                   }}
                 >
-                  <div style={{ width: 38, height: 38, borderRadius: 9, background: "rgba(43,92,224,0.08)", border: "1px solid rgba(43,92,224,0.18)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <Upload size={17} color="#2B5CE0" />
+                  <div style={{ width: 38, height: 38, borderRadius: 9, background: "rgba(32,68,220,0.08)", border: "1px solid rgba(32,68,220,0.18)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Upload size={17} color="#2044DC" />
                   </div>
                   <div style={{ textAlign: "center" }}>
-                    <p style={{ fontSize: 13, fontWeight: 600, color: "#334155", margin: 0 }}>
-                      Drag &amp; drop or <span style={{ color: "#2B5CE0", textDecoration: "underline" }}>browse</span>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: "#0D0D38", margin: 0 }}>
+                      Drag &amp; drop or <span style={{ color: "#2044DC", textDecoration: "underline" }}>browse</span>
                     </p>
-                    <p style={{ fontSize: 11, color: "#94A3B8", margin: "3px 0 0" }}>PDF, PPT, PPTX</p>
+                    <p style={{ fontSize: 11, color: "rgba(13,13,56,0.45)", margin: "3px 0 0" }}>PDF, PPT, PPTX</p>
                   </div>
                 </div>
               ) : (
-                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", background: "rgba(43,92,224,0.04)", border: "1px solid rgba(43,92,224,0.18)", borderRadius: 10 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 8, flexShrink: 0, background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <FileText size={15} color="#DC2626" />
+                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", background: "rgba(32,68,220,0.04)", border: "1px solid rgba(32,68,220,0.18)", borderRadius: 10 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 8, flexShrink: 0, background: "rgba(248,72,94,0.08)", border: "1px solid rgba(248,72,94,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <FileText size={15} color="#F8485E" />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 13, fontWeight: 600, color: "#0F172A", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.name}</p>
-                    <p style={{ fontSize: 11, color: "#94A3B8", margin: "2px 0 0", fontFamily: "JetBrains Mono, monospace" }}>{formatFileSize(file.size)}</p>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: "#0D0D38", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.name}</p>
+                    <p style={{ fontSize: 11, color: "rgba(13,13,56,0.45)", margin: "2px 0 0", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>{formatFileSize(file.size)}</p>
                   </div>
                   {!isSubmitting && (
-                    <button type="button" onClick={() => { setFile(null); setFileError(null); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#94A3B8", padding: 4, flexShrink: 0 }}>
+                    <button type="button" onClick={() => { setFile(null); setFileError(null); }} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(13,13,56,0.45)", padding: 4, flexShrink: 0 }}>
                       <X size={14} />
                     </button>
                   )}
                 </div>
               )}
-              {fileError && <p style={{ fontSize: 11, color: "#DC2626", margin: "5px 0 0", display: "flex", alignItems: "center", gap: 4 }}><AlertCircle size={12} /> {fileError}</p>}
+              {fileError && <p style={{ fontSize: 11, color: "#F8485E", margin: "5px 0 0", display: "flex", alignItems: "center", gap: 4 }}><AlertCircle size={12} /> {fileError}</p>}
             </div>
 
             {/* ── Title ────────────────────────────────────────────────────── */}
             <div>
-              <label style={LABEL}>Title <span style={{ color: "#DC2626" }}>*</span></label>
+              <label style={LABEL}>Title <span style={{ color: "#F8485E" }}>*</span></label>
               <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Banco de Chile — Initiation of Coverage" disabled={isSubmitting} style={{ ...INPUT, opacity: isSubmitting ? 0.6 : 1 }} autoFocus />
             </div>
 
             {/* ── Description ──────────────────────────────────────────────── */}
             <div>
               <label style={LABEL}>
-                Description <span style={{ color: "#94A3B8", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(optional)</span>
+                Description <span style={{ color: "rgba(13,13,56,0.45)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(optional)</span>
               </label>
               <textarea value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Brief summary or source (e.g. JPMorgan, Quant Team…)" rows={2} disabled={isSubmitting} style={{ ...INPUT, resize: "vertical", lineHeight: 1.6, opacity: isSubmitting ? 0.6 : 1 }} />
             </div>
@@ -483,7 +484,7 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
               {/* Origen — Moneda / Sell Side toggle (hidden for "sell_side" category) */}
               {category !== "sell_side" ? (
                 <div>
-                  <label style={LABEL}>Origin <span style={{ color: "#DC2626" }}>*</span></label>
+                  <label style={LABEL}>Origin <span style={{ color: "#F8485E" }}>*</span></label>
                   <div style={{ display: "flex", gap: 6 }}>
                     {[
                       { label: "Moneda",    value: false },
@@ -498,9 +499,9 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
                           onClick={() => setIsSellSide(opt.value)}
                           style={{
                             flex: 1, padding: "7px 8px",
-                            borderRadius: 7, border: `1px solid ${active ? "#2B5CE0" : "rgba(15,23,42,0.14)"}`,
-                            background: active ? "rgba(43,92,224,0.10)" : "#F8FAFC",
-                            color: active ? "#1E3A8A" : "#64748B",
+                            borderRadius: 7, border: `1px solid ${active ? "#2044DC" : "rgba(13,13,56,0.14)"}`,
+                            background: active ? "rgba(32,68,220,0.10)" : "#F5F7FD",
+                            color: active ? "#001EAF" : "rgba(13,13,56,0.62)",
                             fontSize: 12, fontWeight: 700,
                             cursor: isSubmitting ? "not-allowed" : "pointer",
                             transition: "all 0.12s",
@@ -517,7 +518,7 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
                 <div>
                   <label style={LABEL}>Origin</label>
                   <div style={{ display: "flex", alignItems: "center", height: 36 }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: "#1E3A8A", background: "rgba(43,92,224,0.10)", border: "1px solid #2B5CE0", borderRadius: 7, padding: "5px 14px" }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#001EAF", background: "rgba(32,68,220,0.10)", border: "1px solid #2044DC", borderRadius: 7, padding: "5px 14px" }}>
                       Sell Side
                     </span>
                   </div>
@@ -555,9 +556,9 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
                         onClick={() => setRegion(opt.value)}
                         style={{
                           flex: 1, padding: "7px 8px",
-                          borderRadius: 7, border: `1px solid ${active ? "#2B5CE0" : "rgba(15,23,42,0.14)"}`,
-                          background: active ? "rgba(43,92,224,0.10)" : "#F8FAFC",
-                          color: active ? "#1E3A8A" : "#64748B",
+                          borderRadius: 7, border: `1px solid ${active ? "#2044DC" : "rgba(13,13,56,0.14)"}`,
+                          background: active ? "rgba(32,68,220,0.10)" : "#F5F7FD",
+                          color: active ? "#001EAF" : "rgba(13,13,56,0.62)",
                           fontSize: 12, fontWeight: 700,
                           cursor: isSubmitting ? "not-allowed" : "pointer",
                           transition: "all 0.12s",
@@ -574,7 +575,7 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
             {/* ── Company autocomplete ──────────────────────────────────── */}
             <div>
               <label style={LABEL}>
-                Company / Ticker <span style={{ color: "#94A3B8", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(optional)</span>
+                Company / Ticker <span style={{ color: "rgba(13,13,56,0.45)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(optional)</span>
               </label>
               <CompanyCombobox
                 value={companyTicker}
@@ -586,10 +587,10 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
             {/* ── Upload progress ───────────────────────────────────────── */}
             {phase === "uploading" && (
               <div>
-                <div style={{ height: 5, borderRadius: 5, background: "rgba(43,92,224,0.12)", overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${progress}%`, background: "linear-gradient(90deg, #2B5CE0, #60A5FA)", borderRadius: 5, transition: "width 0.2s ease" }} />
+                <div style={{ height: 5, borderRadius: 5, background: "rgba(32,68,220,0.12)", overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${progress}%`, background: "linear-gradient(90deg, #2044DC, #88AAFF)", borderRadius: 5, transition: "width 0.2s ease" }} />
                 </div>
-                <p style={{ fontSize: 10, color: "#94A3B8", margin: "4px 0 0", textAlign: "right", fontFamily: "JetBrains Mono, monospace" }}>
+                <p style={{ fontSize: 10, color: "rgba(13,13,56,0.45)", margin: "4px 0 0", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
                   {progress}% — uploading to storage…
                 </p>
               </div>
@@ -597,18 +598,18 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
 
             {/* ── Error ─────────────────────────────────────────────────── */}
             {error && (
-              <div style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "10px 12px", background: "rgba(220,38,38,0.05)", border: "1px solid rgba(220,38,38,0.18)", borderRadius: 8 }}>
-                <AlertCircle size={14} color="#DC2626" style={{ flexShrink: 0, marginTop: 1 }} />
-                <p style={{ fontSize: 12, color: "#B91C1C", margin: 0, lineHeight: 1.5 }}>{error}</p>
+              <div style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "10px 12px", background: "rgba(248,72,94,0.05)", border: "1px solid rgba(248,72,94,0.18)", borderRadius: 8 }}>
+                <AlertCircle size={14} color="#F8485E" style={{ flexShrink: 0, marginTop: 1 }} />
+                <p style={{ fontSize: 12, color: "#F8485E", margin: 0, lineHeight: 1.5 }}>{error}</p>
               </div>
             )}
 
             {/* ── Actions ───────────────────────────────────────────────── */}
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", paddingTop: 2 }}>
-              <button type="button" onClick={onClose} disabled={isSubmitting} style={{ padding: "8px 18px", borderRadius: 8, border: "1px solid rgba(15,23,42,0.14)", background: "#fff", color: "#64748B", fontSize: 13, fontWeight: 600, cursor: isSubmitting ? "not-allowed" : "pointer", opacity: isSubmitting ? 0.5 : 1 }}>
+              <button type="button" onClick={onClose} disabled={isSubmitting} style={{ padding: "8px 18px", borderRadius: 8, border: "1px solid rgba(13,13,56,0.14)", background: "#fff", color: "rgba(13,13,56,0.62)", fontSize: 13, fontWeight: 600, cursor: isSubmitting ? "not-allowed" : "pointer", opacity: isSubmitting ? 0.5 : 1 }}>
                 Cancel
               </button>
-              <button type="submit" disabled={isSubmitting} style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: isSubmitting ? "rgba(43,92,224,0.65)" : "#2B5CE0", color: "#fff", fontSize: 13, fontWeight: 700, cursor: isSubmitting ? "not-allowed" : "pointer", display: "inline-flex", alignItems: "center", gap: 7, minWidth: 210, justifyContent: "center" }}>
+              <button type="submit" disabled={isSubmitting} style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: isSubmitting ? "rgba(32,68,220,0.65)" : "#2044DC", color: "#fff", fontSize: 13, fontWeight: 700, cursor: isSubmitting ? "not-allowed" : "pointer", display: "inline-flex", alignItems: "center", gap: 7, minWidth: 210, justifyContent: "center" }}>
                 <SubmitLabel phase={phase} progress={progress} />
               </button>
             </div>

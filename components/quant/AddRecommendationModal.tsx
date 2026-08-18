@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import type { TrackRecordOptions } from "@/app/api/analysis/track-record/options/route";
+import { PATRIA, FONT_SECONDARY, TEXT } from "@/lib/patriaTheme";
 
 // Fila editable (subconjunto de PreviewRow) para reutilizar el modal en modo edición.
 export interface EditRecommendationRow {
@@ -16,23 +17,23 @@ export interface EditRecommendationRow {
 }
 
 // ── Design tokens (match the feature) ───────────────────────────────────────────
-const TEXT1  = "#0F172A";
-const TEXT2  = "#64748B";
-const TEXT3  = "#94A3B8";
-const BORDER = "rgba(15,23,42,0.08)";
-const RED    = "#B91C1C";
-const GREEN  = "#15803D";
+const TEXT1  = PATRIA.darkBlue;   // Regla 4
+const TEXT2  = TEXT.label;
+const TEXT3  = TEXT.muted;
+const BORDER = "rgba(13,13,56,0.08)";
+const RED    = PATRIA.pink;       // negativo
+const GREEN  = PATRIA.blue;       // positivo
 
 const inputStyle: React.CSSProperties = {
   width: "100%", boxSizing: "border-box",
   padding: "7px 10px", borderRadius: 7, border: `1px solid ${BORDER}`,
-  background: "#F8FAFF", fontSize: 12.5, color: TEXT1, outline: "none",
+  background: "#F5F7FD", fontSize: 12.5, color: TEXT1, outline: "none",
 };
 
 function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-      <span style={{ fontSize: 10, fontWeight: 700, color: TEXT2, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+      <span style={{ fontSize: 10, fontWeight: 700, fontFamily: FONT_SECONDARY, color: PATRIA.kingBlue, letterSpacing: "0.06em", textTransform: "uppercase" }}>
         {label}
       </span>
       {children}
@@ -152,7 +153,7 @@ export default function AddRecommendationModal({
       onMouseDown={close}
       style={{
         position: "fixed", inset: 0, zIndex: 1000,
-        background: "rgba(15,23,42,0.45)", backdropFilter: "blur(2px)",
+        background: "rgba(13,13,56,0.45)", backdropFilter: "blur(2px)",
         display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
       }}
     >
@@ -161,7 +162,7 @@ export default function AddRecommendationModal({
         style={{
           width: 560, maxWidth: "100%", maxHeight: "90vh", overflowY: "auto",
           background: "#FFFFFF", borderRadius: 14, border: `1px solid ${BORDER}`,
-          boxShadow: "0 18px 50px rgba(15,23,42,0.22)",
+          boxShadow: "0 18px 50px rgba(13,13,56,0.22)",
         }}
       >
         {/* Header */}
@@ -203,7 +204,7 @@ export default function AddRecommendationModal({
             <>
               <Field label="Yahoo ticker" hint="Required — e.g. CMPC.SN, BBAS3.SA">
                 <input value={ticker} onChange={e => setTicker(e.target.value)}
-                  placeholder="TICKER.SN" style={{ ...inputStyle, borderColor: "rgba(43,92,224,0.35)" }} />
+                  placeholder="TICKER.SN" style={{ ...inputStyle, borderColor: "rgba(32,68,220,0.35)" }} />
               </Field>
               <Field label="ISIN (optional)">
                 <input value={isin} onChange={e => setIsin(e.target.value)} placeholder="—" style={inputStyle} />
@@ -228,17 +229,17 @@ export default function AddRecommendationModal({
 
           <Field label="Current price">
             <input type="number" value={currentPrice} onChange={e => setCurrentPrice(e.target.value)}
-              placeholder="0.00" style={{ ...inputStyle, fontFamily: "JetBrains Mono, monospace" }} />
+              placeholder="0.00" style={{ ...inputStyle, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }} />
           </Field>
           <Field label="Target price">
             <input type="number" value={targetPrice} onChange={e => setTargetPrice(e.target.value)}
-              placeholder="0.00" style={{ ...inputStyle, fontFamily: "JetBrains Mono, monospace" }} />
+              placeholder="0.00" style={{ ...inputStyle, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }} />
           </Field>
         </div>
 
         {/* Error */}
         {error && (
-          <div style={{ margin: "0 20px", padding: "9px 12px", borderRadius: 8, fontSize: 12, color: RED, background: "rgba(185,28,28,0.06)", border: "1px solid rgba(185,28,28,0.20)" }}>
+          <div style={{ margin: "0 20px", padding: "9px 12px", borderRadius: 8, fontSize: 12, color: RED, background: "rgba(248,72,94,0.06)", border: "1px solid rgba(248,72,94,0.20)" }}>
             {error}
           </div>
         )}
@@ -253,9 +254,10 @@ export default function AddRecommendationModal({
             style={{
               display: "inline-flex", alignItems: "center", gap: 8,
               padding: "8px 18px", borderRadius: 8, border: "none",
-              background: saving ? "rgba(21,128,61,0.45)" : GREEN, color: "#FFFFFF",
+              // Estado deshabilitado: se sube el alpha para que el texto blanco siga legible.
+              background: saving ? "rgba(0,30,175,0.60)" : GREEN, color: "#FFFFFF",
               fontSize: 12.5, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer",
-              boxShadow: saving ? "none" : "0 1px 3px rgba(21,128,61,0.35)",
+              boxShadow: saving ? "none" : "0 1px 3px rgba(0,30,175,0.35)",
             }}>
             {saving && (
               <span style={{ width: 13, height: 13, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.45)", borderTopColor: "#FFFFFF", animation: "spin 0.8s linear infinite" }} />

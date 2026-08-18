@@ -12,15 +12,16 @@ import type {
 } from "@/app/api/analysis/track-record/route";
 import AddRecommendationModal from "./AddRecommendationModal";
 import { useIsAdmin } from "@/lib/useIsAdmin";
+import { PATRIA, FONT_SECONDARY, TEXT } from "@/lib/patriaTheme";
 
 // ── Design tokens (match QuantModelTable) ───────────────────────────────────────
-const TEXT1   = "#0F172A";
-const TEXT2   = "#64748B";
-const TEXT3   = "#94A3B8";
-const BORDER  = "rgba(15,23,42,0.08)";
-const BLUE    = "#2B5CE0";
-const GREEN   = "#15803D";
-const RED     = "#B91C1C";
+const TEXT1   = PATRIA.darkBlue;   // Regla 4
+const TEXT2   = TEXT.label;
+const TEXT3   = TEXT.muted;
+const BORDER  = "rgba(13,13,56,0.08)";
+const BLUE    = PATRIA.kingBlue;   // Regla 5 / interactivo
+const GREEN   = PATRIA.blue;       // positivo
+const RED     = PATRIA.pink;       // negativo
 
 const CURRENCIES = ["Local", "USD", "CLP", "BRL", "MXN", "COP", "PEN", "ARS"];
 
@@ -46,9 +47,9 @@ function fmtPct(v: number | null, sign = true) {
 }
 
 const DIR_META: Record<CalcRow["direction"], { label: string; color: string; bg: string; arrow: string }> = {
-  long:  { label: "Long",  color: GREEN, bg: "rgba(21,128,61,0.08)",  arrow: "▲" },
-  short: { label: "Short", color: RED,   bg: "rgba(185,28,28,0.08)",  arrow: "▼" },
-  flat:  { label: "Flat",  color: TEXT3, bg: "rgba(15,23,42,0.04)",   arrow: "–" },
+  long:  { label: "Long",  color: GREEN, bg: "rgba(0,30,175,0.08)",  arrow: "▲" },
+  short: { label: "Short", color: RED,   bg: "rgba(248,72,94,0.08)",  arrow: "▼" },
+  flat:  { label: "Flat",  color: TEXT3, bg: "rgba(13,13,56,0.04)",   arrow: "–" },
 };
 function DirBadge({ d }: { d: CalcRow["direction"] }) {
   const m = DIR_META[d];
@@ -77,7 +78,7 @@ function BarTooltip({ active, payload }: { active?: boolean; payload?: { payload
   return (
     <div style={{
       background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 8,
-      padding: "9px 12px", boxShadow: "0 4px 16px rgba(15,23,42,0.10)", minWidth: 180,
+      padding: "9px 12px", boxShadow: "0 4px 16px rgba(13,13,56,0.10)", minWidth: 180,
     }}>
       <p style={{ ...MONO, color: TEXT2, marginBottom: 6 }}>
         {fmtDate(p.entryDate)} → {fmtDate(p.exitDate)}
@@ -139,7 +140,7 @@ function InfoTip({ content }: { content: React.ReactNode }) {
       <button onClick={() => setOpen(v => !v)} aria-label="Methodology" title="Metodología"
         style={{
           width: 17, height: 17, borderRadius: "50%", border: `1px solid ${open ? BLUE : BORDER}`,
-          background: open ? "rgba(43,92,224,0.10)" : "#fff", color: open ? BLUE : TEXT3,
+          background: open ? "rgba(32,68,220,0.10)" : "#fff", color: open ? BLUE : TEXT3,
           fontSize: 10.5, fontWeight: 800, fontStyle: "italic", cursor: "pointer",
           display: "inline-flex", alignItems: "center", justifyContent: "center", lineHeight: 1, padding: 0,
         }}>
@@ -149,7 +150,7 @@ function InfoTip({ content }: { content: React.ReactNode }) {
         <div style={{
           position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 60, width: 330,
           background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 10,
-          boxShadow: "0 8px 28px rgba(15,23,42,0.16)", padding: "12px 14px",
+          boxShadow: "0 8px 28px rgba(13,13,56,0.16)", padding: "12px 14px",
         }}>
           {content}
         </div>
@@ -159,7 +160,7 @@ function InfoTip({ content }: { content: React.ReactNode }) {
 }
 
 const epoch = (iso: string) => new Date(iso + "T00:00:00.000Z").getTime();
-const axisTick = { fill: TEXT3, fontSize: 10, fontFamily: "JetBrains Mono, monospace" };
+const axisTick = { fill: TEXT3, fontSize: 10, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" };
 const tickDate = (t: number) => new Date(t).toLocaleDateString("en-US", { month: "short", year: "2-digit" });
 
 // ── Equity curve (hero): strategy vs benchmark, cumulative % over time ──────────
@@ -171,7 +172,7 @@ function EquityTooltip({ active, payload, label, benchLabel }: {
   const strat = get("strat"), bench = get("bench");
   const alpha = strat != null && bench != null ? strat - bench : null;
   return (
-    <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "9px 12px", boxShadow: "0 4px 16px rgba(15,23,42,0.10)", minWidth: 170 }}>
+    <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "9px 12px", boxShadow: "0 4px 16px rgba(13,13,56,0.10)", minWidth: 170 }}>
       <p style={{ ...MONO, color: TEXT2, marginBottom: 6 }}>{label ? tickDate(label) : ""}</p>
       <p style={{ ...MONO, color: (strat ?? 0) >= 0 ? GREEN : RED, marginBottom: 2 }}>Strategy: {fmtPct(strat)}</p>
       <p style={{ ...MONO, color: TEXT2, marginBottom: alpha != null ? 2 : 0 }}>{benchLabel ?? "Benchmark"}: {fmtPct(bench)}</p>
@@ -205,7 +206,7 @@ function EquityChart({ data, benchLabel }: { data: EquityPoint[]; benchLabel: st
   return (
     <ResponsiveContainer width="100%" height={300}>
       <ComposedChart data={rows} margin={{ top: 6, right: 8, bottom: 0, left: -6 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.05)" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(13,13,56,0.05)" vertical={false} />
         {/* Background: green where strategy beats benchmark, red where it lags */}
         {segs.map((s, i) => (
           <ReferenceArea key={i} x1={s.x1} x2={s.x2}
@@ -215,9 +216,9 @@ function EquityChart({ data, benchLabel }: { data: EquityPoint[]; benchLabel: st
         <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} scale="time"
           tick={axisTick} tickLine={false} axisLine={false} tickFormatter={tickDate} minTickGap={36} />
         <YAxis tick={axisTick} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} width={46} />
-        <ReferenceLine y={0} stroke="rgba(15,23,42,0.25)" />
+        <ReferenceLine y={0} stroke="rgba(13,13,56,0.25)" />
         <Tooltip content={(p) => <EquityTooltip {...(p as object)} benchLabel={benchLabel} />} />
-        <Line type="monotone" dataKey="bench" stroke="#94A3B8" strokeWidth={1.6} strokeDasharray="5 3" dot={false} isAnimationActive={false} connectNulls />
+        <Line type="monotone" dataKey="bench" stroke="rgba(13,13,56,0.45)" strokeWidth={1.6} strokeDasharray="5 3" dot={false} isAnimationActive={false} connectNulls />
         <Line type="monotone" dataKey="strat" stroke={BLUE} strokeWidth={2.4} dot={false} isAnimationActive={false} />
       </ComposedChart>
     </ResponsiveContainer>
@@ -247,7 +248,7 @@ function PriceChart({ priceLine, markers, rows, ccy }: {
   return (
     <ResponsiveContainer width="100%" height={320}>
       <ComposedChart data={data} margin={{ top: 6, right: 8, bottom: 0, left: -6 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.05)" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(13,13,56,0.05)" vertical={false} />
         <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} scale="time"
           tick={axisTick} tickLine={false} axisLine={false} tickFormatter={tickDate} minTickGap={36} />
         <YAxis domain={yDomain} allowDataOverflow tick={axisTick} tickLine={false} axisLine={false}
@@ -285,9 +286,9 @@ function PriceChart({ priceLine, markers, rows, ccy }: {
 // ── Metrics rail (right side) ───────────────────────────────────────────────────
 function Metric({ label, value, color, sub }: { label: string; value: string; color?: string; sub?: string }) {
   return (
-    <div style={{ padding: "9px 11px", borderRadius: 9, background: "rgba(15,23,42,0.025)", border: `1px solid ${BORDER}` }}>
+    <div style={{ padding: "9px 11px", borderRadius: 9, background: "rgba(13,13,56,0.025)", border: `1px solid ${BORDER}` }}>
       <div style={{ fontSize: 9.5, fontWeight: 700, color: TEXT3, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 3 }}>{label}</div>
-      <div style={{ fontSize: 15, fontWeight: 800, fontFamily: "JetBrains Mono, monospace", color: color ?? TEXT1, lineHeight: 1.1 }}>{value}</div>
+      <div style={{ fontSize: 15, fontWeight: 800, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", color: color ?? TEXT1, lineHeight: 1.1 }}>{value}</div>
       {sub && <div style={{ fontSize: 10, color: TEXT3, marginTop: 2 }}>{sub}</div>}
     </div>
   );
@@ -298,11 +299,11 @@ function MetricsRail({ s, ccy, benchLabel }: { s: Summary; ccy: string; benchLab
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {/* Hero: compound + alpha */}
-      <div style={{ padding: "12px 14px", borderRadius: 11, background: "rgba(43,92,224,0.06)", border: "1px solid rgba(43,92,224,0.15)" }}>
+      <div style={{ padding: "12px 14px", borderRadius: 11, background: "rgba(32,68,220,0.06)", border: "1px solid rgba(32,68,220,0.15)" }}>
         <div style={{ fontSize: 9.5, fontWeight: 700, color: BLUE, letterSpacing: "0.05em", textTransform: "uppercase" }}>Compound return ({ccy})</div>
-        <div style={{ fontSize: 26, fontWeight: 800, fontFamily: "JetBrains Mono, monospace", color: sign(s.compound), lineHeight: 1.15 }}>{fmtPct(s.compound)}</div>
+        <div style={{ fontSize: 26, fontWeight: 800, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", color: sign(s.compound), lineHeight: 1.15 }}>{fmtPct(s.compound)}</div>
         <div style={{ fontSize: 11, color: TEXT2, marginTop: 2 }}>
-          Alpha vs {benchLabel}: <span style={{ fontWeight: 700, color: sign(s.alpha), fontFamily: "JetBrains Mono, monospace" }}>{fmtPct(s.alpha)}</span>
+          Alpha vs {benchLabel}: <span style={{ fontWeight: 700, color: sign(s.alpha), fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>{fmtPct(s.alpha)}</span>
         </div>
       </div>
 
@@ -318,14 +319,14 @@ function MetricsRail({ s, ccy, benchLabel }: { s: Summary; ccy: string; benchLab
       <Metric label="Positions (L / S / Flat)" value={`${s.longs} / ${s.shorts} / ${s.flats}`} />
 
       {/* Current standing call */}
-      <div style={{ padding: "10px 12px", borderRadius: 9, background: "rgba(15,23,42,0.025)", border: `1px solid ${BORDER}` }}>
+      <div style={{ padding: "10px 12px", borderRadius: 9, background: "rgba(13,13,56,0.025)", border: `1px solid ${BORDER}` }}>
         <div style={{ fontSize: 9.5, fontWeight: 700, color: TEXT3, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 4 }}>Current call</div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
           <DirBadge d={s.lastDirection} />
           <span style={{ fontSize: 11, color: TEXT2 }}>Upside to target</span>
-          <span style={{ marginLeft: "auto", fontSize: 13, fontWeight: 800, fontFamily: "JetBrains Mono, monospace", color: sign(s.impliedUpside) }}>{fmtPct(s.impliedUpside)}</span>
+          <span style={{ marginLeft: "auto", fontSize: 13, fontWeight: 800, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", color: sign(s.impliedUpside) }}>{fmtPct(s.impliedUpside)}</span>
         </div>
-        <div style={{ fontSize: 10.5, color: TEXT3, fontFamily: "JetBrains Mono, monospace" }}>
+        <div style={{ fontSize: 10.5, color: TEXT3, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
           target {fmtPrice(s.lastTarget)} · last {fmtPrice(s.lastPrice)}
         </div>
       </div>
@@ -384,7 +385,7 @@ function Combobox({
           width: "100%", boxSizing: "border-box",
           padding: "6px 26px 6px 10px",
           borderRadius: 7, border: `1px solid ${BORDER}`,
-          background: "#F8FAFF", fontSize: 12, color: TEXT1, outline: "none",
+          background: "#F5F7FD", fontSize: 12, color: TEXT1, outline: "none",
         }}
       />
       {value && (
@@ -404,7 +405,7 @@ function Combobox({
           position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 50,
           maxHeight: 260, overflowY: "auto",
           background: "#FFFFFF", border: `1px solid ${BORDER}`, borderRadius: 8,
-          boxShadow: "0 6px 20px rgba(15,23,42,0.12)",
+          boxShadow: "0 6px 20px rgba(13,13,56,0.12)",
         }}>
           <button
             onMouseDown={e => { e.preventDefault(); select(""); }}
@@ -424,11 +425,11 @@ function Combobox({
               onMouseDown={e => { e.preventDefault(); select(o); }}
               style={{
                 width: "100%", textAlign: "left", padding: "7px 11px", border: "none",
-                background: o === value ? "rgba(43,92,224,0.08)" : "transparent",
+                background: o === value ? "rgba(32,68,220,0.08)" : "transparent",
                 fontSize: 12, color: o === value ? BLUE : TEXT1, cursor: "pointer",
                 fontWeight: o === value ? 700 : 500,
               }}
-              onMouseEnter={e => { if (o !== value) (e.currentTarget as HTMLElement).style.background = "rgba(15,23,42,0.03)"; }}
+              onMouseEnter={e => { if (o !== value) (e.currentTarget as HTMLElement).style.background = "rgba(13,13,56,0.03)"; }}
               onMouseLeave={e => { if (o !== value) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
             >
               {o}
@@ -444,7 +445,7 @@ function Combobox({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-      <span style={{ fontSize: 10, fontWeight: 700, color: TEXT2, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+      <span style={{ fontSize: 10, fontWeight: 700, fontFamily: FONT_SECONDARY, color: PATRIA.kingBlue, letterSpacing: "0.06em", textTransform: "uppercase" }}>
         {label}
       </span>
       {children}
@@ -454,20 +455,20 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 const inputStyle: React.CSSProperties = {
   padding: "6px 10px", borderRadius: 7, border: `1px solid ${BORDER}`,
-  background: "#F8FAFF", fontSize: 12, color: TEXT1, outline: "none",
-  fontFamily: "JetBrains Mono, monospace",
+  background: "#F5F7FD", fontSize: 12, color: TEXT1, outline: "none",
+  fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
 };
 
 const TH: React.CSSProperties = {
   padding: "7px 10px", fontSize: 10, fontWeight: 700, color: TEXT2,
   textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap",
-  borderBottom: `1px solid ${BORDER}`, background: "rgba(248,250,255,0.95)",
+  borderBottom: `1px solid ${BORDER}`, background: "#F5F7FD",
   position: "sticky", top: 0, zIndex: 2,
 };
 const TD: React.CSSProperties = {
   padding: "6px 10px", borderBottom: `1px solid ${BORDER}`, whiteSpace: "nowrap",
 };
-const MONO: React.CSSProperties = { fontFamily: "JetBrains Mono, monospace", fontSize: 11 };
+const MONO: React.CSSProperties = { fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11 };
 
 // ── Main component ──────────────────────────────────────────────────────────────
 export default function AnalystTrackRecord() {
@@ -630,7 +631,7 @@ export default function AnalystTrackRecord() {
       {/* ── Filter panel ──────────────────────────────────────────────────────── */}
       <div style={{
         background: "#FFFFFF", border: `1px solid ${BORDER}`, borderRadius: 12,
-        boxShadow: "0 1px 4px rgba(15,23,42,0.06)", padding: "16px 18px",
+        boxShadow: "0 1px 4px rgba(13,13,56,0.06)", padding: "16px 18px",
         display: "flex", alignItems: "flex-end", gap: 14, flexWrap: "wrap",
       }}>
         <Field label="Start date">
@@ -665,7 +666,7 @@ export default function AnalystTrackRecord() {
             style={{
               display: "inline-flex", alignItems: "center", gap: 6,
               padding: "9px 16px", borderRadius: 8,
-              border: `1px solid rgba(43,92,224,0.30)`, background: "rgba(43,92,224,0.06)",
+              border: `1px solid rgba(32,68,220,0.30)`, background: "rgba(32,68,220,0.06)",
               color: BLUE, fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer",
             }}
           >
@@ -682,9 +683,9 @@ export default function AnalystTrackRecord() {
             padding: "9px 18px", borderRadius: 8, border: "none",
             fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap",
             color: "#FFFFFF",
-            background: !company || loadingCalc ? "rgba(43,92,224,0.40)" : BLUE,
+            background: !company || loadingCalc ? "rgba(32,68,220,0.40)" : BLUE,
             cursor: !company || loadingCalc ? "not-allowed" : "pointer",
-            boxShadow: !company || loadingCalc ? "none" : "0 1px 3px rgba(43,92,224,0.35)",
+            boxShadow: !company || loadingCalc ? "none" : "0 1px 3px rgba(32,68,220,0.35)",
           }}
         >
           {loadingCalc && (
@@ -702,7 +703,7 @@ export default function AnalystTrackRecord() {
       {error && (
         <div style={{
           padding: "10px 14px", borderRadius: 8, fontSize: 12, color: RED,
-          background: "rgba(185,28,28,0.06)", border: "1px solid rgba(185,28,28,0.20)",
+          background: "rgba(248,72,94,0.06)", border: "1px solid rgba(248,72,94,0.20)",
         }}>
           {error}
         </div>
@@ -715,7 +716,7 @@ export default function AnalystTrackRecord() {
           <div style={{ flex: 1, minWidth: 340, display: "flex", flexDirection: "column", gap: 14 }}>
 
             {/* Equity curve (hero) */}
-            <div style={{ background: "#FFFFFF", border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 1px 4px rgba(15,23,42,0.06)", padding: "14px 16px" }}>
+            <div style={{ background: "#FFFFFF", border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 1px 4px rgba(13,13,56,0.06)", padding: "14px 16px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: TEXT1 }}>
@@ -728,11 +729,11 @@ export default function AnalystTrackRecord() {
                 </div>
                 <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
                   <LegendDot color={BLUE} label="Strategy" line />
-                  <LegendDot color="#94A3B8" label={benchLbl} line />
+                  <LegendDot color="rgba(13,13,56,0.45)" label={benchLbl} line />
                   <LegendDot color={GREEN} label="Ahead" />
                   <LegendDot color={RED} label="Behind" />
                   <select value={benchmark} onChange={e => setBenchmark(e.target.value)}
-                    style={{ padding: "5px 8px", borderRadius: 7, border: `1px solid ${BORDER}`, background: "#F8FAFF", fontSize: 11, color: TEXT1, cursor: "pointer", outline: "none" }}>
+                    style={{ padding: "5px 8px", borderRadius: 7, border: `1px solid ${BORDER}`, background: "#F5F7FD", fontSize: 11, color: TEXT1, cursor: "pointer", outline: "none" }}>
                     {BENCHMARK_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 </div>
@@ -741,7 +742,7 @@ export default function AnalystTrackRecord() {
             </div>
 
             {/* Price with points */}
-            <div style={{ background: "#FFFFFF", border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 1px 4px rgba(15,23,42,0.06)", padding: "14px 16px" }}>
+            <div style={{ background: "#FFFFFF", border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 1px 4px rgba(13,13,56,0.06)", padding: "14px 16px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: TEXT1 }}>
@@ -765,7 +766,7 @@ export default function AnalystTrackRecord() {
             </div>
 
             {/* Per-recommendation bars (secondary) */}
-            <div style={{ background: "#FFFFFF", border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 1px 4px rgba(15,23,42,0.06)", padding: "14px 16px" }}>
+            <div style={{ background: "#FFFFFF", border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 1px 4px rgba(13,13,56,0.06)", padding: "14px 16px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: TEXT1 }}>Per-recommendation return</span>
@@ -782,14 +783,14 @@ export default function AnalystTrackRecord() {
               </div>
               <ResponsiveContainer width="100%" height={220}>
                 <ComposedChart data={chartData} margin={{ top: 6, right: 6, bottom: 0, left: -8 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.05)" vertical={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(13,13,56,0.05)" vertical={false} />
                   <XAxis dataKey="label" tick={axisTick} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={20} />
                   <YAxis yAxisId="ret" tick={axisTick} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} width={46} />
                   <YAxis yAxisId="cmp" orientation="right" tick={{ ...axisTick, fill: BLUE }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} width={48} />
-                  <ReferenceLine yAxisId="ret" y={0} stroke="rgba(15,23,42,0.25)" />
-                  <Tooltip cursor={{ fill: "rgba(43,92,224,0.05)" }} content={(p) => <BarTooltip active={p.active} payload={p.payload as unknown as { payload: ChartPoint }[]} />} />
+                  <ReferenceLine yAxisId="ret" y={0} stroke="rgba(13,13,56,0.25)" />
+                  <Tooltip cursor={{ fill: "rgba(32,68,220,0.05)" }} content={(p) => <BarTooltip active={p.active} payload={p.payload as unknown as { payload: ChartPoint }[]} />} />
                   <Bar yAxisId="ret" dataKey="periodReturn" radius={[2, 2, 0, 0]} maxBarSize={36} isAnimationActive={false}>
-                    {chartData.map((d, i) => (<Cell key={i} fill={d.direction === "flat" ? "#CBD5E1" : (d.periodReturn ?? 0) >= 0 ? GREEN : RED} />))}
+                    {chartData.map((d, i) => (<Cell key={i} fill={d.direction === "flat" ? "rgba(13,13,56,0.28)" : (d.periodReturn ?? 0) >= 0 ? GREEN : RED} />))}
                   </Bar>
                   <Line yAxisId="cmp" type="monotone" dataKey="compound" stroke={BLUE} strokeWidth={2} dot={false} isAnimationActive={false} />
                 </ComposedChart>
@@ -807,13 +808,13 @@ export default function AnalystTrackRecord() {
       {/* ── Results table ─────────────────────────────────────────────────────── */}
       <div style={{
         background: "#FFFFFF", border: `1px solid ${BORDER}`, borderRadius: 12,
-        overflow: "hidden", boxShadow: "0 1px 4px rgba(15,23,42,0.06)",
+        overflow: "hidden", boxShadow: "0 1px 4px rgba(13,13,56,0.06)",
       }}>
         {/* Results header strip */}
         <div style={{
           padding: "10px 16px", borderBottom: `1px solid ${BORDER}`,
           display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
-          background: "rgba(248,250,255,0.6)",
+          background: "#F5F7FD",
         }}>
           <span style={{ fontSize: 11, color: TEXT2, fontWeight: 600 }}>
             {previewRows.length} recommendation{previewRows.length !== 1 ? "s" : ""}
@@ -821,7 +822,7 @@ export default function AnalystTrackRecord() {
           {loadingPreview && (
             <span style={{
               width: 13, height: 13, borderRadius: "50%",
-              border: "2px solid rgba(43,92,224,0.18)", borderTopColor: BLUE,
+              border: "2px solid rgba(32,68,220,0.18)", borderTopColor: BLUE,
               animation: "spin 0.8s linear infinite",
             }} />
           )}
@@ -848,7 +849,7 @@ export default function AnalystTrackRecord() {
                 <th style={{ ...TH, textAlign: "left" }}>Company</th>
                 <th style={{ ...TH, textAlign: "left" }}>Rec.</th>
                 <th style={{ ...TH, textAlign: "right" }}>Target Price</th>
-                <th style={{ ...TH, textAlign: "right", borderLeft: `2px solid rgba(43,92,224,0.22)` }}>Entry (Adj)</th>
+                <th style={{ ...TH, textAlign: "right", borderLeft: `2px solid rgba(32,68,220,0.22)` }}>Entry (Adj)</th>
                 <th style={{ ...TH, textAlign: "right" }}>Exit (Adj)</th>
                 <th style={{ ...TH, textAlign: "center" }}>Pos</th>
                 <th style={{ ...TH, textAlign: "right" }}>Return %</th>
@@ -866,7 +867,7 @@ export default function AnalystTrackRecord() {
               ) : previewRows.map((row, idx) => {
                 const c = calcMap.get(row.id);
                 return (
-                  <tr key={row.id} style={{ background: idx % 2 === 0 ? "#FFFFFF" : "rgba(248,250,255,0.5)" }}>
+                  <tr key={row.id} style={{ background: idx % 2 === 0 ? "#FFFFFF" : "rgba(13,13,56,0.022)" }}>
                     <td style={{ ...TD, ...MONO, color: TEXT2 }}>{fmtDate(row.date)}</td>
                     <td style={{ ...TD, fontSize: 11, color: TEXT2 }}>{row.type}</td>
                     <td style={{ ...TD, fontSize: 11, fontWeight: 600, color: TEXT1 }}>{row.analyst}</td>
@@ -874,7 +875,7 @@ export default function AnalystTrackRecord() {
                     <td style={{ ...TD }}>
                       <span style={{
                         fontSize: 10, fontWeight: 700, color: recColor(row.recommendation),
-                        padding: "2px 7px", borderRadius: 4, background: "rgba(15,23,42,0.04)",
+                        padding: "2px 7px", borderRadius: 4, background: "rgba(13,13,56,0.04)",
                         border: `1px solid ${BORDER}`,
                       }}>
                         {row.recommendation}
@@ -882,7 +883,7 @@ export default function AnalystTrackRecord() {
                     </td>
                     <td style={{ ...TD, ...MONO, textAlign: "right", color: TEXT1, fontWeight: 600 }}>{fmtPrice(row.targetPrice)}</td>
 
-                    <td style={{ ...TD, ...MONO, textAlign: "right", color: TEXT1, borderLeft: `2px solid rgba(43,92,224,0.22)` }}>
+                    <td style={{ ...TD, ...MONO, textAlign: "right", color: TEXT1, borderLeft: `2px solid rgba(32,68,220,0.22)` }}>
                       {c ? fmtPrice(c.entryPrice) : <span style={{ color: TEXT3 }}>—</span>}
                     </td>
                     <td style={{ ...TD, ...MONO, textAlign: "right", color: TEXT1 }}>
@@ -908,7 +909,7 @@ export default function AnalystTrackRecord() {
                             style={{
                               display: "inline-flex", alignItems: "center", justifyContent: "center",
                               width: 26, height: 26, borderRadius: 6, cursor: "pointer",
-                              background: "rgba(43,92,224,0.07)", border: "1px solid rgba(43,92,224,0.22)", color: BLUE,
+                              background: "rgba(32,68,220,0.07)", border: "1px solid rgba(32,68,220,0.22)", color: BLUE,
                             }}
                           >
                             <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M9.5 2.5l2 2M8.5 3.5L3 9v2h2l5.5-5.5-2-2z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -921,11 +922,11 @@ export default function AnalystTrackRecord() {
                               display: "inline-flex", alignItems: "center", justifyContent: "center",
                               width: 26, height: 26, borderRadius: 6,
                               cursor: deletingId === row.id ? "not-allowed" : "pointer",
-                              background: "rgba(220,38,38,0.06)", border: "1px solid rgba(220,38,38,0.22)", color: RED,
+                              background: "rgba(248,72,94,0.06)", border: "1px solid rgba(248,72,94,0.22)", color: RED,
                             }}
                           >
                             {deletingId === row.id
-                              ? <span style={{ width: 11, height: 11, borderRadius: "50%", border: "2px solid rgba(185,28,28,0.35)", borderTopColor: RED, animation: "spin 0.8s linear infinite" }} />
+                              ? <span style={{ width: 11, height: 11, borderRadius: "50%", border: "2px solid rgba(248,72,94,0.35)", borderTopColor: RED, animation: "spin 0.8s linear infinite" }} />
                               : <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 3.5h10M5.5 3.5V2.2c0-.4.3-.7.7-.7h1.6c.4 0 .7.3.7.7v1.3M3.2 3.5l.5 8c0 .5.4.9.9.9h4.8c.5 0 .9-.4.9-.9l.5-8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                           </button>
                         </div>

@@ -12,6 +12,8 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
+import { PATRIA, FONT_SECONDARY } from "@/lib/patriaTheme";
+import { PatriaTitle } from "@/components/patria/PatriaTitle";
 
 // ── Public types ─────────────────────────────────────────────────────────────
 export interface EstimateMetric {
@@ -91,18 +93,18 @@ function EvoTooltip({
   return (
     <div style={{
       background: "#fff",
-      border: "1px solid rgba(15,23,42,0.10)",
+      border: "1px solid rgba(13,13,56,0.10)",
       borderRadius: 6,
       padding: "8px 13px",
       fontSize: 11,
-      fontFamily: "JetBrains Mono, monospace",
-      boxShadow: "0 4px 16px rgba(15,23,42,0.12)",
+      fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
+      boxShadow: "0 4px 16px rgba(13,13,56,0.12)",
       minWidth: 160,
     }}>
       <div style={{
-        color: "#94A3B8", fontSize: 10,
+        color: "rgba(13,13,56,0.45)", fontSize: 10,
         marginBottom: 6, paddingBottom: 5,
-        borderBottom: "1px solid rgba(15,23,42,0.06)",
+        borderBottom: "1px solid rgba(13,13,56,0.06)",
       }}>
         {label ? fmtFullDate(label) : ""}
       </div>
@@ -121,7 +123,7 @@ function EvoTooltip({
               ) : (
                 <span style={{ display: "inline-block", width: 12, height: 0, borderTop: `2px ${i === 1 ? "dashed" : "dotted"} ${color}`, marginTop: 2 }} />
               )}
-              <span style={{ color: "#64748B" }}>{year}E</span>
+              <span style={{ color: "rgba(13,13,56,0.62)" }}>{year}E</span>
             </span>
             <span style={{ color, fontWeight: 700 }}>
               {entry?.value != null ? fmtCompact(entry.value) : "—"}
@@ -138,8 +140,8 @@ function EvoLegend({ cfg, years }: { cfg: EstimateMetric; years: string[] }) {
   return (
     <div style={{
       display: "flex", gap: 14, justifyContent: "flex-end",
-      fontSize: 10, color: "#94A3B8",
-      fontFamily: "JetBrains Mono, monospace",
+      fontSize: 10, color: "rgba(13,13,56,0.45)",
+      fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
       marginBottom: 6,
     }}>
       {years.map((year, i) => {
@@ -194,24 +196,13 @@ export default function ModelEstimateChart({
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
 
       {/* ── Header + metric selector ────────────────────────────────────────── */}
-      <div style={{
-        display: "flex", alignItems: "center",
-        justifyContent: "space-between",
-        marginBottom: 4, flexWrap: "wrap", gap: 6,
-      }}>
-        <span style={{
-          display: "flex", alignItems: "center", gap: 7,
-          fontSize: 11, fontWeight: 800, letterSpacing: "0.08em",
-          color: "#0F172A", textTransform: "uppercase",
-        }}>
-          <span style={{ display: "inline-block", width: 3, height: 13, borderRadius: 2, background: "#2B5CE0" }} />
-          {title}
-        </span>
-
+      <PatriaTitle
+        style={{ marginBottom: 4, borderRadius: 6, flexWrap: "wrap", rowGap: 6 }}
+        right={
         <div style={{
           display: "flex", gap: 3, padding: 3,
-          borderRadius: 7, background: "#F0F4FA",
-          border: "1px solid rgba(15,23,42,0.07)",
+          borderRadius: 7, background: "rgba(255,255,255,0.10)",
+          border: "1px solid rgba(255,255,255,0.16)",
         }}>
           {metrics.map((m) => {
             const active = m.key === cfg.key;
@@ -227,9 +218,10 @@ export default function ModelEstimateChart({
                   cursor: "pointer",
                   border: "none",
                   outline: "none",
-                  background: active ? "#fff" : "transparent",
-                  color: active ? m.colors[0] : "#94A3B8",
-                  boxShadow: active ? "0 1px 3px rgba(15,23,42,0.10)" : "none",
+                  fontFamily: FONT_SECONDARY,
+                  background: active ? PATRIA.white : "transparent",
+                  color: active ? PATRIA.darkBlue : "rgba(255,255,255,0.72)",
+                  boxShadow: active ? "0 1px 3px rgba(13,13,56,0.30)" : "none",
                   transition: "all 0.12s",
                 }}
               >
@@ -238,14 +230,17 @@ export default function ModelEstimateChart({
             );
           })}
         </div>
-      </div>
+        }
+      >
+        {title}
+      </PatriaTitle>
 
       {/* ── Legend ──────────────────────────────────────────────────────────── */}
       {years.length > 0 && <EvoLegend cfg={cfg} years={years} />}
 
       {/* ── Chart ───────────────────────────────────────────────────────────── */}
       {!hasData ? (
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#CBD5E1", fontSize: 12 }}>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(13,13,56,0.28)", fontSize: 12 }}>
           No {cfg.label} estimate history
         </div>
       ) : (
@@ -260,12 +255,12 @@ export default function ModelEstimateChart({
                 </linearGradient>
               </defs>
 
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.05)" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(13,13,56,0.05)" vertical={false} />
 
               <XAxis
                 dataKey="date"
                 tickFormatter={fmtAxisDate}
-                tick={{ fill: "#94A3B8", fontSize: 9, fontFamily: "JetBrains Mono, monospace" }}
+                tick={{ fill: "rgba(13,13,56,0.45)", fontSize: 9, fontFamily: FONT_SECONDARY }}
                 axisLine={false}
                 tickLine={false}
                 interval="preserveStartEnd"
@@ -273,7 +268,7 @@ export default function ModelEstimateChart({
               />
               <YAxis
                 domain={["auto", "auto"]}
-                tick={{ fill: "#94A3B8", fontSize: 9, fontFamily: "JetBrains Mono, monospace" }}
+                tick={{ fill: "rgba(13,13,56,0.45)", fontSize: 9, fontFamily: FONT_SECONDARY }}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={fmtCompact}
@@ -282,7 +277,7 @@ export default function ModelEstimateChart({
 
               <Tooltip
                 content={<EvoTooltip cfg={cfg} years={years} />}
-                cursor={{ stroke: "rgba(15,23,42,0.08)", strokeWidth: 1 }}
+                cursor={{ stroke: "rgba(13,13,56,0.08)", strokeWidth: 1 }}
               />
 
               <Legend content={() => null} />

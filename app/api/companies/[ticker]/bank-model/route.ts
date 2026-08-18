@@ -87,6 +87,7 @@ export interface BankModelSnapshot {
 
 export interface BankModelHistoryPayload {
   snapshots: BankModelSnapshot[];
+  livePrice: { value: number; date: string } | null;
 }
 
 // ── Helper ─────────────────────────────────────────────────────────────────────
@@ -218,6 +219,17 @@ export async function GET(
       },
     });
 
+    // Precio de mercado más reciente (px_last). Match case-insensitive: los tickers difieren
+    // en casing/espacios entre tablas (price_range_52w está limpio; el param viene de empresas).
+    const priceRow = await prisma.priceRange52w.findFirst({
+      where:   { ticker: { equals: ticker, mode: "insensitive" } },
+      orderBy: { date: "desc" },
+      select:  { pxLast: true, date: true },
+    });
+    const livePrice = priceRow
+      ? { value: priceRow.pxLast, date: priceRow.date.toISOString().slice(0, 10) }
+      : null;
+
     const snapshots: BankModelSnapshot[] = headers.map((h) => ({
       header: {
         ticker:     h.ticker,
@@ -240,7 +252,7 @@ export async function GET(
       })),
     }));
 
-    return NextResponse.json({ snapshots } satisfies BankModelHistoryPayload);
+    return NextResponse.json({ snapshots, livePrice } satisfies BankModelHistoryPayload);
   } catch (e) {
     console.error("[bank-model]", e);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

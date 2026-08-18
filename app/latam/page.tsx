@@ -11,6 +11,7 @@ import MatrixAttributionPanel from "@/components/attribution/MatrixAttributionPa
 import EarningsDashboard from "@/components/earnings/EarningsDashboard";
 import ConsensusCheckTable from "@/components/latam/ConsensusCheckTable";
 import BetaExposurePanel from "@/components/latam/BetaExposurePanel";
+import { FONT_SECONDARY } from "@/lib/patriaTheme";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -74,8 +75,8 @@ function AttributionSection() {
         style={{
           display: "flex", gap: 2, marginBottom: 16,
           padding: "3px", borderRadius: 10,
-          background: "rgba(15,23,42,0.04)",
-          border: "1px solid rgba(15,23,42,0.08)",
+          background: "rgba(13,13,56,0.04)",
+          border: "1px solid rgba(13,13,56,0.08)",
           width: "fit-content",
         }}
       >
@@ -95,9 +96,9 @@ function AttributionSection() {
                 padding: "5px 16px", borderRadius: 8, fontSize: 12,
                 cursor: "pointer", transition: "all 0.15s",
                 background: active ? "#FFFFFF"  : "transparent",
-                color:      active ? "#1B2E7E"  : "#475569",
-                border:     active ? "1px solid rgba(15,23,42,0.11)" : "1px solid transparent",
-                boxShadow:  active ? "0 1px 3px rgba(15,23,42,0.09)" : "none",
+                color:      active ? "#0D0D38"  : "rgba(13,13,56,0.62)",
+                border:     active ? "1px solid rgba(13,13,56,0.11)" : "1px solid transparent",
+                boxShadow:  active ? "0 1px 3px rgba(13,13,56,0.09)" : "none",
                 fontWeight: active ? 700 : 500,
               }}
             >
@@ -189,13 +190,13 @@ export default function LatAmPage() {
   const CONTROL_STYLE: React.CSSProperties = {
     padding:     "7px 11px",
     borderRadius: 7,
-    background:  "#F8FAFF",
-    border:      "1px solid rgba(15,23,42,0.10)",
-    color:       "#0F172A",
+    background:  "#F5F7FD",
+    border:      "1px solid rgba(13,13,56,0.10)",
+    color:       "#0D0D38",
     fontSize:    13,
     cursor:      "pointer",
     outline:     "none",
-    fontFamily:  "Inter, sans-serif",
+    fontFamily:  FONT_SECONDARY,
   };
 
   // ── Loading state ─────────────────────────────────────────────────────────
@@ -206,9 +207,9 @@ export default function LatAmPage() {
         <div className="flex flex-col items-center gap-4">
           <div
             className="w-10 h-10 rounded-full border-2 animate-spin"
-            style={{ borderColor: "rgba(43,92,224,0.15)", borderTopColor: "#2B5CE0" }}
+            style={{ borderColor: "rgba(32,68,220,0.15)", borderTopColor: "#2044DC" }}
           />
-          <p className="text-sm font-mono" style={{ color: "#64748B" }}>
+          <p className="text-sm font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.62)" }}>
             Loading LatAm universe...
           </p>
         </div>
@@ -223,14 +224,14 @@ export default function LatAmPage() {
       <div className="flex items-center justify-center h-[80vh]">
         <div
           style={{
-            background:   "rgba(220,38,38,0.06)",
-            border:       "1px solid rgba(220,38,38,0.15)",
+            background:   "rgba(248,72,94,0.06)",
+            border:       "1px solid rgba(248,72,94,0.15)",
             borderRadius: 10,
             padding:      "24px 36px",
             textAlign:    "center",
           }}
         >
-          <p style={{ color: "#DC2626", marginBottom: 12, fontSize: 14 }}>
+          <p style={{ color: "#F8485E", marginBottom: 12, fontSize: 14 }}>
             Failed to load LatAm data
           </p>
           <button
@@ -238,9 +239,9 @@ export default function LatAmPage() {
             style={{
               padding:     "6px 18px",
               borderRadius: 6,
-              background:  "rgba(43,92,224,0.08)",
-              border:      "1px solid rgba(43,92,224,0.20)",
-              color:       "#2B5CE0",
+              background:  "rgba(32,68,220,0.08)",
+              border:      "1px solid rgba(32,68,220,0.20)",
+              color:       "#2044DC",
               cursor:      "pointer",
               fontSize:    13,
             }}
@@ -260,10 +261,10 @@ export default function LatAmPage() {
       {/* ── Page header ─────────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", letterSpacing: "-0.035em", lineHeight: 1.15, margin: 0 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0D0D38", letterSpacing: "-0.035em", lineHeight: 1.15, margin: 0 }}>
             LatAm Equities
           </h1>
-          <p style={{ fontSize: 12, marginTop: 5, color: "#64748B", fontWeight: 500, letterSpacing: "0.01em" }}>
+          <p style={{ fontSize: 12, marginTop: 5, color: "rgba(13,13,56,0.62)", fontWeight: 500, letterSpacing: "0.01em" }}>
             Latin American equity universe · AGF coverage
           </p>
         </div>
@@ -271,9 +272,9 @@ export default function LatAmPage() {
         <button
           onClick={fetchData}
           className="source-pill"
-          style={{ cursor: "pointer", background: "rgba(15,23,42,0.04)", border: "1px solid rgba(15,23,42,0.09)" }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.25)"; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(15,23,42,0.09)"; }}
+          style={{ cursor: "pointer", background: "rgba(13,13,56,0.04)", border: "1px solid rgba(13,13,56,0.09)" }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(32,68,220,0.25)"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(13,13,56,0.09)"; }}
         >
           <RefreshCw size={10} />
           Refresh
@@ -285,8 +286,8 @@ export default function LatAmPage() {
         className="flex items-center mb-5"
         style={{
           gap: 2, padding: "3px", borderRadius: 10,
-          background: "rgba(15,23,42,0.04)",
-          border:     "1px solid rgba(15,23,42,0.08)",
+          background: "rgba(13,13,56,0.04)",
+          border:     "1px solid rgba(13,13,56,0.08)",
           width:      "fit-content",
         }}
       >
@@ -306,9 +307,9 @@ export default function LatAmPage() {
             className="px-5 py-1.5 rounded-lg text-sm transition-all"
             style={{
               background: activeTab === key ? "#FFFFFF"  : "transparent",
-              color:      activeTab === key ? "#1B2E7E"  : "#475569",
-              border:     activeTab === key ? "1px solid rgba(15,23,42,0.11)" : "1px solid transparent",
-              boxShadow:  activeTab === key ? "0 1px 3px rgba(15,23,42,0.09)" : "none",
+              color:      activeTab === key ? "#0D0D38"  : "rgba(13,13,56,0.62)",
+              border:     activeTab === key ? "1px solid rgba(13,13,56,0.11)" : "1px solid transparent",
+              boxShadow:  activeTab === key ? "0 1px 3px rgba(13,13,56,0.09)" : "none",
               fontWeight: activeTab === key ? 700 : 500,
               cursor: "pointer",
             }}
@@ -325,12 +326,12 @@ export default function LatAmPage() {
           {metadata && (
             <p
               className="text-xs mb-3"
-              style={{ color: "#94A3B8", fontFamily: "monospace" }}
+              style={{ color: "rgba(13,13,56,0.45)", fontFamily: FONT_SECONDARY }}
             >
               Data as of ·{" "}
-              <span style={{ color: "#64748B" }}>{metadata.snapshotDate}</span>
+              <span style={{ color: "rgba(13,13,56,0.62)" }}>{metadata.snapshotDate}</span>
               {" "}·{" "}
-              <span style={{ color: "#64748B" }}>{allCompanies.length} companies</span>
+              <span style={{ color: "rgba(13,13,56,0.62)" }}>{allCompanies.length} companies</span>
             </p>
           )}
 
@@ -356,14 +357,14 @@ export default function LatAmPage() {
                 ...CONTROL_STYLE,
                 flex:     "1 1 200px",
                 minWidth: 180,
-                color:    search ? "#0F172A" : "#94A3B8",
+                color:    search ? "#0D0D38" : "rgba(13,13,56,0.45)",
               }}
               onFocus={(e) => {
-                (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.35)";
-                (e.currentTarget as HTMLElement).style.color       = "#0F172A";
+                (e.currentTarget as HTMLElement).style.borderColor = "rgba(32,68,220,0.35)";
+                (e.currentTarget as HTMLElement).style.color       = "#0D0D38";
               }}
               onBlur={(e) => {
-                (e.currentTarget as HTMLElement).style.borderColor = "rgba(15,23,42,0.10)";
+                (e.currentTarget as HTMLElement).style.borderColor = "rgba(13,13,56,0.10)";
               }}
             />
 
@@ -374,7 +375,7 @@ export default function LatAmPage() {
               style={{
                 ...CONTROL_STYLE,
                 minWidth: 170,
-                color:    selectedSector ? "#0F172A" : "#64748B",
+                color:    selectedSector ? "#0D0D38" : "rgba(13,13,56,0.62)",
               }}
             >
               <option value="">All Sectors</option>
@@ -391,8 +392,8 @@ export default function LatAmPage() {
                 gap:          2,
                 padding:      "3px",
                 borderRadius: 8,
-                background:   "rgba(15,23,42,0.04)",
-                border:       "1px solid rgba(15,23,42,0.08)",
+                background:   "rgba(13,13,56,0.04)",
+                border:       "1px solid rgba(13,13,56,0.08)",
               }}
             >
               {(["all", "MLE", "MSC", "others"] as FundFilter[]).map((f) => {
@@ -401,10 +402,10 @@ export default function LatAmPage() {
                   all: "All", MLE: "MLE", MSC: "MSC", others: "Others",
                 };
                 const colors: Record<FundFilter, { text: string; bg: string; border: string }> = {
-                  all:    { text: "#64748B", bg: "rgba(43,92,224,0.10)",  border: "rgba(43,92,224,0.25)"  },
-                  MLE:    { text: "#1E3A8A", bg: "rgba(43,92,224,0.12)",  border: "rgba(43,92,224,0.30)"  },
-                  MSC:    { text: "#065F46", bg: "rgba(5,150,105,0.12)",  border: "rgba(5,150,105,0.30)"  },
-                  others: { text: "#4B5563", bg: "rgba(100,116,139,0.12)", border: "rgba(100,116,139,0.25)" },
+                  all:    { text: "rgba(13,13,56,0.62)", bg: "rgba(32,68,220,0.10)",  border: "rgba(32,68,220,0.25)"  },
+                  MLE:    { text: "#001EAF", bg: "rgba(32,68,220,0.12)",  border: "rgba(32,68,220,0.30)"  },
+                  MSC:    { text: "#001EAF", bg: "rgba(0,30,175,0.12)",  border: "rgba(0,30,175,0.30)"  },
+                  others: { text: "rgba(13,13,56,0.62)", bg: "rgba(13,13,56,0.12)", border: "rgba(13,13,56,0.25)" },
                 };
                 const c = colors[f];
                 return (
@@ -416,11 +417,11 @@ export default function LatAmPage() {
                       borderRadius: 6,
                       fontSize:     12,
                       fontWeight:   600,
-                      fontFamily:   "Inter, sans-serif",
+                      fontFamily:   FONT_SECONDARY,
                       cursor:       "pointer",
                       transition:   "all 0.12s",
                       background:   active ? c.bg      : "transparent",
-                      color:        active ? c.text    : "#94A3B8",
+                      color:        active ? c.text    : "rgba(13,13,56,0.45)",
                       border:       active ? `1px solid ${c.border}` : "1px solid transparent",
                     }}
                   >
@@ -450,13 +451,13 @@ export default function LatAmPage() {
                 style={{
                   marginLeft: "auto",
                   fontSize:   12,
-                  color:      "#64748B",
-                  fontFamily: "JetBrains Mono, monospace",
+                  color:      "rgba(13,13,56,0.62)",
+                  fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
                 }}
               >
                 {filtered.length} result{filtered.length !== 1 ? "s" : ""}
                 {selectedSector && (
-                  <span style={{ color: "#2B5CE0" }}> in {selectedSector}</span>
+                  <span style={{ color: "#2044DC" }}> in {selectedSector}</span>
                 )}
                 {search && (
                   <span> matching &ldquo;{search}&rdquo;</span>
@@ -473,9 +474,9 @@ export default function LatAmPage() {
                 const rows = filtered.map((c) => [c.ticker, c.company, c.sector ?? "", c.funds.join(", "), c.priceUsd, c.mktCapUsd, c.ret1W, c.ret1M, c.retYtd, c.ret1Y, c.ret5Y, c.peCurYr, c.peNxtYr, c.evEbitdaCurYr, c.evEbitdaNxtYr, c.pBv, c.leverage, c.roeEst, c.divYield, c.targetPrice, c.tpUpside]);
                 downloadExcel([{ name: "Stock Selection", headers, rows }], "latam_stock_selection");
               }}
-              style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: "#059669", background: "rgba(5,150,105,0.07)", border: "1px solid rgba(5,150,105,0.22)", borderRadius: 7, padding: "5px 14px", cursor: "pointer", transition: "all 0.12s" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(5,150,105,0.13)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(5,150,105,0.07)"; }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: "#001EAF", background: "rgba(0,30,175,0.07)", border: "1px solid rgba(0,30,175,0.22)", borderRadius: 7, padding: "5px 14px", cursor: "pointer", transition: "all 0.12s" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,30,175,0.13)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,30,175,0.07)"; }}
             >
               <Download size={12} /> Download Excel ({filtered.length})
             </button>
@@ -501,7 +502,7 @@ export default function LatAmPage() {
       {/* ── Beta / Factor Exposure ───────────────────────────────────────────── */}
       {activeTab === "beta-exposure" && (
         <div>
-          <p style={{ fontSize: 12, color: "#64748B", marginBottom: 14, fontFamily: "Inter, sans-serif" }}>
+          <p style={{ fontSize: 12, color: "rgba(13,13,56,0.62)", marginBottom: 14, fontFamily: FONT_SECONDARY }}>
             Portfolio vs benchmark exposure to risk factors — weighted sum-product of position betas.
           </p>
           <BetaExposurePanel />
@@ -514,7 +515,7 @@ export default function LatAmPage() {
       {/* ── Estimates vs Consensus ───────────────────────────────────────────── */}
       {activeTab === "consensus-check" && (
         <div>
-          <p style={{ fontSize: 12, color: "#64748B", marginBottom: 14, fontFamily: "Inter, sans-serif" }}>
+          <p style={{ fontSize: 12, color: "rgba(13,13,56,0.62)", marginBottom: 14, fontFamily: FONT_SECONDARY }}>
             Moneda analyst estimates vs Bloomberg consensus — latest model snapshot per company.
             Click a row to open the full model.
           </p>

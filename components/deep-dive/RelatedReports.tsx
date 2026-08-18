@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { FileText, ExternalLink } from "lucide-react";
 import type { Presentation } from "@/components/CreatePresentationModal";
+import { FONT_SECONDARY } from "@/lib/patriaTheme";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -17,13 +18,13 @@ function fmtDate(iso: string): string {
 function SectionDivider({ label, count }: { label: string; count: number }) {
   return (
     <div className="flex items-center gap-2 mb-1.5">
-      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#94A3B8" }}>
+      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "rgba(13,13,56,0.45)" }}>
         {label}
       </span>
-      <span style={{ fontSize: 9, fontWeight: 600, color: "#CBD5E1", background: "rgba(15,23,42,0.04)", border: "1px solid rgba(15,23,42,0.07)", borderRadius: 3, padding: "0px 5px", fontFamily: "JetBrains Mono, monospace" }}>
+      <span style={{ fontSize: 9, fontWeight: 600, color: "rgba(13,13,56,0.28)", background: "rgba(13,13,56,0.04)", border: "1px solid rgba(13,13,56,0.07)", borderRadius: 3, padding: "0px 5px", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
         {count}
       </span>
-      <div style={{ flex: 1, height: 1, background: "rgba(15,23,42,0.06)" }} />
+      <div style={{ flex: 1, height: 1, background: "rgba(13,13,56,0.06)" }} />
     </div>
   );
 }
@@ -36,34 +37,34 @@ function ReportRow({ report }: { report: Presentation }) {
       href={report.file_url}
       target="_blank"
       rel="noopener noreferrer"
-      className="group flex items-start gap-2.5 py-2 px-2 -mx-2 rounded-lg cursor-pointer transition-colors hover:bg-slate-50 no-underline"
+      className="group flex items-start gap-2.5 py-2 px-2 -mx-2 rounded-lg cursor-pointer transition-colors hover:bg-patria-dark-blue/[0.03] no-underline"
     >
       {/* Icon */}
       <div
         className="flex-shrink-0 mt-0.5 rounded flex items-center justify-center"
-        style={{ width: 26, height: 26, background: "rgba(220,38,38,0.07)", border: "1px solid rgba(220,38,38,0.15)" }}
+        style={{ width: 26, height: 26, background: "rgba(248,72,94,0.07)", border: "1px solid rgba(248,72,94,0.15)" }}
       >
-        <FileText size={12} color="#DC2626" />
+        <FileText size={12} color="#F8485E" />
       </div>
 
       {/* Text */}
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
           <span
-            className="text-[11px] font-semibold leading-tight group-hover:text-blue-700 transition-colors"
-            style={{ color: "#0F172A", maxWidth: "85%", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+            className="text-[11px] font-semibold leading-tight group-hover:text-patria-king-blue transition-colors"
+            style={{ color: "#0D0D38", maxWidth: "85%", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
           >
             {report.title}
           </span>
-          <ExternalLink size={10} className="flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-60 transition-opacity" color="#2B5CE0" />
+          <ExternalLink size={10} className="flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-60 transition-opacity" color="#2044DC" />
         </div>
         {report.description && (
-          <span className="text-[10px] text-slate-400 truncate block mt-0.5">{report.description}</span>
+          <span className="text-[10px] text-patria-dark-blue/45 truncate block mt-0.5">{report.description}</span>
         )}
       </div>
 
       {/* Date */}
-      <span className="flex-shrink-0 text-[9px] font-mono" style={{ color: "#94A3B8", marginTop: 2 }}>
+      <span className="flex-shrink-0 text-[9px] font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.45)", marginTop: 2 }}>
         {fmtDate(report.created_at)}
       </span>
     </a>
@@ -74,9 +75,9 @@ function ReportRow({ report }: { report: Presentation }) {
 
 function EmptyReports() {
   return (
-    <div className="flex flex-col items-center justify-center py-6 gap-2" style={{ color: "#CBD5E1" }}>
+    <div className="flex flex-col items-center justify-center py-6 gap-2" style={{ color: "rgba(13,13,56,0.28)" }}>
       <FileText size={22} style={{ opacity: 0.35 }} />
-      <p style={{ fontSize: 11, color: "#CBD5E1", margin: 0 }}>No reports linked to this company</p>
+      <p style={{ fontSize: 11, color: "rgba(13,13,56,0.28)", margin: 0 }}>No reports linked to this company</p>
     </div>
   );
 }
@@ -114,11 +115,11 @@ export default function RelatedReports({ ticker }: Props) {
 
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
-        <span className="text-[10px] font-bold tracking-widest uppercase text-slate-400">
+        <span className="text-[10px] font-bold tracking-widest uppercase text-patria-dark-blue/45">
           Related Reports
         </span>
         {!loading && total > 0 && (
-          <span style={{ fontSize: 9, fontWeight: 600, color: "#94A3B8", fontFamily: "JetBrains Mono, monospace", background: "rgba(15,23,42,0.04)", border: "1px solid rgba(15,23,42,0.08)", borderRadius: 4, padding: "1px 6px" }}>
+          <span style={{ fontSize: 9, fontWeight: 600, color: "rgba(13,13,56,0.45)", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", background: "rgba(13,13,56,0.04)", border: "1px solid rgba(13,13,56,0.08)", borderRadius: 4, padding: "1px 6px" }}>
             {total}
           </span>
         )}
@@ -127,14 +128,14 @@ export default function RelatedReports({ ticker }: Props) {
       {/* Loading */}
       {loading && (
         <div className="flex items-center gap-2 py-4 justify-center">
-          <div style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid rgba(43,92,224,0.15)", borderTopColor: "#2B5CE0", animation: "spin 0.8s linear infinite" }} />
-          <span style={{ fontSize: 11, color: "#94A3B8" }}>Loading reports…</span>
+          <div style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid rgba(32,68,220,0.15)", borderTopColor: "#2044DC", animation: "spin 0.8s linear infinite" }} />
+          <span style={{ fontSize: 11, color: "rgba(13,13,56,0.45)" }}>Loading reports…</span>
         </div>
       )}
 
       {/* No ticker selected */}
       {!loading && !ticker && (
-        <div style={{ fontSize: 11, color: "#CBD5E1", textAlign: "center", padding: "16px 0" }}>
+        <div style={{ fontSize: 11, color: "rgba(13,13,56,0.28)", textAlign: "center", padding: "16px 0" }}>
           Select a company to see related reports
         </div>
       )}
@@ -169,8 +170,8 @@ export default function RelatedReports({ ticker }: Props) {
 
       {/* Footer */}
       {!loading && (
-        <div className="mt-auto pt-2.5 border-t border-slate-100">
-          <span className="text-[9px] text-slate-300 font-mono">
+        <div className="mt-auto pt-2.5 border-t border-patria-dark-blue/[0.06]">
+          <span className="text-[9px] text-patria-dark-blue/28 font-secondary tabular-nums">
             {ticker ? `${total} document${total !== 1 ? "s" : ""} · filtered by ticker` : "Select a company"}
           </span>
         </div>

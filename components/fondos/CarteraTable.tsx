@@ -1,5 +1,7 @@
 "use client";
 
+import { PATRIA } from "@/lib/patriaTheme";
+
 import { useState } from "react";
 
 interface CarteraRow {
@@ -22,12 +24,12 @@ type SortCol = "company" | "portfolioPct" | "benchmarkPct" | "overweight" | "del
 type SortDir = "asc" | "desc";
 
 function fmtDelta(v: number | null): { text: string; color: string; bg: string } {
-  if (v === null) return { text: "—", color: "#CBD5E1", bg: "transparent" };
+  if (v === null) return { text: "—", color: "rgba(13,13,56,0.28)", bg: "transparent" };
   const pct = v * 100;
-  if (Math.abs(pct) < 0.005) return { text: "0.00%", color: "#94A3B8", bg: "transparent" };
+  if (Math.abs(pct) < 0.005) return { text: "0.00%", color: "rgba(13,13,56,0.45)", bg: "transparent" };
   const text = (pct > 0 ? "+" : "") + pct.toFixed(2) + "%";
-  const color = pct > 0 ? "#10B981" : "#EF4444";
-  const bg = pct > 0 ? "rgba(16,185,129,0.08)" : "rgba(239,68,68,0.08)";
+  const color = pct > 0 ? "#001EAF" : "#F8485E";
+  const bg = pct > 0 ? "rgba(0,30,175,0.08)" : "rgba(248,72,94,0.08)";
   return { text, color, bg };
 }
 
@@ -82,8 +84,8 @@ export default function CarteraTable({ cartera, benchmark, fundName }: Props) {
     const active = sortCol === col;
     return (
       <th
-        className={`px-3 py-2.5 font-medium cursor-pointer select-none ${align === "left" ? "text-left" : "text-right"}`}
-        style={{ color: active ? "#2B5CE0" : "#64748B", borderBottom: "1px solid rgba(15,23,42,0.07)" }}
+        className={`px-3 py-2.5 font-bold font-secondary cursor-pointer select-none ${align === "left" ? "text-left" : "text-right"}`}
+        style={{ color: active ? PATRIA.darkBlue : PATRIA.kingBlue, borderBottom: "1px solid rgba(13,13,56,0.07)" }}
         onClick={() => handleSort(col)}
       >
         <span className="inline-flex items-center gap-1">
@@ -98,27 +100,27 @@ export default function CarteraTable({ cartera, benchmark, fundName }: Props) {
 
   return (
     <div className="card overflow-hidden flex flex-col h-full">
-      <div className="px-5 py-4 border-b flex items-center justify-between"
-        style={{ borderColor: "rgba(15,23,42,0.07)" }}
+      <div className="px-5 py-4 flex items-center justify-between"
+        style={{ background: PATRIA.darkBlue }}
       >
         <div>
-          <h2 className="text-sm font-semibold" style={{ color: "#0F172A" }}>Detalle Cartera</h2>
-          <p className="text-xs mt-0.5" style={{ color: "#64748B" }}>
+          <h2 className="text-sm font-bold font-primary uppercase tracking-wide" style={{ color: PATRIA.white }}>Detalle Cartera</h2>
+          <p className="text-xs mt-0.5 font-secondary" style={{ color: "rgba(255,255,255,0.72)" }}>
             Click en cabecera para ordenar
           </p>
         </div>
-        <span className="text-xs font-mono px-2 py-0.5 rounded"
-          style={{ background: "rgba(43,92,224,0.08)", color: "#2B5CE0" }}
+        <span className="text-xs font-secondary tabular-nums px-2 py-0.5 rounded"
+          style={{ background: "rgba(255,255,255,0.12)", color: PATRIA.white }}
         >
           {cartera.length} posiciones
         </span>
       </div>
       <div className="overflow-y-auto flex-1 min-h-0 max-h-[500px] md:max-h-none">
         <table className="w-full text-xs whitespace-nowrap">
-          <thead className="sticky top-0 z-10" style={{ background: "#F0F4FA" }}>
+          <thead className="sticky top-0 z-10" style={{ background: "#F5F7FD" }}>
             <tr>
-              <th className="px-3 py-2.5 text-left font-medium w-8"
-                style={{ color: "#64748B", borderBottom: "1px solid rgba(15,23,42,0.07)" }}>#</th>
+              <th className="px-3 py-2.5 text-left font-bold w-8 font-secondary"
+                style={{ color: PATRIA.kingBlue, borderBottom: "1px solid rgba(13,13,56,0.07)" }}>#</th>
               {thBtn("company", "Empresa", "left")}
               {thBtn("portfolioPct", "% Port.")}
               {thBtn("benchmarkPct", `% ${benchmark}`)}
@@ -130,7 +132,7 @@ export default function CarteraTable({ cartera, benchmark, fundName }: Props) {
           <tbody>
             {sorted.map((row, i) => {
               const over = row.overweight * 100;
-              const overColor = over > 0 ? "#059669" : over < 0 ? "#DC2626" : "#64748B";
+              const overColor = over > 0 ? "#001EAF" : over < 0 ? "#F8485E" : "rgba(13,13,56,0.62)";
               const d1w = fmtDelta(row.delta1W);
               const d1m = fmtDelta(row.delta1M);
 
@@ -138,38 +140,38 @@ export default function CarteraTable({ cartera, benchmark, fundName }: Props) {
                 <tr
                   key={i}
                   className="border-t transition-colors"
-                  style={{ borderColor: "rgba(15,23,42,0.05)" }}
-                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.03)"}
+                  style={{ borderColor: "rgba(13,13,56,0.05)" }}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.03)"}
                   onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}
                 >
-                  <td className="px-3 py-2 font-mono" style={{ color: "#94A3B8" }}>{i + 1}</td>
+                  <td className="px-3 py-2 font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.45)" }}>{i + 1}</td>
 
-                  <td className="px-3 py-2 font-medium" style={{ color: "#0F172A" }}>
+                  <td className="px-3 py-2 font-medium" style={{ color: "#0D0D38" }}>
                     {row.company}
                   </td>
 
                   <td className="px-3 py-2 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <div className="w-12 h-1.5 rounded-full" style={{ background: "rgba(43,92,224,0.10)" }}>
+                      <div className="w-12 h-1.5 rounded-full" style={{ background: "rgba(32,68,220,0.10)" }}>
                         <div className="h-full rounded-full"
                           style={{
                             width: `${Math.min(100, row.portfolioPct * 500)}%`,
-                            background: "linear-gradient(90deg, #2B5CE0, #3D6FE8)",
+                            background: "linear-gradient(90deg, #2044DC, #2044DC)",
                           }}
                         />
                       </div>
-                      <span className="font-mono font-semibold" style={{ color: "#0F172A" }}>
+                      <span className="font-secondary tabular-nums font-semibold" style={{ color: "#0D0D38" }}>
                         {(row.portfolioPct * 100).toFixed(2)}%
                       </span>
                     </div>
                   </td>
 
-                  <td className="px-3 py-2 font-mono text-right" style={{ color: "#64748B" }}>
+                  <td className="px-3 py-2 font-secondary tabular-nums text-right" style={{ color: "rgba(13,13,56,0.62)" }}>
                     {(row.benchmarkPct * 100).toFixed(2)}%
                   </td>
 
                   <td className="px-3 py-2 text-right">
-                    <span className="font-mono font-bold text-[11px] px-2 py-0.5 rounded-full"
+                    <span className="font-secondary tabular-nums font-bold text-[11px] px-2 py-0.5 rounded-full"
                       style={{ color: overColor, background: `${overColor}12`, border: `1px solid ${overColor}28` }}
                     >
                       {over > 0 ? "+" : ""}{over.toFixed(2)}%
@@ -178,7 +180,7 @@ export default function CarteraTable({ cartera, benchmark, fundName }: Props) {
 
                   {hasDelta1W && (
                     <td className="px-3 py-2 text-right">
-                      <span className="font-mono font-semibold text-[11px] px-1.5 py-0.5 rounded"
+                      <span className="font-secondary tabular-nums font-semibold text-[11px] px-1.5 py-0.5 rounded"
                         style={{ color: d1w.color, background: d1w.bg }}
                       >
                         {d1w.text}
@@ -188,7 +190,7 @@ export default function CarteraTable({ cartera, benchmark, fundName }: Props) {
 
                   {hasDelta1M && (
                     <td className="px-3 py-2 text-right">
-                      <span className="font-mono font-semibold text-[11px] px-1.5 py-0.5 rounded"
+                      <span className="font-secondary tabular-nums font-semibold text-[11px] px-1.5 py-0.5 rounded"
                         style={{ color: d1m.color, background: d1m.bg }}
                       >
                         {d1m.text}

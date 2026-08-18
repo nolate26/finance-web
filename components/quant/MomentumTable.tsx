@@ -2,17 +2,19 @@
 
 import { useState, useEffect, useMemo } from "react";
 import type { MomentumPayload, MomentumRow } from "@/app/api/quant/momentum/route";
+import { PATRIA, FONT_SECONDARY, TEXT } from "@/lib/patriaTheme";
+import { PatriaTitle } from "@/components/patria/PatriaTitle";
 
 // ── Design tokens (match QuantModelTable) ──────────────────────────────────────
-const TEXT1  = "#0F172A";
-const TEXT2  = "#64748B";
-const TEXT3  = "#94A3B8";
-const BORDER = "rgba(15,23,42,0.08)";
-const TEAL   = "#0D9488";          // accent for the momentum factor
-const TEAL_D = "#0F766E";
-const GREEN  = "#15803D";
-const RED    = "#B91C1C";
-const AMBER  = "#B45309";
+const TEXT1  = PATRIA.darkBlue;   // Regla 4
+const TEXT2  = TEXT.label;
+const TEXT3  = TEXT.muted;
+const BORDER = "rgba(13,13,56,0.08)";
+const TEAL   = PATRIA.blue;       // positivo
+const TEAL_D = "#001EAF";
+const GREEN  = PATRIA.blue;       // positivo
+const RED    = PATRIA.pink;       // negativo
+const AMBER  = "#FF6B06";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type SortCol = "rank" | "ticker" | "name" | "industry" | "signal" | "score" | "zscore";
@@ -34,9 +36,9 @@ function fmtSignal(v: number | null): string {
 function zTheme(z: number | null): { text: string; bg: string; border: string; label: string | null } {
   if (z == null) return { text: TEXT3, bg: "transparent", border: "transparent", label: null };
   if (z >= 3)   return { text: "#FFFFFF", bg: RED,                      border: RED,                      label: "EXTREME" };
-  if (z >= 2)   return { text: "#B45309", bg: "rgba(217,119,6,0.14)",  border: "rgba(217,119,6,0.45)",  label: "OUTLIER" };
-  if (z >= 1)   return { text: "#0F766E", bg: "rgba(13,148,136,0.10)", border: "rgba(13,148,136,0.30)", label: null };
-  if (z <= -1)  return { text: TEXT2,     bg: "rgba(100,116,139,0.08)", border: "rgba(100,116,139,0.22)", label: null };
+  if (z >= 2)   return { text: "#FF6B06", bg: "rgba(255,107,6,0.14)",  border: "rgba(255,107,6,0.45)",  label: "OUTLIER" };
+  if (z >= 1)   return { text: "#001EAF", bg: "rgba(0,30,175,0.10)", border: "rgba(0,30,175,0.30)", label: null };
+  if (z <= -1)  return { text: TEXT2,     bg: "rgba(13,13,56,0.08)", border: "rgba(13,13,56,0.22)", label: null };
   return          { text: TEXT2,          bg: "transparent",            border: "transparent",            label: null };
 }
 
@@ -44,13 +46,13 @@ function zTheme(z: number | null): { text: string; bg: string; border: string; l
 function ScoreBar({ value }: { value: number | null }) {
   if (value == null) return <span style={{ color: TEXT3 }}>—</span>;
   const pct   = Math.max(0, Math.min(100, value));
-  const color = pct > 70 ? TEAL_D : pct > 40 ? TEAL : "#5EEAD4";
+  const color = pct > 70 ? TEAL_D : pct > 40 ? TEAL : "#B6FFE3";
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 84 }}>
-      <div style={{ flex: 1, height: 4, background: "rgba(15,23,42,0.07)", borderRadius: 2, overflow: "hidden", minWidth: 38 }}>
+      <div style={{ flex: 1, height: 4, background: "rgba(13,13,56,0.07)", borderRadius: 2, overflow: "hidden", minWidth: 38 }}>
         <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 2, transition: "width 0.3s" }} />
       </div>
-      <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11.5, fontWeight: 800, color: pct > 40 ? TEAL_D : TEXT2, minWidth: 30, textAlign: "right" }}>
+      <span style={{ fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11.5, fontWeight: 800, color: pct > 40 ? TEAL_D : TEXT2, minWidth: 30, textAlign: "right" }}>
         {Math.round(pct)}
       </span>
     </div>
@@ -90,9 +92,10 @@ function Th({
       onClick={clickable ? () => onSort(col!) : undefined}
       style={{
         padding: "8px 12px", textAlign: align, fontSize: 10, fontWeight: 700,
-        letterSpacing: "0.06em", color: active ? TEAL_D : TEXT2, textTransform: "uppercase",
+        letterSpacing: "0.06em", fontFamily: FONT_SECONDARY,
+        color: active ? PATRIA.darkBlue : PATRIA.kingBlue, textTransform: "uppercase",
         whiteSpace: "nowrap", cursor: clickable ? "pointer" : "default",
-        borderBottom: `1px solid ${BORDER}`, background: "rgba(240,253,250,0.6)",
+        borderBottom: `1px solid ${BORDER}`, background: "rgba(70,232,224,0.10)",
         minWidth, userSelect: "none", position: "sticky", top: 0, zIndex: 2,
       }}
     >
@@ -126,16 +129,11 @@ function MethodologyCard() {
   ];
   return (
     <div style={{
-      background: "linear-gradient(135deg, #FFFFFF 0%, #F0FDFA 100%)",
+      background: "linear-gradient(135deg, #FFFFFF 0%, rgba(70,232,224,0.10) 100%)",
       border: `1px solid ${BORDER}`, borderRadius: 12, padding: "20px 22px",
-      boxShadow: "0 1px 4px rgba(15,23,42,0.06)", marginBottom: 20,
+      boxShadow: "0 1px 4px rgba(13,13,56,0.06)", marginBottom: 20,
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-        <span style={{ display: "inline-block", width: 3, height: 16, borderRadius: 2, background: TEAL }} />
-        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.10em", color: TEAL_D, textTransform: "uppercase" }}>
-          Methodology
-        </span>
-      </div>
+      <PatriaTitle style={{ marginBottom: 10, borderRadius: 6 }}>Methodology</PatriaTitle>
       <p style={{ fontSize: 13, color: TEXT2, margin: "0 0 16px 11px", lineHeight: 1.6, maxWidth: 880 }}>
         A pure price-momentum model for LatAm equities. The full universe is re-ranked weekly and the entire
         cross-section is stored for each signal date.
@@ -146,7 +144,7 @@ function MethodologyCard() {
             background: "#FFFFFF", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "14px 16px",
           }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
-              <span style={{ fontSize: 13, fontWeight: 800, fontFamily: "JetBrains Mono, monospace", color: TEAL }}>{s.n}</span>
+              <span style={{ fontSize: 13, fontWeight: 800, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", color: TEAL }}>{s.n}</span>
               <span style={{ fontSize: 12.5, fontWeight: 700, color: TEXT1 }}>{s.title}</span>
             </div>
             <p style={{ fontSize: 11.5, color: TEXT2, margin: 0, lineHeight: 1.55 }}>{s.body}</p>
@@ -258,7 +256,7 @@ export default function MomentumTable() {
           {data?.date && (
             <span style={{
               fontSize: 11, fontWeight: 600, color: TEAL_D,
-              background: "rgba(13,148,136,0.08)", border: "1px solid rgba(13,148,136,0.22)",
+              background: "rgba(0,30,175,0.08)", border: "1px solid rgba(0,30,175,0.22)",
               borderRadius: 6, padding: "5px 10px", whiteSpace: "nowrap",
             }}>
               Last updated: {fmtDate(data.date)}
@@ -271,7 +269,7 @@ export default function MomentumTable() {
               onChange={e => setSelectedDate(e.target.value)}
               style={{
                 padding: "5px 28px 5px 10px", borderRadius: 7, border: `1px solid ${BORDER}`,
-                background: "#F0FDFA", fontSize: 12, fontFamily: "JetBrains Mono, monospace",
+                background: "rgba(70,232,224,0.10)", fontSize: 12, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
                 fontWeight: 600, color: TEXT1, cursor: "pointer", outline: "none", appearance: "none",
                 backgroundImage: `url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2364748B' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
                 backgroundRepeat: "no-repeat", backgroundPosition: "right 9px center",
@@ -288,7 +286,7 @@ export default function MomentumTable() {
       {/* ── Card ────────────────────────────────────────────────────────────── */}
       <div style={{
         background: "#FFFFFF", border: `1px solid ${BORDER}`, borderRadius: 12,
-        overflow: "hidden", boxShadow: "0 1px 4px rgba(15,23,42,0.06)",
+        overflow: "hidden", boxShadow: "0 1px 4px rgba(13,13,56,0.06)",
       }}>
         {/* ── Controls + Stats bar ──────────────────────────────────────────── */}
         <div style={{
@@ -296,18 +294,18 @@ export default function MomentumTable() {
           display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
         }}>
           {/* Stats chips */}
-          <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 6, background: "rgba(15,23,42,0.04)", border: `1px solid ${BORDER}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 6, background: "rgba(13,13,56,0.04)", border: `1px solid ${BORDER}` }}>
             <span style={{ fontSize: 10, color: TEXT2, fontWeight: 600, letterSpacing: "0.04em" }}>Names</span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: TEXT1, fontFamily: "JetBrains Mono, monospace" }}>{stats.total}</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: TEXT1, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>{stats.total}</span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 6, background: "rgba(217,119,6,0.08)", border: "1px solid rgba(217,119,6,0.22)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 6, background: "rgba(255,107,6,0.08)", border: "1px solid rgba(255,107,6,0.22)" }}>
             <span style={{ fontSize: 10, color: AMBER, fontWeight: 600, letterSpacing: "0.04em" }}>Outliers (z≥2)</span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: AMBER, fontFamily: "JetBrains Mono, monospace" }}>{stats.outliers}</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: AMBER, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>{stats.outliers}</span>
           </div>
           {stats.topSignal != null && (
-            <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 6, background: "rgba(13,148,136,0.08)", border: "1px solid rgba(13,148,136,0.22)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 6, background: "rgba(0,30,175,0.08)", border: "1px solid rgba(0,30,175,0.22)" }}>
               <span style={{ fontSize: 10, color: TEAL_D, fontWeight: 600, letterSpacing: "0.04em" }}>Top return</span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: TEAL_D, fontFamily: "JetBrains Mono, monospace" }}>{fmtSignal(stats.topSignal)}</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: TEAL_D, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>{fmtSignal(stats.topSignal)}</span>
             </div>
           )}
 
@@ -325,7 +323,7 @@ export default function MomentumTable() {
               placeholder="Search ticker or name…"
               style={{
                 padding: "5px 10px 5px 26px", borderRadius: 7, border: `1px solid ${BORDER}`,
-                background: "#F0FDFA", fontSize: 11, color: TEXT1, outline: "none", width: 200,
+                background: "rgba(70,232,224,0.10)", fontSize: 11, color: TEXT1, outline: "none", width: 200,
               }}
             />
           </div>
@@ -335,7 +333,7 @@ export default function MomentumTable() {
         <div style={{ overflowX: "auto", maxHeight: "calc(100vh - 360px)" }}>
           {loading ? (
             <div style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: "48px 0", gap: 10, color: TEXT2, fontSize: 13 }}>
-              <div style={{ width: 18, height: 18, borderRadius: "50%", border: `2px solid rgba(13,148,136,0.15)`, borderTopColor: TEAL, animation: "spin 0.8s linear infinite" }} />
+              <div style={{ width: 18, height: 18, borderRadius: "50%", border: `2px solid rgba(0,30,175,0.15)`, borderTopColor: TEAL, animation: "spin 0.8s linear infinite" }} />
               Loading momentum signals…
             </div>
           ) : filtered.length === 0 ? (
@@ -364,18 +362,18 @@ export default function MomentumTable() {
                       key={row.ticker}
                       style={{
                         background: isExtreme
-                          ? "rgba(217,119,6,0.05)"
-                          : idx % 2 === 0 ? "#FFFFFF" : "rgba(240,253,250,0.45)",
+                          ? "rgba(255,107,6,0.05)"
+                          : idx % 2 === 0 ? "#FFFFFF" : "rgba(70,232,224,0.07)",
                         borderLeft: isExtreme ? `3px solid ${AMBER}` : "3px solid transparent",
                         transition: "background 0.08s",
                       }}
-                      onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "rgba(13,148,136,0.06)"}
-                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = isExtreme ? "rgba(217,119,6,0.05)" : idx % 2 === 0 ? "#FFFFFF" : "rgba(240,253,250,0.45)"}
+                      onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "rgba(0,30,175,0.06)"}
+                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = isExtreme ? "rgba(255,107,6,0.05)" : idx % 2 === 0 ? "#FFFFFF" : "rgba(70,232,224,0.07)"}
                     >
                       {/* Rank */}
                       <td style={{ padding: "7px 12px", textAlign: "center", borderBottom: `1px solid ${BORDER}` }}>
                         <span style={{
-                          fontFamily: "JetBrains Mono, monospace", fontSize: 11.5,
+                          fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11.5,
                           fontWeight: row.rank != null && row.rank <= 3 ? 800 : 600,
                           color: row.rank != null && row.rank <= 3 ? TEAL_D : TEXT2,
                         }}>
@@ -385,7 +383,7 @@ export default function MomentumTable() {
 
                       {/* Ticker */}
                       <td style={{ padding: "7px 12px", borderBottom: `1px solid ${BORDER}`, whiteSpace: "nowrap" }}>
-                        <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 12, fontWeight: 700, color: TEXT1 }}>
+                        <span style={{ fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 12, fontWeight: 700, color: TEXT1 }}>
                           {row.ticker}
                         </span>
                       </td>
@@ -398,7 +396,7 @@ export default function MomentumTable() {
                       {/* Industry */}
                       <td style={{ padding: "7px 12px", borderBottom: `1px solid ${BORDER}`, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {row.industry ? (
-                          <span style={{ fontSize: 10, fontWeight: 600, color: TEXT2, padding: "2px 7px", borderRadius: 4, background: "rgba(15,23,42,0.05)", border: `1px solid ${BORDER}`, whiteSpace: "nowrap" }}>
+                          <span style={{ fontSize: 10, fontWeight: 600, color: TEXT2, padding: "2px 7px", borderRadius: 4, background: "rgba(13,13,56,0.05)", border: `1px solid ${BORDER}`, whiteSpace: "nowrap" }}>
                             {row.industry}
                           </span>
                         ) : <span style={{ color: TEXT3 }}>—</span>}
@@ -407,7 +405,7 @@ export default function MomentumTable() {
                       {/* Momentum Return (signal) */}
                       <td style={{ padding: "7px 12px", textAlign: "right", borderBottom: `1px solid ${BORDER}` }}>
                         <span style={{
-                          fontFamily: "JetBrains Mono, monospace", fontSize: 11.5, fontWeight: 700,
+                          fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11.5, fontWeight: 700,
                           color: row.signal == null ? TEXT3 : row.signal >= 0 ? GREEN : RED,
                         }}>
                           {fmtSignal(row.signal)}
@@ -439,7 +437,7 @@ export default function MomentumTable() {
                               </span>
                             )}
                             <span style={{
-                              fontFamily: "JetBrains Mono, monospace", fontSize: 11.5,
+                              fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11.5,
                               fontWeight: row.zscore >= 1 ? 800 : 600,
                               color: zt.text === "#FFFFFF" ? RED : zt.text,
                               minWidth: 38, textAlign: "right",
@@ -459,12 +457,12 @@ export default function MomentumTable() {
 
         {/* ── Footer ────────────────────────────────────────────────────────── */}
         {!loading && filtered.length > 0 && (
-          <div style={{ padding: "8px 16px", borderTop: `1px solid ${BORDER}`, background: "rgba(240,253,250,0.6)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ padding: "8px 16px", borderTop: `1px solid ${BORDER}`, background: "rgba(70,232,224,0.10)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontSize: 10, color: TEXT3 }}>
               {filtered.length} name{filtered.length !== 1 ? "s" : ""}{search ? ` matching "${search}"` : ""}
             </span>
             {data?.date && (
-              <span style={{ fontSize: 10, color: TEXT3, fontFamily: "JetBrains Mono, monospace" }}>
+              <span style={{ fontSize: 10, color: TEXT3, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
                 Signal date: {fmtDate(data.date)}
               </span>
             )}

@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { Search } from "lucide-react";
 import type { CompanyListItem } from "@/app/api/companies/list/route";
+import { FONT_SECONDARY } from "@/lib/patriaTheme";
 
 interface Props {
   companies: CompanyListItem[];
@@ -30,20 +31,20 @@ export default function CompanySidebar({ companies, selectedTicker, onSelect, lo
         display: "flex",
         flexDirection: "column",
         height: "100%",
-        background: "#F8FAFF",
-        borderRight: "1px solid rgba(15,23,42,0.08)",
+        background: "#F5F7FD",
+        borderRight: "1px solid rgba(13,13,56,0.08)",
       }}
     >
       {/* Header */}
-      <div style={{ padding: "16px 14px 10px", borderBottom: "1px solid rgba(15,23,42,0.07)" }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: "#0F172A", letterSpacing: "-0.01em", marginBottom: 10 }}>
+      <div style={{ padding: "16px 14px 10px", borderBottom: "1px solid rgba(13,13,56,0.07)" }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#0D0D38", letterSpacing: "-0.01em", marginBottom: 10 }}>
           Company Profiles
         </div>
         {/* Search */}
         <div style={{ position: "relative" }}>
           <Search
             size={12}
-            style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: "#94A3B8" }}
+            style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: "rgba(13,13,56,0.45)" }}
           />
           <input
             type="text"
@@ -55,18 +56,18 @@ export default function CompanySidebar({ companies, selectedTicker, onSelect, lo
               padding: "6px 10px 6px 26px",
               borderRadius: 6,
               background: "#fff",
-              border: "1px solid rgba(15,23,42,0.10)",
-              color: "#0F172A",
+              border: "1px solid rgba(13,13,56,0.10)",
+              color: "#0D0D38",
               fontSize: 12,
               outline: "none",
-              fontFamily: "Inter, sans-serif",
+              fontFamily: FONT_SECONDARY,
               boxSizing: "border-box",
             }}
             onFocus={(e) => {
-              (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.35)";
+              (e.currentTarget as HTMLElement).style.borderColor = "rgba(32,68,220,0.35)";
             }}
             onBlur={(e) => {
-              (e.currentTarget as HTMLElement).style.borderColor = "rgba(15,23,42,0.10)";
+              (e.currentTarget as HTMLElement).style.borderColor = "rgba(13,13,56,0.10)";
             }}
           />
         </div>
@@ -75,11 +76,11 @@ export default function CompanySidebar({ companies, selectedTicker, onSelect, lo
       {/* List */}
       <div style={{ flex: 1, overflowY: "auto" }}>
         {loading ? (
-          <div style={{ padding: "20px 14px", color: "#94A3B8", fontSize: 11, textAlign: "center" }}>
+          <div style={{ padding: "20px 14px", color: "rgba(13,13,56,0.45)", fontSize: 11, textAlign: "center" }}>
             Loading...
           </div>
         ) : filtered.length === 0 ? (
-          <div style={{ padding: "20px 14px", color: "#CBD5E1", fontSize: 11, textAlign: "center" }}>
+          <div style={{ padding: "20px 14px", color: "rgba(13,13,56,0.28)", fontSize: 11, textAlign: "center" }}>
             No companies found
           </div>
         ) : (
@@ -95,16 +96,16 @@ export default function CompanySidebar({ companies, selectedTicker, onSelect, lo
                   alignItems: "flex-start",
                   width: "100%",
                   padding: "9px 14px",
-                  borderBottom: "1px solid rgba(15,23,42,0.04)",
-                  background: active ? "rgba(43,92,224,0.08)" : "transparent",
+                  borderBottom: "1px solid rgba(13,13,56,0.04)",
+                  background: active ? "rgba(32,68,220,0.08)" : "transparent",
                   border: "none",
-                  borderLeft: active ? "3px solid #2B5CE0" : "3px solid transparent",
+                  borderLeft: active ? "3px solid #2044DC" : "3px solid transparent",
                   cursor: "pointer",
                   textAlign: "left",
                   transition: "background 0.1s",
                 }}
                 onMouseEnter={(e) => {
-                  if (!active) (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.04)";
+                  if (!active) (e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.04)";
                 }}
                 onMouseLeave={(e) => {
                   if (!active) (e.currentTarget as HTMLElement).style.background = "transparent";
@@ -114,8 +115,8 @@ export default function CompanySidebar({ companies, selectedTicker, onSelect, lo
                   style={{
                     fontSize: 12,
                     fontWeight: 700,
-                    fontFamily: "JetBrains Mono, monospace",
-                    color: active ? "#2B5CE0" : "#0F172A",
+                    fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
+                    color: active ? "#2044DC" : "#0D0D38",
                     letterSpacing: "0.02em",
                   }}
                 >
@@ -124,7 +125,7 @@ export default function CompanySidebar({ companies, selectedTicker, onSelect, lo
                 <span
                   style={{
                     fontSize: 10,
-                    color: "#94A3B8",
+                    color: "rgba(13,13,56,0.45)",
                     marginTop: 1,
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -145,10 +146,10 @@ export default function CompanySidebar({ companies, selectedTicker, onSelect, lo
       <div
         style={{
           padding: "8px 14px",
-          borderTop: "1px solid rgba(15,23,42,0.07)",
+          borderTop: "1px solid rgba(13,13,56,0.07)",
           fontSize: 10,
-          color: "#94A3B8",
-          fontFamily: "JetBrains Mono, monospace",
+          color: "rgba(13,13,56,0.45)",
+          fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
         }}
       >
         {filtered.length} / {companies.length} companies

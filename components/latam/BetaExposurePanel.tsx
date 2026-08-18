@@ -26,34 +26,35 @@ import type {
   PositionExposure,
   FundOption,
 } from "@/app/api/latam/beta-exposure/route";
+import { PATRIA, FONT_SECONDARY, TEXT } from "@/lib/patriaTheme";
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
-const BORDER = "rgba(15,23,42,0.08)";
-const TEXT1  = "#0F172A";
-const TEXT2  = "#64748B";
-const TEXT3  = "#94A3B8";
-const GREEN  = "#059669";
-const RED    = "#DC2626";
-const BLUE   = "#2B5CE0";
-const SLATE  = "#94A3B8";
+const BORDER = "rgba(13,13,56,0.08)";
+const TEXT1  = PATRIA.darkBlue;   // Regla 4
+const TEXT2  = TEXT.label;
+const TEXT3  = TEXT.muted;
+const GREEN  = PATRIA.blue;       // positivo
+const RED    = PATRIA.pink;       // negativo
+const BLUE   = PATRIA.kingBlue;   // Regla 5 / interactivo
+const SLATE  = TEXT.muted;
 
 const cardStyle: React.CSSProperties = {
   background:   "#FFFFFF",
   border:       `1px solid ${BORDER}`,
   borderRadius: 12,
-  boxShadow:    "0 1px 4px rgba(15,23,42,0.06)",
+  boxShadow:    "0 1px 4px rgba(13,13,56,0.06)",
 };
 
 const CONTROL_STYLE: React.CSSProperties = {
   padding:      "7px 11px",
   borderRadius: 7,
-  background:   "#F8FAFF",
-  border:       "1px solid rgba(15,23,42,0.10)",
+  background:   "#F5F7FD",
+  border:       "1px solid rgba(13,13,56,0.10)",
   color:        TEXT1,
   fontSize:     13,
   cursor:       "pointer",
   outline:      "none",
-  fontFamily:   "Inter, sans-serif",
+  fontFamily:   FONT_SECONDARY,
 };
 
 // ── Formatters ────────────────────────────────────────────────────────────────
@@ -68,10 +69,10 @@ function KpiCard({
 }: { label: string; value: string; valueColor?: string; sub?: string }) {
   return (
     <div style={{ ...cardStyle, padding: "14px 18px", display: "flex", flexDirection: "column", gap: 3, flex: 1, minWidth: 150 }}>
-      <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.10em", color: TEXT2, textTransform: "uppercase" }}>
+      <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.10em", fontFamily: FONT_SECONDARY, color: PATRIA.kingBlue, textTransform: "uppercase" }}>
         {label}
       </span>
-      <span style={{ fontSize: 22, fontWeight: 800, fontFamily: "JetBrains Mono, monospace", color: valueColor ?? TEXT1, letterSpacing: "-0.02em" }}>
+      <span style={{ fontSize: 22, fontWeight: 800, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", color: valueColor ?? TEXT1, letterSpacing: "-0.02em" }}>
         {value}
       </span>
       {sub && <span style={{ fontSize: 10, color: TEXT3 }}>{sub}</span>}
@@ -90,8 +91,8 @@ function ChartTooltip({ active, payload, label }: any) {
     <div
       style={{
         background: "#FFFFFF",
-        border: "1px solid rgba(15,23,42,0.12)",
-        boxShadow: "0 4px 16px rgba(15,23,42,0.12)",
+        border: "1px solid rgba(13,13,56,0.12)",
+        boxShadow: "0 4px 16px rgba(13,13,56,0.12)",
         borderRadius: 8,
         padding: "10px 12px",
         fontSize: 12,
@@ -102,14 +103,14 @@ function ChartTooltip({ active, payload, label }: any) {
 
       <div style={{ display: "flex", justifyContent: "space-between", gap: 24, marginBottom: 3 }}>
         <span style={{ color: TEXT2 }}>Portfolio β</span>
-        <span style={{ fontFamily: "JetBrains Mono, monospace", fontWeight: 700, color: BLUE }}>
+        <span style={{ fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontWeight: 700, color: BLUE }}>
           {fmtBeta(row.portfolioBeta)}
         </span>
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", gap: 24 }}>
         <span style={{ color: TEXT2 }}>Benchmark β</span>
-        <span style={{ fontFamily: "JetBrains Mono, monospace", color: "#475569" }}>
+        <span style={{ fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", color: "rgba(13,13,56,0.62)" }}>
           {fmtBeta(row.benchmarkBeta)}
         </span>
       </div>
@@ -121,7 +122,7 @@ function ChartTooltip({ active, payload, label }: any) {
         }}
       >
         <span style={{ color: TEXT2, fontWeight: 600 }}>Active β</span>
-        <span style={{ fontFamily: "JetBrains Mono, monospace", fontWeight: 800, color: betaColor(row.activeBeta) }}>
+        <span style={{ fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontWeight: 800, color: betaColor(row.activeBeta) }}>
           {fmtSigned(row.activeBeta)}
         </span>
       </div>
@@ -173,7 +174,7 @@ function FactorTable({
         fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
         textTransform: "uppercase", color: sortKey === col ? BLUE : TEXT2,
         cursor: "pointer", userSelect: "none", whiteSpace: "nowrap",
-        background: "#F0F4FA",
+        background: "#F5F7FD",
       }}
     >
       {label}{sortKey === col ? (sortDir === "desc" ? " ↓" : " ↑") : ""}
@@ -191,7 +192,7 @@ function FactorTable({
             <Th col="portfolioBeta"     label="Beta Portfolio"  right />
             <Th col="benchmarkBeta"     label="Beta Benchmark"  right />
             <Th col="activeBeta"        label="Active Beta"     right />
-            <th style={{ padding: "8px 12px", textAlign: "left", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: TEXT2, background: "#F0F4FA", width: 130 }}>
+            <th style={{ padding: "8px 12px", textAlign: "left", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: TEXT2, background: "#F5F7FD", width: 130 }}>
               Active
             </th>
             <Th col="portfolioCoverage" label="Coverage"        right />
@@ -206,28 +207,28 @@ function FactorTable({
               onClick={() => onSelect(f.factor)}
               title="Click to see every position behind this exposure"
               style={{
-                background: isSel ? "rgba(43,92,224,0.07)" : i % 2 === 0 ? "#FFFFFF" : "rgba(15,23,42,0.018)",
-                borderBottom: "1px solid rgba(15,23,42,0.05)",
+                background: isSel ? "rgba(32,68,220,0.07)" : i % 2 === 0 ? "#FFFFFF" : "rgba(13,13,56,0.018)",
+                borderBottom: "1px solid rgba(13,13,56,0.05)",
                 borderLeft: isSel ? `3px solid ${BLUE}` : "3px solid transparent",
                 cursor: "pointer",
               }}
             >
-              <td style={{ padding: "8px 12px", fontWeight: 600, color: isSel ? BLUE : TEXT1, fontFamily: "JetBrains Mono, monospace", whiteSpace: "nowrap" }}>
+              <td style={{ padding: "8px 12px", fontWeight: 600, color: isSel ? BLUE : TEXT1, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
                 {f.factor}
               </td>
-              <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", color: TEXT1 }}>
+              <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", color: TEXT1 }}>
                 {fmtBeta(f.portfolioBeta)}
               </td>
-              <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", color: "#475569" }}>
+              <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", color: "rgba(13,13,56,0.62)" }}>
                 {fmtBeta(f.benchmarkBeta)}
               </td>
-              <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontWeight: 700, color: betaColor(f.activeBeta) }}>
+              <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontWeight: 700, color: betaColor(f.activeBeta) }}>
                 {fmtSigned(f.activeBeta)}
               </td>
               {/* Diverging bar — centred at zero */}
               <td style={{ padding: "8px 12px" }}>
-                <div style={{ position: "relative", height: 7, background: "rgba(15,23,42,0.05)", borderRadius: 4 }}>
-                  <div style={{ position: "absolute", left: "50%", top: -2, bottom: -2, width: 1, background: "rgba(15,23,42,0.18)" }} />
+                <div style={{ position: "relative", height: 7, background: "rgba(13,13,56,0.05)", borderRadius: 4 }}>
+                  <div style={{ position: "absolute", left: "50%", top: -2, bottom: -2, width: 1, background: "rgba(13,13,56,0.18)" }} />
                   <div
                     style={{
                       position:   "absolute",
@@ -243,7 +244,7 @@ function FactorTable({
                   />
                 </div>
               </td>
-              <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: f.portfolioCoverage < 0.85 ? "#B45309" : TEXT3 }}>
+              <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, color: f.portfolioCoverage < 0.85 ? "#FF6B06" : TEXT3 }}>
                 {fmtPct(f.portfolioCoverage)}
               </td>
             </tr>
@@ -279,23 +280,23 @@ function ContributionScatter({
     <div style={{ height: 340, padding: "8px 4px 0" }}>
       <ResponsiveContainer width="100%" height="100%">
         <ScatterChart margin={{ top: 8, right: 24, left: 4, bottom: 20 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.06)" />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(13,13,56,0.06)" />
           <XAxis
             type="number" dataKey="x" name="Weight"
-            tick={{ fill: TEXT3, fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}
-            tickLine={false} axisLine={{ stroke: "rgba(15,23,42,0.12)" }}
+            tick={{ fill: TEXT3, fontSize: 10, fontFamily: FONT_SECONDARY }}
+            tickLine={false} axisLine={{ stroke: "rgba(13,13,56,0.12)" }}
             tickFormatter={(v: number) => `${v.toFixed(0)}%`}
             label={{ value: "Portfolio weight", position: "insideBottom", offset: -12, fontSize: 10, fill: TEXT2 }}
           />
           <YAxis
             type="number" dataKey="y" name="Beta"
-            tick={{ fill: TEXT3, fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}
+            tick={{ fill: TEXT3, fontSize: 10, fontFamily: FONT_SECONDARY }}
             tickLine={false} axisLine={false} width={52}
             tickFormatter={(v: number) => v.toFixed(2)}
             label={{ value: `β vs ${factor}`, angle: -90, position: "insideLeft", fontSize: 10, fill: TEXT2, style: { textAnchor: "middle" } }}
           />
           <ZAxis type="number" dataKey="z" range={[30, 620]} />
-          <ReferenceLine y={0} stroke="rgba(100,116,139,0.35)" />
+          <ReferenceLine y={0} stroke="rgba(13,13,56,0.35)" />
           <ReferenceLine
             y={portfolioBeta}
             stroke={BLUE}
@@ -320,11 +321,11 @@ function ScatterTooltip({ active, payload }: any) {
   const Row = ({ k, v, c, bold }: { k: string; v: string; c?: string; bold?: boolean }) => (
     <div style={{ display: "flex", justifyContent: "space-between", gap: 22 }}>
       <span style={{ color: TEXT2 }}>{k}</span>
-      <span style={{ fontFamily: "JetBrains Mono, monospace", color: c ?? TEXT1, fontWeight: bold ? 700 : 400 }}>{v}</span>
+      <span style={{ fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", color: c ?? TEXT1, fontWeight: bold ? 700 : 400 }}>{v}</span>
     </div>
   );
   return (
-    <div style={{ background: "#FFF", border: "1px solid rgba(15,23,42,0.12)", boxShadow: "0 4px 16px rgba(15,23,42,0.12)", borderRadius: 8, padding: "10px 12px", fontSize: 11.5, minWidth: 215 }}>
+    <div style={{ background: "#FFF", border: "1px solid rgba(13,13,56,0.12)", boxShadow: "0 4px 16px rgba(13,13,56,0.12)", borderRadius: 8, padding: "10px 12px", fontSize: 11.5, minWidth: 215 }}>
       <div style={{ fontWeight: 700, color: TEXT1, marginBottom: 6 }}>{p.company}</div>
       <Row k="Beta"        v={fmtBeta(p.beta ?? 0)} />
       <Row k="Port. weight" v={fmtPct(p.portfolioWeight, 2)} />
@@ -347,10 +348,10 @@ function PositionsTable({
 }) {
   const th: React.CSSProperties = {
     padding: "7px 10px", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
-    textTransform: "uppercase", color: TEXT2, background: "#F0F4FA", whiteSpace: "nowrap",
+    textTransform: "uppercase", color: TEXT2, background: "#F5F7FD", whiteSpace: "nowrap",
   };
   const td: React.CSSProperties = {
-    padding: "6px 10px", fontFamily: "JetBrains Mono, monospace", textAlign: "right",
+    padding: "6px 10px", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", textAlign: "right",
   };
 
   return (
@@ -375,8 +376,8 @@ function PositionsTable({
               <tr
                 key={p.company}
                 style={{
-                  background: off ? "rgba(220,38,38,0.03)" : i % 2 === 0 ? "#FFFFFF" : "rgba(15,23,42,0.018)",
-                  borderBottom: "1px solid rgba(15,23,42,0.05)",
+                  background: off ? "rgba(248,72,94,0.03)" : i % 2 === 0 ? "#FFFFFF" : "rgba(13,13,56,0.018)",
+                  borderBottom: "1px solid rgba(13,13,56,0.05)",
                   opacity: off ? 0.6 : 1,
                 }}
               >
@@ -405,13 +406,13 @@ function PositionsTable({
                           }
                           style={{
                             display: "inline-flex", alignItems: "center", gap: 4,
-                            fontSize: 9.5, fontFamily: "JetBrains Mono, monospace",
+                            fontSize: 9.5, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
                             padding: "2px 7px", borderRadius: 5,
                             cursor: isOut ? "not-allowed" : "pointer",
                             textDecoration: isOff ? "line-through" : "none",
-                            background: isOut ? "rgba(180,83,9,0.08)" : isOff ? "rgba(15,23,42,0.05)" : "rgba(43,92,224,0.08)",
-                            border: `1px solid ${isOut ? "rgba(180,83,9,0.25)" : isOff ? "rgba(15,23,42,0.12)" : "rgba(43,92,224,0.22)"}`,
-                            color: isOut ? "#B45309" : isOff ? TEXT3 : BLUE,
+                            background: isOut ? "rgba(255,107,6,0.08)" : isOff ? "rgba(13,13,56,0.05)" : "rgba(32,68,220,0.08)",
+                            border: `1px solid ${isOut ? "rgba(255,107,6,0.25)" : isOff ? "rgba(13,13,56,0.12)" : "rgba(32,68,220,0.22)"}`,
+                            color: isOut ? "#FF6B06" : isOff ? TEXT3 : BLUE,
                           }}
                         >
                           {l.ticker.replace(/ Equity$/i, "")}
@@ -426,7 +427,7 @@ function PositionsTable({
                   {off ? "—" : fmtBeta(p.beta as number)}
                 </td>
                 <td style={{ ...td, color: TEXT1 }}>{fmtPct(p.portfolioWeight, 2)}</td>
-                <td style={{ ...td, color: "#475569" }}>{fmtPct(p.benchmarkWeight, 2)}</td>
+                <td style={{ ...td, color: "rgba(13,13,56,0.62)" }}>{fmtPct(p.benchmarkWeight, 2)}</td>
                 <td style={{ ...td, color: betaColor(p.activeWeight) }}>
                   {fmtSigned(p.activeWeight * 100, 2)}%
                 </td>
@@ -448,15 +449,15 @@ function PositionsTable({
 // ── Methodology ───────────────────────────────────────────────────────────────
 function Methodology({ maxAbsBeta }: { maxAbsBeta: number }) {
   const H = ({ children }: { children: React.ReactNode }) => (
-    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: TEXT2, marginTop: 16, marginBottom: 6 }}>
+    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", fontFamily: FONT_SECONDARY, color: PATRIA.kingBlue, marginTop: 16, marginBottom: 6 }}>
       {children}
     </div>
   );
   const P = ({ children }: { children: React.ReactNode }) => (
-    <p style={{ fontSize: 11.5, color: "#475569", lineHeight: 1.65, margin: "0 0 6px" }}>{children}</p>
+    <p style={{ fontSize: 11.5, color: "rgba(13,13,56,0.62)", lineHeight: 1.65, margin: "0 0 6px" }}>{children}</p>
   );
   const Code = ({ children }: { children: React.ReactNode }) => (
-    <code style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, background: "rgba(15,23,42,0.05)", padding: "1px 5px", borderRadius: 4, color: TEXT1 }}>
+    <code style={{ fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, background: "rgba(13,13,56,0.05)", padding: "1px 5px", borderRadius: 4, color: TEXT1 }}>
       {children}
     </code>
   );
@@ -470,7 +471,7 @@ function Methodology({ maxAbsBeta }: { maxAbsBeta: number }) {
       <P>
         For every risk factor <em>f</em>, exposure is the weighted sum-product of position betas:
       </P>
-      <div style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11.5, color: TEXT1, background: "rgba(43,92,224,0.04)", border: `1px solid rgba(43,92,224,0.14)`, borderRadius: 8, padding: "10px 14px", margin: "4px 0 8px", lineHeight: 1.9 }}>
+      <div style={{ fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11.5, color: TEXT1, background: "rgba(32,68,220,0.04)", border: `1px solid rgba(32,68,220,0.14)`, borderRadius: 8, padding: "10px 14px", margin: "4px 0 8px", lineHeight: 1.9 }}>
         Portfolio β<sub>f</sub> &nbsp;= &nbsp;Σ<sub>i</sub> ( w<sup>port</sup><sub>i</sub> × β<sub>i,f</sub> )<br />
         Benchmark β<sub>f</sub> = &nbsp;Σ<sub>i</sub> ( w<sup>bench</sup><sub>i</sub> × β<sub>i,f</sub> )<br />
         Active β<sub>f</sub> &nbsp;&nbsp;&nbsp;= &nbsp;Portfolio β<sub>f</sub> − Benchmark β<sub>f</sub>
@@ -736,7 +737,7 @@ export default function BetaExposurePanel() {
     <div>
       {/* ── Filters ──────────────────────────────────────────────────────────── */}
       <div style={{ ...cardStyle, padding: "12px 16px", marginBottom: 14, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: TEXT2 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", fontFamily: FONT_SECONDARY, color: PATRIA.kingBlue }}>
           Fund
         </span>
         <select
@@ -751,7 +752,7 @@ export default function BetaExposurePanel() {
           ))}
         </select>
 
-        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: TEXT2, marginLeft: 6 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", fontFamily: FONT_SECONDARY, color: PATRIA.kingBlue, marginLeft: 6 }}>
           Report date
         </span>
         <select
@@ -777,7 +778,7 @@ export default function BetaExposurePanel() {
 
         {data && (
           <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ fontSize: 11, color: TEXT3, fontFamily: "JetBrains Mono, monospace" }}>
+            <span style={{ fontSize: 11, color: TEXT3, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
               vs {data.benchmarkName}
               {data.betaAsOf && <> · betas as of {data.betaAsOf}</>}
             </span>
@@ -787,12 +788,12 @@ export default function BetaExposurePanel() {
               title="Summary + one sheet per factor with every company's beta"
               style={{
                 display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600,
-                color: GREEN, background: "rgba(5,150,105,0.07)", border: "1px solid rgba(5,150,105,0.22)",
+                color: GREEN, background: "rgba(0,30,175,0.07)", border: "1px solid rgba(0,30,175,0.22)",
                 borderRadius: 7, padding: "5px 14px", cursor: exporting ? "wait" : "pointer",
                 transition: "all 0.12s", opacity: exporting ? 0.6 : 1,
               }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(5,150,105,0.13)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(5,150,105,0.07)"; }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,30,175,0.13)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,30,175,0.07)"; }}
             >
               <Download size={12} /> {exporting ? "Building…" : "Excel (full detail)"}
             </button>
@@ -805,19 +806,19 @@ export default function BetaExposurePanel() {
         <div style={{ ...cardStyle, padding: "60px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
           <div
             className="w-8 h-8 rounded-full border-2 animate-spin"
-            style={{ borderColor: "rgba(43,92,224,0.15)", borderTopColor: BLUE }}
+            style={{ borderColor: "rgba(32,68,220,0.15)", borderTopColor: BLUE }}
           />
-          <span style={{ fontSize: 12, color: TEXT2, fontFamily: "monospace" }}>Computing factor exposures…</span>
+          <span style={{ fontSize: 12, color: TEXT2, fontFamily: FONT_SECONDARY }}>Computing factor exposures…</span>
         </div>
       )}
 
       {/* ── Error ────────────────────────────────────────────────────────────── */}
       {!loading && error && (
-        <div style={{ ...cardStyle, padding: "28px", textAlign: "center", borderColor: "rgba(220,38,38,0.18)", background: "rgba(220,38,38,0.03)" }}>
+        <div style={{ ...cardStyle, padding: "28px", textAlign: "center", borderColor: "rgba(248,72,94,0.18)", background: "rgba(248,72,94,0.03)" }}>
           <p style={{ color: RED, fontSize: 13, marginBottom: 12 }}>{error}</p>
           <button
             onClick={fetchExposure}
-            style={{ padding: "6px 18px", borderRadius: 6, background: "rgba(43,92,224,0.08)", border: "1px solid rgba(43,92,224,0.20)", color: BLUE, cursor: "pointer", fontSize: 13 }}
+            style={{ padding: "6px 18px", borderRadius: 6, background: "rgba(32,68,220,0.08)", border: "1px solid rgba(32,68,220,0.20)", color: BLUE, cursor: "pointer", fontSize: 13 }}
           >
             Retry
           </button>
@@ -842,7 +843,7 @@ export default function BetaExposurePanel() {
                 <KpiCard
                   label="Fund weight covered"
                   value={fmtPct(data.coverage.portfolioWeight > 0 ? data.coverage.portfolioCovered / data.coverage.portfolioWeight : 0)}
-                  valueColor={lowCoverage ? "#B45309" : TEXT1}
+                  valueColor={lowCoverage ? "#FF6B06" : TEXT1}
                   sub={`Bench. ${fmtPct(data.coverage.benchmarkWeight > 0 ? data.coverage.benchmarkCovered / data.coverage.benchmarkWeight : 0)}`}
                 />
                 {(() => {
@@ -864,8 +865,8 @@ export default function BetaExposurePanel() {
                 <div
                   style={{
                     display: "flex", alignItems: "flex-start", gap: 8,
-                    background: "rgba(43,92,224,0.04)", border: "1px solid rgba(43,92,224,0.18)",
-                    borderRadius: 9, padding: "9px 13px", marginBottom: 14, fontSize: 11.5, color: "#1E3A8A",
+                    background: "rgba(32,68,220,0.04)", border: "1px solid rgba(32,68,220,0.18)",
+                    borderRadius: 9, padding: "9px 13px", marginBottom: 14, fontSize: 11.5, color: "#001EAF",
                   }}
                 >
                   <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
@@ -884,8 +885,8 @@ export default function BetaExposurePanel() {
                 <div
                   style={{
                     display: "flex", alignItems: "flex-start", gap: 8,
-                    background: "rgba(180,83,9,0.05)", border: "1px solid rgba(180,83,9,0.20)",
-                    borderRadius: 9, padding: "9px 13px", marginBottom: 14, fontSize: 11.5, color: "#92400E",
+                    background: "rgba(255,107,6,0.05)", border: "1px solid rgba(255,107,6,0.20)",
+                    borderRadius: 9, padding: "9px 13px", marginBottom: 14, fontSize: 11.5, color: "#FF6B06",
                   }}
                 >
                   <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
@@ -913,11 +914,11 @@ export default function BetaExposurePanel() {
                 <div style={{ height: Math.max(340, chartData.length * 46 + 80), padding: "16px 8px 8px" }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData} margin={{ top: 4, right: 24, left: 4, bottom: 4 }} barGap={4} barCategoryGap="26%">
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.06)" vertical={false} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(13,13,56,0.06)" vertical={false} />
                       <XAxis
                         dataKey="factor"
-                        tick={{ fill: "#475569", fontSize: 11, fontFamily: "JetBrains Mono, monospace" }}
-                        axisLine={{ stroke: "rgba(15,23,42,0.12)" }}
+                        tick={{ fill: "rgba(13,13,56,0.62)", fontSize: 11, fontFamily: FONT_SECONDARY }}
+                        axisLine={{ stroke: "rgba(13,13,56,0.12)" }}
                         tickLine={false}
                         interval={0}
                         angle={chartData.length > 8 ? -25 : 0}
@@ -925,19 +926,19 @@ export default function BetaExposurePanel() {
                         height={chartData.length > 8 ? 60 : 30}
                       />
                       <YAxis
-                        tick={{ fill: TEXT3, fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}
+                        tick={{ fill: TEXT3, fontSize: 10, fontFamily: FONT_SECONDARY }}
                         axisLine={false}
                         tickLine={false}
                         tickFormatter={(v: number) => v.toFixed(2)}
                         width={52}
                       />
-                      <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(43,92,224,0.04)" }} />
+                      <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(32,68,220,0.04)" }} />
                       <Legend
                         wrapperStyle={{ fontSize: 11.5, paddingTop: 6 }}
                         iconType="circle"
                         iconSize={8}
                       />
-                      <ReferenceLine y={0} stroke="rgba(100,116,139,0.35)" strokeWidth={1} />
+                      <ReferenceLine y={0} stroke="rgba(13,13,56,0.35)" strokeWidth={1} />
                       <Bar dataKey="portfolioBeta" name="Portfolio"  fill={BLUE}  radius={[3, 3, 0, 0]} maxBarSize={44} />
                       <Bar dataKey="benchmarkBeta" name="Benchmark"  fill={SLATE} radius={[3, 3, 0, 0]} maxBarSize={44} />
                     </BarChart>
@@ -968,8 +969,8 @@ export default function BetaExposurePanel() {
                     </summary>
                     <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: "4px 18px" }}>
                       {data.blended.map((b) => (
-                        <span key={b.company} style={{ fontSize: 10.5, color: TEXT3, fontFamily: "JetBrains Mono, monospace" }}>
-                          <span style={{ color: "#475569" }}>{b.company}</span> · {b.tickers}
+                        <span key={b.company} style={{ fontSize: 10.5, color: TEXT3, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
+                          <span style={{ color: "rgba(13,13,56,0.62)" }}>{b.company}</span> · {b.tickers}
                         </span>
                       ))}
                     </div>
@@ -979,11 +980,11 @@ export default function BetaExposurePanel() {
 
               {/* ── Drill-down for the clicked factor ───────────────────────── */}
               {selFactor && (
-                <div style={{ ...cardStyle, marginTop: 14, overflow: "hidden", borderColor: "rgba(43,92,224,0.22)" }}>
+                <div style={{ ...cardStyle, marginTop: 14, overflow: "hidden", borderColor: "rgba(32,68,220,0.22)" }}>
                   <div style={{ padding: "14px 20px", borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                     <div>
                       <h2 style={{ fontSize: 13.5, fontWeight: 700, color: TEXT1, margin: 0 }}>
-                        What&apos;s inside <span style={{ fontFamily: "JetBrains Mono, monospace", color: BLUE }}>{selFactor}</span>
+                        What&apos;s inside <span style={{ fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", color: BLUE }}>{selFactor}</span>
                       </h2>
                       <p style={{ fontSize: 11, color: TEXT2, marginTop: 3 }}>
                         Every position behind the exposure · click a ticker chip to drop it from a blended average
@@ -994,12 +995,12 @@ export default function BetaExposurePanel() {
                       <span style={{ display: "flex", gap: 18, marginLeft: "auto", alignItems: "center", flexWrap: "wrap" }}>
                         {[
                           { l: "Portfolio β", v: fmtBeta(detail.totals.portfolioBeta), c: BLUE },
-                          { l: "Benchmark β", v: fmtBeta(detail.totals.benchmarkBeta), c: "#475569" },
+                          { l: "Benchmark β", v: fmtBeta(detail.totals.benchmarkBeta), c: "rgba(13,13,56,0.62)" },
                           { l: "Active β",    v: fmtSigned(detail.totals.activeBeta),  c: betaColor(detail.totals.activeBeta) },
                         ].map((k) => (
                           <span key={k.l} style={{ display: "flex", flexDirection: "column", gap: 1 }}>
                             <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: TEXT2 }}>{k.l}</span>
-                            <span style={{ fontSize: 15, fontWeight: 800, fontFamily: "JetBrains Mono, monospace", color: k.c }}>{k.v}</span>
+                            <span style={{ fontSize: 15, fontWeight: 800, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", color: k.c }}>{k.v}</span>
                           </span>
                         ))}
                         <button
@@ -1015,8 +1016,8 @@ export default function BetaExposurePanel() {
 
                   {/* Dropped-ticker bar */}
                   {dropped.size > 0 && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "9px 20px", borderBottom: `1px solid ${BORDER}`, background: "rgba(15,23,42,0.02)" }}>
-                      <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: TEXT2 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "9px 20px", borderBottom: `1px solid ${BORDER}`, background: "rgba(13,13,56,0.02)" }}>
+                      <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", fontFamily: FONT_SECONDARY, color: PATRIA.kingBlue }}>
                         Dropped listings
                       </span>
                       {Array.from(dropped).map((t) => (
@@ -1024,7 +1025,7 @@ export default function BetaExposurePanel() {
                           key={t}
                           onClick={() => toggleTicker(t)}
                           title="Put this listing back"
-                          style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9.5, fontFamily: "JetBrains Mono, monospace", padding: "2px 7px", borderRadius: 5, background: "rgba(15,23,42,0.05)", border: `1px solid ${BORDER}`, color: TEXT2, cursor: "pointer" }}
+                          style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9.5, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", padding: "2px 7px", borderRadius: 5, background: "rgba(13,13,56,0.05)", border: `1px solid ${BORDER}`, color: TEXT2, cursor: "pointer" }}
                         >
                           {t.replace(/ EQUITY$/i, "")} <X size={9} />
                         </button>
@@ -1039,7 +1040,7 @@ export default function BetaExposurePanel() {
                   )}
 
                   {detailLoading && !detail ? (
-                    <div style={{ padding: "50px 0", textAlign: "center", fontSize: 12, color: TEXT2, fontFamily: "monospace" }}>
+                    <div style={{ padding: "50px 0", textAlign: "center", fontSize: 12, color: TEXT2, fontFamily: FONT_SECONDARY }}>
                       Loading positions…
                     </div>
                   ) : detail ? (

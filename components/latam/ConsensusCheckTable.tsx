@@ -5,21 +5,22 @@ import { useRouter } from "next/navigation";
 import { Download, CalendarDays } from "lucide-react";
 import type { ConsensusCheckPayload, ConsensusCheckRow } from "@/app/api/latam/consensus-check/route";
 import { downloadExcel } from "@/lib/exportExcel";
+import { FONT_SECONDARY } from "@/lib/patriaTheme";
 
 // ── Palette ────────────────────────────────────────────────────────────────────
 const C = {
-  HDR_BG:  "#1E3A8A",
+  HDR_BG:  "#001EAF",
   HDR_TXT: "#FFFFFF",
-  SUB_BG:  "#DBEAFE",
-  SUB_TXT: "#1E3A8A",
-  BDR:     "#D1D5DB",
-  ROW_ALT: "#F8FAFF",
-  ROW_HOV: "#EFF6FF",
-  POS_BG:  "rgba(22,163,74,0.12)",
-  POS_TXT: "#15803D",
-  NEG_BG:  "rgba(220,38,38,0.10)",
-  NEG_TXT: "#B91C1C",
-  NIL_TXT: "#94A3B8",
+  SUB_BG:  "rgba(32,68,220,0.10)",
+  SUB_TXT: "#001EAF",
+  BDR:     "rgba(13,13,56,0.28)",
+  ROW_ALT: "#F5F7FD",
+  ROW_HOV: "rgba(32,68,220,0.06)",
+  POS_BG:  "rgba(0,30,175,0.12)",
+  POS_TXT: "#001EAF",
+  NEG_BG:  "rgba(248,72,94,0.10)",
+  NEG_TXT: "#F8485E",
+  NIL_TXT: "rgba(13,13,56,0.45)",
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -43,7 +44,7 @@ function fmtUpside(v: number | null): { text: string; color: string } {
   const pct = v * 100;
   return {
     text:  (pct >= 0 ? "+" : "") + pct.toFixed(1) + "%",
-    color: pct > 0.1 ? C.POS_TXT : pct < -0.1 ? C.NEG_TXT : "#64748B",
+    color: pct > 0.1 ? C.POS_TXT : pct < -0.1 ? C.NEG_TXT : "rgba(13,13,56,0.62)",
   };
 }
 
@@ -85,9 +86,9 @@ function ReccBadge({ recc }: { recc: string | null }) {
   const u     = recc.toUpperCase();
   const isBuy  = u.includes("BUY") || u === "OW";
   const isSell = u.includes("SELL") || u === "UW";
-  const color  = isBuy ? "#1D4ED8" : isSell ? "#B91C1C" : "#64748B";
-  const bg     = isBuy ? "rgba(29,78,216,0.10)" : isSell ? "rgba(185,28,28,0.10)" : "rgba(100,116,139,0.10)";
-  const border = isBuy ? "rgba(29,78,216,0.25)" : isSell ? "rgba(185,28,28,0.25)" : "rgba(100,116,139,0.22)";
+  const color  = isBuy ? "#2044DC" : isSell ? "#F8485E" : "rgba(13,13,56,0.62)";
+  const bg     = isBuy ? "rgba(32,68,220,0.10)" : isSell ? "rgba(248,72,94,0.10)" : "rgba(13,13,56,0.10)";
+  const border = isBuy ? "rgba(32,68,220,0.25)" : isSell ? "rgba(248,72,94,0.25)" : "rgba(13,13,56,0.22)";
   return (
     <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.06em", padding: "2px 7px", borderRadius: 4, background: bg, color, border: `1px solid ${border}` }}>
       {u}
@@ -102,8 +103,8 @@ function NumCell({ v }: { v: number | null }) {
       textAlign:   "right",
       padding:     "5px 10px",
       fontSize:    12,
-      fontFamily:  "JetBrains Mono, monospace",
-      color:       v == null ? C.NIL_TXT : "#0F172A",
+      fontFamily:  FONT_SECONDARY,
+      color:       v == null ? C.NIL_TXT : "#0D0D38",
       borderRight: `1px solid ${C.BDR}`,
       whiteSpace:  "nowrap",
     }}>
@@ -118,8 +119,8 @@ function ConNumCell({ v }: { v: number | null }) {
       textAlign:   "right",
       padding:     "5px 10px",
       fontSize:    12,
-      fontFamily:  "JetBrains Mono, monospace",
-      color:       v == null ? C.NIL_TXT : "#0F172A",
+      fontFamily:  FONT_SECONDARY,
+      color:       v == null ? C.NIL_TXT : "#0D0D38",
       borderRight: `1px solid ${C.BDR}`,
       whiteSpace:  "nowrap",
     }}>
@@ -131,13 +132,13 @@ function ConNumCell({ v }: { v: number | null }) {
 function VarCell({ moneda, consensus }: { moneda: number | null; consensus: number | null }) {
   const v   = varPct(moneda, consensus);
   const bg  = v == null ? "transparent" : v > 0 ? C.POS_BG  : v < 0 ? C.NEG_BG  : "transparent";
-  const col = v == null ? C.NIL_TXT    : v > 0 ? C.POS_TXT : v < 0 ? C.NEG_TXT : "#475569";
+  const col = v == null ? C.NIL_TXT    : v > 0 ? C.POS_TXT : v < 0 ? C.NEG_TXT : "rgba(13,13,56,0.62)";
   return (
     <td style={{
       textAlign:   "center",
       padding:     "5px 8px",
       fontSize:    11,
-      fontFamily:  "JetBrains Mono, monospace",
+      fontFamily:  FONT_SECONDARY,
       fontWeight:  v != null ? 700 : 400,
       color:       col,
       background:  bg,
@@ -181,8 +182,8 @@ function Th({
         whiteSpace:    "nowrap",
         borderRight:   `1px solid ${level === 0 ? "rgba(255,255,255,0.20)" : C.BDR}`,
         borderBottom:  `1px solid ${C.BDR}`,
-        background:    level === 0 ? C.HDR_BG : level === 1 ? C.SUB_BG : "#F1F5F9",
-        color:         level === 0 ? C.HDR_TXT : level === 1 ? C.SUB_TXT : "#374151",
+        background:    level === 0 ? C.HDR_BG : level === 1 ? C.SUB_BG : "#F5F7FD",
+        color:         level === 0 ? C.HDR_TXT : level === 1 ? C.SUB_TXT : "#0D0D38",
         position:      sticky ? "sticky" : undefined,
         left:          stickyLeft != null ? stickyLeft : undefined,
         zIndex:        sticky ? (level === 0 ? 30 : 20) : undefined,
@@ -210,10 +211,10 @@ const countryName = (c: string) => COUNTRY_NAMES[c] ?? c;
 // Shared select style for the filter dropdowns.
 const selStyle = (active: boolean): React.CSSProperties => ({
   padding: "6px 12px", borderRadius: 7,
-  border: active ? "1px solid rgba(43,92,224,0.30)" : "1px solid rgba(15,23,42,0.12)",
-  background: active ? "rgba(43,92,224,0.07)" : "#F8FAFF",
-  color: active ? "#1E3A8A" : "#64748B",
-  fontSize: 12, fontFamily: "Inter, sans-serif", cursor: "pointer", outline: "none",
+  border: active ? "1px solid rgba(32,68,220,0.30)" : "1px solid rgba(13,13,56,0.12)",
+  background: active ? "rgba(32,68,220,0.07)" : "#F5F7FD",
+  color: active ? "#001EAF" : "rgba(13,13,56,0.62)",
+  fontSize: 12, fontFamily: FONT_SECONDARY, cursor: "pointer", outline: "none",
   minWidth: 150,
 });
 
@@ -311,7 +312,7 @@ export default function ConsensusCheckTable() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 60 }}>
         <div style={{
           width: 28, height: 28, borderRadius: "50%",
-          border: "2px solid rgba(43,92,224,0.15)", borderTopColor: "#2B5CE0",
+          border: "2px solid rgba(32,68,220,0.15)", borderTopColor: "#2044DC",
           animation: "spin 0.8s linear infinite",
         }} />
       </div>
@@ -320,7 +321,7 @@ export default function ConsensusCheckTable() {
 
   if (error || !data) {
     return (
-      <div style={{ textAlign: "center", padding: 40, color: "#94A3B8", fontSize: 13 }}>
+      <div style={{ textAlign: "center", padding: 40, color: "rgba(13,13,56,0.45)", fontSize: 13 }}>
         Failed to load consensus data.
       </div>
     );
@@ -363,8 +364,8 @@ export default function ConsensusCheckTable() {
   // 3 sections × colSpan 4 (EBITDA + NI only)
   const sections: { label: string; bg: string }[] = [
     { label: "Moneda",    bg: C.HDR_BG  },
-    { label: "Consensus", bg: "#1D4ED8" },
-    { label: "Var %",     bg: "#4338CA" },
+    { label: "Consensus", bg: "#2044DC" },
+    { label: "Var %",     bg: "#001EAF" },
   ];
 
   return (
@@ -374,14 +375,14 @@ export default function ConsensusCheckTable() {
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
           gap: 12, marginBottom: 10, padding: "9px 14px", borderRadius: 8,
-          background: "rgba(217,119,6,0.07)", border: "1px solid rgba(217,119,6,0.28)",
+          background: "rgba(255,107,6,0.07)", border: "1px solid rgba(255,107,6,0.28)",
         }}>
-          <span style={{ fontSize: 12, color: "#78350F" }}>
-            Ticker <strong style={{ fontFamily: "JetBrains Mono, monospace" }}>{notFoundMsg}</strong> was not found in Company Profiles — no deep dive data available.
+          <span style={{ fontSize: 12, color: "#FF6B06" }}>
+            Ticker <strong style={{ fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>{notFoundMsg}</strong> was not found in Company Profiles — no deep dive data available.
           </span>
           <button
             onClick={() => setNotFoundMsg(null)}
-            style={{ background: "transparent", border: "none", cursor: "pointer", color: "#92400E", fontSize: 16, lineHeight: 1, padding: "0 2px" }}
+            style={{ background: "transparent", border: "none", cursor: "pointer", color: "#FF6B06", fontSize: 16, lineHeight: 1, padding: "0 2px" }}
           >
             ×
           </button>
@@ -410,7 +411,7 @@ export default function ConsensusCheckTable() {
           </select>
 
           {(analystFilter || countryFilter || industryFilter) && (
-            <span style={{ fontSize: 11, color: "#64748B", fontFamily: "JetBrains Mono, monospace" }}>
+            <span style={{ fontSize: 11, color: "rgba(13,13,56,0.62)", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
               {filtered.length} of {rows.length}
             </span>
           )}
@@ -441,9 +442,9 @@ export default function ConsensusCheckTable() {
             ]);
             downloadExcel([{ name: "Estimates vs Consensus", headers, rows }], "latam_estimates_consensus");
           }}
-          style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: "#059669", background: "rgba(5,150,105,0.07)", border: "1px solid rgba(5,150,105,0.22)", borderRadius: 7, padding: "5px 14px", cursor: "pointer", transition: "all 0.12s" }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(5,150,105,0.13)"; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(5,150,105,0.07)"; }}
+          style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: "#001EAF", background: "rgba(0,30,175,0.07)", border: "1px solid rgba(0,30,175,0.22)", borderRadius: 7, padding: "5px 14px", cursor: "pointer", transition: "all 0.12s" }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,30,175,0.13)"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,30,175,0.07)"; }}
         >
           <Download size={12} /> Download Excel ({filtered.length})
         </button>
@@ -455,14 +456,14 @@ export default function ConsensusCheckTable() {
           <span style={{
             display: "inline-flex", alignItems: "center", gap: 8,
             padding: "7px 14px", borderRadius: 9,
-            background: "rgba(29,78,216,0.07)",
-            border: "1px solid rgba(29,78,216,0.22)",
+            background: "rgba(32,68,220,0.07)",
+            border: "1px solid rgba(32,68,220,0.22)",
           }}>
-            <CalendarDays size={15} style={{ color: "#1D4ED8", flexShrink: 0 }} />
-            <span style={{ fontSize: 13, color: "#475569", fontWeight: 600, letterSpacing: "0.01em" }}>
+            <CalendarDays size={15} style={{ color: "#2044DC", flexShrink: 0 }} />
+            <span style={{ fontSize: 13, color: "rgba(13,13,56,0.62)", fontWeight: 600, letterSpacing: "0.01em" }}>
               Prices as of
             </span>
-            <span style={{ fontSize: 14, color: "#1D4ED8", fontWeight: 800, fontFamily: "JetBrains Mono, monospace", letterSpacing: "0.02em" }}>
+            <span style={{ fontSize: 14, color: "#2044DC", fontWeight: 800, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", letterSpacing: "0.02em" }}>
               {fmtDate(pricesAsOf)}
             </span>
           </span>
@@ -470,7 +471,7 @@ export default function ConsensusCheckTable() {
       )}
 
       {/* ── Table ── */}
-      <div style={{ overflowX: "auto", borderRadius: 10, border: `1px solid ${C.BDR}`, boxShadow: "0 1px 6px rgba(15,23,42,0.07)" }}>
+      <div style={{ overflowX: "auto", borderRadius: 10, border: `1px solid ${C.BDR}`, boxShadow: "0 1px 6px rgba(13,13,56,0.07)" }}>
         <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 900, tableLayout: "auto" }}>
           <thead>
             {/* ── Row 1: section headers ── */}
@@ -543,8 +544,8 @@ export default function ConsensusCheckTable() {
                     key={i}
                     onClick={() => handleSort(colKey)}
                     style={{
-                      background:   "#F1F5F9",
-                      color:        isSorted ? "#4338CA" : "#374151",
+                      background:   "#F5F7FD",
+                      color:        isSorted ? "#001EAF" : "#0D0D38",
                       textAlign:    "center",
                       padding:      "4px 8px",
                       fontWeight:   isSorted ? 700 : 600,
@@ -552,7 +553,7 @@ export default function ConsensusCheckTable() {
                       borderRight:  `1px solid ${C.BDR}`,
                       borderBottom: `1px solid ${C.BDR}`,
                       whiteSpace:   "nowrap",
-                      fontFamily:   "JetBrains Mono, monospace",
+                      fontFamily:   FONT_SECONDARY,
                       cursor:       "pointer",
                       userSelect:   "none",
                     }}
@@ -592,8 +593,8 @@ export default function ConsensusCheckTable() {
                     padding:     "6px 12px",
                     fontSize:    12,
                     fontWeight:  700,
-                    color:       "#1D4ED8",
-                    fontFamily:  "JetBrains Mono, monospace",
+                    color:       "#2044DC",
+                    fontFamily:  FONT_SECONDARY,
                     borderRight: `1px solid ${C.BDR}`,
                     whiteSpace:  "nowrap",
                     position:    "sticky",
@@ -604,7 +605,7 @@ export default function ConsensusCheckTable() {
                     <span
                       onClick={() => handleTickerClick(row.ticker)}
                       style={{ cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3 }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#1E40AF"; }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#001EAF"; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = ""; }}
                     >
                       {shortTicker(row.ticker)}
@@ -615,8 +616,8 @@ export default function ConsensusCheckTable() {
                   <td style={{
                     padding:     "6px 10px",
                     fontSize:    11,
-                    color:       "#64748B",
-                    fontFamily:  "JetBrains Mono, monospace",
+                    color:       "rgba(13,13,56,0.62)",
+                    fontFamily:  FONT_SECONDARY,
                     borderRight: `1px solid ${C.BDR}`,
                     whiteSpace:  "nowrap",
                   }}>
@@ -627,8 +628,8 @@ export default function ConsensusCheckTable() {
                   <td style={{
                     padding:      "6px 10px",
                     fontSize:     11,
-                    color:        "#475569",
-                    fontFamily:   "Inter, sans-serif",
+                    color:        "rgba(13,13,56,0.62)",
+                    fontFamily:   FONT_SECONDARY,
                     borderRight:  `1px solid ${C.BDR}`,
                     whiteSpace:   "nowrap",
                     maxWidth:     100,
@@ -652,7 +653,7 @@ export default function ConsensusCheckTable() {
                   <td style={{
                     padding:     "6px 10px",
                     fontSize:    12,
-                    fontFamily:  "JetBrains Mono, monospace",
+                    fontFamily:  FONT_SECONDARY,
                     textAlign:   "center",
                     fontWeight:  row.upsideModel != null ? 700 : 400,
                     color:       upsideM.color,
@@ -666,7 +667,7 @@ export default function ConsensusCheckTable() {
                   <td style={{
                     padding:     "6px 10px",
                     fontSize:    12,
-                    fontFamily:  "JetBrains Mono, monospace",
+                    fontFamily:  FONT_SECONDARY,
                     textAlign:   "center",
                     fontWeight:  row.upside != null ? 700 : 400,
                     color:       upside.color,
@@ -699,7 +700,7 @@ export default function ConsensusCheckTable() {
 
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={18} style={{ textAlign: "center", padding: 32, color: "#94A3B8", fontSize: 13 }}>
+                <td colSpan={18} style={{ textAlign: "center", padding: 32, color: "rgba(13,13,56,0.45)", fontSize: 13 }}>
                   No model data available.
                 </td>
               </tr>

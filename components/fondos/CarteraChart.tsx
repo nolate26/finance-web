@@ -1,5 +1,7 @@
 "use client";
 
+import { PATRIA, FONT_SECONDARY } from "@/lib/patriaTheme";
+
 import {
   ResponsiveContainer,
   BarChart,
@@ -33,29 +35,29 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     <div className="rounded-lg px-3 py-2.5 text-xs"
       style={{
         background: "#FFFFFF",
-        border: "1px solid rgba(15,23,42,0.12)",
-        boxShadow: "0 4px 16px rgba(15,23,42,0.12)",
+        border: "1px solid rgba(13,13,56,0.12)",
+        boxShadow: "0 4px 16px rgba(13,13,56,0.12)",
         minWidth: 200,
       }}
     >
-      <div className="font-semibold mb-2" style={{ color: "#0F172A" }}>{label}</div>
+      <div className="font-semibold mb-2" style={{ color: "#0D0D38" }}>{label}</div>
       <div className="space-y-1">
         <div className="flex justify-between gap-6">
-          <span style={{ color: "#64748B" }}>Portafolio</span>
-          <span className="font-mono font-semibold" style={{ color: "#2B5CE0" }}>
+          <span style={{ color: "rgba(13,13,56,0.62)" }}>Portafolio</span>
+          <span className="font-secondary tabular-nums font-semibold" style={{ color: "#2044DC" }}>
             {(row.portfolioPct * 100).toFixed(2)}%
           </span>
         </div>
         <div className="flex justify-between gap-6">
-          <span style={{ color: "#64748B" }}>Benchmark</span>
-          <span className="font-mono" style={{ color: "#475569" }}>
+          <span style={{ color: "rgba(13,13,56,0.62)" }}>Benchmark</span>
+          <span className="font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.62)" }}>
             {(row.benchmarkPct * 100).toFixed(2)}%
           </span>
         </div>
-        <div className="flex justify-between gap-6 pt-1 border-t" style={{ borderColor: "rgba(15,23,42,0.08)" }}>
-          <span style={{ color: "#64748B" }}>Overweight</span>
-          <span className="font-mono font-bold"
-            style={{ color: row.overweight >= 0 ? "#059669" : "#DC2626" }}
+        <div className="flex justify-between gap-6 pt-1 border-t" style={{ borderColor: "rgba(13,13,56,0.08)" }}>
+          <span style={{ color: "rgba(13,13,56,0.62)" }}>Overweight</span>
+          <span className="font-secondary tabular-nums font-bold"
+            style={{ color: row.overweight >= 0 ? "#001EAF" : "#F8485E" }}
           >
             {row.overweight >= 0 ? "+" : ""}{(row.overweight * 100).toFixed(2)}%
           </span>
@@ -83,9 +85,10 @@ export default function CarteraChart({ cartera, fondoName, benchmark }: Props) {
 
   return (
     <div className="card overflow-hidden flex flex-col">
-      <div className="px-5 py-4 border-b" style={{ borderColor: "rgba(15,23,42,0.07)" }}>
-        <h2 className="text-sm font-semibold" style={{ color: "#0F172A" }}>Overweight / Underweight — {fondoName}</h2>
-        <p className="text-xs mt-0.5" style={{ color: "#64748B" }}>
+      <div className="px-5 py-4"
+        style={{ background: PATRIA.darkBlue }}>
+        <h2 className="text-sm font-bold font-primary uppercase tracking-wide" style={{ color: PATRIA.white }}>Overweight / Underweight — {fondoName}</h2>
+        <p className="text-xs mt-0.5 font-secondary" style={{ color: "rgba(255,255,255,0.72)" }}>
           Desviación del portafolio respecto al benchmark {benchmark} (puntos porcentuales)
         </p>
       </div>
@@ -98,11 +101,11 @@ export default function CarteraChart({ cartera, fondoName, benchmark }: Props) {
             margin={{ top: 0, right: 20, left: 8, bottom: 0 }}
             barCategoryGap="20%"
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.06)" horizontal={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(13,13,56,0.06)" horizontal={false} />
             <XAxis
               type="number"
               domain={[-domainMax, domainMax]}
-              tick={{ fill: "#94A3B8", fontSize: 10, fontFamily: "monospace" }}
+              tick={{ fill: "rgba(13,13,56,0.45)", fontSize: 10, fontFamily: FONT_SECONDARY }}
               axisLine={false}
               tickLine={false}
               tickFormatter={v => `${v > 0 ? "+" : ""}${v.toFixed(1)}%`}
@@ -110,18 +113,18 @@ export default function CarteraChart({ cartera, fondoName, benchmark }: Props) {
             <YAxis
               type="category"
               dataKey="company"
-              tick={{ fill: "#475569", fontSize: 11 }}
+              tick={{ fill: "rgba(13,13,56,0.62)", fontSize: 11 }}
               axisLine={false}
               tickLine={false}
               width={180}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(43,92,224,0.04)" }} />
-            <ReferenceLine x={0} stroke="rgba(100,116,139,0.3)" strokeWidth={1} />
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(32,68,220,0.04)" }} />
+            <ReferenceLine x={0} stroke="rgba(13,13,56,0.3)" strokeWidth={1} />
             <Bar dataKey="overweightPct" radius={[0, 3, 3, 0]}>
               {chartData.map((entry, i) => (
                 <Cell
                   key={i}
-                  fill={entry.overweightPct >= 0 ? "#059669" : "#DC2626"}
+                  fill={entry.overweightPct >= 0 ? "#001EAF" : "#F8485E"}
                   fillOpacity={0.75}
                 />
               ))}

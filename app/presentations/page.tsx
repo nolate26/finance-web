@@ -38,23 +38,23 @@ const CP_LATAM_FUNDS = CLIENT_FUND_FILTERS.filter((f) => f.group === "LatAm");
 function FileRow({ pres }: { pres: Presentation }) {
   return (
     <div
-      className="flex items-center gap-4 px-5 py-4 border-b border-slate-100 last:border-0 transition-colors"
-      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.02)")}
+      className="flex items-center gap-4 px-5 py-4 border-b border-patria-dark-blue/[0.06] last:border-0 transition-colors"
+      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.02)")}
       onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
     >
       {/* PDF icon */}
       <div
         className="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-lg"
-        style={{ background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.15)" }}
+        style={{ background: "rgba(248,72,94,0.08)", border: "1px solid rgba(248,72,94,0.15)" }}
       >
-        <FileText size={16} style={{ color: "#DC2626" }} />
+        <FileText size={16} style={{ color: "#F8485E" }} />
       </div>
 
       {/* Title + description */}
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold truncate" style={{ color: "#0F172A" }}>{pres.title}</p>
+        <p className="text-sm font-semibold truncate" style={{ color: "#0D0D38" }}>{pres.title}</p>
         {pres.description && (
-          <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "#64748B" }}>{pres.description}</p>
+          <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "rgba(13,13,56,0.62)" }}>{pres.description}</p>
         )}
       </div>
 
@@ -63,8 +63,8 @@ function FileRow({ pres }: { pres: Presentation }) {
         className="flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-md"
         style={
           pres.is_sell_side
-            ? { background: "rgba(234,88,12,0.08)", color: "#C2410C", border: "1px solid rgba(234,88,12,0.20)", whiteSpace: "nowrap" }
-            : { background: "rgba(43,92,224,0.07)", color: "#2B5CE0",  border: "1px solid rgba(43,92,224,0.18)", whiteSpace: "nowrap" }
+            ? { background: "rgba(255,107,6,0.08)", color: "#FF6B06", border: "1px solid rgba(255,107,6,0.20)", whiteSpace: "nowrap" }
+            : { background: "rgba(32,68,220,0.07)", color: "#2044DC",  border: "1px solid rgba(32,68,220,0.18)", whiteSpace: "nowrap" }
         }
       >
         {pres.is_sell_side ? "Sell Side" : "Moneda"}
@@ -72,13 +72,13 @@ function FileRow({ pres }: { pres: Presentation }) {
 
       {/* Company chip */}
       {pres.company_name && (
-        <span className="flex-shrink-0 text-xs font-mono" style={{ color: "#94A3B8", whiteSpace: "nowrap" }}>
+        <span className="flex-shrink-0 text-xs font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.45)", whiteSpace: "nowrap" }}>
           {pres.company_name}
         </span>
       )}
 
       {/* Date */}
-      <span className="font-mono text-xs flex-shrink-0" style={{ color: "#CBD5E1", minWidth: 90, textAlign: "right" }}>
+      <span className="font-secondary tabular-nums text-xs flex-shrink-0" style={{ color: "rgba(13,13,56,0.28)", minWidth: 90, textAlign: "right" }}>
         {formatDate(pres.created_at)}
       </span>
 
@@ -88,9 +88,9 @@ function FileRow({ pres }: { pres: Presentation }) {
         target="_blank"
         rel="noopener noreferrer"
         className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all"
-        style={{ background: "rgba(43,92,224,0.08)", color: "#2B5CE0", border: "1px solid rgba(43,92,224,0.20)", textDecoration: "none" }}
-        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.14)")}
-        onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.08)")}
+        style={{ background: "rgba(32,68,220,0.08)", color: "#2044DC", border: "1px solid rgba(32,68,220,0.20)", textDecoration: "none" }}
+        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.14)")}
+        onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.08)")}
       >
         <Download size={11} /> PDF
       </a>
@@ -175,8 +175,8 @@ export default function PresentationsPage() {
     return (
       <div className="flex items-center justify-center h-[80vh]">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(43,92,224,0.15)", borderTopColor: "#2B5CE0" }} />
-          <p className="text-sm font-mono" style={{ color: "#64748B" }}>Loading presentations…</p>
+          <div className="w-10 h-10 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(32,68,220,0.15)", borderTopColor: "#2044DC" }} />
+          <p className="text-sm font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.62)" }}>Loading presentations…</p>
         </div>
       </div>
     );
@@ -198,26 +198,26 @@ export default function PresentationsPage() {
         {/* ── Header ──────────────────────────────────────────────────── */}
         <div className="flex items-start justify-between mb-6">
           <div>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", letterSpacing: "-0.035em", lineHeight: 1.15, margin: 0 }}>Presentations</h1>
-            <p style={{ fontSize: 12, marginTop: 5, color: "#64748B", fontWeight: 500, letterSpacing: "0.01em" }}>Research reports · Investor presentations</p>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0D0D38", letterSpacing: "-0.035em", lineHeight: 1.15, margin: 0 }}>Presentations</h1>
+            <p style={{ fontSize: 12, marginTop: 5, color: "rgba(13,13,56,0.62)", fontWeight: 500, letterSpacing: "0.01em" }}>Research reports · Investor presentations</p>
           </div>
           <div className="flex items-center gap-3">
             {isAdmin && (
               <button
                 onClick={() => setShowModal(true)}
-                style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 15px", borderRadius: 8, background: "#2B5CE0", border: "none", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 15px", borderRadius: 8, background: "#2044DC", border: "none", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
               >
                 <Upload size={14} /> Upload
               </button>
             )}
-            <span className="text-xs font-mono px-2 py-1 rounded" style={{ background: "rgba(43,92,224,0.08)", color: "#2B5CE0" }}>
+            <span className="text-xs font-secondary tabular-nums px-2 py-1 rounded" style={{ background: "rgba(32,68,220,0.08)", color: "#2044DC" }}>
               {displayFiles.length} document{displayFiles.length !== 1 ? "s" : ""}
             </span>
           </div>
         </div>
 
         {/* ── Level 1: Category tabs ──────────────────────────────────── */}
-        <div className="flex items-center mb-4" style={{ gap: 2, padding: "3px", borderRadius: 10, background: "rgba(15,23,42,0.04)", border: "1px solid rgba(15,23,42,0.08)", width: "fit-content" }}>
+        <div className="flex items-center mb-4" style={{ gap: 2, padding: "3px", borderRadius: 10, background: "rgba(13,13,56,0.04)", border: "1px solid rgba(13,13,56,0.08)", width: "fit-content" }}>
           {MAIN_TABS.map(({ key, label }) => {
             const active = mainCategory === key;
             return (
@@ -227,9 +227,9 @@ export default function PresentationsPage() {
                 className="px-5 py-1.5 rounded-lg text-sm transition-all"
                 style={{
                   background: active ? "#FFFFFF"  : "transparent",
-                  color:      active ? "#1B2E7E"  : "#475569",
-                  border:     active ? "1px solid rgba(15,23,42,0.11)" : "1px solid transparent",
-                  boxShadow:  active ? "0 1px 3px rgba(15,23,42,0.09)" : "none",
+                  color:      active ? "#0D0D38"  : "rgba(13,13,56,0.62)",
+                  border:     active ? "1px solid rgba(13,13,56,0.11)" : "1px solid transparent",
+                  boxShadow:  active ? "0 1px 3px rgba(13,13,56,0.09)" : "none",
                   fontWeight: active ? 700 : 500,
                   cursor: "pointer",
                 }}
@@ -248,13 +248,13 @@ export default function PresentationsPage() {
             <>
               {/* Row 1: Chile / LatAm region toggle */}
               <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1 p-0.5 rounded-md" style={{ background: "rgba(15,23,42,0.04)", border: "1px solid rgba(15,23,42,0.08)" }}>
+                <div className="flex items-center gap-1 p-0.5 rounded-md" style={{ background: "rgba(13,13,56,0.04)", border: "1px solid rgba(13,13,56,0.08)" }}>
                   {(["chile", "latam"] as const).map((r) => (
                     <button
                       key={r}
                       onClick={() => handleCpRegion(r)}
                       className="px-4 py-1 rounded text-xs font-semibold transition-all"
-                      style={{ background: cpRegion === r ? "#fff" : "transparent", color: cpRegion === r ? "#1E3A8A" : "#64748B", boxShadow: cpRegion === r ? "0 1px 3px rgba(15,23,42,0.10)" : "none" }}
+                      style={{ background: cpRegion === r ? "#fff" : "transparent", color: cpRegion === r ? "#001EAF" : "rgba(13,13,56,0.62)", boxShadow: cpRegion === r ? "0 1px 3px rgba(13,13,56,0.10)" : "none" }}
                     >
                       {r === "chile" ? "Chile" : "LatAm"}
                     </button>
@@ -263,12 +263,12 @@ export default function PresentationsPage() {
               </div>
 
               {/* Row 2: fund buttons for the selected region */}
-              <div className="flex items-center gap-1 p-0.5 rounded-md" style={{ background: "rgba(15,23,42,0.04)", border: "1px solid rgba(15,23,42,0.08)", width: "fit-content" }}>
+              <div className="flex items-center gap-1 p-0.5 rounded-md" style={{ background: "rgba(13,13,56,0.04)", border: "1px solid rgba(13,13,56,0.08)", width: "fit-content" }}>
                 {/* "All" within this region */}
                 <button
                   onClick={() => setCpFund("All")}
                   className="px-3 py-1 rounded text-xs font-semibold transition-all"
-                  style={{ background: cpFund === "All" ? "#fff" : "transparent", color: cpFund === "All" ? "#1E3A8A" : "#64748B", boxShadow: cpFund === "All" ? "0 1px 3px rgba(15,23,42,0.10)" : "none" }}
+                  style={{ background: cpFund === "All" ? "#fff" : "transparent", color: cpFund === "All" ? "#001EAF" : "rgba(13,13,56,0.62)", boxShadow: cpFund === "All" ? "0 1px 3px rgba(13,13,56,0.10)" : "none" }}
                 >
                   All
                 </button>
@@ -277,7 +277,7 @@ export default function PresentationsPage() {
                     key={f.value}
                     onClick={() => setCpFund(f.value)}
                     className="px-3 py-1 rounded text-xs font-semibold transition-all"
-                    style={{ background: cpFund === f.value ? "#fff" : "transparent", color: cpFund === f.value ? "#1E3A8A" : "#64748B", boxShadow: cpFund === f.value ? "0 1px 3px rgba(15,23,42,0.10)" : "none", whiteSpace: "nowrap" }}
+                    style={{ background: cpFund === f.value ? "#fff" : "transparent", color: cpFund === f.value ? "#001EAF" : "rgba(13,13,56,0.62)", boxShadow: cpFund === f.value ? "0 1px 3px rgba(13,13,56,0.10)" : "none", whiteSpace: "nowrap" }}
                   >
                     {f.label}
                   </button>
@@ -288,13 +288,13 @@ export default function PresentationsPage() {
 
           {/* Investment Cases & Sell Side → Chile / LatAm */}
           {mainCategory !== "client_presentations" && (
-            <div className="flex items-center gap-1 p-0.5 rounded-md" style={{ background: "rgba(15,23,42,0.04)", border: "1px solid rgba(15,23,42,0.08)", width: "fit-content" }}>
+            <div className="flex items-center gap-1 p-0.5 rounded-md" style={{ background: "rgba(13,13,56,0.04)", border: "1px solid rgba(13,13,56,0.08)", width: "fit-content" }}>
               {[{ value: "chile", label: "Chile" }, { value: "latam", label: "LatAm" }].map((r) => (
                 <button
                   key={r.value}
                   onClick={() => setSubFilter(r.value)}
                   className="px-4 py-1 rounded text-xs font-semibold transition-all"
-                  style={{ background: subFilter === r.value ? "#fff" : "transparent", color: subFilter === r.value ? "#1E3A8A" : "#64748B", boxShadow: subFilter === r.value ? "0 1px 3px rgba(15,23,42,0.10)" : "none" }}
+                  style={{ background: subFilter === r.value ? "#fff" : "transparent", color: subFilter === r.value ? "#001EAF" : "rgba(13,13,56,0.62)", boxShadow: subFilter === r.value ? "0 1px 3px rgba(13,13,56,0.10)" : "none" }}
                 >
                   {r.label}
                 </button>
@@ -305,7 +305,7 @@ export default function PresentationsPage() {
 
         {/* ── File list ────────────────────────────────────────────────── */}
         {displayFiles.length === 0 ? (
-          <div className="card flex flex-col items-center justify-center py-20 gap-4" style={{ color: "#94A3B8" }}>
+          <div className="card flex flex-col items-center justify-center py-20 gap-4" style={{ color: "rgba(13,13,56,0.45)" }}>
             <FileText size={40} style={{ opacity: 0.3 }} />
             <p className="text-sm">No documents found for this selection.</p>
           </div>

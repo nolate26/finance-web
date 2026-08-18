@@ -2,6 +2,7 @@
 
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import type { AnalystRecSnap } from "@/app/api/companies/[ticker]/route";
+import { FONT_SECONDARY } from "@/lib/patriaTheme";
 
 interface Props {
   analystRec: AnalystRecSnap | null;
@@ -10,9 +11,9 @@ interface Props {
 }
 
 const COLORS = {
-  buy:  { fill: "#059669", bg: "rgba(5,150,105,0.10)",  border: "rgba(5,150,105,0.25)"  },
-  hold: { fill: "#D97706", bg: "rgba(217,119,6,0.10)",  border: "rgba(217,119,6,0.25)"  },
-  sell: { fill: "#DC2626", bg: "rgba(220,38,38,0.10)",  border: "rgba(220,38,38,0.25)"  },
+  buy:  { fill: "#001EAF", bg: "rgba(0,30,175,0.10)",  border: "rgba(0,30,175,0.25)"  },
+  hold: { fill: "#FF6B06", bg: "rgba(255,107,6,0.10)",  border: "rgba(255,107,6,0.25)"  },
+  sell: { fill: "#F8485E", bg: "rgba(248,72,94,0.10)",  border: "rgba(248,72,94,0.25)"  },
 };
 
 interface SlicePayload {
@@ -33,12 +34,12 @@ function SliceTooltip({
     <div
       style={{
         background: "#fff",
-        border: "1px solid rgba(15,23,42,0.10)",
+        border: "1px solid rgba(13,13,56,0.10)",
         borderRadius: 6,
         padding: "6px 10px",
         fontSize: 11,
-        fontFamily: "JetBrains Mono, monospace",
-        boxShadow: "0 4px 12px rgba(15,23,42,0.10)",
+        fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
+        boxShadow: "0 4px 12px rgba(13,13,56,0.10)",
       }}
     >
       <span style={{ fontWeight: 600 }}>{d.name}</span>: {d.value}
@@ -49,7 +50,7 @@ function SliceTooltip({
 export default function AnalystDonut({ analystRec, targetPrice, currentPrice }: Props) {
   if (!analystRec) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#CBD5E1", fontSize: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "rgba(13,13,56,0.28)", fontSize: 12 }}>
         No analyst data
       </div>
     );
@@ -71,7 +72,7 @@ export default function AnalystDonut({ analystRec, targetPrice, currentPrice }: 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ marginBottom: 8 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: "#D97706", letterSpacing: "0.06em" }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: "#FF6B06", letterSpacing: "0.06em" }}>
           Analyst Recommendations
         </span>
       </div>
@@ -111,10 +112,10 @@ export default function AnalystDonut({ analystRec, targetPrice, currentPrice }: 
               pointerEvents: "none",
             }}
           >
-            <span style={{ fontSize: 16, fontWeight: 700, color: "#0F172A", fontFamily: "JetBrains Mono, monospace" }}>
+            <span style={{ fontSize: 16, fontWeight: 700, color: "#0D0D38", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
               {totAnalysts}
             </span>
-            <span style={{ fontSize: 11, color: "#94A3B8" }}>analysts</span>
+            <span style={{ fontSize: 11, color: "rgba(13,13,56,0.45)" }}>analysts</span>
           </div>
         </div>
 
@@ -137,14 +138,14 @@ export default function AnalystDonut({ analystRec, targetPrice, currentPrice }: 
                     background: c.bg,
                     color: c.fill,
                     border: `1px solid ${c.border}`,
-                    fontFamily: "JetBrains Mono, monospace",
+                    fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
                     minWidth: 40,
                     textAlign: "center",
                   }}
                 >
                   {label}
                 </span>
-                <div style={{ flex: 1, margin: "0 8px", height: 4, borderRadius: 2, background: "rgba(15,23,42,0.06)" }}>
+                <div style={{ flex: 1, margin: "0 8px", height: 4, borderRadius: 2, background: "rgba(13,13,56,0.06)" }}>
                   <div
                     style={{
                       width: totAnalysts > 0 ? `${(value / totAnalysts) * 100}%` : "0%",
@@ -155,7 +156,7 @@ export default function AnalystDonut({ analystRec, targetPrice, currentPrice }: 
                     }}
                   />
                 </div>
-                <span style={{ fontSize: 12, fontFamily: "JetBrains Mono, monospace", color: "#334155", minWidth: 20, textAlign: "right" }}>
+                <span style={{ fontSize: 12, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", color: "#0D0D38", minWidth: 20, textAlign: "right" }}>
                   {value}
                 </span>
               </div>
@@ -164,25 +165,25 @@ export default function AnalystDonut({ analystRec, targetPrice, currentPrice }: 
 
           {/* Consensus + Target */}
           {consenso && (
-            <div style={{ fontSize: 13, color: "#64748B", marginBottom: 5 }}>
-              Consensus: <strong style={{ color: "#0F172A" }}>{consenso}</strong>
+            <div style={{ fontSize: 13, color: "rgba(13,13,56,0.62)", marginBottom: 5 }}>
+              Consensus: <strong style={{ color: "#0D0D38" }}>{consenso}</strong>
             </div>
           )}
           {targetPrice != null && (
             <div
               style={{
                 fontSize: 12,
-                color: "#64748B",
+                color: "rgba(13,13,56,0.62)",
                 marginBottom: 4,
                 paddingTop: 6,
-                borderTop: "1px solid rgba(15,23,42,0.07)",
+                borderTop: "1px solid rgba(13,13,56,0.07)",
               }}
             >
               Target price:{" "}
               <strong
                 style={{
-                  fontFamily: "JetBrains Mono, monospace",
-                  color: "#0F172A",
+                  fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
+                  color: "#0D0D38",
                 }}
               >
                 ${targetPrice.toFixed(2)}
@@ -190,13 +191,13 @@ export default function AnalystDonut({ analystRec, targetPrice, currentPrice }: 
             </div>
           )}
           {upside !== null && (
-            <div style={{ fontSize: 12, color: "#64748B" }}>
+            <div style={{ fontSize: 12, color: "rgba(13,13,56,0.62)" }}>
               Target upside:{" "}
               <strong
                 style={{
-                  fontFamily: "JetBrains Mono, monospace",
+                  fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
                   fontSize: 12,
-                  color: upside >= 0 ? "#059669" : "#DC2626",
+                  color: upside >= 0 ? "#001EAF" : "#F8485E",
                 }}
               >
                 {upside >= 0 ? "+" : ""}

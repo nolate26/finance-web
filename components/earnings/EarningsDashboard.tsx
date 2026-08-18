@@ -3,26 +3,27 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
 import type { EarningsRow, EarningsPayload } from "@/app/api/earnings/route";
+import { FONT_SECONDARY } from "@/lib/patriaTheme";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
-const BLUE    = "#1D4ED8";
-const BLUE_BG = "rgba(29,78,216,0.09)";
-const BLUE_BD = "rgba(29,78,216,0.25)";
-const NEG     = "#1E293B";
-const NEG_BG  = "rgba(15,23,42,0.08)";
-const NEG_BD  = "rgba(15,23,42,0.20)";
-const TEXT1   = "#0F172A";
-const TEXT2   = "#64748B";
-const BORDER  = "rgba(15,23,42,0.08)";
+const BLUE    = "#2044DC";
+const BLUE_BG = "rgba(32,68,220,0.09)";
+const BLUE_BD = "rgba(32,68,220,0.25)";
+const NEG     = "#0D0D38";
+const NEG_BG  = "rgba(13,13,56,0.08)";
+const NEG_BD  = "rgba(13,13,56,0.20)";
+const TEXT1   = "#0D0D38";
+const TEXT2   = "rgba(13,13,56,0.62)";
+const BORDER  = "rgba(13,13,56,0.08)";
 
 const selectStyle: React.CSSProperties = {
   background: "#FFFFFF",
-  border: "1px solid rgba(15,23,42,0.12)",
+  border: "1px solid rgba(13,13,56,0.12)",
   borderRadius: 8,
   padding: "5px 10px",
   color: TEXT1,
   fontSize: 12,
-  fontFamily: "JetBrains Mono, monospace",
+  fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
   cursor: "pointer",
   outline: "none",
 };
@@ -123,7 +124,7 @@ function computeWeightedTotals(
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 function PctBadge({ v }: { v: number | null }) {
-  if (v === null) return <span style={{ color: "#CBD5E1", fontSize: 10, fontStyle: "italic" }}>NR</span>;
+  if (v === null) return <span style={{ color: "rgba(13,13,56,0.28)", fontSize: 10, fontStyle: "italic" }}>NR</span>;
   const pct    = v * 100;
   const pos    = pct >  0.05;
   const neg    = pct < -0.05;
@@ -138,7 +139,7 @@ function PctBadge({ v }: { v: number | null }) {
 }
 
 function GrowthVal({ v }: { v: number | null }) {
-  if (v === null) return <span style={{ color: "#CBD5E1", fontSize: 10, fontStyle: "italic" }}>NR</span>;
+  if (v === null) return <span style={{ color: "rgba(13,13,56,0.28)", fontSize: 10, fontStyle: "italic" }}>NR</span>;
   const pct   = v * 100;
   const color = pct > 0.05 ? BLUE : pct < -0.05 ? NEG : TEXT2;
   return (
@@ -162,13 +163,13 @@ function AvgCell({ vals }: { vals: (number | null)[] }) {
 }
 
 function OWCell({ v }: { v: number | null }) {
-  if (v === null) return <span style={{ color: "#CBD5E1", fontSize: 10 }}>—</span>;
+  if (v === null) return <span style={{ color: "rgba(13,13,56,0.28)", fontSize: 10 }}>—</span>;
   const pct = v * 100;
   const pos = pct > 0.05;
   const neg = pct < -0.05;
   const color = pos ? BLUE : neg ? NEG : TEXT2;
   return (
-    <span style={{ color, fontWeight: 700, fontSize: 11, fontFamily: "JetBrains Mono, monospace" }}>
+    <span style={{ color, fontWeight: 700, fontSize: 11, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
       {pos ? "+" : ""}{pct.toFixed(2)}%
     </span>
   );
@@ -188,7 +189,7 @@ function WtdPctCell({ v }: { v: number | null }) {
 function WtdActualCell({ v }: { v: number | null }) {
   if (v === null) return <span style={{ color: TEXT2 }}>—</span>;
   return (
-    <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: TEXT1, fontWeight: 600, whiteSpace: "nowrap" }}>
+    <span style={{ fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, color: TEXT1, fontWeight: 600, whiteSpace: "nowrap" }}>
       <span style={{ fontSize: 9, color: TEXT2, marginRight: 3 }}>USD</span>
       {fmtActual(v)}
     </span>
@@ -216,8 +217,8 @@ function SortTh({
         fontWeight: 600,
         letterSpacing: "0.07em",
         textTransform: "uppercase",
-        color: active ? BLUE : "#94A3B8",
-        background: active ? "rgba(29,78,216,0.05)" : "#F8FAFC",
+        color: active ? BLUE : "rgba(13,13,56,0.45)",
+        background: active ? "rgba(32,68,220,0.05)" : "#F5F7FD",
         borderBottom: `1px solid ${BORDER}`,
         whiteSpace: "nowrap",
         cursor: "pointer",
@@ -338,8 +339,8 @@ export default function EarningsDashboard() {
     fontWeight: 600,
     letterSpacing: "0.07em",
     textTransform: "uppercase",
-    color: "#94A3B8",
-    background: "#F8FAFC",
+    color: "rgba(13,13,56,0.45)",
+    background: "#F5F7FD",
     borderBottom: `1px solid ${BORDER}`,
     whiteSpace: "nowrap",
   };
@@ -359,14 +360,14 @@ export default function EarningsDashboard() {
           onChange={(e) => setQuery(e.target.value)}
           style={{
             fontSize: 11, padding: "6px 10px", borderRadius: 7,
-            border: "1px solid rgba(15,23,42,0.12)", background: "#F8FAFC",
+            border: "1px solid rgba(13,13,56,0.12)", background: "#F5F7FD",
             color: TEXT1, outline: "none", width: 190,
-            fontFamily: "JetBrains Mono, monospace",
+            fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
           }}
         />
 
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ fontSize: 11, color: TEXT2, fontFamily: "JetBrains Mono, monospace" }}>Quarter</span>
+          <span style={{ fontSize: 11, color: TEXT2, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>Quarter</span>
           <select value={selQuarter} onChange={(e) => setSelQuarter(e.target.value)} style={selectStyle}>
             <option value="">Todos</option>
             {quarters.map((q) => <option key={q} value={q}>{q}</option>)}
@@ -374,7 +375,7 @@ export default function EarningsDashboard() {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ fontSize: 11, color: TEXT2, fontFamily: "JetBrains Mono, monospace" }}>Fecha</span>
+          <span style={{ fontSize: 11, color: TEXT2, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>Fecha</span>
           <select value={selDate} onChange={(e) => setSelDate(e.target.value)} style={selectStyle}>
             <option value="">Todas</option>
             {dates.map((d) => <option key={d} value={d}>{d}</option>)}
@@ -382,7 +383,7 @@ export default function EarningsDashboard() {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ fontSize: 11, color: TEXT2, fontFamily: "JetBrains Mono, monospace" }}>Fondo</span>
+          <span style={{ fontSize: 11, color: TEXT2, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>Fondo</span>
           <select value={selFund} onChange={(e) => setSelFund(e.target.value)} style={selectStyle}>
             {FUND_OPTIONS.map(({ value, label }) => (
               <option key={value} value={value}>{label}</option>
@@ -390,17 +391,17 @@ export default function EarningsDashboard() {
           </select>
         </div>
 
-        <span style={{ fontSize: 11, color: TEXT2, fontFamily: "JetBrains Mono, monospace", marginLeft: "auto" }}>
+        <span style={{ fontSize: 11, color: TEXT2, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", marginLeft: "auto" }}>
           {displayed.length} {displayed.length === 1 ? "empresa" : "empresas"}
         </span>
       </div>
 
       {/* ── Table card ──────────────────────────────────────────────────────── */}
-      <div style={{ background: "#FFFFFF", border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 1px 4px rgba(15,23,42,0.06)", overflow: "hidden" }}>
+      <div style={{ background: "#FFFFFF", border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 1px 4px rgba(13,13,56,0.06)", overflow: "hidden" }}>
         {loading ? (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "80px 0", gap: 12 }}>
-            <div style={{ width: 24, height: 24, borderRadius: "50%", border: "2px solid rgba(29,78,216,0.2)", borderTopColor: BLUE, animation: "spin 0.8s linear infinite" }} />
-            <span style={{ fontSize: 12, color: TEXT2, fontFamily: "JetBrains Mono, monospace" }}>Cargando resultados…</span>
+            <div style={{ width: 24, height: 24, borderRadius: "50%", border: "2px solid rgba(32,68,220,0.2)", borderTopColor: BLUE, animation: "spin 0.8s linear infinite" }} />
+            <span style={{ fontSize: 12, color: TEXT2, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>Cargando resultados…</span>
           </div>
         ) : displayed.length === 0 ? (
           <div style={{ textAlign: "center", padding: "80px 0", color: TEXT2, fontSize: 13 }}>
@@ -415,13 +416,13 @@ export default function EarningsDashboard() {
                 {/* ── Group row ─── */}
                 <tr>
                   <th colSpan={infoColSpan} style={{ ...thBase, textAlign: "left", ...sep }} />
-                  <th colSpan={4} style={{ ...thBase, textAlign: "center", color: "#1E3A8A", background: "rgba(30,58,138,0.07)", borderBottom: "2px solid rgba(30,58,138,0.22)", ...sep, fontWeight: 800, letterSpacing: "0.10em" }}>
+                  <th colSpan={4} style={{ ...thBase, textAlign: "center", color: "#001EAF", background: "rgba(0,30,175,0.07)", borderBottom: "2px solid rgba(0,30,175,0.22)", ...sep, fontWeight: 800, letterSpacing: "0.10em" }}>
                     Revenue
                   </th>
-                  <th colSpan={4} style={{ ...thBase, textAlign: "center", color: "#1D4ED8", background: "rgba(29,78,216,0.07)", borderBottom: "2px solid rgba(29,78,216,0.22)", ...sep, fontWeight: 800, letterSpacing: "0.10em" }}>
+                  <th colSpan={4} style={{ ...thBase, textAlign: "center", color: "#2044DC", background: "rgba(32,68,220,0.07)", borderBottom: "2px solid rgba(32,68,220,0.22)", ...sep, fontWeight: 800, letterSpacing: "0.10em" }}>
                     EBITDA
                   </th>
-                  <th colSpan={4} style={{ ...thBase, textAlign: "center", color: "#2563EB", background: "rgba(37,99,235,0.07)", borderBottom: "2px solid rgba(37,99,235,0.22)", fontWeight: 800, letterSpacing: "0.10em" }}>
+                  <th colSpan={4} style={{ ...thBase, textAlign: "center", color: "#2044DC", background: "rgba(32,68,220,0.07)", borderBottom: "2px solid rgba(32,68,220,0.22)", fontWeight: 800, letterSpacing: "0.10em" }}>
                     Net Income
                   </th>
                 </tr>
@@ -461,40 +462,40 @@ export default function EarningsDashboard() {
                 {displayed.map((row, i) => (
                   <tr
                     key={`${row.tickerBloomberg}-${row.quarter}`}
-                    style={{ background: i % 2 === 0 ? "#FFFFFF" : "rgba(15,23,42,0.018)", borderBottom: "1px solid rgba(15,23,42,0.05)", transition: "background 0.1s" }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(29,78,216,0.04)"; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = i % 2 === 0 ? "#FFFFFF" : "rgba(15,23,42,0.018)"; }}
+                    style={{ background: i % 2 === 0 ? "#FFFFFF" : "rgba(13,13,56,0.018)", borderBottom: "1px solid rgba(13,13,56,0.05)", transition: "background 0.1s" }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.04)"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = i % 2 === 0 ? "#FFFFFF" : "rgba(13,13,56,0.018)"; }}
                   >
                     {/* Info */}
-                    <td style={{ padding: "8px 14px", fontFamily: "JetBrains Mono, monospace", fontWeight: 700, color: BLUE, whiteSpace: "nowrap", fontSize: 11 }}>
+                    <td style={{ padding: "8px 14px", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontWeight: 700, color: BLUE, whiteSpace: "nowrap", fontSize: 11 }}>
                       {row.tickerBloomberg}
                     </td>
                     <td style={{ padding: "8px 12px", fontSize: 11, color: TEXT2, whiteSpace: "nowrap", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis" }}>
                       {row.sector ?? "—"}
                     </td>
                     <td style={{ padding: "8px 10px", textAlign: "center" }}>
-                      <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, fontWeight: 800, color: TEXT1, background: "rgba(15,23,42,0.05)", borderRadius: 4, padding: "2px 7px" }}>
+                      <span style={{ fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, fontWeight: 800, color: TEXT1, background: "rgba(13,13,56,0.05)", borderRadius: 4, padding: "2px 7px" }}>
                         {row.quarter}
                       </span>
                     </td>
-                    <td style={{ padding: "8px 14px", fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: TEXT2, whiteSpace: "nowrap" }}>
+                    <td style={{ padding: "8px 14px", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, color: TEXT2, whiteSpace: "nowrap" }}>
                       {row.reportDate}
                     </td>
                     <td style={{ padding: "8px 10px", textAlign: "center", ...(showWeights ? {} : sep) }}>
                       {row.currency
-                        ? <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 10, fontWeight: 700, color: TEXT2, background: "rgba(15,23,42,0.04)", border: `1px solid ${BORDER}`, borderRadius: 4, padding: "1px 5px" }}>{row.currency}</span>
-                        : <span style={{ color: "#CBD5E1", fontSize: 10 }}>—</span>
+                        ? <span style={{ fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 10, fontWeight: 700, color: TEXT2, background: "rgba(13,13,56,0.04)", border: `1px solid ${BORDER}`, borderRadius: 4, padding: "1px 5px" }}>{row.currency}</span>
+                        : <span style={{ color: "rgba(13,13,56,0.28)", fontSize: 10 }}>—</span>
                       }
                     </td>
                     {showWeights && (
                       <>
                         <td style={{ ...tdNum }}>
-                          <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: TEXT2, fontWeight: 600 }}>
+                          <span style={{ fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, color: TEXT2, fontWeight: 600 }}>
                             {fmtWt(row.portfolioWeight)}
                           </span>
                         </td>
                         <td style={{ ...tdNum }}>
-                          <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: TEXT2, fontWeight: 600 }}>
+                          <span style={{ fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, color: TEXT2, fontWeight: 600 }}>
                             {fmtWt(row.benchmarkWeight)}
                           </span>
                         </td>
@@ -504,21 +505,21 @@ export default function EarningsDashboard() {
                       </>
                     )}
                     {/* Revenue */}
-                    <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: TEXT1, fontWeight: 600 }}>
+                    <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, color: TEXT1, fontWeight: 600 }}>
                       {fmtActual(row.revActual)}
                     </td>
                     <td style={tdNum}><PctBadge v={row.revBeatMiss} /></td>
                     <td style={tdNum}><GrowthVal v={row.revYoy} /></td>
                     <td style={tdSepNum}><GrowthVal v={row.revQoq} /></td>
                     {/* EBITDA */}
-                    <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: TEXT1, fontWeight: 600 }}>
+                    <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, color: TEXT1, fontWeight: 600 }}>
                       {fmtActual(row.ebitdaActual)}
                     </td>
                     <td style={tdNum}><PctBadge v={row.ebitdaBeatMiss} /></td>
                     <td style={tdNum}><GrowthVal v={row.ebitdaYoy} /></td>
                     <td style={tdSepNum}><GrowthVal v={row.ebitdaQoq} /></td>
                     {/* Net Income */}
-                    <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: TEXT1, fontWeight: 600 }}>
+                    <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, color: TEXT1, fontWeight: 600 }}>
                       {fmtActual(row.niActual)}
                     </td>
                     <td style={tdNum}><PctBadge v={row.niBeatMiss} /></td>
@@ -532,8 +533,8 @@ export default function EarningsDashboard() {
               <tfoot>
                 {!showWeights ? (
                   /* Simple unweighted average when fund = ALL */
-                  <tr style={{ background: "#EFF6FF", borderTop: "2px solid #1E3A8A" }}>
-                    <td colSpan={5} style={{ padding: "9px 14px", fontSize: 10, fontWeight: 800, color: "#1E3A8A", letterSpacing: "0.08em", textTransform: "uppercase", ...sep }}>
+                  <tr style={{ background: "rgba(32,68,220,0.06)", borderTop: "2px solid #001EAF" }}>
+                    <td colSpan={5} style={{ padding: "9px 14px", fontSize: 10, fontWeight: 800, color: "#001EAF", letterSpacing: "0.08em", textTransform: "uppercase", ...sep }}>
                       Promedio simple ({displayed.length})
                     </td>
                     <td style={{ padding: "9px 12px" }} />
@@ -552,8 +553,8 @@ export default function EarningsDashboard() {
                 ) : (
                   /* Weighted Portfolio + Benchmark rows */
                   <>
-                    <tr style={{ background: "#EFF6FF", borderTop: "2px solid #1E3A8A" }}>
-                      <td colSpan={infoColSpan} style={{ padding: "9px 14px", fontSize: 10, fontWeight: 800, color: "#1E3A8A", letterSpacing: "0.08em", textTransform: "uppercase", ...sep }}>
+                    <tr style={{ background: "rgba(32,68,220,0.06)", borderTop: "2px solid #001EAF" }}>
+                      <td colSpan={infoColSpan} style={{ padding: "9px 14px", fontSize: 10, fontWeight: 800, color: "#001EAF", letterSpacing: "0.08em", textTransform: "uppercase", ...sep }}>
                         Total Portfolio
                       </td>
                       <td style={{ padding: "9px 12px", textAlign: "right" }}><WtdActualCell v={portfolioTotals?.revActualUSD ?? null} /></td>
@@ -569,8 +570,8 @@ export default function EarningsDashboard() {
                       <td style={tdNum}><WtdPctCell v={portfolioTotals?.niYoy          ?? null} /></td>
                       <td style={tdNum}><WtdPctCell v={portfolioTotals?.niQoq          ?? null} /></td>
                     </tr>
-                    <tr style={{ background: "rgba(241,245,249,0.9)", borderTop: `1px solid ${BORDER}` }}>
-                      <td colSpan={infoColSpan} style={{ padding: "9px 14px", fontSize: 10, fontWeight: 800, color: "#334155", letterSpacing: "0.08em", textTransform: "uppercase", ...sep }}>
+                    <tr style={{ background: "#F5F7FD", borderTop: `1px solid ${BORDER}` }}>
+                      <td colSpan={infoColSpan} style={{ padding: "9px 14px", fontSize: 10, fontWeight: 800, color: "#0D0D38", letterSpacing: "0.08em", textTransform: "uppercase", ...sep }}>
                         Total Benchmark
                       </td>
                       <td style={{ padding: "9px 12px", textAlign: "right" }}><WtdActualCell v={benchmarkTotals?.revActualUSD ?? null} /></td>
@@ -602,12 +603,12 @@ export default function EarningsDashboard() {
                   <span style={{ width: 8, height: 8, borderRadius: 2, background: NEG, opacity: 0.75, display: "inline-block" }} />
                   <span style={{ fontSize: 10, color: TEXT2 }}>Miss / Negativo / UW</span>
                 </div>
-                <span style={{ fontSize: 10, color: "#CBD5E1", fontStyle: "italic" }}>NR = Not Reported</span>
+                <span style={{ fontSize: 10, color: "rgba(13,13,56,0.28)", fontStyle: "italic" }}>NR = Not Reported</span>
                 {showWeights && (
                   <span style={{ fontSize: 10, color: TEXT2 }}>Actuals en USD ponderados por peso</span>
                 )}
               </div>
-              <span style={{ fontSize: 10, color: "#CBD5E1" }}>Fuente: Bloomberg</span>
+              <span style={{ fontSize: 10, color: "rgba(13,13,56,0.28)" }}>Fuente: Bloomberg</span>
             </div>
           </div>
         )}

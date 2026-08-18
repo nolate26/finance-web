@@ -14,19 +14,22 @@ import {
 } from "recharts";
 import { computeBands } from "@/lib/stats";
 import type { ValuationPoint } from "@/app/api/companies/[ticker]/route";
+import { PATRIA, FONT_SECONDARY, seriesColor } from "@/lib/patriaTheme";
 
 type MetricKey  = "peFwd" | "evEbitdaFwd" | "pbv_vs_roe";
 type TimeRange  = "1yr" | "3yr" | "5yr" | "10yr";
 
+// Fondo claro → prioridad dark-blue, blue, king-blue (seriesColor lo resuelve).
 const TABS: { key: MetricKey; label: string; color: string }[] = [
-  { key: "peFwd",       label: "P/E Fwd",     color: "#2B5CE0" },
-  { key: "evEbitdaFwd", label: "EV/EBITDA Fwd", color: "#7C3AED" },
-  { key: "pbv_vs_roe",  label: "P/BV vs ROE", color: "#059669" },
+  { key: "peFwd",       label: "P/E Fwd",       color: seriesColor(0) },
+  { key: "evEbitdaFwd", label: "EV/EBITDA Fwd", color: seriesColor(1) },
+  { key: "pbv_vs_roe",  label: "P/BV vs ROE",   color: seriesColor(2) },
 ];
 const TIME_RANGES: TimeRange[] = ["1yr", "3yr", "5yr", "10yr"];
 
-const PBV_COLOR = "#059669";
-const ROE_COLOR = "#D97706";
+// P/BV y ROE conviven en el mismo gráfico de doble eje: azul principal vs naranja.
+const PBV_COLOR = PATRIA.darkBlue;
+const ROE_COLOR = PATRIA.orange;
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 const fmtX          = (v: number) => v.toFixed(2) + "x";
@@ -48,13 +51,13 @@ function filterByRange(data: ValuationPoint[], range: TimeRange): ValuationPoint
 
 // ── Tooltips ──────────────────────────────────────────────────────────────────
 const TT_STYLE: React.CSSProperties = {
-  background: "#fff", border: "1px solid rgba(15,23,42,0.10)", borderRadius: 6,
-  padding: "8px 13px", fontSize: 11, fontFamily: "JetBrains Mono, monospace",
-  boxShadow: "0 4px 16px rgba(15,23,42,0.12)", minWidth: 130,
+  background: "#fff", border: "1px solid rgba(13,13,56,0.10)", borderRadius: 6,
+  padding: "8px 13px", fontSize: 11, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
+  boxShadow: "0 4px 16px rgba(13,13,56,0.12)", minWidth: 130,
 };
 const TT_DATE: React.CSSProperties = {
-  color: "#94A3B8", fontSize: 10, marginBottom: 3, paddingBottom: 4,
-  borderBottom: "1px solid rgba(15,23,42,0.06)",
+  color: "rgba(13,13,56,0.45)", fontSize: 10, marginBottom: 3, paddingBottom: 4,
+  borderBottom: "1px solid rgba(13,13,56,0.06)",
 };
 
 function SingleTooltip({ active, payload, label, color, fmt }: any) {
@@ -76,13 +79,13 @@ function DualTooltip({ active, payload, label }: any) {
       <div style={{ ...TT_DATE, marginBottom: 6 }}>{fmtTooltipDate(label)}</div>
       {pbv?.value != null && (
         <div style={{ display: "flex", justifyContent: "space-between", gap: 20, marginBottom: 3 }}>
-          <span style={{ color: "#64748B", fontSize: 11 }}>P/BV</span>
+          <span style={{ color: "rgba(13,13,56,0.62)", fontSize: 11 }}>P/BV</span>
           <span style={{ color: PBV_COLOR, fontWeight: 700, fontSize: 12 }}>{fmtX(pbv.value)}</span>
         </div>
       )}
       {roe?.value != null && (
         <div style={{ display: "flex", justifyContent: "space-between", gap: 20 }}>
-          <span style={{ color: "#64748B", fontSize: 11 }}>ROE Fwd</span>
+          <span style={{ color: "rgba(13,13,56,0.62)", fontSize: 11 }}>ROE Fwd</span>
           <span style={{ color: ROE_COLOR, fontWeight: 700, fontSize: 12 }}>{fmtPct(roe.value)}</span>
         </div>
       )}
@@ -117,7 +120,7 @@ function makeEndDot(color: string, fmt: (v: number) => string, dataLen: number) 
         <text
           x={cx + 7} y={cy + 4}
           fontSize={11} fontWeight={700}
-          fontFamily="JetBrains Mono, monospace"
+          fontFamily={FONT_SECONDARY}
           fill={color}
         >
           {fmt(value)}
@@ -151,15 +154,15 @@ function DiscountBadge({ current, med, timeRange }: { current: number | null; me
           borderRadius: 6,
           fontSize: 11,
           fontWeight: 700,
-          fontFamily: "JetBrains Mono, monospace",
-          background: isDiscount ? "rgba(5,150,105,0.10)" : "rgba(220,38,38,0.10)",
-          color: isDiscount ? "#059669" : "#DC2626",
-          border: `1px solid ${isDiscount ? "rgba(5,150,105,0.20)" : "rgba(220,38,38,0.20)"}`,
+          fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
+          background: isDiscount ? "rgba(0,30,175,0.10)" : "rgba(248,72,94,0.10)",
+          color: isDiscount ? "#001EAF" : "#F8485E",
+          border: `1px solid ${isDiscount ? "rgba(0,30,175,0.20)" : "rgba(248,72,94,0.20)"}`,
         }}
       >
         {isDiscount ? "Discount" : "Premium"}: {pct >= 0 ? "+" : ""}{pct.toFixed(1)}%
       </div>
-      <div style={{ fontSize: 11, color: "#94A3B8", fontFamily: "JetBrains Mono, monospace" }}>
+      <div style={{ fontSize: 11, color: "rgba(13,13,56,0.45)", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
         vs. {timeRange} median
       </div>
     </div>
@@ -232,9 +235,9 @@ export default function ValuationChart({ data }: { data: ValuationPoint[] }) {
               onClick={() => setActiveMetric(t.key)}
               style={{
                 padding: "5px 13px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer",
-                border: t.key === activeMetric ? `1.5px solid ${t.color}` : "1.5px solid rgba(15,23,42,0.10)",
-                background: t.key === activeMetric ? `${t.color}12` : "#F8FAFF",
-                color: t.key === activeMetric ? t.color : "#64748B",
+                border: t.key === activeMetric ? `1.5px solid ${t.color}` : "1.5px solid rgba(13,13,56,0.10)",
+                background: t.key === activeMetric ? `${t.color}12` : "#F5F7FD",
+                color: t.key === activeMetric ? t.color : "rgba(13,13,56,0.62)",
               }}
             >
               {t.label}
@@ -247,7 +250,7 @@ export default function ValuationChart({ data }: { data: ValuationPoint[] }) {
           style={{
             display: "flex",
             gap: 2,
-            background: "rgba(15,23,42,0.04)",
+            background: "rgba(13,13,56,0.04)",
             borderRadius: 7,
             padding: 3,
           }}
@@ -261,12 +264,12 @@ export default function ValuationChart({ data }: { data: ValuationPoint[] }) {
                 borderRadius: 5,
                 fontSize: 11,
                 fontWeight: 700,
-                fontFamily: "JetBrains Mono, monospace",
+                fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
                 cursor: "pointer",
                 border: "none",
                 background: r === timeRange ? "#fff" : "transparent",
-                color: r === timeRange ? "#0F172A" : "#94A3B8",
-                boxShadow: r === timeRange ? "0 1px 3px rgba(15,23,42,0.10)" : "none",
+                color: r === timeRange ? "#0D0D38" : "rgba(13,13,56,0.45)",
+                boxShadow: r === timeRange ? "0 1px 3px rgba(13,13,56,0.10)" : "none",
               }}
             >
               {r}
@@ -276,11 +279,11 @@ export default function ValuationChart({ data }: { data: ValuationPoint[] }) {
       </div>
 
       {/* ── Legend ────────────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", gap: 14, marginBottom: 10, flexWrap: "wrap", fontSize: 11, color: "#94A3B8", fontFamily: "JetBrains Mono, monospace" }}>
+      <div style={{ display: "flex", gap: 14, marginBottom: 10, flexWrap: "wrap", fontSize: 11, color: "rgba(13,13,56,0.45)", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
         {!isDual && hasBands && (
           <>
             <LegendItem color={tab.color} label={tab.label} />
-            <LegendItem color="#94A3B8" label={`Median ${fmtX(single.bands.median)}`} dashed />
+            <LegendItem color="rgba(13,13,56,0.45)" label={`Median ${fmtX(single.bands.median)}`} dashed />
             <LegendItem color={tab.color} label="±1 SD" swatch="band" />
           </>
         )}
@@ -289,7 +292,7 @@ export default function ValuationChart({ data }: { data: ValuationPoint[] }) {
             <LegendItem color={PBV_COLOR} label="P/BV (left)" />
             {hasPbvBands && (
               <>
-                <LegendItem color="#94A3B8" label={`Median ${fmtX(dual.pbvBands.median)}`} dashed />
+                <LegendItem color="rgba(13,13,56,0.45)" label={`Median ${fmtX(dual.pbvBands.median)}`} dashed />
                 <LegendItem color={PBV_COLOR} label="±1 SD" swatch="band" />
               </>
             )}
@@ -299,7 +302,7 @@ export default function ValuationChart({ data }: { data: ValuationPoint[] }) {
       </div>
 
       {noData ? (
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#CBD5E1", fontSize: 11 }}>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(13,13,56,0.28)", fontSize: 11 }}>
           No data for {tab.label}
         </div>
       ) : (
@@ -318,15 +321,15 @@ export default function ValuationChart({ data }: { data: ValuationPoint[] }) {
           <ResponsiveContainer width="100%" height="100%">
             {!isDual ? (
               <ComposedChart data={single.chartData} margin={{ top: 6, right: 52, bottom: 0, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.05)" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(13,13,56,0.05)" vertical={false} />
                 <XAxis
                   dataKey="date" ticks={yearTicks} tickFormatter={fmtAxis}
-                  tick={{ fill: "#94A3B8", fontSize: 11, fontFamily: "JetBrains Mono, monospace" }}
+                  tick={{ fill: "rgba(13,13,56,0.45)", fontSize: 11, fontFamily: FONT_SECONDARY }}
                   axisLine={false} tickLine={false}
                 />
                 <YAxis
                   domain={["auto", "auto"]}
-                  tick={{ fill: "#94A3B8", fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}
+                  tick={{ fill: "rgba(13,13,56,0.45)", fontSize: 10, fontFamily: FONT_SECONDARY }}
                   axisLine={false} tickLine={false} tickFormatter={(v) => fmtX(v)} width={46}
                 />
                 <Tooltip content={<SingleTooltip color={tab.color} fmt={(v: number) => fmtX(v)} />} />
@@ -343,14 +346,14 @@ export default function ValuationChart({ data }: { data: ValuationPoint[] }) {
                 {hasBands && (
                   <ReferenceLine
                     y={single.bands.median}
-                    stroke="#94A3B8"
+                    stroke="rgba(13,13,56,0.45)"
                     strokeDasharray="5 3"
                     label={{
                       value: `Md ${fmtX(single.bands.median)}`,
                       position: "insideTopRight",
                       fontSize: 11,
-                      fill: "#94A3B8",
-                      fontFamily: "JetBrains Mono, monospace",
+                      fill: "rgba(13,13,56,0.45)",
+                      fontFamily: FONT_SECONDARY,
                       fontWeight: 600,
                     }}
                   />
@@ -369,18 +372,18 @@ export default function ValuationChart({ data }: { data: ValuationPoint[] }) {
               </ComposedChart>
             ) : (
               <ComposedChart data={dual.chartData} margin={{ top: 6, right: 48, bottom: 0, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.05)" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(13,13,56,0.05)" vertical={false} />
                 <XAxis
                   dataKey="date" ticks={yearTicks} tickFormatter={fmtAxis}
-                  tick={{ fill: "#94A3B8", fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}
+                  tick={{ fill: "rgba(13,13,56,0.45)", fontSize: 10, fontFamily: FONT_SECONDARY }}
                   axisLine={false} tickLine={false}
                 />
                 <YAxis yAxisId="left" orientation="left" domain={["auto", "auto"]}
-                  tick={{ fill: PBV_COLOR, fontSize: 11, fontFamily: "JetBrains Mono, monospace" }}
+                  tick={{ fill: PBV_COLOR, fontSize: 11, fontFamily: FONT_SECONDARY }}
                   axisLine={false} tickLine={false} tickFormatter={fmtX} width={40}
                 />
                 <YAxis yAxisId="right" orientation="right" domain={["auto", "auto"]}
-                  tick={{ fill: ROE_COLOR, fontSize: 11, fontFamily: "JetBrains Mono, monospace" }}
+                  tick={{ fill: ROE_COLOR, fontSize: 11, fontFamily: FONT_SECONDARY }}
                   axisLine={false} tickLine={false} tickFormatter={fmtPct} width={42}
                 />
                 <Tooltip content={<DualTooltip />} />
@@ -392,13 +395,13 @@ export default function ValuationChart({ data }: { data: ValuationPoint[] }) {
                 {hasPbvBands && (
                   <ReferenceLine
                     yAxisId="left" y={dual.pbvBands.median}
-                    stroke="#94A3B8" strokeDasharray="5 3"
+                    stroke="rgba(13,13,56,0.45)" strokeDasharray="5 3"
                     label={{
                       value: `Md ${fmtX(dual.pbvBands.median)}`,
                       position: "insideTopRight",
                       fontSize: 11,
-                      fill: "#94A3B8",
-                      fontFamily: "JetBrains Mono, monospace",
+                      fill: "rgba(13,13,56,0.45)",
+                      fontFamily: FONT_SECONDARY,
                       fontWeight: 600,
                     }}
                   />

@@ -11,31 +11,35 @@ import { consensusScaleFactor } from "@/lib/consensusScale";
 import { ccySuffix } from "@/lib/ccySuffix";
 import ModelEstimateChart, { buildEstimateRows, type EstimateMetric, type EstimateRow } from "@/components/deep-dive/ModelEstimateChart";
 import { useIsAdmin } from "@/lib/useIsAdmin";
+import { PATRIA, FONT_PRIMARY, FONT_SECONDARY, TEXT, BORDER } from "@/lib/patriaTheme";
 
 // ── Estimate-evolution chart metrics (Net Income default) ────────────────────────
+// Orden de priorización del manual sobre fondo claro: dark-blue → blue → king-blue.
 const ESTIMATE_METRICS: EstimateMetric[] = [
-  { key: "NI",     label: "Net Income", gradId: "me_ni",   colors: ["#7C3AED", "#A78BFA"] },
-  { key: "EBITDA", label: "EBITDA",     gradId: "me_ebd",  colors: ["#2B5CE0", "#60A5FA"] },
-  { key: "FCFE",   label: "FCFE",       gradId: "me_fcfe", colors: ["#059669", "#34D399"] },
+  { key: "NI",     label: "Net Income", gradId: "me_ni",   colors: [PATRIA.darkBlue,  PATRIA.darkSkyBlue] },
+  { key: "EBITDA", label: "EBITDA",     gradId: "me_ebd",  colors: [PATRIA.kingBlue,  PATRIA.skyBlue] },
+  { key: "FCFE",   label: "FCFE",       gradId: "me_fcfe", colors: [PATRIA.turquoise, PATRIA.lightTurquoise] },
 ];
 
-// ── Palette ────────────────────────────────────────────────────────────────────
+// ── Palette — Manual de Identidad PATRIA ───────────────────────────────────────
 const C = {
-  HDR:     "#1E3A8A",
-  SEC_SUB: "#374151",
-  HIST_BG: "#FFFFFF",
-  EST_BG:  "#FEFCE8",   // subtle warm cream for estimate years
-  DRV_BG:  "#F4F7FF",   // near-white with barely-blue tint — replaces heavy #DBEAFE
-  CON_BG:  "#FEFCE8",
-  LIVE_BG: "#DCFCE7",
-  LIVE_TXT:"#166534",
-  BDR:     "#D1D5DB",   // lighter borders — less visual noise in dense table
-  BLUE:    "#1D4ED8",
-  RED:     "#DC2626",
-  GREEN:   "#15803D",
-  TXT:     "#111827",
-  TXT2:    "#4B5563",   // raised from #374151 — better readability on tinted rows
-  WHITE:   "#FFFFFF",
+  HDR:     PATRIA.darkBlue,           // Regla 1 — banda de título principal
+  SEC_SUB: PATRIA.kingBlue,           // Regla 2 — subtítulo de sección
+  IND:     PATRIA.kingBlue,           // Regla 5 — columna de indicadores sobre fondo claro
+  HIST_BG: PATRIA.white,
+  EST_BG:  "rgba(255,107,6,0.06)",    // años estimados: tinte naranja del manual
+  DRV_BG:  "#F5F7FD",                 // filas derivadas: dark-blue al 3%
+  CON_BG:  "rgba(255,107,6,0.06)",
+  LIVE_BG: PATRIA.lightTurquoise,     // Regla 3 — destacado sobre fondo claro
+  LIVE_TXT: PATRIA.darkBlue,
+  BDR:     BORDER.base,
+  BLUE:    PATRIA.blue,               // positivo / buy
+  ACC:     PATRIA.kingBlue,           // botones y elementos interactivos
+  RED:     PATRIA.pink,               // negativo / sell
+  GREEN:   PATRIA.blue,               // positivo (el manual no incluye verde)
+  TXT:     PATRIA.darkBlue,           // Regla 4
+  TXT2:    TEXT.label,
+  WHITE:   PATRIA.white,
 };
 
 // ── Math helpers ───────────────────────────────────────────────────────────────
@@ -310,9 +314,9 @@ const SECTIONS: Section[] = [
 
 // ── Cell renderer ──────────────────────────────────────────────────────────────
 function renderCell(value: number | null, fmt: Fmt, colorize: boolean) {
-  if (value === null) return { text: "—", color: "#9CA3AF" };
+  if (value === null) return { text: "—", color: "rgba(13,13,56,0.45)" };
   let text: string;
-  let color = C.TXT;
+  let color: string = C.TXT;
   switch (fmt) {
     case "abs":       text = fmtAbs(value);       break;
     case "pct":       text = fmtPct(value, false);
@@ -326,9 +330,9 @@ function renderCell(value: number | null, fmt: Fmt, colorize: boolean) {
 }
 
 function vsConStyle(v: number | null): React.CSSProperties {
-  if (v === null) return { color: "#9CA3AF" };
-  if (v > 0.001)  return { background: "rgba(21,128,61,0.12)",  color: C.GREEN, fontWeight: 700 };
-  if (v < -0.001) return { background: "rgba(220,38,38,0.12)",  color: C.RED,   fontWeight: 700 };
+  if (v === null) return { color: "rgba(13,13,56,0.45)" };
+  if (v > 0.001)  return { background: "rgba(0,30,175,0.12)",  color: C.GREEN, fontWeight: 700 };
+  if (v < -0.001) return { background: "rgba(248,72,94,0.12)",  color: C.RED,   fontWeight: 700 };
   return { color: C.TXT2 };
 }
 
@@ -339,8 +343,8 @@ function ReccBadge({ recc }: { recc: string | null }) {
   const isBuy  = u.includes("BUY") || u === "OW";
   const isSell = u.includes("SELL") || u === "UW";
   const color  = isBuy ? C.BLUE : isSell ? C.RED : C.TXT2;
-  const bg     = isBuy ? "rgba(29,78,216,0.10)" : isSell ? "rgba(185,28,28,0.10)" : "rgba(107,114,128,0.10)";
-  const bdr    = isBuy ? "rgba(29,78,216,0.30)" : isSell ? "rgba(185,28,28,0.30)" : "rgba(107,114,128,0.25)";
+  const bg     = isBuy ? "rgba(32,68,220,0.10)" : isSell ? "rgba(248,72,94,0.10)" : "rgba(13,13,56,0.10)";
+  const bdr    = isBuy ? "rgba(32,68,220,0.30)" : isSell ? "rgba(248,72,94,0.30)" : "rgba(13,13,56,0.25)";
   return (
     <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.06em",
       padding: "2px 10px", borderRadius: 4, background: bg, color, border: `1px solid ${bdr}` }}>
@@ -505,9 +509,9 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "80px 0", gap: 10 }}>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         <div style={{ width: 20, height: 20, borderRadius: "50%",
-          border: `2px solid rgba(29,78,216,0.18)`, borderTopColor: C.BLUE,
+          border: `2px solid rgba(32,68,220,0.18)`, borderTopColor: C.BLUE,
           animation: "spin 0.8s linear infinite" }} />
-        <span style={{ fontSize: 12, color: C.TXT2, fontFamily: "JetBrains Mono, monospace" }}>Loading model…</span>
+        <span style={{ fontSize: 12, color: C.TXT2, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>Loading model…</span>
       </div>
     );
   }
@@ -532,7 +536,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
   const now         = new Date().getFullYear();
 
   // ── Shared cell geometry ───────────────────────────────────────────────────
-  const MONO: React.CSSProperties = { fontFamily: "JetBrains Mono, monospace" };
+  const MONO: React.CSSProperties = { fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" };
   const labelSticky: React.CSSProperties = {
     position: "sticky", left: 0, zIndex: 1,
     width: 160, minWidth: 160, maxWidth: 160,
@@ -581,16 +585,18 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
     type XCell = Record<string, any>;
     type XRow  = (XCell | null)[];
 
+    // Excel no soporta alpha: los tonos atenuados van aplanados sobre blanco
+    // (5A5A85 = patria-dark-blue al 62%, F5F7FD = al 3%, FFF4EC = patria-orange al 6%).
     const fill = (rgb: string) => ({ patternType: "solid", fgColor: { rgb } });
-    const F_HDR    = fill("1E3A8A");
-    const F_SUB    = fill("374151");
-    const F_EST    = fill("FFFDE7");
-    const F_DRV    = fill("DBEAFE");
+    const F_HDR    = fill("0D0D38");   // Regla 1 — dark-blue
+    const F_SUB    = fill("2044DC");   // Regla 2 — king-blue
+    const F_EST    = fill("FFF4EC");   // patria-orange ~6% sobre blanco
+    const F_DRV    = fill("F5F7FD");   // patria-dark-blue ~3% sobre blanco
     const F_WHITE  = fill("FFFFFF");
-    const F_GRAY   = fill("F0F4FA");
-    const F_POS    = fill("DCFCE7");
-    const F_NEG    = fill("FEE2E2");
-    const F_LIVE   = fill("DCFCE7");   // celdas de precio de mercado (price_range_52w)
+    const F_GRAY   = fill("F5F7FD");
+    const F_POS    = fill("B6FFE3");   // patria-light-turquoise
+    const F_NEG    = fill("FF99AF");   // patria-light-pink
+    const F_LIVE   = fill("B6FFE3");   // celdas de precio de mercado (price_range_52w)
 
     const bdr = (rgb = "9CA3AF") => ({
       top:    { style: "thin", color: { rgb } },
@@ -641,7 +647,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
       ...years.map(yr => {
         const isEst = yr >= now;
         return xc(`${yr}${isEst ? "E" : ""}`, {
-          font: { bold: true, sz: 11, name: "Courier New", color: { rgb: isEst ? "FDE68A" : "FFFFFF" } },
+          font: { bold: true, sz: 11, name: "Arial", color: { rgb: isEst ? "FFBB8D" : "FFFFFF" } },
           fill: F_HDR,
           alignment: { horizontal: "center", vertical: "center" },
         });
@@ -671,7 +677,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
               bold:   !isDerived && !isVsCons,
               italic: isDerived,
               sz:     10,
-              color:  { rgb: isDerived || isVsCons ? "374151" : "111827" },
+              color:  { rgb: isDerived || isVsCons ? "5A5A85" : "2044DC" },
             },
             fill:      isDerived ? F_DRV : F_WHITE,
             alignment: { horizontal: "left" },
@@ -682,7 +688,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
             const isEst = d.isEst;
 
             let text   = "—";
-            let fColor = "111827";
+            let fColor = "0D0D38";
             let fFill  = isDerived ? F_DRV : isEst ? F_EST : F_WHITE;
 
             if (isVsCons && row.bbgKeys && row.modelFn) {
@@ -692,7 +698,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
               if (bbg !== null && model !== null && bbg !== 0) {
                 const v = (model - bbg) / Math.abs(bbg);
                 text   = fmtPct(v, false);
-                fColor = v > 0.001 ? "15803D" : v < -0.001 ? "DC2626" : "374151";
+                fColor = v > 0.001 ? "001EAF" : v < -0.001 ? "F8485E" : "0D0D38";
                 fFill  = v > 0.001 ? F_POS : v < -0.001 ? F_NEG : F_WHITE;
               }
             } else if (isConsensus && row.bbgKeys) {
@@ -704,14 +710,14 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
               if (v !== null) {
                 const r = renderCell(v, row.fmt, !!row.colorize);
                 text = r.text;
-                if (row.colorize) fColor = r.color === C.BLUE ? "1D4ED8" : r.color === C.RED ? "DC2626" : "111827";
+                if (row.colorize) fColor = r.color === C.BLUE ? "001EAF" : r.color === C.RED ? "F8485E" : "0D0D38";
               }
               // Precio vivo (Share Price, año proyectado con price_range_52w) → resaltado.
-              if (row.key === "price" && d.priceIsLive) { fFill = F_LIVE; fColor = "166534"; }
+              if (row.key === "price" && d.priceIsLive) { fFill = F_LIVE; fColor = "0D0D38"; }
             }
 
             return xc(text, {
-              font:      { name: "Courier New", sz: 10, bold: !isDerived && !isVsCons, italic: isDerived, color: { rgb: fColor } },
+              font:      { name: "Arial", sz: 10, bold: !isDerived && !isVsCons, italic: isDerived, color: { rgb: fColor } },
               fill:      fFill,
               alignment: { horizontal: "center" },
               border:    bdr(),
@@ -731,7 +737,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
       for (const { sectionName, kpis } of kpiSections) {
         rows.push([
           xc(sectionName.toUpperCase(), {
-            font: { bold: true, sz: 9, color: { rgb: "E5E7EB" } },
+            font: { bold: true, sz: 9, color: { rgb: "FFFFFF" } },
             fill: F_SUB,
           }),
           ...Array.from({ length: years.length }, () => xc("", { fill: F_SUB })),
@@ -742,13 +748,13 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
           const fmt: Fmt = hasPct ? "pct_plain" : "abs";
 
           rows.push([
-            xc(kpiName, { font: { bold: true, sz: 10, color: { rgb: hasPct ? "1D4ED8" : "111827" } }, fill: hasPct ? F_DRV : F_WHITE, alignment: { horizontal: "left" } }),
+            xc(kpiName, { font: { bold: true, sz: 10, color: { rgb: hasPct ? "001EAF" : "0D0D38" } }, fill: hasPct ? F_DRV : F_WHITE, alignment: { horizontal: "left" } }),
             ...years.map(yr => {
               const v    = kByYear.get(yr) ?? null;
               const isEst = (byYear.get(yr)?.isEst) ?? false;
               const { text } = renderCell(v, fmt, false);
               return xc(text, {
-                font:      { name: "Courier New", sz: 10, bold: true, color: { rgb: hasPct ? "1D4ED8" : "111827" } },
+                font:      { name: "Arial", sz: 10, bold: true, color: { rgb: hasPct ? "001EAF" : "0D0D38" } },
                 fill:      hasPct ? F_DRV : isEst ? F_EST : F_WHITE,
                 alignment: { horizontal: "center" },
                 border:    bdr(),
@@ -785,7 +791,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
         display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)",
         gap: 16, alignItems: "stretch",
         padding: "12px 16px",
-        background: "#F8FAFC",
+        background: "#F5F7FD",
         border: `1px solid ${C.BDR}`,
         borderRadius: 10,
       }}>
@@ -806,7 +812,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
               { label: "Upside (initial)", value: upsideInitial !== null
                   ? <span style={{
                       padding: "1px 10px", borderRadius: 4, fontWeight: 800,
-                      background: upsideInitial > 0 ? "rgba(21,128,61,0.12)" : "rgba(220,38,38,0.12)",
+                      background: upsideInitial > 0 ? "rgba(0,30,175,0.12)" : "rgba(248,72,94,0.12)",
                       color: upsideInitial > 0 ? C.GREEN : C.RED,
                     }}>{fmtPct(upsideInitial)}</span>
                   : <span style={{ color: C.TXT2 }}>—</span> },
@@ -814,7 +820,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                   ? <span style={{
                       display: "inline-flex", alignItems: "center", gap: 6,
                       padding: "1px 10px", borderRadius: 4, fontWeight: 800,
-                      background: "#EFF4FF", color: C.BLUE, ...MONO,
+                      background: "#F5F7FD", color: C.BLUE, ...MONO,
                     }}>
                       {fmtSmall(currentPrice)}
                       {livePrice && <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.8 }}>{fmtDate(livePrice.date)}</span>}
@@ -823,7 +829,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
               { label: "Upside (current)", value: upsideCurrent !== null
                   ? <span style={{
                       padding: "1px 10px", borderRadius: 4, fontWeight: 800,
-                      background: upsideCurrent > 0 ? "rgba(21,128,61,0.12)" : "rgba(220,38,38,0.12)",
+                      background: upsideCurrent > 0 ? "rgba(0,30,175,0.12)" : "rgba(248,72,94,0.12)",
                       color: upsideCurrent > 0 ? C.GREEN : C.RED,
                     }}>{fmtPct(upsideCurrent)}</span>
                   : <span style={{ color: C.TXT2 }}>—</span> },
@@ -891,7 +897,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
             padding: "5px 12px", borderRadius: 5,
             background: C.LIVE_BG, color: C.LIVE_TXT,
             fontWeight: 700, fontSize: 11, letterSpacing: "0.02em",
-            border: "1px solid rgba(22,101,52,0.28)",
+            border: "1px solid rgba(0,30,175,0.28)",
           }}>
             <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.LIVE_TXT, flexShrink: 0 }} />
             Price {fmtSmall(livePrice.value)} @ {fmtDate(livePrice.date)}
@@ -904,7 +910,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
           style={{
             display: "inline-flex", alignItems: "center", gap: 5,
             padding: "5px 12px", borderRadius: 5, cursor: "pointer",
-            background: "#16A34A", color: C.WHITE,
+            background: "#001EAF", color: C.WHITE,
             fontWeight: 700, fontSize: 11, letterSpacing: "0.02em",
             border: "none", outline: "none",
           }}
@@ -952,7 +958,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
             style={{
               display: "inline-flex", alignItems: "center", gap: 5,
               padding: "5px 12px", borderRadius: 5, cursor: deleting ? "not-allowed" : "pointer",
-              background: "transparent", border: "1px solid rgba(220,38,38,0.35)",
+              background: "transparent", border: "1px solid rgba(248,72,94,0.35)",
               color: C.RED, fontWeight: 700, fontSize: 11, letterSpacing: "0.02em", outline: "none",
             }}
           >
@@ -978,7 +984,9 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
             <tr>
               <th style={{
                 ...labelSticky, position: "sticky", left: 0, top: 0, zIndex: 3,
+                // Regla 1 — título principal: dark-blue, blanco, MAYÚSCULAS, Aptos Bold.
                 padding: "7px 10px", background: C.HDR, color: C.WHITE,
+                fontFamily: FONT_PRIMARY,
                 fontWeight: 700, fontSize: 10, letterSpacing: "0.06em",
                 textTransform: "uppercase", textAlign: "left",
               }}>
@@ -991,7 +999,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                     ...yearColW, position: "sticky", top: 0, zIndex: 2,
                     padding: "7px 7px", textAlign: "center",
                     background: C.HDR,
-                    color: isEst ? "#FDE68A" : C.WHITE,
+                    color: isEst ? "#FFBB8D" : C.WHITE,
                     fontWeight: 700, fontSize: 11,
                     borderLeft: `1px solid rgba(255,255,255,0.10)`,
                     ...MONO,
@@ -1009,8 +1017,10 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
               <React.Fragment key={section.key}>
                 <tr>
                   <td colSpan={years.length + 1} style={{
+                    // Regla 2 — subtítulo: king-blue, texto blanco, Arial Bold.
                     ...labelSticky, position: "sticky", left: 0,
-                    padding: "4px 10px", background: C.HDR, color: C.WHITE,
+                    padding: "4px 10px", background: C.SEC_SUB, color: C.WHITE,
+                    fontFamily: FONT_SECONDARY,
                     fontWeight: 700, fontSize: 10, letterSpacing: "0.10em",
                     textTransform: "uppercase", maxWidth: "none",
                     borderTop: "2px solid rgba(255,255,255,0.05)",
@@ -1030,17 +1040,20 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                     <tr
                       key={row.key}
                       style={{ borderBottom: `1px solid ${C.BDR}` }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(29,78,216,0.04)"; }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.04)"; }}
                       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ""; }}
                     >
-                      {/* Label */}
+                      {/* Label — Regla 5: columna de indicadores en Arial Bold king-blue.
+                          Las filas derivadas / vs-consenso bajan a texto secundario para
+                          no competir con los conceptos principales. */}
                       <td style={{
                         ...labelSticky,
                         padding: CELL_PAD,
                         paddingLeft,
                         background: rowBg,
-                        color:      isDerived || isVsCons ? C.TXT2 : isConsensus ? "#374151" : C.TXT,
-                        fontWeight: isDerived || isVsCons ? 400 : 500,
+                        fontFamily: FONT_SECONDARY,
+                        color:      isDerived || isVsCons ? C.TXT2 : isConsensus ? C.TXT : C.IND,
+                        fontWeight: isDerived || isVsCons ? 400 : 700,
                         fontStyle:  isDerived ? "italic" : "normal",
                         fontSize:   isDerived || isVsCons ? 10.5 : 11,
                       }}>
@@ -1122,8 +1135,10 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                 {/* KPI master header */}
                 <tr>
                   <td colSpan={years.length + 1} style={{
+                    // Regla 1 — título principal del bloque KPI.
                     ...labelSticky, position: "sticky", left: 0,
                     padding: "4px 10px", background: C.HDR, color: C.WHITE,
+                    fontFamily: FONT_PRIMARY,
                     fontWeight: 700, fontSize: 10, letterSpacing: "0.10em",
                     textTransform: "uppercase", maxWidth: "none",
                     borderTop: "2px solid rgba(255,255,255,0.05)",
@@ -1137,8 +1152,10 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                     {/* Sub-section header */}
                     <tr>
                       <td colSpan={years.length + 1} style={{
+                        // Regla 2 — subtítulo: king-blue con texto BLANCO Arial Bold.
                         ...labelSticky, position: "sticky", left: 0,
-                        padding: "3px 16px", background: C.SEC_SUB, color: "#E5E7EB",
+                        padding: "3px 16px", background: C.SEC_SUB, color: C.WHITE,
+                        fontFamily: FONT_SECONDARY,
                         fontWeight: 700, fontSize: 10, letterSpacing: "0.08em",
                         textTransform: "uppercase", maxWidth: "none",
                         borderTop: `1px solid rgba(255,255,255,0.07)`,
@@ -1155,12 +1172,15 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                         <tr
                           key={`kpi-${sectionName}-${kpiName}`}
                           style={{ borderBottom: `1px solid ${C.BDR}` }}
-                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(29,78,216,0.04)"; }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.04)"; }}
                           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ""; }}
                         >
+                          {/* Regla 5 — columna de indicadores: Arial Bold en king-blue. */}
                           <td style={{
                             ...labelSticky, padding: CELL_PAD, paddingLeft: 22,
-                            background: hasPct ? C.DRV_BG : C.WHITE, color: hasPct ? C.BLUE : C.TXT, fontWeight: 500, fontSize: 11,
+                            background: hasPct ? C.DRV_BG : C.WHITE,
+                            fontFamily: FONT_SECONDARY,
+                            color: C.IND, fontWeight: 700, fontSize: 11,
                           }}>
                             {kpiName}
                           </td>
@@ -1193,11 +1213,11 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
 
       {/* ── Footer ───────────────────────────────────────────────────────── */}
       <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 2px" }}>
-        <span style={{ fontSize: 10, color: "#9CA3AF", fontStyle: "italic" }}>
+        <span style={{ fontSize: 10, color: "rgba(13,13,56,0.45)", fontStyle: "italic" }}>
            Updated {header.updateDate}
           {!isLatest && " · Viewing historical version"}
         </span>
-        <span style={{ fontSize: 10, color: "#9CA3AF" }}>Bloomberg / Internal</span>
+        <span style={{ fontSize: 10, color: "rgba(13,13,56,0.45)" }}>Bloomberg / Internal</span>
       </div>
     </div>
   );

@@ -12,6 +12,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import type { PriceEarningsPoint, ConsensusPoint } from "@/app/api/companies/[ticker]/route";
+import { FONT_SECONDARY, sentimentColor, seriesColor } from "@/lib/patriaTheme";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -35,12 +36,18 @@ interface EarningsMetricCfg {
 }
 
 // Static list — year pills are only shown when that year exists in the data
+// Un color distinto por año: se comparan entre sí, así que recorren el orden
+// de priorización del manual sobre fondo claro.
+// La línea de precio se reserva el slot 0 (dark-blue) por ser la serie ancla,
+// así que las métricas de utilidad arrancan en el 1.
+const PRICE_COLOR = seriesColor(0);
+
 const ALL_EARNINGS_METRICS: EarningsMetricCfg[] = [
-  { key: "ni1bf", label: "Blended", color: "#7C3AED" },
-  { key: "2025",  label: "2025",    color: "#0D9488" },
-  { key: "2026",  label: "2026",    color: "#059669" },
-  { key: "2027",  label: "2027",    color: "#2B5CE0" },
-  { key: "2028",  label: "2028",    color: "#D97706" },
+  { key: "ni1bf", label: "Blended", color: seriesColor(1) },
+  { key: "2025",  label: "2025",    color: seriesColor(2) },
+  { key: "2026",  label: "2026",    color: seriesColor(3) },
+  { key: "2027",  label: "2027",    color: seriesColor(4) },
+  { key: "2028",  label: "2028",    color: seriesColor(5) },
 ];
 
 // DB alias normalisation (mirrors ConsensusChart)
@@ -119,16 +126,16 @@ const SIGNAL_STYLES: Record<ValuationSignal, {
   bg: string; border: string; dot: string; label: string; labelColor: string; tag: string;
 }> = {
   BUY: {
-    bg: "rgba(22,163,74,0.07)", border: "rgba(22,163,74,0.22)", dot: "#16A34A",
-    label: "Potentially Undervalued", labelColor: "#15803D", tag: "BUY",
+    bg: "rgba(0,30,175,0.07)", border: "rgba(0,30,175,0.22)", dot: "#001EAF",
+    label: "Potentially Undervalued", labelColor: "#001EAF", tag: "BUY",
   },
   SELL: {
-    bg: "rgba(220,38,38,0.07)", border: "rgba(220,38,38,0.22)", dot: "#DC2626",
-    label: "Potentially Overvalued", labelColor: "#B91C1C", tag: "SELL",
+    bg: "rgba(248,72,94,0.07)", border: "rgba(248,72,94,0.22)", dot: "#F8485E",
+    label: "Potentially Overvalued", labelColor: "#F8485E", tag: "SELL",
   },
   FAIR: {
-    bg: "rgba(100,116,139,0.07)", border: "rgba(100,116,139,0.20)", dot: "#64748B",
-    label: "Potentially Fairly Valued", labelColor: "#475569", tag: "FAIR",
+    bg: "rgba(13,13,56,0.07)", border: "rgba(13,13,56,0.20)", dot: "rgba(13,13,56,0.62)",
+    label: "Potentially Fairly Valued", labelColor: "rgba(13,13,56,0.62)", tag: "FAIR",
   },
 };
 
@@ -141,7 +148,7 @@ function SignalArrow({ signal }: { signal: ValuationSignal }) {
 function ValuationBadge({ result }: { result: DivergenceResult }) {
   const s          = SIGNAL_STYLES[result.signal];
   const fmt        = (n: number) => (n >= 0 ? "+" : "") + n.toFixed(1) + "%";
-  const deltaColor = (n: number) => (n >= 0 ? "#2563EB" : "#DC2626");
+  const deltaColor = (n: number) => sentimentColor(n);
 
   return (
     <div style={{
@@ -152,7 +159,7 @@ function ValuationBadge({ result }: { result: DivergenceResult }) {
       border:        `1px solid ${s.border}`,
       borderRadius:  7,
       padding:       "5px 10px",
-      fontFamily:    "JetBrains Mono, monospace",
+      fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
     }}>
       {/* Top row: dot + tag + arrow + label */}
       <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -171,7 +178,7 @@ function ValuationBadge({ result }: { result: DivergenceResult }) {
 
       {/* Sub-row: sign-colored deltas */}
       {result.pctChangeEarnings != null && (
-        <div style={{ fontSize: 8.5, color: "#94A3B8", letterSpacing: "0.02em" }}>
+        <div style={{ fontSize: 8.5, color: "rgba(13,13,56,0.45)", letterSpacing: "0.02em" }}>
           Earnings&nbsp;Δ&nbsp;
           <span style={{ color: deltaColor(result.pctChangeEarnings), fontWeight: 700 }}>
             {fmt(result.pctChangeEarnings)}
@@ -250,26 +257,26 @@ function DualTooltip({
   return (
     <div style={{
       background: "#fff",
-      border: "1px solid rgba(15,23,42,0.10)",
+      border: "1px solid rgba(13,13,56,0.10)",
       borderRadius: 6,
       padding: "8px 13px",
       fontSize: 11,
-      fontFamily: "JetBrains Mono, monospace",
-      boxShadow: "0 4px 16px rgba(15,23,42,0.12)",
+      fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
+      boxShadow: "0 4px 16px rgba(13,13,56,0.12)",
       minWidth: 160,
     }}>
-      <div style={{ color: "#94A3B8", marginBottom: 6, fontSize: 10, borderBottom: "1px solid rgba(15,23,42,0.06)", paddingBottom: 5 }}>
+      <div style={{ color: "rgba(13,13,56,0.45)", marginBottom: 6, fontSize: 10, borderBottom: "1px solid rgba(13,13,56,0.06)", paddingBottom: 5 }}>
         {label}
       </div>
       {price && (
         <div style={{ display: "flex", justifyContent: "space-between", gap: 16, marginBottom: 3 }}>
-          <span style={{ color: "#64748B" }}>Price</span>
-          <span style={{ color: "#2B5CE0", fontWeight: 700 }}>{fmtPrice(price.value)}</span>
+          <span style={{ color: "rgba(13,13,56,0.62)" }}>Price</span>
+          <span style={{ color: PRICE_COLOR, fontWeight: 700 }}>{fmtPrice(price.value)}</span>
         </div>
       )}
       {earnings && earnings.value != null && (
         <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
-          <span style={{ color: "#64748B" }}>{earningsLabel}</span>
+          <span style={{ color: "rgba(13,13,56,0.62)" }}>{earningsLabel}</span>
           <span style={{ color: earningsColor, fontWeight: 700 }}>{fmtCompact(earnings.value)}</span>
         </div>
       )}
@@ -376,12 +383,12 @@ export default function PriceEarningsChart({ data, consensus }: Props) {
 
         {/* Legend */}
         <div style={{ display: "flex", gap: 12 }}>
-          <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: "#94A3B8", fontFamily: "JetBrains Mono, monospace" }}>
-            <span style={{ display: "inline-block", width: 16, height: 2, background: "#2B5CE0", borderRadius: 1 }} />
+          <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: "rgba(13,13,56,0.45)", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
+            <span style={{ display: "inline-block", width: 16, height: 2, background: PRICE_COLOR, borderRadius: 1 }} />
             Price
           </span>
           {hasEarnings && metricCfg && (
-            <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: "#94A3B8", fontFamily: "JetBrains Mono, monospace" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: "rgba(13,13,56,0.45)", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
               <span style={{
                 display: "inline-block", width: 16, height: 8,
                 background: `${metricCfg.color}1F`,
@@ -400,8 +407,8 @@ export default function PriceEarningsChart({ data, consensus }: Props) {
           <div style={{
             display: "flex", gap: 3, padding: 3,
             borderRadius: 7,
-            background: "rgba(15,23,42,0.04)",
-            border: "1px solid rgba(15,23,42,0.07)",
+            background: "rgba(13,13,56,0.04)",
+            border: "1px solid rgba(13,13,56,0.07)",
           }}>
             {earningsMetrics.map((m) => (
               <button
@@ -410,7 +417,7 @@ export default function PriceEarningsChart({ data, consensus }: Props) {
                 style={{
                   fontSize: 9,
                   fontWeight: 700,
-                  fontFamily: "JetBrains Mono, monospace",
+                  fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
                   letterSpacing: "0.04em",
                   padding: "3px 8px",
                   borderRadius: 5,
@@ -418,8 +425,8 @@ export default function PriceEarningsChart({ data, consensus }: Props) {
                   cursor: "pointer",
                   transition: "all 0.15s",
                   background: selectedMetric === m.key ? "#fff"        : "transparent",
-                  color:      selectedMetric === m.key ? m.color       : "#94A3B8",
-                  boxShadow:  selectedMetric === m.key ? "0 1px 3px rgba(15,23,42,0.12)" : "none",
+                  color:      selectedMetric === m.key ? m.color       : "rgba(13,13,56,0.45)",
+                  boxShadow:  selectedMetric === m.key ? "0 1px 3px rgba(13,13,56,0.12)" : "none",
                 }}
               >
                 {m.label}
@@ -434,8 +441,8 @@ export default function PriceEarningsChart({ data, consensus }: Props) {
           <div style={{
             display: "flex", gap: 4, padding: 3,
             borderRadius: 7,
-            background: "rgba(15,23,42,0.04)",
-            border: "1px solid rgba(15,23,42,0.07)",
+            background: "rgba(13,13,56,0.04)",
+            border: "1px solid rgba(13,13,56,0.07)",
           }}>
             {RANGES.map((r) => (
               <button
@@ -444,7 +451,7 @@ export default function PriceEarningsChart({ data, consensus }: Props) {
                 style={{
                   fontSize: 9,
                   fontWeight: 700,
-                  fontFamily: "JetBrains Mono, monospace",
+                  fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
                   letterSpacing: "0.04em",
                   padding: "3px 8px",
                   borderRadius: 5,
@@ -452,8 +459,8 @@ export default function PriceEarningsChart({ data, consensus }: Props) {
                   cursor: "pointer",
                   transition: "all 0.15s",
                   background: range === r ? "#fff"    : "transparent",
-                  color:      range === r ? "#0F172A" : "#94A3B8",
-                  boxShadow:  range === r ? "0 1px 3px rgba(15,23,42,0.12)" : "none",
+                  color:      range === r ? "#0D0D38" : "rgba(13,13,56,0.45)",
+                  boxShadow:  range === r ? "0 1px 3px rgba(13,13,56,0.12)" : "none",
                 }}
               >
                 {r}
@@ -465,7 +472,7 @@ export default function PriceEarningsChart({ data, consensus }: Props) {
 
       {/* ── Chart ───────────────────────────────────────────────────────────── */}
       {!hasData ? (
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#CBD5E1", fontSize: 12 }}>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(13,13,56,0.28)", fontSize: 12 }}>
           No price data available
         </div>
       ) : (
@@ -475,16 +482,16 @@ export default function PriceEarningsChart({ data, consensus }: Props) {
 
               <defs>
                 <linearGradient id="niGradientPE" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor={metricCfg?.color ?? "#7C3AED"} stopOpacity={0.18} />
-                  <stop offset="90%" stopColor={metricCfg?.color ?? "#7C3AED"} stopOpacity={0.01} />
+                  <stop offset="5%"  stopColor={metricCfg?.color ?? "#001EAF"} stopOpacity={0.18} />
+                  <stop offset="90%" stopColor={metricCfg?.color ?? "#001EAF"} stopOpacity={0.01} />
                 </linearGradient>
               </defs>
 
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.05)" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(13,13,56,0.05)" vertical={false} />
 
               <XAxis
                 dataKey="date"
-                tick={{ fill: "#94A3B8", fontSize: 9, fontFamily: "JetBrains Mono, monospace" }}
+                tick={{ fill: "rgba(13,13,56,0.45)", fontSize: 9, fontFamily: FONT_SECONDARY }}
                 axisLine={false}
                 tickLine={false}
                 interval="preserveStartEnd"
@@ -495,7 +502,7 @@ export default function PriceEarningsChart({ data, consensus }: Props) {
                 yAxisId="left"
                 orientation="left"
                 domain={leftDomain}
-                tick={{ fill: "#2B5CE0", fontSize: 9, fontFamily: "JetBrains Mono, monospace" }}
+                tick={{ fill: PRICE_COLOR, fontSize: 9, fontFamily: FONT_SECONDARY }}
                 axisLine={false}
                 tickLine={false}
                 width={50}
@@ -507,7 +514,7 @@ export default function PriceEarningsChart({ data, consensus }: Props) {
                 yAxisId="right"
                 orientation="right"
                 domain={rightDomain}
-                tick={{ fill: metricCfg?.color ?? "#7C3AED", fontSize: 9, fontFamily: "JetBrains Mono, monospace" }}
+                tick={{ fill: metricCfg?.color ?? "#001EAF", fontSize: 9, fontFamily: FONT_SECONDARY }}
                 axisLine={false}
                 tickLine={false}
                 width={46}
@@ -519,7 +526,7 @@ export default function PriceEarningsChart({ data, consensus }: Props) {
                   <DualTooltip
                     metricKey={selectedMetric}
                     earningsLabel={metricCfg?.label ?? "Earnings"}
-                    earningsColor={metricCfg?.color ?? "#7C3AED"}
+                    earningsColor={metricCfg?.color ?? "#001EAF"}
                   />
                 }
               />
@@ -531,7 +538,7 @@ export default function PriceEarningsChart({ data, consensus }: Props) {
                   type="monotone"
                   dataKey={selectedMetric}
                   name={metricCfg?.label ?? "Earnings"}
-                  stroke={metricCfg?.color ?? "#7C3AED"}
+                  stroke={metricCfg?.color ?? "#001EAF"}
                   strokeWidth={1.5}
                   strokeDasharray="5 3"
                   fill="url(#niGradientPE)"
@@ -547,10 +554,10 @@ export default function PriceEarningsChart({ data, consensus }: Props) {
                 type="monotone"
                 dataKey="price"
                 name="Price"
-                stroke="#2B5CE0"
+                stroke={PRICE_COLOR}
                 strokeWidth={2.5}
                 dot={false}
-                activeDot={{ r: 4, fill: "#2B5CE0", strokeWidth: 0 }}
+                activeDot={{ r: 4, fill: PRICE_COLOR, strokeWidth: 0 }}
                 isAnimationActive={false}
               />
             </ComposedChart>

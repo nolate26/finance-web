@@ -2,20 +2,22 @@
 
 import { useState, useEffect, useCallback } from "react";
 import type { MatrixPayload, MatrixSector } from "@/app/api/attribution/matrix/route";
+import { PATRIA, FONT_SECONDARY } from "@/lib/patriaTheme";
+import { PatriaTitle } from "@/components/patria/PatriaTitle";
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
-const BORDER = "rgba(15,23,42,0.08)";
-const TEXT1  = "#0F172A";
-const TEXT2  = "#64748B";
-const GREEN  = "#059669";
-const RED    = "#DC2626";
-const BLUE   = "#2563EB";
-const PURPLE = "#7C3AED";
+const BORDER = "rgba(13,13,56,0.08)";
+const TEXT1  = PATRIA.darkBlue;   // Regla 4
+const TEXT2  = "rgba(13,13,56,0.62)";
+const GREEN  = PATRIA.blue;       // positivo
+const RED    = PATRIA.pink;       // negativo
+const BLUE   = PATRIA.kingBlue;   // Regla 5 / interactivo
+const PURPLE = "#001EAF";
 const cardStyle: React.CSSProperties = {
   background: "#FFFFFF",
   border: `1px solid ${BORDER}`,
   borderRadius: 12,
-  boxShadow: "0 1px 4px rgba(15,23,42,0.06)",
+  boxShadow: "0 1px 4px rgba(13,13,56,0.06)",
 };
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -51,7 +53,7 @@ function KpiCard({ label, value, valueColor, sub }: {
       <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.10em", color: TEXT2, textTransform: "uppercase" }}>
         {label}
       </span>
-      <span style={{ fontSize: 26, fontWeight: 800, fontFamily: "JetBrains Mono, monospace", color: valueColor ?? TEXT1, letterSpacing: "-0.02em" }}>
+      <span style={{ fontSize: 26, fontWeight: 800, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", color: valueColor ?? TEXT1, letterSpacing: "-0.02em" }}>
         {value}
       </span>
       {sub && <span style={{ fontSize: 10, color: TEXT2 }}>{sub}</span>}
@@ -67,22 +69,22 @@ function EffectCell({ v, maxAbs, heatmap, dec = 2 }: {
   const pos   = v > 0;
   const color = zero ? TEXT2 : pos ? GREEN : RED;
 
-  let bg     = zero ? "transparent" : pos ? "rgba(5,150,105,0.09)"  : "rgba(220,38,38,0.09)";
-  let border = zero ? "transparent" : pos ? "rgba(5,150,105,0.25)"  : "rgba(220,38,38,0.25)";
+  let bg     = zero ? "transparent" : pos ? "rgba(0,30,175,0.09)"  : "rgba(248,72,94,0.09)";
+  let border = zero ? "transparent" : pos ? "rgba(0,30,175,0.25)"  : "rgba(248,72,94,0.25)";
 
   if (heatmap && maxAbs && maxAbs > 0 && !zero) {
     const intensity = Math.min(Math.abs(v) / maxAbs, 1);
     if (pos) {
-      bg     = `rgba(5,150,105,${(intensity * 0.35).toFixed(3)})`;
-      border = `rgba(5,150,105,${(intensity * 0.50).toFixed(3)})`;
+      bg     = `rgba(0,30,175,${(intensity * 0.35).toFixed(3)})`;
+      border = `rgba(0,30,175,${(intensity * 0.50).toFixed(3)})`;
     } else {
-      bg     = `rgba(220,38,38,${(intensity * 0.35).toFixed(3)})`;
-      border = `rgba(220,38,38,${(intensity * 0.50).toFixed(3)})`;
+      bg     = `rgba(248,72,94,${(intensity * 0.35).toFixed(3)})`;
+      border = `rgba(248,72,94,${(intensity * 0.50).toFixed(3)})`;
     }
   }
 
   return (
-    <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11, fontWeight: 700 }}>
+    <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, fontWeight: 700 }}>
       <span style={{ color, background: bg, border: `1px solid ${border}`, borderRadius: 4, padding: "2px 8px", display: "inline-block", minWidth: 64, textAlign: "right" }}>
         {fmtPct(v, dec)}
       </span>
@@ -105,9 +107,9 @@ function SectorRow({
   expanded: boolean;
   onToggle: () => void;
 }) {
-  const rowBg     = "rgba(241,245,249,0.7)";
-  const assetBg   = "#FAFCFF";
-  const assetHover= "rgba(37,99,235,0.03)";
+  const rowBg     = "#F5F7FD";
+  const assetBg   = "#F5F7FD";
+  const assetHover= "rgba(32,68,220,0.03)";
 
   // ── Per-sector asset totals (corroboration) ───────────────────────────────
   const sumWp        = sector.assets.reduce((s, a) => s + a.wp,              0);
@@ -121,7 +123,7 @@ function SectorRow({
     const ok = Math.abs(computed - ref) < 5e-5;
     return ok
       ? <span style={{ color: GREEN, fontWeight: 800, marginLeft: 4 }}>✓</span>
-      : <span style={{ color: "#D97706", fontSize: 9, marginLeft: 4 }}>Δ{fmt(computed - ref)}</span>;
+      : <span style={{ color: "#FF6B06", fontSize: 9, marginLeft: 4 }}>Δ{fmt(computed - ref)}</span>;
   };
   // Each animated div clips to one row height when open
   const cellDiv = (content: React.ReactNode, tdStyle?: React.CSSProperties): React.ReactNode => (
@@ -142,12 +144,12 @@ function SectorRow({
       <tr
         style={{
           background: rowBg,
-          borderBottom: "1px solid rgba(15,23,42,0.06)",
+          borderBottom: "1px solid rgba(13,13,56,0.06)",
           cursor: "pointer",
           transition: "background 0.1s",
         }}
         onClick={onToggle}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(37,99,235,0.06)"; }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.06)"; }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = rowBg; }}
       >
         {/* Col 1 — expand toggle + sector name */}
@@ -156,40 +158,40 @@ function SectorRow({
             <span style={{
               display: "inline-flex", alignItems: "center", justifyContent: "center",
               width: 16, height: 16, borderRadius: 4, fontSize: 10, fontWeight: 800,
-              background: expanded ? "rgba(37,99,235,0.12)" : "rgba(15,23,42,0.06)",
+              background: expanded ? "rgba(32,68,220,0.12)" : "rgba(13,13,56,0.06)",
               color: expanded ? BLUE : TEXT2,
-              border: `1px solid ${expanded ? "rgba(37,99,235,0.25)" : "rgba(15,23,42,0.10)"}`,
+              border: `1px solid ${expanded ? "rgba(32,68,220,0.25)" : "rgba(13,13,56,0.10)"}`,
               transition: "all 0.15s", flexShrink: 0,
             }}>
               {expanded ? "−" : "+"}
             </span>
             {sector.sectorName}
             <span style={{
-              fontSize: 9, color: TEXT2, background: "rgba(15,23,42,0.05)",
-              borderRadius: 4, padding: "1px 5px", fontFamily: "JetBrains Mono, monospace",
+              fontSize: 9, color: TEXT2, background: "rgba(13,13,56,0.05)",
+              borderRadius: 4, padding: "1px 5px", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
             }}>
               {sector.nAssets}
             </span>
           </div>
         </td>
         {/* Col 2 — Port. W% */}
-        <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: TEXT1, fontWeight: 600 }}>
+        <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, color: TEXT1, fontWeight: 600 }}>
           {fmtW(sector.Wp)}
         </td>
         {/* Col 3 — Bench. W% */}
-        <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: TEXT2 }}>
+        <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, color: TEXT2 }}>
           {fmtW(sector.Wb)}
         </td>
         {/* Col 4 — Active W% */}
-        <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11, fontWeight: 600, color: numColor(sector.activeWeight), borderLeft: "1px solid rgba(15,23,42,0.05)" }}>
+        <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, fontWeight: 600, color: numColor(sector.activeWeight), borderLeft: "1px solid rgba(13,13,56,0.05)" }}>
           {fmtPct(sector.activeWeight)}
         </td>
         {/* Col 5 — Port. Ret */}
-        <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11, fontWeight: 600, color: numColor(sector.Rp), borderLeft: "1px solid rgba(15,23,42,0.05)" }}>
+        <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, fontWeight: 600, color: numColor(sector.Rp), borderLeft: "1px solid rgba(13,13,56,0.05)" }}>
           {fmtPct(sector.Rp)}
         </td>
         {/* Col 6 — Bench. Ret */}
-        <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: numColor(sector.Rb) }}>
+        <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, color: numColor(sector.Rb) }}>
           {fmtPct(sector.Rb)}
         </td>
         {/* Cols 7-9 — Effects */}
@@ -211,11 +213,11 @@ function SectorRow({
           {/* Col 1 — Ticker + Company (indented) */}
           {cellDiv(
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px 7px 36px", whiteSpace: "nowrap",
-              borderBottom: ai < sector.assets.length - 1 ? "1px solid rgba(15,23,42,0.04)" : "none" }}>
+              borderBottom: ai < sector.assets.length - 1 ? "1px solid rgba(13,13,56,0.04)" : "none" }}>
               <span style={{
-                fontSize: 10, fontWeight: 700, fontFamily: "JetBrains Mono, monospace",
-                color: BLUE, background: "rgba(37,99,235,0.07)",
-                border: "1px solid rgba(37,99,235,0.18)", borderRadius: 4, padding: "1px 6px",
+                fontSize: 10, fontWeight: 700, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
+                color: BLUE, background: "rgba(32,68,220,0.07)",
+                border: "1px solid rgba(32,68,220,0.18)", borderRadius: 4, padding: "1px 6px",
               }}>
                 {asset.ticker}
               </span>
@@ -225,64 +227,64 @@ function SectorRow({
 
           {/* Col 2 — Port. W% */}
           {cellDiv(
-            <div style={{ padding: "7px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: TEXT1,
-              borderBottom: ai < sector.assets.length - 1 ? "1px solid rgba(15,23,42,0.04)" : "none" }}>
+            <div style={{ padding: "7px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, color: TEXT1,
+              borderBottom: ai < sector.assets.length - 1 ? "1px solid rgba(13,13,56,0.04)" : "none" }}>
               {fmtW(asset.wp)}
             </div>
           )}
 
           {/* Col 3 — Bench. W% */}
           {cellDiv(
-            <div style={{ padding: "7px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: TEXT2,
-              borderBottom: ai < sector.assets.length - 1 ? "1px solid rgba(15,23,42,0.04)" : "none" }}>
+            <div style={{ padding: "7px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, color: TEXT2,
+              borderBottom: ai < sector.assets.length - 1 ? "1px solid rgba(13,13,56,0.04)" : "none" }}>
               {fmtW(asset.wb)}
             </div>
           )}
 
           {/* Col 4 — Active W% */}
           {cellDiv(
-            <div style={{ padding: "7px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11,
+            <div style={{ padding: "7px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11,
               fontWeight: 600, color: numColor(asset.wp - asset.wb),
-              borderLeft: "1px solid rgba(15,23,42,0.04)",
-              borderBottom: ai < sector.assets.length - 1 ? "1px solid rgba(15,23,42,0.04)" : "none" }}>
+              borderLeft: "1px solid rgba(13,13,56,0.04)",
+              borderBottom: ai < sector.assets.length - 1 ? "1px solid rgba(13,13,56,0.04)" : "none" }}>
               {fmtPct(asset.wp - asset.wb)}
             </div>
           )}
 
           {/* Col 5 — Return (under Port. Ret) */}
           {cellDiv(
-            <div style={{ padding: "7px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11,
+            <div style={{ padding: "7px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11,
               fontWeight: 600, color: numColor(asset.ret),
-              borderLeft: "1px solid rgba(15,23,42,0.04)",
-              borderBottom: ai < sector.assets.length - 1 ? "1px solid rgba(15,23,42,0.04)" : "none" }}>
+              borderLeft: "1px solid rgba(13,13,56,0.04)",
+              borderBottom: ai < sector.assets.length - 1 ? "1px solid rgba(13,13,56,0.04)" : "none" }}>
               {fmtPct(asset.ret)}
             </div>
           )}
 
           {/* Col 6 — Bench. Ret (n/a per asset) */}
           {cellDiv(<div style={{ padding: "7px 10px",
-            borderBottom: ai < sector.assets.length - 1 ? "1px solid rgba(15,23,42,0.04)" : "none" }} />)}
+            borderBottom: ai < sector.assets.length - 1 ? "1px solid rgba(13,13,56,0.04)" : "none" }} />)}
 
           {/* Col 7 — Allocation (n/a per asset) */}
           {cellDiv(<div style={{ padding: "7px 10px",
-            borderBottom: ai < sector.assets.length - 1 ? "1px solid rgba(15,23,42,0.04)" : "none" }} />)}
+            borderBottom: ai < sector.assets.length - 1 ? "1px solid rgba(13,13,56,0.04)" : "none" }} />)}
 
           {/* Col 8 — Selection (n/a per asset) */}
           {cellDiv(<div style={{ padding: "7px 10px",
-            borderBottom: ai < sector.assets.length - 1 ? "1px solid rgba(15,23,42,0.04)" : "none" }} />)}
+            borderBottom: ai < sector.assets.length - 1 ? "1px solid rgba(13,13,56,0.04)" : "none" }} />)}
 
           {/* Col 9 — Interaction (n/a per asset) */}
           {cellDiv(<div style={{ padding: "7px 10px",
-            borderBottom: ai < sector.assets.length - 1 ? "1px solid rgba(15,23,42,0.04)" : "none" }} />)}
+            borderBottom: ai < sector.assets.length - 1 ? "1px solid rgba(13,13,56,0.04)" : "none" }} />)}
 
           {/* Col 10 — Selection Contribution (under Total α) */}
           {cellDiv(
-            <div style={{ padding: "7px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11, fontWeight: 700,
-              borderBottom: ai < sector.assets.length - 1 ? "1px solid rgba(15,23,42,0.04)" : "none" }}>
+            <div style={{ padding: "7px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, fontWeight: 700,
+              borderBottom: ai < sector.assets.length - 1 ? "1px solid rgba(13,13,56,0.04)" : "none" }}>
               <span style={{
                 color: numColor(asset.selectionContrib),
-                background: asset.selectionContrib > 0 ? "rgba(5,150,105,0.09)" : asset.selectionContrib < 0 ? "rgba(220,38,38,0.09)" : "transparent",
-                border: `1px solid ${asset.selectionContrib > 0 ? "rgba(5,150,105,0.22)" : asset.selectionContrib < 0 ? "rgba(220,38,38,0.22)" : "transparent"}`,
+                background: asset.selectionContrib > 0 ? "rgba(0,30,175,0.09)" : asset.selectionContrib < 0 ? "rgba(248,72,94,0.09)" : "transparent",
+                border: `1px solid ${asset.selectionContrib > 0 ? "rgba(0,30,175,0.22)" : asset.selectionContrib < 0 ? "rgba(248,72,94,0.22)" : "transparent"}`,
                 borderRadius: 4, padding: "2px 8px", display: "inline-block", minWidth: 64, textAlign: "right",
               }}>
                 {fmtPct(asset.selectionContrib, 3)}
@@ -293,70 +295,71 @@ function SectorRow({
       ))}
 
       {/* ── Totals / reconciliation row ── */}
-      <tr style={{ background: "rgba(226,232,240,0.70)" }}>
+      {/* Regla 3 — fila de totales: destacado sobre fondo claro. */}
+      <tr style={{ background: "rgba(32,68,220,0.10)" }}>
         {/* Col 1 — label */}
         {cellDiv(
           <div style={{ padding: "6px 10px 6px 36px", fontSize: 10, fontWeight: 800, color: TEXT2,
             letterSpacing: "0.07em", textTransform: "uppercase",
-            borderTop: "1px solid rgba(15,23,42,0.12)" }}>
+            borderTop: "1px solid rgba(13,13,56,0.12)" }}>
             Σ Totales
           </div>
         )}
         {/* Col 2 — Σ Port. W% (= sector.Wp) */}
         {cellDiv(
-          <div style={{ padding: "6px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace",
+          <div style={{ padding: "6px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
             fontSize: 11, fontWeight: 700, color: TEXT1,
-            borderTop: "1px solid rgba(15,23,42,0.12)", display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+            borderTop: "1px solid rgba(13,13,56,0.12)", display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
             {fmtW(sumWp)}{chk(sumWp, sector.Wp, fmtW)}
           </div>
         )}
         {/* Col 3 — Σ Bench. W% (= sector.Wb) */}
         {cellDiv(
-          <div style={{ padding: "6px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace",
+          <div style={{ padding: "6px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
             fontSize: 11, fontWeight: 700, color: TEXT2,
-            borderTop: "1px solid rgba(15,23,42,0.12)", display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+            borderTop: "1px solid rgba(13,13,56,0.12)", display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
             {fmtW(sumWb)}{chk(sumWb, sector.Wb, fmtW)}
           </div>
         )}
         {/* Col 4 — Active W% (= sector.activeWeight) */}
         {cellDiv(
-          <div style={{ padding: "6px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace",
+          <div style={{ padding: "6px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
             fontSize: 11, fontWeight: 700, color: numColor(sumWp - sumWb),
-            borderTop: "1px solid rgba(15,23,42,0.12)", borderLeft: "1px solid rgba(15,23,42,0.08)",
+            borderTop: "1px solid rgba(13,13,56,0.12)", borderLeft: "1px solid rgba(13,13,56,0.08)",
             display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
             {fmtPct(sumWp - sumWb)}{chk(sumWp - sumWb, sector.activeWeight, fmtPct)}
           </div>
         )}
         {/* Col 5 — Wgt. avg. Port. Ret (= sector.Rp) */}
         {cellDiv(
-          <div style={{ padding: "6px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace",
+          <div style={{ padding: "6px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
             fontSize: 11, fontWeight: 700, color: numColor(wgtRetP),
-            borderTop: "1px solid rgba(15,23,42,0.12)", borderLeft: "1px solid rgba(15,23,42,0.08)",
+            borderTop: "1px solid rgba(13,13,56,0.12)", borderLeft: "1px solid rgba(13,13,56,0.08)",
             display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
             {fmtPct(wgtRetP)}{chk(wgtRetP, sector.Rp, fmtPct)}
           </div>
         )}
         {/* Col 6 — Wgt. avg. Bench. Ret (= sector.Rb) */}
         {cellDiv(
-          <div style={{ padding: "6px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace",
+          <div style={{ padding: "6px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
             fontSize: 11, fontWeight: 700, color: numColor(wgtRetB),
-            borderTop: "1px solid rgba(15,23,42,0.12)",
+            borderTop: "1px solid rgba(13,13,56,0.12)",
             display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
             {fmtPct(wgtRetB)}{chk(wgtRetB, sector.Rb, fmtPct)}
           </div>
         )}
         {/* Cols 7-9 — Allocation / Selection / Interaction (sector-level, shown above) */}
-        {cellDiv(<div style={{ borderTop: "1px solid rgba(15,23,42,0.12)" }} />)}
-        {cellDiv(<div style={{ borderTop: "1px solid rgba(15,23,42,0.12)" }} />)}
-        {cellDiv(<div style={{ borderTop: "1px solid rgba(15,23,42,0.12)" }} />)}
+        {cellDiv(<div style={{ borderTop: "1px solid rgba(13,13,56,0.12)" }} />)}
+        {cellDiv(<div style={{ borderTop: "1px solid rgba(13,13,56,0.12)" }} />)}
+        {cellDiv(<div style={{ borderTop: "1px solid rgba(13,13,56,0.12)" }} />)}
         {/* Col 10 — Σ selectionContrib ≈ 0 by construction */}
         {cellDiv(
-          <div style={{ padding: "6px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace",
+          <div style={{ padding: "6px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
             fontSize: 11, fontWeight: 700,
-            borderTop: "1px solid rgba(15,23,42,0.12)", display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+            borderTop: "1px solid rgba(13,13,56,0.12)", display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
             <span style={{
               color: Math.abs(sumSelContrib) < 5e-5 ? TEXT2 : numColor(sumSelContrib),
-              background: "rgba(15,23,42,0.05)", border: "1px solid rgba(15,23,42,0.10)",
+              background: "rgba(13,13,56,0.05)", border: "1px solid rgba(13,13,56,0.10)",
               borderRadius: 4, padding: "2px 8px", display: "inline-block", minWidth: 64, textAlign: "right",
             }}>
               {fmtPct(sumSelContrib, 3)}
@@ -368,7 +371,7 @@ function SectorRow({
 
       {/* Separator after totals row when expanded */}
       {expanded && (
-        <tr><td colSpan={10} style={{ padding: 0, borderBottom: "2px solid rgba(37,99,235,0.10)" }} /></tr>
+        <tr><td colSpan={10} style={{ padding: 0, borderBottom: "2px solid rgba(32,68,220,0.10)" }} /></tr>
       )}
     </>
   );
@@ -437,9 +440,9 @@ export default function MatrixAttributionPanel() {
 
   const selectStyle: React.CSSProperties = {
     padding: "6px 10px", borderRadius: 8,
-    background: "#F8FAFF", border: `1px solid ${BORDER}`,
+    background: "#F5F7FD", border: `1px solid ${BORDER}`,
     color: TEXT1, fontSize: 12, cursor: "pointer", outline: "none",
-    fontFamily: "JetBrains Mono, monospace",
+    fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
   };
 
   const Th = ({ col, label, right }: { col: SortKey; label: string; right?: boolean }) => (
@@ -450,7 +453,7 @@ export default function MatrixAttributionPanel() {
         fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
         color: sortKey === col ? BLUE : TEXT2,
         cursor: "pointer", userSelect: "none", whiteSpace: "nowrap",
-        background: "#F0F4FA", borderBottom: "1px solid rgba(15,23,42,0.08)",
+        background: "#F5F7FD", borderBottom: "1px solid rgba(13,13,56,0.08)",
       }}
     >
       {label}{sortKey === col ? (sortDir === "desc" ? " ↓" : " ↑") : ""}
@@ -484,24 +487,24 @@ export default function MatrixAttributionPanel() {
 
         <span style={{
           fontSize: 10, fontWeight: 700, color: PURPLE,
-          background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.20)",
-          borderRadius: 6, padding: "3px 10px", fontFamily: "JetBrains Mono, monospace",
+          background: "rgba(0,30,175,0.08)", border: "1px solid rgba(0,30,175,0.20)",
+          borderRadius: 6, padding: "3px 10px", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
         }}>
           vs {fundInfo.bench}
         </span>
 
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ fontSize: 11, color: TEXT2, fontWeight: 600 }}>Period</span>
-          <div style={{ display: "flex", gap: 2, background: "rgba(15,23,42,0.04)", border: `1px solid ${BORDER}`, borderRadius: 8, padding: 3 }}>
+          <div style={{ display: "flex", gap: 2, background: "rgba(13,13,56,0.04)", border: `1px solid ${BORDER}`, borderRadius: 8, padding: 3 }}>
             {PERIODS.map((p) => {
               const active = period === p.value;
               return (
                 <button key={p.value} onClick={() => setPeriod(p.value)} style={{
                   padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
                   cursor: "pointer", transition: "all 0.1s",
-                  background: active ? "rgba(37,99,235,0.12)" : "transparent",
-                  color:      active ? "#1E3A8A" : TEXT2,
-                  border:     active ? "1px solid rgba(37,99,235,0.28)" : "1px solid transparent",
+                  background: active ? "rgba(32,68,220,0.12)" : "transparent",
+                  color:      active ? "#001EAF" : TEXT2,
+                  border:     active ? "1px solid rgba(32,68,220,0.28)" : "1px solid transparent",
                 }}>
                   {p.label}
                 </button>
@@ -511,7 +514,7 @@ export default function MatrixAttributionPanel() {
         </div>
 
         {data && (
-          <span style={{ marginLeft: "auto", fontSize: 11, color: TEXT2, fontFamily: "JetBrains Mono, monospace" }}>
+          <span style={{ marginLeft: "auto", fontSize: 11, color: TEXT2, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
             Weights: {data.summary.reportDate} · Returns: {data.summary.snapshotDate} · {data.summary.nAssets} assets · {data.summary.nSectors} sectors
           </span>
         )}
@@ -527,8 +530,8 @@ export default function MatrixAttributionPanel() {
       {/* ── Loading ── */}
       {loading && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "64px 0", gap: 12 }}>
-          <div style={{ width: 28, height: 28, borderRadius: "50%", border: "2px solid rgba(37,99,235,0.15)", borderTopColor: BLUE, animation: "spin 0.8s linear infinite" }} />
-          <span style={{ fontSize: 12, color: TEXT2, fontFamily: "JetBrains Mono, monospace" }}>
+          <div style={{ width: 28, height: 28, borderRadius: "50%", border: "2px solid rgba(32,68,220,0.15)", borderTopColor: BLUE, animation: "spin 0.8s linear infinite" }} />
+          <span style={{ fontSize: 12, color: TEXT2, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
             Building attribution matrix for {fundInfo.label}…
           </span>
         </div>
@@ -536,7 +539,7 @@ export default function MatrixAttributionPanel() {
 
       {/* ── Error ── */}
       {error && !loading && (
-        <div style={{ background: "rgba(220,38,38,0.06)", border: "1px solid rgba(220,38,38,0.15)", borderRadius: 10, padding: "16px 24px", textAlign: "center" }}>
+        <div style={{ background: "rgba(248,72,94,0.06)", border: "1px solid rgba(248,72,94,0.15)", borderRadius: 10, padding: "16px 24px", textAlign: "center" }}>
           <p style={{ color: RED, fontSize: 13, marginBottom: 8 }}>{error}</p>
           <button onClick={fetchData} style={{ ...selectStyle, color: BLUE }}>Retry</button>
         </div>
@@ -568,7 +571,7 @@ export default function MatrixAttributionPanel() {
           </div>
 
           {/* Methodology banner */}
-          <div style={{ ...cardStyle, padding: "10px 16px", background: "rgba(37,99,235,0.03)", borderColor: "rgba(37,99,235,0.12)" }}>
+          <div style={{ ...cardStyle, padding: "10px 16px", background: "rgba(32,68,220,0.03)", borderColor: "rgba(32,68,220,0.12)" }}>
             <div style={{ display: "flex", gap: 20, flexWrap: "wrap", alignItems: "baseline" }}>
               <span style={{ fontSize: 10, fontWeight: 700, color: BLUE, letterSpacing: "0.08em", textTransform: "uppercase" }}>
                 Brinson-Fachler · Attribution Matrix
@@ -587,9 +590,9 @@ export default function MatrixAttributionPanel() {
 
           {/* Matrix table */}
           <div style={{ ...cardStyle, overflow: "hidden" }}>
+            <PatriaTitle style={{ borderRadius: 0 }}>Attribution Matrix</PatriaTitle>
             <div style={{ padding: "14px 16px 0", marginBottom: 4, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.10em", color: TEXT2, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ display: "inline-block", width: 3, height: 12, borderRadius: 2, background: BLUE }} />
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.10em", color: PATRIA.kingBlue, fontFamily: FONT_SECONDARY, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 8 }}>
                 Attribution Matrix — {selPeriod.label}
               </div>
               <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
@@ -611,14 +614,14 @@ export default function MatrixAttributionPanel() {
                 <thead>
                   {/* Group row */}
                   <tr>
-                    <th colSpan={4} style={{ padding: "5px 10px", background: "#F0F4FA", fontSize: 9, fontWeight: 700, color: TEXT2, letterSpacing: "0.08em", textTransform: "uppercase", textAlign: "left", borderBottom: "1px solid rgba(15,23,42,0.08)" }} />
-                    <th colSpan={2} style={{ padding: "5px 10px", background: "rgba(37,99,235,0.06)", fontSize: 9, fontWeight: 800, color: BLUE, letterSpacing: "0.08em", textTransform: "uppercase", textAlign: "center", borderBottom: "2px solid rgba(37,99,235,0.20)", borderLeft: "1px solid rgba(15,23,42,0.07)" }}>
+                    <th colSpan={4} style={{ padding: "5px 10px", background: "#F5F7FD", fontSize: 9, fontWeight: 700, color: TEXT2, letterSpacing: "0.08em", textTransform: "uppercase", textAlign: "left", borderBottom: "1px solid rgba(13,13,56,0.08)" }} />
+                    <th colSpan={2} style={{ padding: "5px 10px", background: "rgba(32,68,220,0.06)", fontSize: 9, fontWeight: 800, color: BLUE, letterSpacing: "0.08em", textTransform: "uppercase", textAlign: "center", borderBottom: "2px solid rgba(32,68,220,0.20)", borderLeft: "1px solid rgba(13,13,56,0.07)" }}>
                       Sector Return
                     </th>
-                    <th colSpan={3} style={{ padding: "5px 10px", background: "rgba(16,185,129,0.06)", fontSize: 9, fontWeight: 800, color: GREEN, letterSpacing: "0.08em", textTransform: "uppercase", textAlign: "center", borderBottom: "2px solid rgba(16,185,129,0.20)", borderLeft: "1px solid rgba(15,23,42,0.07)" }}>
+                    <th colSpan={3} style={{ padding: "5px 10px", background: "rgba(0,30,175,0.06)", fontSize: 9, fontWeight: 800, color: GREEN, letterSpacing: "0.08em", textTransform: "uppercase", textAlign: "center", borderBottom: "2px solid rgba(0,30,175,0.20)", borderLeft: "1px solid rgba(13,13,56,0.07)" }}>
                       Attribution Effects
                     </th>
-                    <th style={{ padding: "5px 10px", background: "#F0F4FA", fontSize: 9, fontWeight: 800, color: TEXT1, letterSpacing: "0.08em", textTransform: "uppercase", textAlign: "center", borderBottom: "1px solid rgba(15,23,42,0.08)", borderLeft: "1px solid rgba(15,23,42,0.07)" }}>
+                    <th style={{ padding: "5px 10px", background: "#F5F7FD", fontSize: 9, fontWeight: 800, color: TEXT1, letterSpacing: "0.08em", textTransform: "uppercase", textAlign: "center", borderBottom: "1px solid rgba(13,13,56,0.08)", borderLeft: "1px solid rgba(13,13,56,0.07)" }}>
                       Total / Asset Contrib.
                     </th>
                   </tr>
@@ -650,14 +653,14 @@ export default function MatrixAttributionPanel() {
                 {/* ── Totals footer ── */}
                 {totals && (
                   <tfoot>
-                    <tr style={{ background: "#F0F4FA", borderTop: "2px solid rgba(15,23,42,0.12)" }}>
-                      <td style={{ padding: "8px 10px", fontSize: 10, fontWeight: 700, color: TEXT2, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                    <tr style={{ background: "#F5F7FD", borderTop: "2px solid rgba(13,13,56,0.12)" }}>
+                      <td style={{ padding: "8px 10px", fontSize: 10, fontWeight: 700, color: PATRIA.kingBlue, fontFamily: FONT_SECONDARY, letterSpacing: "0.06em", textTransform: "uppercase" }}>
                         Σ Total
                       </td>
-                      <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11, fontWeight: 700, color: TEXT1 }}>
+                      <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, fontWeight: 700, color: TEXT1 }}>
                         {fmtW(totals.Wp)}
                       </td>
-                      <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11, fontWeight: 700, color: TEXT2 }}>
+                      <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, fontWeight: 700, color: TEXT2 }}>
                         {fmtW(totals.Wb)}
                       </td>
                       <td style={{ padding: "8px 10px", textAlign: "center", fontSize: 10, color: TEXT2 }}>—</td>
@@ -665,22 +668,22 @@ export default function MatrixAttributionPanel() {
                         weighted
                       </td>
                       {([totals.allocation, totals.selection, totals.interaction] as number[]).map((v, idx) => (
-                        <td key={idx} style={{ padding: "8px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11, fontWeight: 800, color: numColor(v) }}>
+                        <td key={idx} style={{ padding: "8px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, fontWeight: 800, color: numColor(v) }}>
                           {fmtPct(v, 3)}
                         </td>
                       ))}
-                      <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 12, fontWeight: 800 }}>
+                      <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 12, fontWeight: 800 }}>
                         <span style={{
                           color: numColor(totals.totalAlpha),
-                          background: totals.totalAlpha > 0 ? "rgba(5,150,105,0.12)" : "rgba(220,38,38,0.12)",
-                          border: `1px solid ${totals.totalAlpha > 0 ? "rgba(5,150,105,0.30)" : "rgba(220,38,38,0.30)"}`,
+                          background: totals.totalAlpha > 0 ? "rgba(0,30,175,0.12)" : "rgba(248,72,94,0.12)",
+                          border: `1px solid ${totals.totalAlpha > 0 ? "rgba(0,30,175,0.30)" : "rgba(248,72,94,0.30)"}`,
                           borderRadius: 5, padding: "3px 10px",
                         }}>
                           {fmtPct(totals.totalAlpha, 3)}
                         </span>
                       </td>
                     </tr>
-                    <tr style={{ background: "#F8FAFC" }}>
+                    <tr style={{ background: "#F5F7FD" }}>
                       <td colSpan={10} style={{ padding: "5px 10px", fontSize: 10, color: TEXT2, fontStyle: "italic" }}>
                         Reconciliation: Σ Total Alpha ({fmtPct(totals.totalAlpha, 3)}) should equal R<sub>p</sub> − R<sub>b</sub> ({fmtPct(data.summary.totalAlpha, 3)}).
                         &nbsp;Δ = {fmtPct(totals.totalAlpha - data.summary.totalAlpha, 4)}
@@ -693,14 +696,14 @@ export default function MatrixAttributionPanel() {
             </div>
 
             {/* Legend */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", borderTop: "1px solid rgba(15,23,42,0.06)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", borderTop: "1px solid rgba(13,13,56,0.06)" }}>
               <div style={{ display: "flex", gap: 16 }}>
                 <span style={{ fontSize: 10, color: GREEN, fontWeight: 600 }}>● Positive alpha</span>
                 <span style={{ fontSize: 10, color: RED,   fontWeight: 600 }}>● Negative alpha</span>
                 <span style={{ fontSize: 10, color: TEXT2 }}>Heatmap intensity ∝ |Total Alpha|</span>
                 <span style={{ fontSize: 10, color: TEXT2 }}>N = # assets in sector</span>
               </div>
-              <span style={{ fontSize: 10, color: "#CBD5E1" }}>Brinson-Fachler · GICS sectors · Bloomberg</span>
+              <span style={{ fontSize: 10, color: "rgba(13,13,56,0.28)" }}>Brinson-Fachler · GICS sectors · Bloomberg</span>
             </div>
           </div>
         </>

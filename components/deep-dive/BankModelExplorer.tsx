@@ -11,28 +11,34 @@ import { consensusScaleFactor } from "@/lib/consensusScale";
 import { ccySuffix } from "@/lib/ccySuffix";
 import ModelEstimateChart, { buildEstimateRows, type EstimateMetric, type EstimateRow } from "@/components/deep-dive/ModelEstimateChart";
 import { useIsAdmin } from "@/lib/useIsAdmin";
+import { PATRIA, FONT_PRIMARY, FONT_SECONDARY, TEXT, BORDER } from "@/lib/patriaTheme";
 
 // ── Estimate-evolution chart metrics (Net Income default) ────────────────────────
 // Banks don't carry EBITDA / FCFE, so we track the closest analogues.
+// Orden de priorización del manual sobre fondo claro: dark-blue → blue → king-blue.
 const ESTIMATE_METRICS: EstimateMetric[] = [
-  { key: "NI",  label: "Net Income", gradId: "bme_ni",  colors: ["#7C3AED", "#A78BFA"] },
-  { key: "REV", label: "Revenue",    gradId: "bme_rev", colors: ["#059669", "#34D399"] },
-  { key: "EPS", label: "EPS",        gradId: "bme_eps", colors: ["#D97706", "#FBBF24"] },
+  { key: "NI",  label: "Net Income", gradId: "bme_ni",  colors: [PATRIA.darkBlue, PATRIA.darkSkyBlue] },
+  { key: "REV", label: "Revenue",    gradId: "bme_rev", colors: [PATRIA.kingBlue, PATRIA.skyBlue] },
+  { key: "EPS", label: "EPS",        gradId: "bme_eps", colors: [PATRIA.orange,   PATRIA.lightOrange] },
 ];
 
-// ── Palette ────────────────────────────────────────────────────────────────────
+// ── Palette — Manual de Identidad PATRIA ───────────────────────────────────────
 const C = {
-  HDR:     "#1E3A8A",
-  SEC_SUB: "#374151",
-  EST_BG:  "#FFFDE7",
-  DRV_BG:  "#DBEAFE",
-  BDR:     "#9CA3AF",
-  BLUE:    "#1D4ED8",
-  RED:     "#DC2626",
-  GREEN:   "#15803D",
-  TXT:     "#111827",
-  TXT2:    "#374151",
-  WHITE:   "#FFFFFF",
+  HDR:     PATRIA.darkBlue,           // Regla 1 — banda de título principal
+  SEC_SUB: PATRIA.kingBlue,           // Regla 2 — subtítulo de sección
+  IND:     PATRIA.kingBlue,           // Regla 5 — columna de indicadores sobre fondo claro
+  EST_BG:  "rgba(255,107,6,0.06)",    // años estimados: tinte naranja del manual
+  DRV_BG:  "#F5F7FD",                 // filas derivadas: dark-blue al 3%
+  BDR:     BORDER.base,
+  BLUE:    PATRIA.blue,               // positivo / buy
+  ACC:     PATRIA.kingBlue,           // botones y elementos interactivos
+  RED:     PATRIA.pink,               // negativo / sell
+  GREEN:   PATRIA.blue,               // positivo (el manual no incluye verde)
+  TXT:     PATRIA.darkBlue,           // Regla 4
+  TXT2:    TEXT.label,
+  WHITE:   PATRIA.white,
+  LIVE_BG: PATRIA.lightTurquoise,     // Regla 3 — destacado sobre fondo claro
+  LIVE_TXT: PATRIA.darkBlue,
 };
 
 // ── Safe math ──────────────────────────────────────────────────────────────────
@@ -69,11 +75,44 @@ const fmtMult = (v: number | null): string => (v === null ? "-" : v.toFixed(1) +
 
 // ── Enriched year data ─────────────────────────────────────────────────────────
 interface YearData extends BankFinancialRow {
-  isEst: boolean;
+  isEst:        boolean;
+  effPrice:     number | null;
+  effMarketCap: number | null;
+  priceIsLive:  boolean;   // true si effPrice viene de price_range_52w (año proyectado con precio vivo)
 }
-function enrich(financials: BankFinancialRow[]): YearData[] {
+
+function enrich(financials: BankFinancialRow[], livePrice: number | null): YearData[] {
   const now = new Date().getFullYear();
-  return financials.map(f => ({ ...f, isEst: f.year >= now }));
+  return financials.map(f => {
+    const isEst = f.year >= now;
+    // En años proyectados, si hay precio de mercado (price_range_52w) lo usamos en vez del precio
+    // del modelo y recomputamos el market cap con él, para que TODOS los múltiplos derivados
+    // (P/E, P/TBV, dividend yield, buyback yield…) queden calculados con el precio vivo.
+    const priceIsLive = isEst && livePrice !== null;
+    const effPrice    = priceIsLive ? livePrice : f.sharePrice;
+
+    // A diferencia del modelo de analista, bank_financials NO tiene fxEop, así que no hay un
+    // factor explícito que lleve precio×acciones a la escala de los financials. Por eso la vía
+    // principal es re-marcar el market_cap del propio modelo por la razón de precios: hereda la
+    // escala de esa columna y no hay que asumir en qué unidad quedan precio×acciones.
+    //  • Precio vivo + market_cap + sharePrice del modelo → market_cap × (vivo / modelo).
+    //  • Precio vivo sin market_cap → precio×acciones crudo (asume misma escala).
+    //  • Resto de años → la columna market_cap tal cual, y si falta se reconstruye.
+    let effMarketCap: number | null;
+    if (priceIsLive && livePrice !== null && f.marketCap !== null && f.sharePrice !== null && f.sharePrice !== 0) {
+      effMarketCap = f.marketCap * (livePrice / f.sharePrice);
+    } else if (priceIsLive && livePrice !== null && f.shares !== null) {
+      effMarketCap = livePrice * f.shares;
+    } else if (f.marketCap !== null) {
+      effMarketCap = f.marketCap;
+    } else if (f.sharePrice !== null && f.shares !== null) {
+      effMarketCap = f.sharePrice * f.shares;
+    } else {
+      effMarketCap = null;
+    }
+
+    return { ...f, isEst, effPrice, effMarketCap, priceIsLive };
+  });
 }
 
 // ── Row types ──────────────────────────────────────────────────────────────────
@@ -105,6 +144,10 @@ const NI_KEYS  = ["ni", "net income", "net profit", "netincome", "controlling", 
 // ── Derived helpers used by row fns (pure: read the year map directly) ───────────
 const fld = (by: Map<number, YearData>, y: number, k: keyof BankFinancialRow): number | null =>
   (by.get(y)?.[k] as number | null | undefined) ?? null;
+// Market cap efectivo: en años proyectados ya viene re-marcado al precio vivo (ver enrich).
+// Todos los múltiplos que dividen por market cap deben pasar por acá, no por fld(...,"marketCap").
+const effMcap = (by: Map<number, YearData>, y: number): number | null =>
+  by.get(y)?.effMarketCap ?? null;
 const neg = (v: number | null): number | null => (v === null ? null : -v);
 function divBuyback(by: Map<number, YearData>, y: number): number | null {
   const dv = neg(fld(by, y, "dividend"));
@@ -113,7 +156,7 @@ function divBuyback(by: Map<number, YearData>, y: number): number | null {
   return (dv ?? 0) + (bb ?? 0);
 }
 function peRatio(by: Map<number, YearData>, y: number): number | null {
-  return divz(fld(by, y, "marketCap"), fld(by, y, "controllingNetIncome"));
+  return divz(effMcap(by, y), fld(by, y, "controllingNetIncome"));
 }
 function peg1(y: number, by: Map<number, YearData>): number | null {
   const pe = peRatio(by, y);
@@ -200,7 +243,7 @@ const SECTIONS: Section[] = [
       { key: "l_d",      label: "Loans / Deposits",                kind: "derived", fmt: "mult", fn: (y, by) => divz(fld(by, y, "grossLoans"), fld(by, y, "totalDeposits")) },
       { key: "d_f",      label: "Deposits / Funding",              kind: "derived", fmt: "mult", fn: (y, by) => divz(fld(by, y, "totalDeposits"), fld(by, y, "totalFunding")) },
       { key: "div_bb",   label: "Dividend + Buyback",              kind: "derived", fmt: "money", fn: (y, by) => divBuyback(by, y) },
-      { key: "dbb_yld",  label: "Yield (%)",                       kind: "derived", fmt: "pct", colorize: true, indent: 1, fn: (y, by) => divz(divBuyback(by, y), fld(by, y, "marketCap")) },
+      { key: "dbb_yld",  label: "Yield (%)",                       kind: "derived", fmt: "pct", colorize: true, indent: 1, fn: (y, by) => divz(divBuyback(by, y), effMcap(by, y)) },
     ],
   },
 
@@ -210,7 +253,7 @@ const SECTIONS: Section[] = [
     rows: [
       { key: "div",     label: "Dividend ($)",         kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "dividend") },
       { key: "payout",  label: "Payout",               kind: "raw",     fmt: "pct", fn: (y, by) => fld(by, y, "payout") },
-      { key: "div_yld", label: "Dividend Yield (%)",   kind: "derived", fmt: "pct", colorize: true, indent: 1, fn: (y, by) => divz(neg(fld(by, y, "dividend")), fld(by, y, "marketCap")) },
+      { key: "div_yld", label: "Dividend Yield (%)",   kind: "derived", fmt: "pct", colorize: true, indent: 1, fn: (y, by) => divz(neg(fld(by, y, "dividend")), effMcap(by, y)) },
       { key: "dps",     label: "DPS ($)",              kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "dps") },
       { key: "bb",      label: "Buybacks ($)",         kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "buybacks") },
     ],
@@ -220,10 +263,10 @@ const SECTIONS: Section[] = [
   {
     key: "mm", title: "Market Multiples",
     rows: [
-      { key: "price",   label: "Share Price ($) - LCCY", kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "sharePrice") },
-      { key: "mktcap",  label: "Market Cap ($) - LCCY",  kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "marketCap") },
-      { key: "pe",      label: "P/E",                    kind: "derived", fmt: "mult", fn: (y, by) => divz(fld(by, y, "marketCap"), fld(by, y, "controllingNetIncome")) },
-      { key: "ptbv",    label: "P/TBV",                  kind: "derived", fmt: "mult", fn: (y, by) => divz(fld(by, y, "marketCap"), fld(by, y, "tangibleEquity")) },
+      { key: "price",   label: "Share Price ($) - LCCY", kind: "raw",     fmt: "money", fn: (y, by) => by.get(y)?.effPrice ?? null },
+      { key: "mktcap",  label: "Market Cap ($) - LCCY",  kind: "raw",     fmt: "money", fn: (y, by) => effMcap(by, y) },
+      { key: "pe",      label: "P/E",                    kind: "derived", fmt: "mult", fn: (y, by) => divz(effMcap(by, y), fld(by, y, "controllingNetIncome")) },
+      { key: "ptbv",    label: "P/TBV",                  kind: "derived", fmt: "mult", fn: (y, by) => divz(effMcap(by, y), fld(by, y, "tangibleEquity")) },
       { key: "roe",     label: "ROE (NI / Equity)",      kind: "derived", fmt: "pct", fn: (y, by) => divz(fld(by, y, "controllingNetIncome"), fld(by, y - 1, "controllingEquity")) },
       { key: "roe_t",   label: "ROE* (NI / Tang. Equity)", kind: "derived", fmt: "pct", fn: (y, by) => divz(fld(by, y, "controllingNetIncome"), fld(by, y - 1, "tangibleEquity")) },
       { key: "peg1",    label: "PEG (PE / next year EPS g%)", kind: "derived", fmt: "mult", fn: (y, by) => peg1(y, by) },
@@ -234,9 +277,9 @@ const SECTIONS: Section[] = [
 
 // ── Cell renderer ──────────────────────────────────────────────────────────────
 function renderCell(value: number | null, fmt: Fmt, colorize: boolean): { text: string; color: string } {
-  if (value === null) return { text: "-", color: "#9CA3AF" };
+  if (value === null) return { text: "-", color: "rgba(13,13,56,0.45)" };
   let text: string;
-  let color = C.TXT;
+  let color: string = C.TXT;
   switch (fmt) {
     case "money": text = fmtMoney(value); break;
     case "pct":
@@ -249,9 +292,9 @@ function renderCell(value: number | null, fmt: Fmt, colorize: boolean): { text: 
 }
 
 function vsConStyle(v: number | null): React.CSSProperties {
-  if (v === null) return { color: "#9CA3AF" };
-  if (v > 0.001)  return { background: "rgba(21,128,61,0.12)", color: C.GREEN, fontWeight: 700 };
-  if (v < -0.001) return { background: "rgba(220,38,38,0.12)", color: C.RED,   fontWeight: 700 };
+  if (v === null) return { color: "rgba(13,13,56,0.45)" };
+  if (v > 0.001)  return { background: "rgba(0,30,175,0.12)", color: C.GREEN, fontWeight: 700 };
+  if (v < -0.001) return { background: "rgba(248,72,94,0.12)", color: C.RED,   fontWeight: 700 };
   return { color: C.TXT2 };
 }
 
@@ -262,8 +305,8 @@ function ReccBadge({ recc }: { recc: string | null }) {
   const isBuy  = u.includes("BUY") || u === "OW";
   const isSell = u.includes("SELL") || u === "UW";
   const color  = isBuy ? C.BLUE : isSell ? C.RED : C.TXT2;
-  const bg     = isBuy ? "rgba(29,78,216,0.10)" : isSell ? "rgba(185,28,28,0.10)" : "rgba(107,114,128,0.10)";
-  const bdr    = isBuy ? "rgba(29,78,216,0.30)" : isSell ? "rgba(185,28,28,0.30)" : "rgba(107,114,128,0.25)";
+  const bg     = isBuy ? "rgba(32,68,220,0.10)" : isSell ? "rgba(248,72,94,0.10)" : "rgba(13,13,56,0.10)";
+  const bdr    = isBuy ? "rgba(32,68,220,0.30)" : isSell ? "rgba(248,72,94,0.30)" : "rgba(13,13,56,0.25)";
   return (
     <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.06em",
       padding: "2px 10px", borderRadius: 4, background: bg, color, border: `1px solid ${bdr}` }}>
@@ -364,8 +407,8 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
   );
 
   const enriched = useMemo(
-    () => (snapshot ? enrich(snapshot.financials) : []),
-    [snapshot],
+    () => (snapshot ? enrich(snapshot.financials, history?.livePrice?.value ?? null) : []),
+    [snapshot, history],
   );
 
   const byYear = useMemo(() => {
@@ -438,16 +481,14 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
     return v != null ? v / scaleFactor : null;
   };
 
-  // Actual Price = last estimate year's share price (most recently set by analyst).
-  const actualPrice = useMemo(
+  // Initial recommendation price = precio del modelo al recomendar (último sharePrice del
+  // analista, típicamente en el último año con dato real). NO usa el precio vivo.
+  const initialPrice = useMemo(
     () => enriched.filter(d => d.isEst && d.sharePrice !== null).at(-1)?.sharePrice
        ?? enriched.filter(d => d.sharePrice !== null).at(-1)?.sharePrice
        ?? null,
     [enriched],
   );
-  const upside = snapshot?.header.tp && actualPrice
-    ? snapshot.header.tp / actualPrice - 1
-    : null;
 
   // ── Loading / error states ─────────────────────────────────────────────────
   if (loading) {
@@ -455,9 +496,9 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "80px 0", gap: 10 }}>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         <div style={{ width: 20, height: 20, borderRadius: "50%",
-          border: `2px solid rgba(29,78,216,0.18)`, borderTopColor: C.BLUE,
+          border: `2px solid rgba(32,68,220,0.18)`, borderTopColor: C.BLUE,
           animation: "spin 0.8s linear infinite" }} />
-        <span style={{ fontSize: 12, color: C.TXT2, fontFamily: "JetBrains Mono, monospace" }}>Loading model…</span>
+        <span style={{ fontSize: 12, color: C.TXT2, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>Loading model…</span>
       </div>
     );
   }
@@ -473,11 +514,16 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
 
   const { header }  = snapshot;
   const snapshots   = history!.snapshots;
+  const livePrice   = history!.livePrice;          // precio de mercado usado en años proyectados
+  const currentPrice = livePrice?.value ?? null;   // precio de mercado actual (el resaltado en verde)
+  // Dos upsides para ver el cambio: al recomendar (vs precio del modelo) y hoy (vs precio de mercado).
+  const upsideInitial = header.tp && initialPrice ? header.tp / initialPrice - 1 : null;
+  const upsideCurrent = header.tp && currentPrice ? header.tp / currentPrice - 1 : null;
   const isLatest    = selectedDate === snapshots[0]?.header.updateDate;
   const now         = new Date().getFullYear();
 
   // ── Shared cell geometry ───────────────────────────────────────────────────
-  const MONO: React.CSSProperties = { fontFamily: "JetBrains Mono, monospace" };
+  const MONO: React.CSSProperties = { fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" };
   const labelSticky: React.CSSProperties = {
     position: "sticky", left: 0, zIndex: 1,
     width: 200, minWidth: 200, maxWidth: 200,
@@ -524,15 +570,18 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
     type XCell = Record<string, any>;
     type XRow  = (XCell | null)[];
 
+    // Excel no soporta alpha: los tonos atenuados van aplanados sobre blanco
+    // (5A5A85 = patria-dark-blue al 62%, F5F7FD = al 3%, FFF4EC = patria-orange al 6%).
     const fill = (rgb: string) => ({ patternType: "solid", fgColor: { rgb } });
-    const F_HDR    = fill("1E3A8A");
-    const F_SUB    = fill("374151");
-    const F_EST    = fill("FFFDE7");
-    const F_DRV    = fill("DBEAFE");
+    const F_HDR    = fill("0D0D38");   // Regla 1 — dark-blue
+    const F_SUB    = fill("2044DC");   // Regla 2 — king-blue
+    const F_EST    = fill("FFF4EC");   // patria-orange ~6% sobre blanco
+    const F_DRV    = fill("F5F7FD");   // patria-dark-blue ~3% sobre blanco
     const F_WHITE  = fill("FFFFFF");
-    const F_GRAY   = fill("F0F4FA");
-    const F_POS    = fill("DCFCE7");
-    const F_NEG    = fill("FEE2E2");
+    const F_GRAY   = fill("F5F7FD");
+    const F_POS    = fill("B6FFE3");   // patria-light-turquoise
+    const F_NEG    = fill("FF99AF");   // patria-light-pink
+    const F_LIVE   = fill("B6FFE3");   // celdas de precio de mercado (price_range_52w)
 
     const bdr = (rgb = "9CA3AF") => ({
       top:    { style: "thin", color: { rgb } },
@@ -551,9 +600,11 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
     const metaItems: [string, string][] = [
       ["Ticker Bloomberg", header.ticker],
       ["Recommendation",   header.recc ?? "—"],
-      ["Actual Price",     actualPrice !== null ? fmtMoney(actualPrice) : "—"],
+      ["Initial recommendation price", initialPrice !== null ? fmtMoney(initialPrice) : "—"],
       ["TP",               header.tp   !== null ? fmtMoney(header.tp)   : "—"],
-      ["Upside",           upside !== null ? fmtPct(upside, true) : "—"],
+      ["Upside (initial)", upsideInitial !== null ? fmtPct(upsideInitial, true) : "—"],
+      ["Current price",    currentPrice !== null ? `${fmtMoney(currentPrice)}${livePrice ? `  ·  ${fmtDate(livePrice.date)}` : ""}` : "—"],
+      ["Upside (current)", upsideCurrent !== null ? fmtPct(upsideCurrent, true) : "—"],
       ["Thesis",           header.thesis ?? "—"],
       ["Analyst",          header.analyst ?? "—"],
       ["Updated",          header.updateDate],
@@ -573,7 +624,7 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
         alignment: { horizontal: "left", vertical: "center" },
       }),
       ...years.map(yr => xc(`${yr}${yr >= now ? "E" : ""}`, {
-        font: { bold: true, sz: 11, name: "Courier New", color: { rgb: yr >= now ? "FDE68A" : "FFFFFF" } },
+        font: { bold: true, sz: 11, name: "Arial", color: { rgb: yr >= now ? "FFBB8D" : "FFFFFF" } },
         fill: F_HDR, alignment: { horizontal: "center", vertical: "center" },
       })),
     ]);
@@ -590,28 +641,30 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
         const indent    = "  ".repeat(row.indent ?? 0);
         rows.push([
           xc(`${indent}${row.label}`, {
-            font: { bold: !isDerived && !isVs, italic: isDerived || isVs, sz: 10, color: { rgb: isDerived || isVs ? "374151" : "111827" } },
+            font: { bold: !isDerived && !isVs, italic: isDerived || isVs, sz: 10, color: { rgb: isDerived || isVs ? "5A5A85" : "2044DC" } },
             fill: isDerived ? F_DRV : F_WHITE, alignment: { horizontal: "left" },
           }),
           ...years.map(yr => {
             const v = rowValue(row, yr, byYear, getConsensus);
             const isEst = (byYear.get(yr)?.isEst) ?? false;
             let text = "-";
-            let fColor = "111827";
+            let fColor = "0D0D38";
             let cellFill = isDerived ? F_DRV : isEst ? F_EST : F_WHITE;
             if (isVs) {
               if (v !== null) {
                 text = fmtPct(v, true);
-                fColor = v > 0.001 ? "15803D" : v < -0.001 ? "DC2626" : "374151";
+                fColor = v > 0.001 ? "001EAF" : v < -0.001 ? "F8485E" : "0D0D38";
                 cellFill = v > 0.001 ? F_POS : v < -0.001 ? F_NEG : F_WHITE;
               }
             } else {
               const r = renderCell(v, row.fmt, !!row.colorize);
               text = r.text;
-              if (row.colorize) fColor = r.color === C.BLUE ? "1D4ED8" : r.color === C.RED ? "DC2626" : "111827";
+              if (row.colorize) fColor = r.color === C.BLUE ? "001EAF" : r.color === C.RED ? "F8485E" : "0D0D38";
+              // Precio vivo: mismo verde que en pantalla, para que se note que no es dato del modelo.
+              if (row.key === "price" && byYear.get(yr)?.priceIsLive) { cellFill = F_LIVE; fColor = "0D0D38"; }
             }
             return xc(text, {
-              font: { name: "Courier New", sz: 10, bold: !isDerived && !isVs, italic: isDerived || isVs, color: { rgb: fColor } },
+              font: { name: "Arial", sz: 10, bold: !isDerived && !isVs, italic: isDerived || isVs, color: { rgb: fColor } },
               fill: cellFill, alignment: { horizontal: "center" }, border: bdr(),
             });
           }),
@@ -626,20 +679,20 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
       ]);
       for (const { sectionName, kpis } of kpiSections) {
         rows.push([
-          xc(sectionName.toUpperCase(), { font: { bold: true, sz: 9, color: { rgb: "E5E7EB" } }, fill: F_SUB }),
+          xc(sectionName.toUpperCase(), { font: { bold: true, sz: 9, color: { rgb: "FFFFFF" } }, fill: F_SUB }),
           ...Array.from({ length: years.length }, () => xc("", { fill: F_SUB })),
         ]);
         for (const { kpiName, byYear: kByYear } of kpis) {
           const hasPct = kpiName.includes("%");   // sólo '%' → azul + porcentaje
           const fmt: Fmt = hasPct ? "pct" : "money";
           rows.push([
-            xc(kpiName, { font: { bold: true, sz: 10, color: { rgb: hasPct ? "1D4ED8" : "111827" } }, fill: hasPct ? F_DRV : F_WHITE, alignment: { horizontal: "left" } }),
+            xc(kpiName, { font: { bold: true, sz: 10, color: { rgb: hasPct ? "001EAF" : "0D0D38" } }, fill: hasPct ? F_DRV : F_WHITE, alignment: { horizontal: "left" } }),
             ...years.map(yr => {
               const v = kByYear.get(yr) ?? null;
               const isEst = (byYear.get(yr)?.isEst) ?? false;
               const { text } = renderCell(v, fmt, false);
               return xc(text, {
-                font: { name: "Courier New", sz: 10, bold: true, color: { rgb: hasPct ? "1D4ED8" : "111827" } },
+                font: { name: "Arial", sz: 10, bold: true, color: { rgb: hasPct ? "001EAF" : "0D0D38" } },
                 fill: hasPct ? F_DRV : isEst ? F_EST : F_WHITE, alignment: { horizontal: "center" }, border: bdr(),
               });
             }),
@@ -672,7 +725,7 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
       <div style={{
         display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)",
         gap: 16, alignItems: "stretch",
-        padding: "12px 16px", background: "#F8FAFC",
+        padding: "12px 16px", background: "#F5F7FD",
         border: `1px solid ${C.BDR}`, borderRadius: 10,
       }}>
         {/* ── Left half: model info table + actions ── */}
@@ -683,18 +736,36 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
             {[
               { label: "Ticker Bloomberg", value: <span style={{ fontWeight: 700, color: C.TXT, ...MONO }}>{header.ticker}</span> },
               { label: "Recommendation",  value: <ReccBadge recc={header.recc} /> },
-              { label: "Actual Price",    value: actualPrice !== null
-                  ? <span style={{ fontWeight: 700, color: C.TXT, ...MONO }}>{fmtMoney(actualPrice)}</span>
+              { label: "Initial recommendation price", value: initialPrice !== null
+                  ? <span style={{ fontWeight: 700, color: C.TXT, ...MONO }}>{fmtMoney(initialPrice)}</span>
                   : <span style={{ color: C.TXT2 }}>—</span> },
               { label: "TP",              value: header.tp !== null
                   ? <span style={{ fontWeight: 800, color: C.TXT, ...MONO }}>{fmtMoney(header.tp)}</span>
                   : <span style={{ color: C.TXT2 }}>—</span> },
-              { label: "Upside",          value: upside !== null
+              { label: "Upside (initial)", value: upsideInitial !== null
                   ? <span style={{
                       padding: "1px 10px", borderRadius: 4, fontWeight: 800,
-                      background: upside > 0 ? "rgba(21,128,61,0.12)" : "rgba(220,38,38,0.12)",
-                      color: upside > 0 ? C.GREEN : C.RED,
-                    }}>{fmtPct(upside, true)}</span>
+                      background: upsideInitial > 0 ? "rgba(0,30,175,0.12)" : "rgba(248,72,94,0.12)",
+                      color: upsideInitial > 0 ? C.GREEN : C.RED,
+                    }}>{fmtPct(upsideInitial, true)}</span>
+                  : <span style={{ color: C.TXT2 }}>—</span> },
+              { label: "Current price",   value: currentPrice !== null
+                  ? <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6 }}>
+                      <span style={{
+                        padding: "1px 8px", borderRadius: 4, fontWeight: 800,
+                        background: C.LIVE_BG, color: C.LIVE_TXT, ...MONO,
+                      }}>
+                        {fmtMoney(currentPrice)}
+                      </span>
+                      {livePrice && <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.8 }}>{fmtDate(livePrice.date)}</span>}
+                    </span>
+                  : <span style={{ color: C.TXT2 }}>—</span> },
+              { label: "Upside (current)", value: upsideCurrent !== null
+                  ? <span style={{
+                      padding: "1px 10px", borderRadius: 4, fontWeight: 800,
+                      background: upsideCurrent > 0 ? "rgba(0,30,175,0.12)" : "rgba(248,72,94,0.12)",
+                      color: upsideCurrent > 0 ? C.GREEN : C.RED,
+                    }}>{fmtPct(upsideCurrent, true)}</span>
                   : <span style={{ color: C.TXT2 }}>—</span> },
               { label: "Thesis",          value: header.thesis
                   ? <span style={{ color: C.TXT, fontStyle: "italic" }}>{header.thesis}</span>
@@ -754,7 +825,7 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
           style={{
             display: "inline-flex", alignItems: "center", gap: 5,
             padding: "5px 12px", borderRadius: 5, cursor: "pointer",
-            background: "#16A34A", color: C.WHITE, fontWeight: 700, fontSize: 11,
+            background: "#001EAF", color: C.WHITE, fontWeight: 700, fontSize: 11,
             letterSpacing: "0.02em", border: "none", outline: "none",
           }}
         >
@@ -791,7 +862,7 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
             style={{
               display: "inline-flex", alignItems: "center", gap: 5,
               padding: "5px 12px", borderRadius: 5, cursor: deleting ? "not-allowed" : "pointer",
-              background: "transparent", border: "1px solid rgba(220,38,38,0.35)",
+              background: "transparent", border: "1px solid rgba(248,72,94,0.35)",
               color: C.RED, fontWeight: 700, fontSize: 11, letterSpacing: "0.02em", outline: "none",
             }}
           >
@@ -800,6 +871,20 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
             </svg>
             {deleting ? "Deleting…" : "Delete version"}
           </button>
+        )}
+
+        {/* Live price date — precio de mercado usado en los años proyectados */}
+        {livePrice && (
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "5px 12px", borderRadius: 5,
+            background: C.LIVE_BG, color: C.LIVE_TXT,
+            fontWeight: 700, fontSize: 11, letterSpacing: "0.02em",
+            border: "1px solid rgba(0,30,175,0.28)",
+          }}>
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.LIVE_TXT, flexShrink: 0 }} />
+            Price {fmtMoney(livePrice.value)} @ {fmtDate(livePrice.date)}
+          </span>
         )}
       </div>
 
@@ -811,7 +896,8 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
             <tr>
               <th style={{
                 ...labelSticky, position: "sticky", left: 0, top: 0, zIndex: 3,
-                padding: "7px 10px", background: C.HDR, color: C.WHITE,
+                // Regla 1 — título principal: dark-blue, blanco, MAYÚSCULAS, Aptos Bold.
+                padding: "7px 10px", background: C.HDR, color: C.WHITE, fontFamily: FONT_PRIMARY,
                 fontWeight: 700, fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", textAlign: "left",
               }}>
                 Reported CCY{ccySuffix(header.currency, header.unit)}
@@ -822,7 +908,7 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
                   <th key={yr} style={{
                     ...yearColW, position: "sticky", top: 0, zIndex: 2,
                     padding: "7px 7px", textAlign: "center", background: C.HDR,
-                    color: isEst ? "#FDE68A" : C.WHITE, fontWeight: 700, fontSize: 11,
+                    color: isEst ? "#FFBB8D" : C.WHITE, fontWeight: 700, fontSize: 11,
                     borderLeft: `1px solid rgba(255,255,255,0.10)`, ...MONO,
                   }}>
                     {yr}{isEst ? <span style={{ fontSize: 8, opacity: 0.8, marginLeft: 1 }}>E</span> : ""}
@@ -838,7 +924,8 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
                 <tr>
                   <td colSpan={years.length + 1} style={{
                     ...labelSticky, position: "sticky", left: 0,
-                    padding: "4px 10px", background: C.HDR, color: C.WHITE,
+                    // Regla 2 — subtítulo: king-blue, texto blanco, Arial Bold.
+                    padding: "4px 10px", background: C.SEC_SUB, color: C.WHITE, fontFamily: FONT_SECONDARY,
                     fontWeight: 700, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase",
                     maxWidth: "none", borderTop: "2px solid rgba(255,255,255,0.05)",
                   }}>
@@ -856,14 +943,15 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
                     <tr
                       key={row.key}
                       style={{ borderBottom: `1px solid ${C.BDR}` }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(29,78,216,0.04)"; }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.04)"; }}
                       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ""; }}
                     >
                       <td style={{
                         ...labelSticky, padding: CELL_PAD, paddingLeft,
                         background: rowBg,
-                        color:      isDerived || isVs ? C.TXT2 : isCon ? "#374151" : C.TXT,
-                        fontWeight: isDerived || isVs ? 400 : 500,
+                        fontFamily: FONT_SECONDARY,
+                        color:      isDerived || isVs ? C.TXT2 : isCon ? C.TXT : C.IND,
+                        fontWeight: isDerived || isVs ? 400 : 700,
                         fontStyle:  isDerived || isVs ? "italic" : "normal",
                         fontSize:   isDerived || isVs ? 10.5 : 11,
                       }}>
@@ -889,10 +977,14 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
                         }
 
                         const { text, color } = renderCell(value, row.fmt, !!row.colorize);
+                        // Precio vivo (price_range_52w) en años proyectados: verde, para
+                        // distinguirlo del precio que dejó el analista en el modelo.
+                        const liveCell = row.key === "price" && (byYear.get(yr)?.priceIsLive ?? false);
                         return (
                           <td key={yr} style={{
                             ...yearColW, padding: CELL_PAD, textAlign: "center",
-                            background: cellBg, color,
+                            background: liveCell ? C.LIVE_BG : cellBg,
+                            color:      liveCell ? C.LIVE_TXT : color,
                             fontWeight: isDerived ? 400 : 600,
                             fontStyle:  isDerived ? "italic" : "normal",
                             fontSize:   isDerived ? 10.5 : 11,
@@ -914,7 +1006,8 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
                 <tr>
                   <td colSpan={years.length + 1} style={{
                     ...labelSticky, position: "sticky", left: 0,
-                    padding: "4px 10px", background: C.HDR, color: C.WHITE,
+                    // Regla 1 — título principal del bloque KPI.
+                    padding: "4px 10px", background: C.HDR, color: C.WHITE, fontFamily: FONT_PRIMARY,
                     fontWeight: 700, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase",
                     maxWidth: "none", borderTop: "2px solid rgba(255,255,255,0.05)",
                   }}>
@@ -927,7 +1020,7 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
                     <tr>
                       <td colSpan={years.length + 1} style={{
                         ...labelSticky, position: "sticky", left: 0,
-                        padding: "3px 16px", background: C.SEC_SUB, color: "#E5E7EB",
+                        padding: "3px 16px", background: C.SEC_SUB, color: C.WHITE, fontFamily: FONT_SECONDARY,
                         fontWeight: 700, fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase",
                         maxWidth: "none", borderTop: `1px solid rgba(255,255,255,0.07)`,
                       }}>
@@ -942,14 +1035,13 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
                         <tr
                           key={`kpi-${sectionName}-${kpiOrder}`}
                           style={{ borderBottom: `1px solid ${C.BDR}` }}
-                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(29,78,216,0.04)"; }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.04)"; }}
                           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ""; }}
                         >
                           <td style={{
                             ...labelSticky, padding: CELL_PAD, paddingLeft: 22,
-                            background: hasPct ? C.DRV_BG : C.WHITE,
-                            color: hasPct ? C.BLUE : C.TXT,
-                            fontWeight: 500, fontSize: 11,
+                            background: hasPct ? C.DRV_BG : C.WHITE, fontFamily: FONT_SECONDARY,
+                            color: C.IND, fontWeight: 700, fontSize: 11,
                           }}>
                             {kpiName}
                           </td>
@@ -982,11 +1074,11 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
 
       {/* ── Footer ───────────────────────────────────────────────────────── */}
       <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 2px" }}>
-        <span style={{ fontSize: 10, color: "#9CA3AF", fontStyle: "italic" }}>
+        <span style={{ fontSize: 10, color: "rgba(13,13,56,0.45)", fontStyle: "italic" }}>
            Updated {header.updateDate}
           {!isLatest && " · Viewing historical version"}
         </span>
-        <span style={{ fontSize: 10, color: "#9CA3AF" }}>Bloomberg / Internal</span>
+        <span style={{ fontSize: 10, color: "rgba(13,13,56,0.45)" }}>Bloomberg / Internal</span>
       </div>
     </div>
   );

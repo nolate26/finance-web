@@ -1,5 +1,7 @@
 "use client";
 
+import { PATRIA, FONT_SECONDARY } from "@/lib/patriaTheme";
+
 import { useEffect, useState, useMemo } from "react";
 import {
   LineChart,
@@ -109,10 +111,10 @@ function fmtFee(v: number | null): string {
 }
 
 function pctColor(v: number | null): string {
-  if (v === null) return "#CBD5E1";
-  if (v > 0) return "#10B981";
-  if (v < 0) return "#EF4444";
-  return "#64748B";
+  if (v === null) return "rgba(13,13,56,0.28)";
+  if (v > 0) return "#001EAF";
+  if (v < 0) return "#F8485E";
+  return "rgba(13,13,56,0.62)";
 }
 
 /** Normalize CSV group → display group name */
@@ -155,7 +157,7 @@ const TABLE_COLS: ColDef[] = [
   {
     label: "MANAGER",
     textValue: (r) => r.manager || "—",
-    color: (r) => (r.manager ? "#475569" : "#CBD5E1"),
+    color: (r) => (r.manager ? "rgba(13,13,56,0.62)" : "rgba(13,13,56,0.28)"),
     right: false,
     mono: false,
     sortKey: "manager",
@@ -163,7 +165,7 @@ const TABLE_COLS: ColDef[] = [
   {
     label: "AUM ($MM)",
     textValue: (r) => fmtAum(r.aum),
-    color: (r) => (r.aum === null ? "#CBD5E1" : "#475569"),
+    color: (r) => (r.aum === null ? "rgba(13,13,56,0.28)" : "rgba(13,13,56,0.62)"),
     right: true,
     mono: true,
     sortKey: "aum",
@@ -178,7 +180,7 @@ const TABLE_COLS: ColDef[] = [
   {
     label: "SHARPE",
     textValue: (r) => fmtSharpe(r.sharpe),
-    color: (r) => (r.sharpe === null ? "#CBD5E1" : "#475569"),
+    color: (r) => (r.sharpe === null ? "rgba(13,13,56,0.28)" : "rgba(13,13,56,0.62)"),
     right: true,
     mono: true,
     sortKey: "sharpe",
@@ -186,7 +188,7 @@ const TABLE_COLS: ColDef[] = [
   {
     label: "MGMT FEE",
     textValue: (r) => fmtFee(r.mgmtFee),
-    color: (r) => (r.mgmtFee === null ? "#CBD5E1" : "#475569"),
+    color: (r) => (r.mgmtFee === null ? "rgba(13,13,56,0.28)" : "rgba(13,13,56,0.62)"),
     right: true,
     mono: true,
     sortKey: "mgmtFee",
@@ -204,13 +206,15 @@ function fmtShortDate(iso: string): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "2-digit" });
 }
 
+// Jerarquía de series: los fondos Moneda son la serie protagonista (dark-blue,
+// trazo grueso) y el resto se atenúa con alphas de la misma base corporativa.
 function seriesStyle(meta?: FundMeta): { stroke: string; width: number; dash?: string } {
-  if (!meta) return { stroke: "#CBD5E1", width: 1.5 };
-  if (meta.group === "Moneda") return { stroke: "#1D4ED8", width: 3 };
-  if (meta.group === "Indices") return { stroke: "#64748B", width: 1.5 };
-  if (meta.group === "Other Moneda") return { stroke: "#94A3B8", width: 1.5, dash: "4 4" };
-  if (meta.group.startsWith("Peer")) return { stroke: "#CBD5E1", width: 1.5, dash: "5 5" };
-  return { stroke: "#CBD5E1", width: 1.5 };
+  if (!meta) return { stroke: "rgba(13,13,56,0.28)", width: 1.5 };
+  if (meta.group === "Moneda") return { stroke: PATRIA.darkBlue, width: 3 };
+  if (meta.group === "Indices") return { stroke: PATRIA.orange, width: 1.5 };
+  if (meta.group === "Other Moneda") return { stroke: "rgba(13,13,56,0.45)", width: 1.5, dash: "4 4" };
+  if (meta.group.startsWith("Peer")) return { stroke: "rgba(13,13,56,0.28)", width: 1.5, dash: "5 5" };
+  return { stroke: "rgba(13,13,56,0.28)", width: 1.5 };
 }
 
 // ── Chart tooltip (sorted desc by value) ──────────────────────────────────────
@@ -238,20 +242,20 @@ function ChartTooltip({
     <div
       style={{
         background: "#fff",
-        border: "1px solid #E2E8F0",
+        border: "1px solid rgba(13,13,56,0.10)",
         borderRadius: 8,
         padding: "8px 12px",
         fontSize: 12,
         boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
       }}
     >
-      <div style={{ fontWeight: 700, color: "#0F172A", marginBottom: 6 }}>
+      <div style={{ fontWeight: 700, color: "#0D0D38", marginBottom: 6 }}>
         {label ? fmtShortDate(label) : ""}
       </div>
       <div style={{ display: "grid", gap: 4 }}>
         {sorted.map((p) => (
           <div key={p.dataKey} style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
-            <span style={{ color: p.color ?? "#64748B", fontSize: 11 }}>{p.dataKey}</span>
+            <span style={{ color: p.color ?? "rgba(13,13,56,0.62)", fontSize: 11 }}>{p.dataKey}</span>
             <span style={{ fontWeight: 600, color: pctColor(p.value) }}>{fmtPct(p.value)}</span>
           </div>
         ))}
@@ -399,7 +403,7 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
       >
         <div
           className="w-6 h-6 rounded-full border-2 animate-spin"
-          style={{ borderColor: "rgba(43,92,224,0.15)", borderTopColor: "#2B5CE0" }}
+          style={{ borderColor: "rgba(32,68,220,0.15)", borderTopColor: "#2044DC" }}
         />
       </div>
     );
@@ -440,7 +444,7 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
       return <span style={{ opacity: 0.25, marginLeft: 3, fontSize: 9 }}>⇅</span>;
     }
     return (
-      <span style={{ color: "#2B5CE0", marginLeft: 3, fontSize: 9 }}>
+      <span style={{ color: "#2044DC", marginLeft: 3, fontSize: 9 }}>
         {sortConfig.direction === "desc" ? "↓" : "↑"}
       </span>
     );
@@ -453,13 +457,13 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
       <div
         style={{
           padding: "10px 18px",
-          borderBottom: "1px solid rgba(15,23,42,0.07)",
+          borderBottom: "1px solid rgba(13,13,56,0.07)",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
         }}
       >
-        <span style={{ fontSize: 11, fontWeight: 600, color: "#64748B", letterSpacing: "0.08em" }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: "rgba(13,13,56,0.62)", letterSpacing: "0.08em" }}>
           RETURNS DASHBOARD — {fundDisplayName.toUpperCase()}
         </span>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
@@ -468,9 +472,9 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
               style={{
                 fontSize: 10,
                 fontWeight: 600,
-                color: "#94A3B8",
-                background: "rgba(15,23,42,0.04)",
-                border: "1px solid rgba(15,23,42,0.08)",
+                color: "rgba(13,13,56,0.45)",
+                background: "rgba(13,13,56,0.04)",
+                border: "1px solid rgba(13,13,56,0.08)",
                 borderRadius: 4,
                 padding: "2px 7px",
               }}
@@ -479,20 +483,20 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
             </span>
           )}
           {reportDate && (
-            <span style={{ fontSize: 10, color: "#475569", fontWeight: 500, letterSpacing: "0.04em" }}>as of {reportDate}</span>
+            <span style={{ fontSize: 10, color: "rgba(13,13,56,0.62)", fontWeight: 500, letterSpacing: "0.04em" }}>as of {reportDate}</span>
           )}
         </div>
       </div>
 
       {/* ── Weekly YTD Line Chart ───────────────────────────────────────────── */}
       {timeseries.length > 0 && orderedLineFunds.length > 0 && (
-        <div style={{ borderBottom: "1px solid rgba(15,23,42,0.06)" }}>
+        <div style={{ borderBottom: "1px solid rgba(13,13,56,0.06)" }}>
           <div
             style={{
               padding: "8px 18px 4px",
               fontSize: 10,
               fontWeight: 600,
-              color: "#94A3B8",
+              color: "rgba(13,13,56,0.45)",
               letterSpacing: "0.06em",
             }}
           >
@@ -501,18 +505,18 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
           <div style={{ height: 300, padding: "0 8px 8px" }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={timeseries} margin={{ top: 8, right: 20, bottom: 8, left: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(13,13,56,0.10)" />
                 <XAxis
                   dataKey="date"
                   tickFormatter={(v) => fmtShortDate(String(v))}
-                  tick={{ fontSize: 12, fill: "#94A3B8" }}
+                  tick={{ fontSize: 12, fill: "rgba(13,13,56,0.45)" }}
                   minTickGap={15}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
                   tickFormatter={(v) => fmtPct(typeof v === "number" ? v : null)}
-                  tick={{ fontSize: 10, fill: "#94A3B8" }}
+                  tick={{ fontSize: 10, fill: "rgba(13,13,56,0.45)" }}
                   axisLine={false}
                   tickLine={false}
                 />
@@ -547,8 +551,8 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
           alignItems: "center",
           gap: 10,
           padding: "8px 18px",
-          borderBottom: "1px solid rgba(15,23,42,0.06)",
-          background: "#FAFBFC",
+          borderBottom: "1px solid rgba(13,13,56,0.06)",
+          background: "#F5F7FD",
         }}
       >
         {/* Search input */}
@@ -559,7 +563,7 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
               left: 8,
               top: "50%",
               transform: "translateY(-50%)",
-              color: "#94A3B8",
+              color: "rgba(13,13,56,0.45)",
               fontSize: 12,
               pointerEvents: "none",
             }}
@@ -578,10 +582,10 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
               paddingTop: 5,
               paddingBottom: 5,
               fontSize: 11,
-              border: "1px solid #E2E8F0",
+              border: "1px solid rgba(13,13,56,0.10)",
               borderRadius: 5,
               background: "#fff",
-              color: "#334155",
+              color: "#0D0D38",
               outline: "none",
             }}
           />
@@ -594,10 +598,10 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
           style={{
             padding: "5px 8px",
             fontSize: 11,
-            border: "1px solid #E2E8F0",
+            border: "1px solid rgba(13,13,56,0.10)",
             borderRadius: 5,
             background: "#fff",
-            color: "#334155",
+            color: "#0D0D38",
             cursor: "pointer",
             outline: "none",
           }}
@@ -614,9 +618,9 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
             <span
               style={{
                 fontSize: 10,
-                color: "#94A3B8",
-                background: "rgba(43,92,224,0.06)",
-                border: "1px solid rgba(43,92,224,0.15)",
+                color: "rgba(13,13,56,0.45)",
+                background: "rgba(32,68,220,0.06)",
+                border: "1px solid rgba(32,68,220,0.15)",
                 borderRadius: 4,
                 padding: "2px 8px",
                 fontWeight: 500,
@@ -628,7 +632,7 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
               onClick={() => setSortConfig(null)}
               style={{
                 fontSize: 10,
-                color: "#94A3B8",
+                color: "rgba(13,13,56,0.45)",
                 background: "none",
                 border: "none",
                 cursor: "pointer",
@@ -641,7 +645,7 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
         )}
 
         {/* Result count */}
-        <span style={{ marginLeft: "auto", fontSize: 10, color: "#CBD5E1" }}>
+        <span style={{ marginLeft: "auto", fontSize: 10, color: "rgba(13,13,56,0.28)" }}>
           {Array.from(processedGrouped.values()).reduce((acc, g) => acc + g.length, 0)} funds
         </span>
       </div>
@@ -652,7 +656,7 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
 
           {/* Sticky header */}
           <thead>
-            <tr style={{ background: "#F0F4FA" }}>
+            <tr style={{ background: "#F5F7FD" }}>
               {/* FUND — sticky, clickable */}
               <th
                 onClick={() => handleSort("fund")}
@@ -660,13 +664,14 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
                   position: "sticky",
                   left: 0,
                   zIndex: 10,
-                  background: "#F0F4FA",
-                  boxShadow: "2px 0 4px rgba(15,23,42,0.06)",
+                  background: "#F5F7FD",
+                  boxShadow: "2px 0 4px rgba(13,13,56,0.06)",
                   padding: "8px 18px",
                   textAlign: "left",
                   fontSize: 9,
                   fontWeight: 600,
-                  color: sortConfig?.key === "fund" ? "#2B5CE0" : "#64748B",
+                  fontFamily: FONT_SECONDARY,
+                  color: sortConfig?.key === "fund" ? PATRIA.darkBlue : PATRIA.kingBlue,
                   letterSpacing: "0.08em",
                   minWidth: 200,
                   whiteSpace: "nowrap",
@@ -685,8 +690,9 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
                     padding: "8px 14px",
                     textAlign: col.right ? "right" : "left",
                     fontSize: 9,
-                    fontWeight: 600,
-                    color: col.sortKey && sortConfig?.key === col.sortKey ? "#2B5CE0" : "#64748B",
+                    fontWeight: 700,
+                    fontFamily: FONT_SECONDARY,
+                    color: col.sortKey && sortConfig?.key === col.sortKey ? PATRIA.darkBlue : PATRIA.kingBlue,
                     letterSpacing: "0.08em",
                     minWidth: col.label === "MANAGER" ? 110 : 76,
                     whiteSpace: "nowrap",
@@ -711,7 +717,7 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
                 <tr>
                   <td
                     colSpan={TOTAL_COLS}
-                    className="bg-slate-50 text-slate-500 font-semibold uppercase border-y border-slate-200"
+                    className="bg-patria-dark-blue/[0.03] text-patria-dark-blue/60 font-semibold uppercase border-y border-patria-dark-blue/10"
                     style={{
                       position: "sticky",
                       left: 0,
@@ -726,13 +732,13 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
 
                 {/* Data rows */}
                 {groupRows.map((row, i) => {
-                  const rowBg = i % 2 === 0 ? "#ffffff" : "#F9FAFB";
+                  const rowBg = i % 2 === 0 ? "#ffffff" : "#F5F7FD";
                   return (
                     <tr
                       key={`${group}-${row.fund}-${i}`}
                       style={{
                         background: rowBg,
-                        borderBottom: "1px solid rgba(15,23,42,0.04)",
+                        borderBottom: "1px solid rgba(13,13,56,0.04)",
                       }}
                     >
                       {/* FUND cell — sticky */}
@@ -742,7 +748,7 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
                           left: 0,
                           zIndex: 5,
                           background: rowBg,
-                          boxShadow: "2px 0 4px rgba(15,23,42,0.05)",
+                          boxShadow: "2px 0 4px rgba(13,13,56,0.05)",
                           padding: "9px 18px",
                           minWidth: 200,
                           whiteSpace: "nowrap",
@@ -752,7 +758,7 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
                           style={{
                             fontSize: 12,
                             fontWeight: row.isMoneda ? 600 : 500,
-                            color: row.isMoneda ? "#1E3A8A" : "#334155",
+                            color: row.isMoneda ? "#001EAF" : "#0D0D38",
                           }}
                         >
                           {row.fund}
@@ -769,7 +775,7 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
                             style={{
                               padding: "9px 14px",
                               textAlign: isDash ? "center" : col.right ? "right" : "left",
-                              fontFamily: col.mono ? "monospace" : "inherit",
+                              fontFamily: FONT_SECONDARY,
                               fontSize: 12,
                               fontWeight: 500,
                               color: col.color(row),
@@ -797,7 +803,7 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
                     padding: "32px 18px",
                     textAlign: "center",
                     fontSize: 12,
-                    color: "#CBD5E1",
+                    color: "rgba(13,13,56,0.28)",
                   }}
                 >
                   No funds match the current filters.

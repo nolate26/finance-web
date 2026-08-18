@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { MetricBlock, DeltaBlock, DeltaSet, ProjectionRowAPI } from "@/app/api/projections/route";
+import { FONT_SECONDARY } from "@/lib/patriaTheme";
 
 export type { ProjectionRowAPI as ProjectionRow };
 
@@ -11,8 +12,8 @@ type MetricName = (typeof METRIC_HEADERS)[number];
 // Column indices 0, 1, 2 — always represent globalBaseYear, +1, +2
 const COL_INDICES = [0, 1, 2] as const;
 
-const BORDER_METRIC = "1px solid rgba(43,92,224,0.12)";
-const BORDER_LIGHT  = "1px solid rgba(15,23,42,0.05)";
+const BORDER_METRIC = "1px solid rgba(32,68,220,0.12)";
+const BORDER_LIGHT  = "1px solid rgba(13,13,56,0.05)";
 
 interface Props {
   rows:      ProjectionRowAPI[];
@@ -76,9 +77,9 @@ function classifyDelta(pct: number): DeltaState {
 }
 
 const DELTA_STYLE: Record<DeltaState, { bg: string; color: string; icon: string }> = {
-  positive: { bg: "rgba(22,163,74,0.10)",  color: "#16A34A", icon: "▲" },
-  negative: { bg: "rgba(220,38,38,0.10)", color: "#DC2626", icon: "▼" },
-  neutral:  { bg: "rgba(100,116,139,0.10)", color: "#64748B", icon: "—" },
+  positive: { bg: "rgba(0,30,175,0.10)",  color: "#001EAF", icon: "▲" },
+  negative: { bg: "rgba(248,72,94,0.10)", color: "#F8485E", icon: "▼" },
+  neutral:  { bg: "rgba(13,13,56,0.10)", color: "rgba(13,13,56,0.62)", icon: "—" },
 };
 
 function DeltaBadge({ pct }: { pct: number | null }) {
@@ -95,7 +96,7 @@ function DeltaBadge({ pct }: { pct: number | null }) {
         borderRadius: 3,
         fontSize: 9,
         fontWeight: 700,
-        fontFamily: "JetBrains Mono, monospace",
+        fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
         lineHeight: "14px",
         background: bg,
         color,
@@ -114,8 +115,8 @@ function MetricCell({ value, pct }: { value: number | null; pct: number | null }
   if (value === null) {
     return (
       <td
-        className="px-3 py-2 text-center font-mono text-xs"
-        style={{ color: "#CBD5E1", verticalAlign: "top" }}
+        className="px-3 py-2 text-center font-secondary tabular-nums text-xs"
+        style={{ color: "rgba(13,13,56,0.28)", verticalAlign: "top" }}
       >
         —
       </td>
@@ -123,10 +124,10 @@ function MetricCell({ value, pct }: { value: number | null; pct: number | null }
   }
   return (
     <td
-      className="px-3 py-2 font-mono text-xs"
+      className="px-3 py-2 font-secondary tabular-nums text-xs"
       style={{ verticalAlign: "top", textAlign: "right" }}
     >
-      <span style={{ color: value < 0 ? "#DC2626" : "#0F172A", display: "block" }}>
+      <span style={{ color: value < 0 ? "#F8485E" : "#0D0D38", display: "block" }}>
         {fmtVal(value)}
       </span>
       <DeltaBadge pct={pct} />
@@ -185,7 +186,7 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
     if (sort.key !== colKey)
       return <span style={{ opacity: 0.25, marginLeft: 2, fontSize: 8 }}>⇅</span>;
     return (
-      <span style={{ color: "#2B5CE0", marginLeft: 2, fontSize: 8 }}>
+      <span style={{ color: "#2044DC", marginLeft: 2, fontSize: 8 }}>
         {sort.dir === "asc" ? "↑" : "↓"}
       </span>
     );
@@ -208,8 +209,8 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
     return {
       cursor: "pointer",
       userSelect: "none",
-      color: active ? "#2B5CE0" : "#64748B",
-      background: active ? "rgba(43,92,224,0.06)" : undefined,
+      color: active ? "#2044DC" : "rgba(13,13,56,0.62)",
+      background: active ? "rgba(32,68,220,0.06)" : undefined,
     };
   }
 
@@ -240,35 +241,35 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
             alignItems: "center",
             gap: 18,
             fontSize: 10,
-            color: "#94A3B8",
-            fontFamily: "JetBrains Mono, monospace",
-            background: "rgba(248,250,252,0.7)",
+            color: "rgba(13,13,56,0.45)",
+            fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
+            background: "rgba(13,13,56,0.022)",
           }}
         >
-          <span style={{ fontWeight: 600, color: "#64748B" }}>
+          <span style={{ fontWeight: 600, color: "rgba(13,13,56,0.62)" }}>
             Δ vs. reporte del {fmtLegendDate(prevAt)}
           </span>
-          <span style={{ color: "#CBD5E1" }}>·</span>
+          <span style={{ color: "rgba(13,13,56,0.28)" }}>·</span>
           <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <span style={{ background: "rgba(22,163,74,0.10)", color: "#16A34A", fontWeight: 700, padding: "0 4px", borderRadius: 3 }}>
+            <span style={{ background: "rgba(0,30,175,0.10)", color: "#001EAF", fontWeight: 700, padding: "0 4px", borderRadius: 3 }}>
               ▲ +%
             </span>
             upward revision
           </span>
           <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <span style={{ background: "rgba(220,38,38,0.10)", color: "#DC2626", fontWeight: 700, padding: "0 4px", borderRadius: 3 }}>
+            <span style={{ background: "rgba(248,72,94,0.10)", color: "#F8485E", fontWeight: 700, padding: "0 4px", borderRadius: 3 }}>
               ▼ −%
             </span>
             downward revision
           </span>
           <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <span style={{ background: "rgba(100,116,139,0.10)", color: "#64748B", fontWeight: 700, padding: "0 4px", borderRadius: 3 }}>
+            <span style={{ background: "rgba(13,13,56,0.10)", color: "rgba(13,13,56,0.62)", fontWeight: 700, padding: "0 4px", borderRadius: 3 }}>
               — 0%
             </span>
             no change
           </span>
-          <span style={{ color: "#CBD5E1" }}>·</span>
-          <span style={{ color: "#CBD5E1" }}>years aligned by calendar · stale rows shifted right</span>
+          <span style={{ color: "rgba(13,13,56,0.28)" }}>·</span>
+          <span style={{ color: "rgba(13,13,56,0.28)" }}>years aligned by calendar · stale rows shifted right</span>
         </div>
       )}
 
@@ -279,11 +280,11 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
         >
           <thead>
             {/* Row 1 — metric group headers */}
-            <tr style={{ background: "#EEF2FA" }}>
+            <tr style={{ background: "#F5F7FD" }}>
               <th
                 colSpan={3}
                 className="px-4 py-2 text-left text-[10px] font-bold tracking-widest uppercase"
-                style={{ color: "#64748B", borderBottom: BORDER_METRIC, borderRight: BORDER_METRIC }}
+                style={{ color: "rgba(13,13,56,0.62)", borderBottom: BORDER_METRIC, borderRight: BORDER_METRIC }}
               >
                 Company Info
               </th>
@@ -292,14 +293,14 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
                   key={m}
                   colSpan={3}
                   className="px-4 py-2 text-center text-[10px] font-bold tracking-widest uppercase"
-                  style={{ color: "#2B5CE0", borderBottom: BORDER_METRIC, borderRight: BORDER_METRIC }}
+                  style={{ color: "#2044DC", borderBottom: BORDER_METRIC, borderRight: BORDER_METRIC }}
                 >
                   {m}
                 </th>
               ))}
             </tr>
             {/* Row 2 — year column headers (strictly globalBaseYear anchored) */}
-            <tr style={{ background: "#F0F4FA" }}>
+            <tr style={{ background: "#F5F7FD" }}>
               <th
                 className="px-4 py-2 text-left font-medium"
                 style={{ ...thStyle(sort.key === "empresa"), borderBottom: BORDER_LIGHT }}
@@ -316,7 +317,7 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
               </th>
               <th
                 className="px-3 py-2 text-left font-medium"
-                style={{ color: "#64748B", borderBottom: BORDER_LIGHT, borderRight: BORDER_METRIC }}
+                style={{ color: "rgba(13,13,56,0.62)", borderBottom: BORDER_LIGHT, borderRight: BORDER_METRIC }}
               >
                 Mon.
               </th>
@@ -353,14 +354,14 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
                   className="transition-colors"
                   style={{ borderBottom: BORDER_LIGHT }}
                   onMouseEnter={(e) =>
-                    ((e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.03)")
+                    ((e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.03)")
                   }
                   onMouseLeave={(e) =>
                     ((e.currentTarget as HTMLElement).style.background = "transparent")
                   }
                 >
                   {/* Company name */}
-                  <td className="px-4 py-2 font-medium" style={{ color: "#0F172A", verticalAlign: "top" }}>
+                  <td className="px-4 py-2 font-medium" style={{ color: "#0D0D38", verticalAlign: "top" }}>
                     {row.empresa}
                     {isStale && (
                       <span
@@ -371,9 +372,9 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
                           borderRadius: 4,
                           fontSize: 9,
                           fontWeight: 600,
-                          background: "rgba(234,179,8,0.12)",
-                          color: "#A16207",
-                          fontFamily: "JetBrains Mono, monospace",
+                          background: "rgba(255,107,6,0.12)",
+                          color: "#FF6B06",
+                          fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
                           cursor: "default",
                         }}
                       >
@@ -382,12 +383,12 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
                     )}
                   </td>
 
-                  <td className="px-3 py-2" style={{ color: "#64748B", verticalAlign: "top" }}>
+                  <td className="px-3 py-2" style={{ color: "rgba(13,13,56,0.62)", verticalAlign: "top" }}>
                     {row.sector || "—"}
                   </td>
                   <td
-                    className="px-3 py-2 font-mono"
-                    style={{ color: "#94A3B8", borderRight: BORDER_METRIC, verticalAlign: "top" }}
+                    className="px-3 py-2 font-secondary tabular-nums"
+                    style={{ color: "rgba(13,13,56,0.45)", borderRight: BORDER_METRIC, verticalAlign: "top" }}
                   >
                     {row.moneda}
                   </td>
@@ -399,7 +400,7 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
                       <td
                         key={`ing-${ci}`}
                         style={{
-                          borderLeft: ci === 0 ? "2px solid #E2E8F0" : undefined,
+                          borderLeft: ci === 0 ? "2px solid rgba(13,13,56,0.10)" : undefined,
                           borderRight: ci === 2 ? BORDER_METRIC : undefined,
                           padding: 0,
                         }}
@@ -416,9 +417,9 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
                       <td
                         key={`ebd-${ci}`}
                         style={{
-                          borderLeft: ci === 0 ? "2px solid #E2E8F0" : undefined,
+                          borderLeft: ci === 0 ? "2px solid rgba(13,13,56,0.10)" : undefined,
                           borderRight: ci === 2 ? BORDER_METRIC : undefined,
-                          background: "rgba(248,250,252,0.8)",
+                          background: "#F5F7FD",
                           padding: 0,
                         }}
                       >
@@ -434,7 +435,7 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
                       <td
                         key={`ebt-${ci}`}
                         style={{
-                          borderLeft: ci === 0 ? "2px solid #E2E8F0" : undefined,
+                          borderLeft: ci === 0 ? "2px solid rgba(13,13,56,0.10)" : undefined,
                           borderRight: ci === 2 ? BORDER_METRIC : undefined,
                           padding: 0,
                         }}
@@ -451,9 +452,9 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
                       <td
                         key={`utl-${ci}`}
                         style={{
-                          borderLeft: ci === 0 ? "2px solid #E2E8F0" : undefined,
+                          borderLeft: ci === 0 ? "2px solid rgba(13,13,56,0.10)" : undefined,
                           borderRight: ci === 2 ? BORDER_METRIC : undefined,
-                          background: "rgba(248,250,252,0.8)",
+                          background: "#F5F7FD",
                           padding: 0,
                         }}
                       >

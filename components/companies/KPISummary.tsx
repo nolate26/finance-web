@@ -48,22 +48,22 @@ export default function KPISummary({ companies }: Props) {
       icon: Building2,
       label: "Companies Tracked",
       value: totalCount.toLocaleString("en-US"),
-      iconColor: "#2B5CE0",
-      iconBg: "rgba(43,92,224,0.08)",
+      iconColor: "#2044DC",
+      iconBg: "rgba(32,68,220,0.08)",
     },
     {
       icon: DollarSign,
       label: "Total Market Cap",
       value: Math.round(totalMktCap).toLocaleString("en-US") + " MM CLP",
-      iconColor: "#3D6FE8",
-      iconBg: "rgba(61,111,232,0.08)",
+      iconColor: "#2044DC",
+      iconBg: "rgba(32,68,220,0.08)",
     },
     {
       icon: BarChart2,
       label: "Median FV/EBITDA LTM",
       value: medianEbitda !== null ? medianEbitda.toFixed(1) + "x" : "—",
-      iconColor: "#7C3AED",
-      iconBg: "rgba(124,58,237,0.08)",
+      iconColor: "#001EAF",
+      iconBg: "rgba(0,30,175,0.08)",
     },
     {
       icon: TrendingUp,
@@ -73,14 +73,14 @@ export default function KPISummary({ companies }: Props) {
           ? (avgRet1y >= 0 ? "+" : "") + (avgRet1y * 100).toFixed(1) + "%"
           : "—",
       valueColor:
-        avgRet1y === null ? "#64748B" : avgRet1y >= 0 ? "#059669" : "#DC2626",
-      iconColor: avgRet1y === null ? "#64748B" : avgRet1y >= 0 ? "#059669" : "#DC2626",
+        avgRet1y === null ? "rgba(13,13,56,0.62)" : avgRet1y >= 0 ? "#001EAF" : "#F8485E",
+      iconColor: avgRet1y === null ? "rgba(13,13,56,0.62)" : avgRet1y >= 0 ? "#001EAF" : "#F8485E",
       iconBg:
         avgRet1y === null
-          ? "rgba(100,116,139,0.08)"
+          ? "rgba(13,13,56,0.08)"
           : avgRet1y >= 0
-          ? "rgba(5,150,105,0.08)"
-          : "rgba(220,38,38,0.08)",
+          ? "rgba(0,30,175,0.08)"
+          : "rgba(248,72,94,0.08)",
     },
   ];
 
@@ -114,13 +114,13 @@ export default function KPISummary({ companies }: Props) {
             <Icon size={18} style={{ color: iconColor }} />
           </div>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 11, color: "#64748B", marginBottom: 4 }}>{label}</div>
+            <div style={{ fontSize: 11, color: "rgba(13,13,56,0.62)", marginBottom: 4 }}>{label}</div>
             <div
-              className="font-mono"
+              className="font-secondary tabular-nums"
               style={{
                 fontSize: 20,
                 fontWeight: 700,
-                color: valueColor ?? "#0F172A",
+                color: valueColor ?? "#0D0D38",
                 lineHeight: 1.2,
                 whiteSpace: "nowrap",
                 overflow: "hidden",
@@ -143,56 +143,56 @@ export default function KPISummary({ companies }: Props) {
             width: 36,
             height: 36,
             borderRadius: 8,
-            background: "rgba(217,119,6,0.08)",
+            background: "rgba(255,107,6,0.08)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             flexShrink: 0,
           }}
         >
-          <Target size={18} style={{ color: "#D97706" }} />
+          <Target size={18} style={{ color: "#FF6B06" }} />
         </div>
         <div>
-          <div style={{ fontSize: 11, color: "#64748B", marginBottom: 6 }}>Recommendations</div>
+          <div style={{ fontSize: 11, color: "rgba(13,13,56,0.62)", marginBottom: 6 }}>Recommendations</div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             <span
-              className="font-mono"
+              className="font-secondary tabular-nums"
               style={{
                 fontSize: 11,
                 fontWeight: 600,
                 padding: "2px 8px",
                 borderRadius: 20,
-                background: "rgba(5,150,105,0.10)",
-                color: "#059669",
-                border: "1px solid rgba(5,150,105,0.20)",
+                background: "rgba(0,30,175,0.10)",
+                color: "#001EAF",
+                border: "1px solid rgba(0,30,175,0.20)",
               }}
             >
               Buy {buyCount}
             </span>
             <span
-              className="font-mono"
+              className="font-secondary tabular-nums"
               style={{
                 fontSize: 11,
                 fontWeight: 600,
                 padding: "2px 8px",
                 borderRadius: 20,
-                background: "rgba(217,119,6,0.10)",
-                color: "#D97706",
-                border: "1px solid rgba(217,119,6,0.20)",
+                background: "rgba(255,107,6,0.10)",
+                color: "#FF6B06",
+                border: "1px solid rgba(255,107,6,0.20)",
               }}
             >
               Hold {holdCount}
             </span>
             <span
-              className="font-mono"
+              className="font-secondary tabular-nums"
               style={{
                 fontSize: 11,
                 fontWeight: 600,
                 padding: "2px 8px",
                 borderRadius: 20,
-                background: "rgba(220,38,38,0.10)",
-                color: "#DC2626",
-                border: "1px solid rgba(220,38,38,0.20)",
+                background: "rgba(248,72,94,0.10)",
+                color: "#F8485E",
+                border: "1px solid rgba(248,72,94,0.20)",
               }}
             >
               Sell {sellCount}

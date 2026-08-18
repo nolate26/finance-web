@@ -1,5 +1,7 @@
 "use client";
 
+import { PATRIA, FONT_PRIMARY, FONT_SECONDARY, SLOT_COLORS } from "@/lib/patriaTheme";
+
 import { useEffect, useState } from "react";
 import ValuationTable from "@/components/economia/ValuationTable";
 import PerformanceTable from "@/components/economia/PerformanceTable";
@@ -39,8 +41,7 @@ const VIEWS: { key: View; label: string }[] = [
   { key: "commodities", label: "Commodities" },
 ];
 
-// Slot accent colors matching ValuationTable badge colors
-const SLOT_COLORS = ["#2B5CE0", "#D97706", "#059669"];
+
 
 function formatUpdateDate(d: string): string {
   const [datePart, timePart] = d.split(" ");
@@ -84,9 +85,9 @@ export default function EconomiaPage() {
         <div className="flex flex-col items-center gap-4">
           <div
             className="w-10 h-10 rounded-full border-2 animate-spin"
-            style={{ borderColor: "rgba(43,92,224,0.15)", borderTopColor: "#2B5CE0" }}
+            style={{ borderColor: "rgba(32,68,220,0.15)", borderTopColor: "#2044DC" }}
           />
-          <p className="text-sm font-mono" style={{ color: "#64748B" }}>
+          <p className="text-sm font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.62)" }}>
             Loading market data...
           </p>
         </div>
@@ -97,7 +98,7 @@ export default function EconomiaPage() {
   if (!data) {
     return (
       <div className="flex items-center justify-center h-[80vh]">
-        <p style={{ color: "#DC2626" }}>Error loading market data</p>
+        <p style={{ color: "#F8485E" }}>Error loading market data</p>
       </div>
     );
   }
@@ -108,19 +109,23 @@ export default function EconomiaPage() {
   return (
     <div className="max-w-[1600px] mx-auto px-6 py-6">
       {/* Page header */}
-      <div className="flex items-center justify-between mb-6">
+      {/* Regla 1 — título principal de la vista: banda dark-blue, Aptos Bold. */}
+      <div
+        className="flex items-center justify-between mb-6"
+        style={{ background: PATRIA.darkBlue, borderRadius: 10, padding: "14px 18px" }}
+      >
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", letterSpacing: "-0.035em", lineHeight: 1.15, margin: 0 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: PATRIA.white, fontFamily: FONT_PRIMARY, textTransform: "uppercase", letterSpacing: "0.02em", lineHeight: 1.15, margin: 0 }}>
             Market Overview
           </h1>
-          <p style={{ fontSize: 12, marginTop: 5, color: "#64748B", fontWeight: 500, letterSpacing: "0.01em" }}>
+          <p style={{ fontSize: 12, marginTop: 5, color: "rgba(255,255,255,0.72)", fontFamily: FONT_SECONDARY, fontWeight: 500, letterSpacing: "0.01em" }}>
             Global valuations · Macro projections · Commodity prices
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="source-pill">Bloomberg</span>
+          <span className="source-pill source-pill--on-dark">Bloomberg</span>
           {data.updateDate && (
-            <div className="source-pill">
+            <div className="source-pill source-pill--on-dark">
               <Calendar size={10} />
               {formatUpdateDate(data.updateDate)}
             </div>
@@ -133,8 +138,8 @@ export default function EconomiaPage() {
         className="flex items-center mb-6"
         style={{
           gap: 2, padding: "3px", borderRadius: 10,
-          background: "rgba(15,23,42,0.04)",
-          border: "1px solid rgba(15,23,42,0.08)",
+          background: "rgba(13,13,56,0.04)",
+          border: "1px solid rgba(13,13,56,0.08)",
           width: "fit-content",
         }}
       >
@@ -145,9 +150,9 @@ export default function EconomiaPage() {
             className="px-5 py-1.5 rounded-lg text-sm transition-all"
             style={{
               background: view === key ? "#FFFFFF"  : "transparent",
-              color:      view === key ? "#1B2E7E"  : "#475569",
-              border:     view === key ? "1px solid rgba(15,23,42,0.11)" : "1px solid transparent",
-              boxShadow:  view === key ? "0 1px 3px rgba(15,23,42,0.09)" : "none",
+              color:      view === key ? "#0D0D38"  : "rgba(13,13,56,0.62)",
+              border:     view === key ? "1px solid rgba(13,13,56,0.11)" : "1px solid transparent",
+              boxShadow:  view === key ? "0 1px 3px rgba(13,13,56,0.09)" : "none",
               fontWeight: view === key ? 700 : 500,
               cursor: "pointer",
             }}
@@ -174,9 +179,9 @@ export default function EconomiaPage() {
                   { name: "PE History",  headers: ["Date", ...indices], rows: histRows },
                 ], "market_valuations");
               }}
-              style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: "#059669", background: "rgba(5,150,105,0.07)", border: "1px solid rgba(5,150,105,0.22)", borderRadius: 7, padding: "5px 14px", cursor: "pointer", transition: "all 0.12s" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(5,150,105,0.13)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(5,150,105,0.07)"; }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: "#001EAF", background: "rgba(0,30,175,0.07)", border: "1px solid rgba(0,30,175,0.22)", borderRadius: 7, padding: "5px 14px", cursor: "pointer", transition: "all 0.12s" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,30,175,0.13)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,30,175,0.07)"; }}
             >
               <Download size={12} /> Download Excel
             </button>
@@ -223,7 +228,7 @@ export default function EconomiaPage() {
 
           {/* Bloomberg footer */}
           <div className="flex justify-end mt-2">
-            <span className="text-xs" style={{ color: "#CBD5E1" }}>Fuente: Bloomberg</span>
+            <span className="text-xs" style={{ color: "rgba(13,13,56,0.28)" }}>Fuente: Bloomberg</span>
           </div>
         </>
       )}
@@ -241,7 +246,7 @@ export default function EconomiaPage() {
       )}
       {view === "macro" && !macroData && (
         <div className="flex items-center justify-center h-48">
-          <p style={{ color: "#64748B" }}>Macro data unavailable</p>
+          <p style={{ color: "rgba(13,13,56,0.62)" }}>Macro data unavailable</p>
         </div>
       )}
 
@@ -257,9 +262,9 @@ export default function EconomiaPage() {
                 const rows = series.map((r) => [r.date, ...cols.map((c) => (r[c] as number | null) ?? null)]);
                 downloadExcel([{ name: "Historical Prices", headers: ["Date", ...cols], rows }], "commodities_historical");
               }}
-              style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: "#059669", background: "rgba(5,150,105,0.07)", border: "1px solid rgba(5,150,105,0.22)", borderRadius: 7, padding: "5px 14px", cursor: "pointer", transition: "all 0.12s" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(5,150,105,0.13)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(5,150,105,0.07)"; }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: "#001EAF", background: "rgba(0,30,175,0.07)", border: "1px solid rgba(0,30,175,0.22)", borderRadius: 7, padding: "5px 14px", cursor: "pointer", transition: "all 0.12s" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,30,175,0.13)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,30,175,0.07)"; }}
             >
               <Download size={12} /> Download Excel
             </button>
@@ -274,7 +279,7 @@ export default function EconomiaPage() {
       )}
       {view === "commodities" && !commoditiesData && (
         <div className="flex items-center justify-center h-48">
-          <p style={{ color: "#64748B" }}>Commodities data unavailable</p>
+          <p style={{ color: "rgba(13,13,56,0.62)" }}>Commodities data unavailable</p>
         </div>
       )}
     </div>

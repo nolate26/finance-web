@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Plus, Trash2, CheckCircle2, Loader2, Search, Pencil, ChevronLeft, ChevronRight, Table2 } from "lucide-react";
 import { useIsAdmin } from "@/lib/useIsAdmin";
+import { PATRIA, FONT_SECONDARY } from "@/lib/patriaTheme";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -125,34 +126,34 @@ function CompanyCombobox({
   return (
     <div ref={containerRef} style={{ position: "relative", width: "100%" }}>
       <div style={{ position: "relative" }}>
-        <Search size={12} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: "#94A3B8", pointerEvents: "none" }} />
+        <Search size={12} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: "rgba(13,13,56,0.45)", pointerEvents: "none" }} />
         <input
           type="text"
           value={query}
           onChange={(e) => handleChange(e.target.value)}
           onFocus={(e) => {
             if (query.length >= 2) setOpen(true);
-            (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.40)";
+            (e.currentTarget as HTMLElement).style.borderColor = "rgba(32,68,220,0.40)";
           }}
-          onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(15,23,42,0.12)"; }}
+          onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(13,13,56,0.12)"; }}
           placeholder={`Search company…`}
           style={{
             width: "100%", padding: "7px 28px 7px 26px",
-            borderRadius: 7, background: "#F8FAFF",
-            border: "1px solid rgba(15,23,42,0.12)",
-            color: "#0F172A", fontSize: 12, outline: "none",
-            fontFamily: "Inter, sans-serif", boxSizing: "border-box",
+            borderRadius: 7, background: "#F5F7FD",
+            border: "1px solid rgba(13,13,56,0.12)",
+            color: "#0D0D38", fontSize: 12, outline: "none",
+            fontFamily: FONT_SECONDARY, boxSizing: "border-box",
           }}
         />
-        {loading && <Loader2 size={12} style={{ position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)", color: "#94A3B8", animation: "spin 0.8s linear infinite" }} />}
+        {loading && <Loader2 size={12} style={{ position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)", color: "rgba(13,13,56,0.45)", animation: "spin 0.8s linear infinite" }} />}
       </div>
 
       {open && results.length > 0 && (
         <div style={{
           position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
           zIndex: 9999, background: "#fff",
-          border: "1px solid rgba(15,23,42,0.12)", borderRadius: 8,
-          boxShadow: "0 8px 24px rgba(15,23,42,0.14)", overflow: "hidden",
+          border: "1px solid rgba(13,13,56,0.12)", borderRadius: 8,
+          boxShadow: "0 8px 24px rgba(13,13,56,0.14)", overflow: "hidden",
         }}>
           {results.map((r) => (
             <button
@@ -162,14 +163,14 @@ function CompanyCombobox({
                 display: "flex", flexDirection: "column", alignItems: "flex-start",
                 width: "100%", padding: "8px 12px",
                 background: "transparent", border: "none",
-                borderBottom: "1px solid rgba(15,23,42,0.05)",
+                borderBottom: "1px solid rgba(13,13,56,0.05)",
                 cursor: "pointer", textAlign: "left",
               }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.05)"; }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.05)"; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
             >
-              <span style={{ fontSize: 12, fontWeight: 600, color: "#0F172A" }}>{r.nombreLatam}</span>
-              <span style={{ fontSize: 10, color: "#94A3B8", marginTop: 1 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: "#0D0D38" }}>{r.nombreLatam}</span>
+              <span style={{ fontSize: 10, color: "rgba(13,13,56,0.45)", marginTop: 1 }}>
                 {region === "LATAM" ? (r.industriaGics ?? "—") : (r.industriaChile ?? "—")}
               </span>
             </button>
@@ -182,15 +183,17 @@ function CompanyCombobox({
 
 // ── Industry palette (accent + tinted header bg) ─────────────────────────────
 
+// Un color por industria, en el orden de priorización del manual sobre fondo
+// claro. `accent` se usa como color de TEXTO, así que quedan fuera turquesa y
+// sky-blue: no tienen contraste suficiente sobre blanco. Son 6 tonos y el índice
+// cicla, de modo que a partir de la séptima industria se repite el primero.
 const INDUSTRY_PALETTE = [
-  { accent: "#2B5CE0", bg: "rgba(43,92,224,0.045)",  border: "rgba(43,92,224,0.18)"  }, // blue
-  { accent: "#059669", bg: "rgba(5,150,105,0.045)",  border: "rgba(5,150,105,0.18)"  }, // emerald
-  { accent: "#7C3AED", bg: "rgba(124,58,237,0.045)", border: "rgba(124,58,237,0.18)" }, // violet
-  { accent: "#D97706", bg: "rgba(217,119,6,0.045)",  border: "rgba(217,119,6,0.18)"  }, // amber
-  { accent: "#0891B2", bg: "rgba(8,145,178,0.045)",  border: "rgba(8,145,178,0.18)"  }, // cyan
-  { accent: "#DC2626", bg: "rgba(220,38,38,0.045)",  border: "rgba(220,38,38,0.18)"  }, // red
-  { accent: "#0D9488", bg: "rgba(13,148,136,0.045)", border: "rgba(13,148,136,0.18)" }, // teal
-  { accent: "#9333EA", bg: "rgba(147,51,234,0.045)", border: "rgba(147,51,234,0.18)" }, // purple
+  { accent: PATRIA.darkBlue,    bg: "rgba(13,13,56,0.045)",   border: "rgba(13,13,56,0.18)"   },
+  { accent: PATRIA.blue,        bg: "rgba(0,30,175,0.045)",   border: "rgba(0,30,175,0.18)"   },
+  { accent: PATRIA.kingBlue,    bg: "rgba(32,68,220,0.045)",  border: "rgba(32,68,220,0.18)"  },
+  { accent: PATRIA.darkSkyBlue, bg: "rgba(69,113,255,0.045)", border: "rgba(69,113,255,0.18)" },
+  { accent: PATRIA.orange,      bg: "rgba(255,107,6,0.045)",  border: "rgba(255,107,6,0.18)"  },
+  { accent: PATRIA.pink,        bg: "rgba(248,72,94,0.045)",  border: "rgba(248,72,94,0.18)"  },
 ] as const;
 
 // ── View mode — grouped by industry ──────────────────────────────────────────
@@ -210,7 +213,7 @@ function ViewMode({
 
   if (loading) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "48px 24px", gap: 10, color: "#94A3B8" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "48px 24px", gap: 10, color: "rgba(13,13,56,0.45)" }}>
         <Loader2 size={16} style={{ animation: "spin 0.8s linear infinite" }} />
         <span style={{ fontSize: 13 }}>Loading picks…</span>
       </div>
@@ -221,12 +224,12 @@ function ViewMode({
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "52px 24px", gap: 10 }}>
         <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-          <circle cx="20" cy="20" r="16" stroke="#E2E8F0" strokeWidth="1.5" />
-          <path d="M14 20h12M20 14v12" stroke="#CBD5E1" strokeWidth="1.5" strokeLinecap="round" />
+          <circle cx="20" cy="20" r="16" stroke="rgba(13,13,56,0.10)" strokeWidth="1.5" />
+          <path d="M14 20h12M20 14v12" stroke="rgba(13,13,56,0.28)" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
         <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "#64748B", marginBottom: 3 }}>No picks for this period</div>
-          <div style={{ fontSize: 12, color: "#94A3B8" }}>Click "Edit / Add Top Picks" to enter your investment ideas</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(13,13,56,0.62)", marginBottom: 3 }}>No picks for this period</div>
+          <div style={{ fontSize: 12, color: "rgba(13,13,56,0.45)" }}>Click "Edit / Add Top Picks" to enter your investment ideas</div>
         </div>
       </div>
     );
@@ -250,21 +253,21 @@ function ViewMode({
       {/* ── Industry filter dropdown ─────────────────────────────────────── */}
       {allIndustries.length > 1 && (
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 11, color: "#94A3B8", fontWeight: 600, whiteSpace: "nowrap" }}>Filter by</span>
+          <span style={{ fontSize: 11, color: "rgba(13,13,56,0.45)", fontWeight: 600, whiteSpace: "nowrap" }}>Filter by</span>
           <select
             value={selectedIndustry}
             onChange={(e) => setSelectedIndustry(e.target.value)}
             style={{
               padding:      "5px 10px",
               borderRadius: 7,
-              background:   selectedIndustry !== "All" ? "rgba(43,92,224,0.06)" : "#F8FAFF",
-              border:       selectedIndustry !== "All" ? "1px solid rgba(43,92,224,0.25)" : "1px solid rgba(15,23,42,0.12)",
-              color:        selectedIndustry !== "All" ? "#1E3A8A" : "#475569",
+              background:   selectedIndustry !== "All" ? "rgba(32,68,220,0.06)" : "#F5F7FD",
+              border:       selectedIndustry !== "All" ? "1px solid rgba(32,68,220,0.25)" : "1px solid rgba(13,13,56,0.12)",
+              color:        selectedIndustry !== "All" ? "#001EAF" : "rgba(13,13,56,0.62)",
               fontSize:     12,
               fontWeight:   selectedIndustry !== "All" ? 600 : 400,
               cursor:       "pointer",
               outline:      "none",
-              fontFamily:   "Inter, sans-serif",
+              fontFamily:   FONT_SECONDARY,
               minWidth:     160,
             }}
           >
@@ -279,12 +282,12 @@ function ViewMode({
             <button
               onClick={() => setSelectedIndustry("All")}
               style={{
-                fontSize: 11, color: "#64748B", background: "transparent",
+                fontSize: 11, color: "rgba(13,13,56,0.62)", background: "transparent",
                 border: "none", cursor: "pointer", padding: "4px 6px",
                 borderRadius: 5, transition: "color 0.12s",
               }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#0F172A"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "#64748B"; }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#0D0D38"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(13,13,56,0.62)"; }}
             >
               Clear ×
             </button>
@@ -325,7 +328,7 @@ function ViewMode({
                 border: `1px solid ${color.border}`,
                 borderRadius: 10,
                 padding: "1px 9px",
-                fontFamily: "JetBrains Mono, monospace",
+                fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
               }}>
                 {members.length} {members.length === 1 ? "pick" : "picks"}
               </span>
@@ -337,11 +340,11 @@ function ViewMode({
               gridTemplateColumns: isChile ? "220px 1fr 120px" : "220px 1fr",
               gap: "0 20px",
               padding: "6px 18px 6px 22px",
-              borderBottom: "1px solid rgba(15,23,42,0.06)",
-              background: "rgba(15,23,42,0.015)",
+              borderBottom: "1px solid rgba(13,13,56,0.06)",
+              background: "rgba(13,13,56,0.015)",
             }}>
               {["Company", "Investment Thesis", ...(isChile ? ["Target Price"] : [])].map((h) => (
-                <div key={h} style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.10em", color: "#94A3B8", textTransform: "uppercase" }}>{h}</div>
+                <div key={h} style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.10em", color: "rgba(13,13,56,0.45)", textTransform: "uppercase" }}>{h}</div>
               ))}
             </div>
 
@@ -355,14 +358,14 @@ function ViewMode({
                   gap: "0 20px",
                   padding: "13px 18px 13px 22px",
                   alignItems: "start",
-                  borderBottom: rowIdx < members.length - 1 ? "1px solid rgba(15,23,42,0.05)" : "none",
-                  background: rowIdx % 2 === 1 ? "rgba(15,23,42,0.012)" : "transparent",
+                  borderBottom: rowIdx < members.length - 1 ? "1px solid rgba(13,13,56,0.05)" : "none",
+                  background: rowIdx % 2 === 1 ? "rgba(13,13,56,0.012)" : "transparent",
                 }}
               >
                 {/* Company name */}
                 <div style={{ paddingTop: 1 }}>
                   <div style={{
-                    fontSize: 13, fontWeight: 700, color: "#0F172A",
+                    fontSize: 13, fontWeight: 700, color: "#0D0D38",
                     letterSpacing: "-0.01em", lineHeight: 1.3,
                   }}>
                     {p.nombre_latam}
@@ -371,7 +374,7 @@ function ViewMode({
 
                 {/* Investment thesis — takes all remaining space */}
                 <div style={{
-                  fontSize: 13, color: "#334155",
+                  fontSize: 13, color: "#0D0D38",
                   lineHeight: 1.65, whiteSpace: "pre-wrap",
                 }}>
                   {p.comment}
@@ -384,7 +387,7 @@ function ViewMode({
                       <span style={{
                         display: "inline-block",
                         fontSize: 13, fontWeight: 700,
-                        fontFamily: "JetBrains Mono, monospace",
+                        fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
                         color: color.accent,
                         background: color.bg,
                         border: `1px solid ${color.border}`,
@@ -393,7 +396,7 @@ function ViewMode({
                         {p.target_price.toLocaleString("en-US", { minimumFractionDigits: 0 })}
                       </span>
                     ) : (
-                      <span style={{ fontSize: 12, color: "#CBD5E1" }}>—</span>
+                      <span style={{ fontSize: 12, color: "rgba(13,13,56,0.28)" }}>—</span>
                     )}
                   </div>
                 )}
@@ -438,7 +441,7 @@ function SummaryView({
 
   if (loading) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "48px 24px", gap: 10, color: "#94A3B8" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "48px 24px", gap: 10, color: "rgba(13,13,56,0.45)" }}>
         <Loader2 size={16} style={{ animation: "spin 0.8s linear infinite" }} />
         <span style={{ fontSize: 13 }}>Loading summary…</span>
       </div>
@@ -450,7 +453,7 @@ function SummaryView({
 
   if (activePeriods.length === 0) {
     return (
-      <div style={{ padding: "48px 24px", textAlign: "center", color: "#94A3B8", fontSize: 13 }}>
+      <div style={{ padding: "48px 24px", textAlign: "center", color: "rgba(13,13,56,0.45)", fontSize: 13 }}>
         No data to summarize yet.
       </div>
     );
@@ -468,13 +471,13 @@ function SummaryView({
           <tr>
             <th style={{
               position: "sticky", left: 0, zIndex: 2,
-              background: "#F8FAFF",
+              background: "#F5F7FD",
               padding: "8px 20px 8px 12px",
-              borderBottom: "2px solid rgba(15,23,42,0.10)",
-              borderRight: "1px solid rgba(15,23,42,0.08)",
+              borderBottom: "2px solid rgba(13,13,56,0.10)",
+              borderRight: "1px solid rgba(13,13,56,0.08)",
               textAlign: "left",
               fontSize: 10, fontWeight: 700, letterSpacing: "0.09em",
-              color: "#94A3B8", textTransform: "uppercase",
+              color: "rgba(13,13,56,0.45)", textTransform: "uppercase",
               whiteSpace: "nowrap", minWidth: 170,
             }}>
               Industry
@@ -482,13 +485,13 @@ function SummaryView({
             {activePeriods.map((p) => (
               <th key={p} style={{
                 padding: "8px 16px",
-                borderBottom: "2px solid rgba(15,23,42,0.10)",
-                borderLeft: "1px solid rgba(15,23,42,0.06)",
+                borderBottom: "2px solid rgba(13,13,56,0.10)",
+                borderLeft: "1px solid rgba(13,13,56,0.06)",
                 textAlign: "center",
                 fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
-                color: "#475569", textTransform: "uppercase",
+                color: "rgba(13,13,56,0.62)", textTransform: "uppercase",
                 whiteSpace: "nowrap", minWidth: 150,
-                background: "#F8FAFF",
+                background: "#F5F7FD",
               }}>
                 {periodLabel(p, isChile)}
               </th>
@@ -498,16 +501,16 @@ function SummaryView({
         <tbody>
           {industries.map((industry, rowIdx) => {
             const color = INDUSTRY_PALETTE[rowIdx % INDUSTRY_PALETTE.length];
-            const rowBg = rowIdx % 2 === 1 ? "rgba(15,23,42,0.013)" : "transparent";
+            const rowBg = rowIdx % 2 === 1 ? "rgba(13,13,56,0.013)" : "transparent";
             return (
               <tr key={industry}>
                 {/* Industry label — sticky */}
                 <td style={{
                   position: "sticky", left: 0, zIndex: 1,
-                  background: rowIdx % 2 === 1 ? "#F9FAFB" : "#fff",
+                  background: rowIdx % 2 === 1 ? "#F5F7FD" : "#fff",
                   padding: "11px 20px 11px 0",
-                  borderBottom: "1px solid rgba(15,23,42,0.06)",
-                  borderRight: "1px solid rgba(15,23,42,0.08)",
+                  borderBottom: "1px solid rgba(13,13,56,0.06)",
+                  borderRight: "1px solid rgba(13,13,56,0.08)",
                   borderLeft: `3px solid ${color.accent}`,
                   paddingLeft: 10,
                   verticalAlign: "top",
@@ -524,24 +527,24 @@ function SummaryView({
                   return (
                     <td key={period} style={{
                       padding: "11px 16px",
-                      borderBottom: "1px solid rgba(15,23,42,0.06)",
-                      borderLeft: "1px solid rgba(15,23,42,0.05)",
+                      borderBottom: "1px solid rgba(13,13,56,0.06)",
+                      borderLeft: "1px solid rgba(13,13,56,0.05)",
                       verticalAlign: "top",
                       background: rowBg,
                     }}>
                       {cellPicks.length === 0 ? (
-                        <span style={{ color: "#E2E8F0", fontSize: 12 }}>—</span>
+                        <span style={{ color: "rgba(13,13,56,0.10)", fontSize: 12 }}>—</span>
                       ) : (
                         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                           {cellPicks.map((pick) => (
                             <div key={pick.id} style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                              <span style={{ fontSize: 12, fontWeight: 600, color: "#0F172A", lineHeight: 1.2, whiteSpace: "nowrap" }}>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: "#0D0D38", lineHeight: 1.2, whiteSpace: "nowrap" }}>
                                 {pick.nombre_latam}
                               </span>
                               {isChile && pick.target_price != null && (
                                 <span style={{
                                   fontSize: 10, fontWeight: 700,
-                                  fontFamily: "JetBrains Mono, monospace",
+                                  fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
                                   color: color.accent,
                                   background: color.bg,
                                   border: `1px solid ${color.border}`,
@@ -753,11 +756,11 @@ function EditForm({
       <div style={{
         display: "flex", alignItems: "center", gap: 12,
         padding: "12px 24px",
-        borderBottom: "1px solid rgba(15,23,42,0.06)",
-        background: isRollover ? "rgba(217,119,6,0.04)" : "rgba(43,92,224,0.03)",
+        borderBottom: "1px solid rgba(13,13,56,0.06)",
+        background: isRollover ? "rgba(255,107,6,0.04)" : "rgba(32,68,220,0.03)",
         flexWrap: "wrap",
       }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: isRollover ? "#92400E" : "#475569" }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: isRollover ? "#FF6B06" : "rgba(13,13,56,0.62)" }}>
           {isRollover ? "↪ Rollover — saving to:" : "Saving to:"}
         </div>
 
@@ -770,19 +773,19 @@ function EditForm({
               padding: "5px 10px", borderRadius: 7,
               background: "#fff",
               border: isRollover
-                ? "1px solid rgba(217,119,6,0.45)"
-                : "1px solid rgba(43,92,224,0.30)",
-              color: "#0F172A", fontSize: 12, fontWeight: 600,
-              outline: "none", fontFamily: "Inter, sans-serif", cursor: "pointer",
+                ? "1px solid rgba(255,107,6,0.45)"
+                : "1px solid rgba(32,68,220,0.30)",
+              color: "#0D0D38", fontSize: 12, fontWeight: 600,
+              outline: "none", fontFamily: FONT_SECONDARY, cursor: "pointer",
             }}
-            onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.55)"; }}
+            onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(32,68,220,0.55)"; }}
             onBlur={(e)  => {
               (e.currentTarget as HTMLElement).style.borderColor = isRollover
-                ? "rgba(217,119,6,0.45)" : "rgba(43,92,224,0.30)";
+                ? "rgba(255,107,6,0.45)" : "rgba(32,68,220,0.30)";
             }}
           />
           {isChile && formPeriod && (
-            <span style={{ fontSize: 11, color: "#64748B", fontFamily: "JetBrains Mono, monospace" }}>
+            <span style={{ fontSize: 11, color: "rgba(13,13,56,0.62)", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
               {quarterLabel(formPeriod)}
             </span>
           )}
@@ -790,9 +793,9 @@ function EditForm({
 
         {isRollover && (
           <span style={{
-            fontSize: 11, color: "#92400E",
-            background: "rgba(217,119,6,0.08)",
-            border: "1px solid rgba(217,119,6,0.22)",
+            fontSize: 11, color: "#FF6B06",
+            background: "rgba(255,107,6,0.08)",
+            border: "1px solid rgba(255,107,6,0.22)",
             borderRadius: 6, padding: "2px 8px",
           }}>
             Rows kept — edit freely before saving
@@ -803,7 +806,7 @@ function EditForm({
           <button
             onClick={() => setFormPeriod(period)}
             style={{
-              marginLeft: "auto", fontSize: 11, color: "#64748B",
+              marginLeft: "auto", fontSize: 11, color: "rgba(13,13,56,0.62)",
               background: "transparent", border: "none",
               cursor: "pointer", padding: "3px 6px",
             }}
@@ -817,11 +820,11 @@ function EditForm({
       <div style={{
         display: "grid", gridTemplateColumns: colTemplate,
         gap: "0 12px", padding: "8px 24px",
-        background: "rgba(15,23,42,0.025)",
-        borderBottom: "1px solid rgba(15,23,42,0.06)",
+        background: "rgba(13,13,56,0.025)",
+        borderBottom: "1px solid rgba(13,13,56,0.06)",
       }}>
         {["Company", "Industry Group", "Investment Thesis / Comment", ...(isChile ? ["Target Price"] : []), ""].map((h, i) => (
-          <div key={i} style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", color: "#94A3B8", textTransform: "uppercase" }}>{h}</div>
+          <div key={i} style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", color: "rgba(13,13,56,0.45)", textTransform: "uppercase" }}>{h}</div>
         ))}
       </div>
 
@@ -834,7 +837,7 @@ function EditForm({
               display: "grid", gridTemplateColumns: colTemplate,
               gap: "0 12px", alignItems: "start",
               padding: "8px 0",
-              borderBottom: idx < rows.length - 1 ? "1px solid rgba(15,23,42,0.05)" : "none",
+              borderBottom: idx < rows.length - 1 ? "1px solid rgba(13,13,56,0.05)" : "none",
             }}
           >
             <CompanyCombobox
@@ -851,13 +854,13 @@ function EditForm({
               placeholder="Auto-filled on select"
               style={{
                 width: "100%", padding: "7px 10px", borderRadius: 7,
-                background: row.industryGroup ? "#F0F9FF" : "#F8FAFF",
-                border: "1px solid rgba(15,23,42,0.12)",
-                color: "#0F172A", fontSize: 12, outline: "none",
-                fontFamily: "Inter, sans-serif", boxSizing: "border-box",
+                background: row.industryGroup ? "rgba(32,68,220,0.06)" : "#F5F7FD",
+                border: "1px solid rgba(13,13,56,0.12)",
+                color: "#0D0D38", fontSize: 12, outline: "none",
+                fontFamily: FONT_SECONDARY, boxSizing: "border-box",
               }}
-              onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.40)"; }}
-              onBlur={(e)  => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(15,23,42,0.12)"; }}
+              onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(32,68,220,0.40)"; }}
+              onBlur={(e)  => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(13,13,56,0.12)"; }}
             />
 
             <textarea
@@ -867,13 +870,13 @@ function EditForm({
               rows={2}
               style={{
                 width: "100%", padding: "7px 10px", borderRadius: 7,
-                background: "#F8FAFF", border: "1px solid rgba(15,23,42,0.12)",
-                color: "#0F172A", fontSize: 12, outline: "none",
-                fontFamily: "Inter, sans-serif", resize: "vertical",
+                background: "#F5F7FD", border: "1px solid rgba(13,13,56,0.12)",
+                color: "#0D0D38", fontSize: 12, outline: "none",
+                fontFamily: FONT_SECONDARY, resize: "vertical",
                 boxSizing: "border-box", lineHeight: 1.5,
               }}
-              onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.40)"; }}
-              onBlur={(e)  => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(15,23,42,0.12)"; }}
+              onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(32,68,220,0.40)"; }}
+              onBlur={(e)  => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(13,13,56,0.12)"; }}
             />
 
             {isChile && (
@@ -886,12 +889,12 @@ function EditForm({
                 step="any"
                 style={{
                   width: "100%", padding: "7px 10px", borderRadius: 7,
-                  background: "#F8FAFF", border: "1px solid rgba(15,23,42,0.12)",
-                  color: "#0F172A", fontSize: 12, outline: "none",
-                  fontFamily: "JetBrains Mono, monospace", boxSizing: "border-box",
+                  background: "#F5F7FD", border: "1px solid rgba(13,13,56,0.12)",
+                  color: "#0D0D38", fontSize: 12, outline: "none",
+                  fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", boxSizing: "border-box",
                 }}
-                onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(43,92,224,0.40)"; }}
-                onBlur={(e)  => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(15,23,42,0.12)"; }}
+                onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(32,68,220,0.40)"; }}
+                onBlur={(e)  => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(13,13,56,0.12)"; }}
               />
             )}
 
@@ -903,19 +906,19 @@ function EditForm({
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: 32, height: 32, borderRadius: 6,
                 background: "transparent", border: "1px solid transparent",
-                color: rows.length === 1 ? "#CBD5E1" : "#94A3B8",
+                color: rows.length === 1 ? "rgba(13,13,56,0.28)" : "rgba(13,13,56,0.45)",
                 cursor: rows.length === 1 ? "default" : "pointer",
                 marginTop: 2, flexShrink: 0, transition: "all 0.12s",
               }}
               onMouseEnter={(e) => {
                 if (rows.length > 1) {
-                  (e.currentTarget as HTMLElement).style.color       = "#DC2626";
-                  (e.currentTarget as HTMLElement).style.background  = "rgba(220,38,38,0.06)";
-                  (e.currentTarget as HTMLElement).style.borderColor = "rgba(220,38,38,0.18)";
+                  (e.currentTarget as HTMLElement).style.color       = "#F8485E";
+                  (e.currentTarget as HTMLElement).style.background  = "rgba(248,72,94,0.06)";
+                  (e.currentTarget as HTMLElement).style.borderColor = "rgba(248,72,94,0.18)";
                 }
               }}
               onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.color       = rows.length === 1 ? "#CBD5E1" : "#94A3B8";
+                (e.currentTarget as HTMLElement).style.color       = rows.length === 1 ? "rgba(13,13,56,0.28)" : "rgba(13,13,56,0.45)";
                 (e.currentTarget as HTMLElement).style.background  = "transparent";
                 (e.currentTarget as HTMLElement).style.borderColor = "transparent";
               }}
@@ -937,10 +940,10 @@ function EditForm({
           margin: "4px 24px 2px",
           padding: "12px 16px",
           borderRadius: 8,
-          background: "rgba(124,58,237,0.03)",
-          border: "1px solid rgba(124,58,237,0.18)",
+          background: "rgba(0,30,175,0.03)",
+          border: "1px solid rgba(0,30,175,0.18)",
         }}>
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", color: "#6D28D9", textTransform: "uppercase", marginBottom: 10 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", color: "#001EAF", textTransform: "uppercase", marginBottom: 10 }}>
             Rename Coverage Group
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -949,17 +952,17 @@ function EditForm({
               onChange={(e) => { setRenameFrom(e.target.value); setRenameMsg(null); }}
               style={{
                 padding: "6px 10px", borderRadius: 7,
-                background: "#F8FAFF", border: "1px solid rgba(15,23,42,0.12)",
-                color: renameFrom ? "#0F172A" : "#94A3B8",
+                background: "#F5F7FD", border: "1px solid rgba(13,13,56,0.12)",
+                color: renameFrom ? "#0D0D38" : "rgba(13,13,56,0.45)",
                 fontSize: 12, outline: "none", cursor: "pointer",
-                fontFamily: "Inter, sans-serif", minWidth: 160,
+                fontFamily: FONT_SECONDARY, minWidth: 160,
               }}
             >
               <option value="">Select group…</option>
               {existingGroups.map((g) => <option key={g} value={g}>{g}</option>)}
             </select>
 
-            <span style={{ color: "#CBD5E1", fontSize: 14, flexShrink: 0 }}>→</span>
+            <span style={{ color: "rgba(13,13,56,0.28)", fontSize: 14, flexShrink: 0 }}>→</span>
 
             <input
               type="text"
@@ -968,12 +971,12 @@ function EditForm({
               placeholder="New name…"
               style={{
                 padding: "6px 10px", borderRadius: 7,
-                background: "#F8FAFF", border: "1px solid rgba(15,23,42,0.12)",
-                color: "#0F172A", fontSize: 12, outline: "none",
-                fontFamily: "Inter, sans-serif", minWidth: 140,
+                background: "#F5F7FD", border: "1px solid rgba(13,13,56,0.12)",
+                color: "#0D0D38", fontSize: 12, outline: "none",
+                fontFamily: FONT_SECONDARY, minWidth: 140,
               }}
-              onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(124,58,237,0.45)"; }}
-              onBlur={(e)  => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(15,23,42,0.12)"; }}
+              onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,30,175,0.45)"; }}
+              onBlur={(e)  => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(13,13,56,0.12)"; }}
             />
 
             <button
@@ -982,8 +985,8 @@ function EditForm({
               style={{
                 padding: "6px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600,
                 background: "transparent",
-                border: "1px solid rgba(124,58,237,0.25)",
-                color: (!renameFrom || !renameTo.trim()) ? "#C4B5FD" : "#6D28D9",
+                border: "1px solid rgba(0,30,175,0.25)",
+                color: (!renameFrom || !renameTo.trim()) ? "#88AAFF" : "#001EAF",
                 cursor: (!renameFrom || !renameTo.trim()) ? "default" : "pointer",
                 transition: "all 0.12s",
               }}
@@ -996,7 +999,7 @@ function EditForm({
               disabled={!renameFrom || !renameTo.trim() || renaming}
               style={{
                 padding: "6px 14px", borderRadius: 7, fontSize: 12, fontWeight: 700,
-                background: (!renameFrom || !renameTo.trim() || renaming) ? "rgba(124,58,237,0.25)" : "#7C3AED",
+                background: (!renameFrom || !renameTo.trim() || renaming) ? "rgba(0,30,175,0.25)" : "#001EAF",
                 border: "none",
                 color: "#fff",
                 cursor: (!renameFrom || !renameTo.trim() || renaming) ? "default" : "pointer",
@@ -1009,8 +1012,8 @@ function EditForm({
             {renameMsg && (
               <span style={{
                 fontSize: 11,
-                color: renameMsg.startsWith("Error") ? "#DC2626" : "#15803D",
-                fontFamily: "Inter, sans-serif",
+                color: renameMsg.startsWith("Error") ? "#F8485E" : "#001EAF",
+                fontFamily: FONT_SECONDARY,
               }}>
                 {renameMsg}
               </span>
@@ -1023,7 +1026,7 @@ function EditForm({
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "14px 24px 18px", gap: 12, flexWrap: "wrap",
-        borderTop: "1px solid rgba(15,23,42,0.06)",
+        borderTop: "1px solid rgba(13,13,56,0.06)",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <button
@@ -1031,11 +1034,11 @@ function EditForm({
             style={{
               display: "flex", alignItems: "center", gap: 6,
               padding: "7px 14px", borderRadius: 7,
-              background: "rgba(43,92,224,0.06)", border: "1px solid rgba(43,92,224,0.18)",
-              color: "#2B5CE0", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.12s",
+              background: "rgba(32,68,220,0.06)", border: "1px solid rgba(32,68,220,0.18)",
+              color: "#2044DC", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.12s",
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.10)"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.06)"; }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.10)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.06)"; }}
           >
             <Plus size={13} /> Add Company
           </button>
@@ -1045,11 +1048,11 @@ function EditForm({
             style={{
               display: "flex", alignItems: "center", gap: 5,
               padding: "7px 12px", borderRadius: 7,
-              background: "transparent", border: "1px solid rgba(15,23,42,0.12)",
-              color: "#64748B", fontSize: 12, cursor: "pointer", transition: "all 0.12s",
+              background: "transparent", border: "1px solid rgba(13,13,56,0.12)",
+              color: "rgba(13,13,56,0.62)", fontSize: 12, cursor: "pointer", transition: "all 0.12s",
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(15,23,42,0.25)"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(15,23,42,0.12)"; }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(13,13,56,0.25)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(13,13,56,0.12)"; }}
           >
             <ChevronLeft size={13} /> Cancel
           </button>
@@ -1059,9 +1062,9 @@ function EditForm({
             style={{
               display: "flex", alignItems: "center", gap: 5,
               padding: "7px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600,
-              background: renamePanel ? "rgba(124,58,237,0.07)" : "transparent",
-              border: renamePanel ? "1px solid rgba(124,58,237,0.28)" : "1px solid rgba(15,23,42,0.10)",
-              color: renamePanel ? "#6D28D9" : "#64748B",
+              background: renamePanel ? "rgba(0,30,175,0.07)" : "transparent",
+              border: renamePanel ? "1px solid rgba(0,30,175,0.28)" : "1px solid rgba(13,13,56,0.10)",
+              color: renamePanel ? "#001EAF" : "rgba(13,13,56,0.62)",
               cursor: "pointer", transition: "all 0.12s",
             }}
           >
@@ -1077,10 +1080,10 @@ function EditForm({
               style={{
                 display: "flex", alignItems: "center", gap: 5,
                 padding: "7px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600,
-                background: "transparent", border: "1px solid rgba(220,38,38,0.22)",
-                color: "#DC2626", cursor: deleting ? "not-allowed" : "pointer", transition: "all 0.12s",
+                background: "transparent", border: "1px solid rgba(248,72,94,0.22)",
+                color: "#F8485E", cursor: deleting ? "not-allowed" : "pointer", transition: "all 0.12s",
               }}
-              onMouseEnter={(e) => { if (!deleting) (e.currentTarget as HTMLElement).style.background = "rgba(220,38,38,0.06)"; }}
+              onMouseEnter={(e) => { if (!deleting) (e.currentTarget as HTMLElement).style.background = "rgba(248,72,94,0.06)"; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
             >
               {deleting ? <Loader2 size={13} style={{ animation: "spin 0.8s linear infinite" }} /> : <Trash2 size={13} />}
@@ -1091,7 +1094,7 @@ function EditForm({
 
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {error && (
-            <span style={{ fontSize: 12, color: "#DC2626", fontFamily: "Inter, sans-serif", maxWidth: 300 }}>
+            <span style={{ fontSize: 12, color: "#F8485E", fontFamily: FONT_SECONDARY, maxWidth: 300 }}>
               {error}
             </span>
           )}
@@ -1101,14 +1104,14 @@ function EditForm({
             style={{
               display: "flex", alignItems: "center", gap: 7,
               padding: "8px 20px", borderRadius: 8,
-              background: saving ? "rgba(43,92,224,0.50)" : "#2B5CE0",
+              background: saving ? "rgba(32,68,220,0.50)" : "#2044DC",
               border: "none", color: "#fff", fontSize: 13, fontWeight: 700,
               cursor: saving ? "not-allowed" : "pointer",
-              fontFamily: "Inter, sans-serif", letterSpacing: "-0.01em",
-              transition: "background 0.15s", boxShadow: "0 2px 8px rgba(43,92,224,0.25)",
+              fontFamily: FONT_SECONDARY, letterSpacing: "-0.01em",
+              transition: "background 0.15s", boxShadow: "0 2px 8px rgba(32,68,220,0.25)",
             }}
-            onMouseEnter={(e) => { if (!saving) (e.currentTarget as HTMLElement).style.background = "#1E4AC8"; }}
-            onMouseLeave={(e) => { if (!saving) (e.currentTarget as HTMLElement).style.background = "#2B5CE0"; }}
+            onMouseEnter={(e) => { if (!saving) (e.currentTarget as HTMLElement).style.background = "#001EAF"; }}
+            onMouseLeave={(e) => { if (!saving) (e.currentTarget as HTMLElement).style.background = "#2044DC"; }}
           >
             {saving && <Loader2 size={14} style={{ animation: "spin 0.8s linear infinite" }} />}
             {saving ? "Saving…" : "Save Report"}
@@ -1203,22 +1206,22 @@ export default function TopPicksForm({ region: regionProp, defaultRegion }: Prop
       {/* Card — no overflow:hidden so the combobox dropdown can escape */}
       <div style={{
         background: "#fff",
-        border: "1px solid rgba(15,23,42,0.08)",
+        border: "1px solid rgba(13,13,56,0.08)",
         borderRadius: 14,
-        boxShadow: "0 1px 6px rgba(15,23,42,0.06)",
+        boxShadow: "0 1px 6px rgba(13,13,56,0.06)",
       }}>
         {/* ── Header ────────────────────────────────────────────────────────── */}
         <div style={{
           padding: "14px 24px",
-          borderBottom: "1px solid rgba(15,23,42,0.07)",
-          background: "#F8FAFF",
+          borderBottom: "1px solid rgba(13,13,56,0.07)",
+          background: "#F5F7FD",
           borderRadius: "14px 14px 0 0",
           display: "flex", alignItems: "center", justifyContent: "space-between",
           flexWrap: "wrap", gap: 12,
         }}>
           {/* Left: title + period navigator */}
           <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#0F172A", letterSpacing: "-0.01em" }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#0D0D38", letterSpacing: "-0.01em" }}>
               {region} Top Picks
             </div>
 
@@ -1232,12 +1235,12 @@ export default function TopPicksForm({ region: regionProp, defaultRegion }: Prop
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center",
                   width: 26, height: 26, borderRadius: 6,
-                  background: "transparent", border: "1px solid rgba(15,23,42,0.12)",
-                  color: canGoOlder ? "#475569" : "#CBD5E1",
+                  background: "transparent", border: "1px solid rgba(13,13,56,0.12)",
+                  color: canGoOlder ? "rgba(13,13,56,0.62)" : "rgba(13,13,56,0.28)",
                   cursor: canGoOlder ? "pointer" : "default",
                   transition: "all 0.12s",
                 }}
-                onMouseEnter={(e) => { if (canGoOlder) { (e.currentTarget as HTMLElement).style.background = "rgba(15,23,42,0.06)"; } }}
+                onMouseEnter={(e) => { if (canGoOlder) { (e.currentTarget as HTMLElement).style.background = "rgba(13,13,56,0.06)"; } }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
               >
                 <ChevronLeft size={14} />
@@ -1246,14 +1249,14 @@ export default function TopPicksForm({ region: regionProp, defaultRegion }: Prop
               {/* Period label */}
               <div style={{
                 padding: "3px 12px", borderRadius: 6,
-                background: "#fff", border: "1px solid rgba(15,23,42,0.12)",
-                fontSize: 12, fontWeight: 600, color: "#0F172A",
-                fontFamily: "Inter, sans-serif", minWidth: 110, textAlign: "center",
+                background: "#fff", border: "1px solid rgba(13,13,56,0.12)",
+                fontSize: 12, fontWeight: 600, color: "#0D0D38",
+                fontFamily: FONT_SECONDARY, minWidth: 110, textAlign: "center",
                 whiteSpace: "nowrap",
               }}>
                 {periodLabel(activePeriod, isChile)}
                 {isChile && (
-                  <span style={{ marginLeft: 6, fontSize: 10, color: "#94A3B8", fontFamily: "JetBrains Mono, monospace" }}>
+                  <span style={{ marginLeft: 6, fontSize: 10, color: "rgba(13,13,56,0.45)", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
                     {quarterLabel(activePeriod)}
                   </span>
                 )}
@@ -1267,12 +1270,12 @@ export default function TopPicksForm({ region: regionProp, defaultRegion }: Prop
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center",
                   width: 26, height: 26, borderRadius: 6,
-                  background: "transparent", border: "1px solid rgba(15,23,42,0.12)",
-                  color: canGoNewer ? "#475569" : "#CBD5E1",
+                  background: "transparent", border: "1px solid rgba(13,13,56,0.12)",
+                  color: canGoNewer ? "rgba(13,13,56,0.62)" : "rgba(13,13,56,0.28)",
                   cursor: canGoNewer ? "pointer" : "default",
                   transition: "all 0.12s",
                 }}
-                onMouseEnter={(e) => { if (canGoNewer) { (e.currentTarget as HTMLElement).style.background = "rgba(15,23,42,0.06)"; } }}
+                onMouseEnter={(e) => { if (canGoNewer) { (e.currentTarget as HTMLElement).style.background = "rgba(13,13,56,0.06)"; } }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
               >
                 <ChevronRight size={14} />
@@ -1283,8 +1286,8 @@ export default function TopPicksForm({ region: regionProp, defaultRegion }: Prop
                 <span style={{
                   marginLeft: 4,
                   fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10,
-                  background: "rgba(43,92,224,0.08)", color: "#2B5CE0",
-                  border: "1px solid rgba(43,92,224,0.15)",
+                  background: "rgba(32,68,220,0.08)", color: "#2044DC",
+                  border: "1px solid rgba(32,68,220,0.15)",
                 }}>
                   {picks.length} picks
                 </span>
@@ -1295,7 +1298,7 @@ export default function TopPicksForm({ region: regionProp, defaultRegion }: Prop
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             {/* Success toast */}
             {successMsg && (
-              <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#15803D" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#001EAF" }}>
                 <CheckCircle2 size={14} /> Saved successfully
               </span>
             )}
@@ -1307,22 +1310,22 @@ export default function TopPicksForm({ region: regionProp, defaultRegion }: Prop
                 style={{
                   display: "flex", alignItems: "center", gap: 6,
                   padding: "7px 14px", borderRadius: 8,
-                  background: mode === "summary" ? "rgba(43,92,224,0.10)" : "transparent",
-                  border: mode === "summary" ? "1px solid rgba(43,92,224,0.28)" : "1px solid rgba(15,23,42,0.12)",
-                  color: mode === "summary" ? "#1E3A8A" : "#475569",
+                  background: mode === "summary" ? "rgba(32,68,220,0.10)" : "transparent",
+                  border: mode === "summary" ? "1px solid rgba(32,68,220,0.28)" : "1px solid rgba(13,13,56,0.12)",
+                  color: mode === "summary" ? "#001EAF" : "rgba(13,13,56,0.62)",
                   fontSize: 12, fontWeight: 600,
                   cursor: "pointer", transition: "all 0.15s",
                 }}
                 onMouseEnter={(e) => {
                   if (mode !== "summary") {
-                    (e.currentTarget as HTMLElement).style.background = "rgba(15,23,42,0.04)";
-                    (e.currentTarget as HTMLElement).style.borderColor = "rgba(15,23,42,0.20)";
+                    (e.currentTarget as HTMLElement).style.background = "rgba(13,13,56,0.04)";
+                    (e.currentTarget as HTMLElement).style.borderColor = "rgba(13,13,56,0.20)";
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (mode !== "summary") {
                     (e.currentTarget as HTMLElement).style.background = "transparent";
-                    (e.currentTarget as HTMLElement).style.borderColor = "rgba(15,23,42,0.12)";
+                    (e.currentTarget as HTMLElement).style.borderColor = "rgba(13,13,56,0.12)";
                   }
                 }}
               >
@@ -1337,13 +1340,13 @@ export default function TopPicksForm({ region: regionProp, defaultRegion }: Prop
                 style={{
                   display: "flex", alignItems: "center", gap: 6,
                   padding: "7px 16px", borderRadius: 8,
-                  background: "#2B5CE0", border: "none",
+                  background: "#2044DC", border: "none",
                   color: "#fff", fontSize: 12, fontWeight: 700,
                   cursor: "pointer", transition: "background 0.15s",
-                  boxShadow: "0 2px 8px rgba(43,92,224,0.22)",
+                  boxShadow: "0 2px 8px rgba(32,68,220,0.22)",
                 }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "#1E4AC8"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "#2B5CE0"; }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "#001EAF"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "#2044DC"; }}
               >
                 <Pencil size={12} /> Edit / Add Top Picks
               </button>

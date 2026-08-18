@@ -1,5 +1,7 @@
 "use client";
 
+import { PATRIA, FONT_PRIMARY, FONT_SECONDARY } from "@/lib/patriaTheme";
+
 import { useEffect, useState } from "react";
 import CarteraView from "@/components/fondos/CarteraView";
 import ReturnsDashboard from "@/components/fondos/ReturnsDashboard";
@@ -120,9 +122,9 @@ export default function FondosPage() {
         <div className="flex flex-col items-center gap-4">
           <div
             className="w-10 h-10 rounded-full border-2 animate-spin"
-            style={{ borderColor: "rgba(43,92,224,0.15)", borderTopColor: "#2B5CE0" }}
+            style={{ borderColor: "rgba(32,68,220,0.15)", borderTopColor: "#2044DC" }}
           />
-          <p className="text-sm font-mono" style={{ color: "#64748B" }}>Loading funds...</p>
+          <p className="text-sm font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.62)" }}>Loading funds...</p>
         </div>
       </div>
     );
@@ -175,17 +177,21 @@ export default function FondosPage() {
   return (
     <div className="max-w-[1600px] mx-auto px-6 py-6">
       {/* Header */}
-      <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
+      {/* Regla 1 — título principal de la vista: banda dark-blue, Aptos Bold. */}
+      <div
+        className="flex items-start justify-between mb-6 gap-4 flex-wrap"
+        style={{ background: PATRIA.darkBlue, borderRadius: 10, padding: "14px 18px" }}
+      >
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", letterSpacing: "-0.035em", lineHeight: 1.15, margin: 0 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: PATRIA.white, fontFamily: FONT_PRIMARY, textTransform: "uppercase", letterSpacing: "0.02em", lineHeight: 1.15, margin: 0 }}>
             Funds
           </h1>
-          <p style={{ fontSize: 12, marginTop: 5, color: "#64748B", fontWeight: 500, letterSpacing: "0.01em" }}>
+          <p style={{ fontSize: 12, marginTop: 5, color: "rgba(255,255,255,0.72)", fontFamily: FONT_SECONDARY, fontWeight: 500, letterSpacing: "0.01em" }}>
             Portfolio composition · Deviation vs benchmark
           </p>
         </div>
         {selectedMeta && (
-          <div className="source-pill">
+          <div className="source-pill source-pill--on-dark">
             <RefreshCw size={10} />
             Data as of {fmtDate(selectedMeta.date)}
           </div>
@@ -197,8 +203,8 @@ export default function FondosPage() {
         className="flex items-center mb-4"
         style={{
           gap: 2, padding: "3px", borderRadius: 10,
-          background: "rgba(15,23,42,0.04)",
-          border: "1px solid rgba(15,23,42,0.08)",
+          background: "rgba(13,13,56,0.04)",
+          border: "1px solid rgba(13,13,56,0.08)",
           width: "fit-content",
         }}
       >
@@ -209,9 +215,9 @@ export default function FondosPage() {
             className="px-5 py-1.5 rounded-lg text-sm transition-all"
             style={{
               background: region === r ? "#FFFFFF"  : "transparent",
-              color:      region === r ? "#1B2E7E"  : "#475569",
-              border:     region === r ? "1px solid rgba(15,23,42,0.11)" : "1px solid transparent",
-              boxShadow:  region === r ? "0 1px 3px rgba(15,23,42,0.09)" : "none",
+              color:      region === r ? "#0D0D38"  : "rgba(13,13,56,0.62)",
+              border:     region === r ? "1px solid rgba(13,13,56,0.11)" : "1px solid transparent",
+              boxShadow:  region === r ? "0 1px 3px rgba(13,13,56,0.09)" : "none",
               fontWeight: region === r ? 700 : 500,
               cursor: "pointer",
             }}
@@ -223,7 +229,7 @@ export default function FondosPage() {
 
       {/* Fund quick-select */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <span className="text-xs font-medium" style={{ color: "#94A3B8" }}>Fund:</span>
+        <span className="text-xs font-medium" style={{ color: "rgba(13,13,56,0.45)" }}>Fund:</span>
         {uniqueNames.map((name) => {
           const displayName = fondosList.find((f) => f.name === name)?.displayName ?? name;
           const isActive = selectedMeta?.name === name;
@@ -233,9 +239,9 @@ export default function FondosPage() {
               onClick={() => selectFund(name)}
               className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
               style={{
-                background: isActive ? "rgba(43,92,224,0.10)" : "rgba(15,23,42,0.04)",
-                color: isActive ? "#2B5CE0" : "#64748B",
-                border: `1px solid ${isActive ? "rgba(43,92,224,0.25)" : "rgba(15,23,42,0.08)"}`,
+                background: isActive ? "rgba(32,68,220,0.10)" : "rgba(13,13,56,0.04)",
+                color: isActive ? "#2044DC" : "rgba(13,13,56,0.62)",
+                border: `1px solid ${isActive ? "rgba(32,68,220,0.25)" : "rgba(13,13,56,0.08)"}`,
               }}
             >
               {displayName}
@@ -249,8 +255,8 @@ export default function FondosPage() {
         className="flex items-center mb-5"
         style={{
           gap: 2, padding: "3px", borderRadius: 10,
-          background: "rgba(15,23,42,0.04)",
-          border: "1px solid rgba(15,23,42,0.08)",
+          background: "rgba(13,13,56,0.04)",
+          border: "1px solid rgba(13,13,56,0.08)",
           width: "fit-content",
         }}
       >
@@ -265,9 +271,9 @@ export default function FondosPage() {
             className="px-5 py-1.5 rounded-lg text-sm transition-all"
             style={{
               background: activeTab === key ? "#FFFFFF"  : "transparent",
-              color:      activeTab === key ? "#1B2E7E"  : "#475569",
-              border:     activeTab === key ? "1px solid rgba(15,23,42,0.11)" : "1px solid transparent",
-              boxShadow:  activeTab === key ? "0 1px 3px rgba(15,23,42,0.09)" : "none",
+              color:      activeTab === key ? "#0D0D38"  : "rgba(13,13,56,0.62)",
+              border:     activeTab === key ? "1px solid rgba(13,13,56,0.11)" : "1px solid transparent",
+              boxShadow:  activeTab === key ? "0 1px 3px rgba(13,13,56,0.09)" : "none",
               fontWeight: activeTab === key ? 700 : 500,
               cursor: "pointer",
             }}
@@ -293,10 +299,10 @@ export default function FondosPage() {
           {fondoData?.error && (
             <div
               className="flex items-center gap-3 px-4 py-3 rounded-lg mb-5"
-              style={{ background: "rgba(220,38,38,0.06)", border: "1px solid rgba(220,38,38,0.15)" }}
+              style={{ background: "rgba(248,72,94,0.06)", border: "1px solid rgba(248,72,94,0.15)" }}
             >
-              <AlertCircle size={16} style={{ color: "#DC2626" }} />
-              <p className="text-sm" style={{ color: "#DC2626" }}>
+              <AlertCircle size={16} style={{ color: "#F8485E" }} />
+              <p className="text-sm" style={{ color: "#F8485E" }}>
                 Could not load fund {fondoData.displayName}: {fondoData.error}
               </p>
             </div>
@@ -308,9 +314,9 @@ export default function FondosPage() {
               <div className="flex flex-col items-center gap-4">
                 <div
                   className="w-8 h-8 rounded-full border-2 animate-spin"
-                  style={{ borderColor: "rgba(43,92,224,0.15)", borderTopColor: "#2B5CE0" }}
+                  style={{ borderColor: "rgba(32,68,220,0.15)", borderTopColor: "#2044DC" }}
                 />
-                <p className="text-sm font-mono" style={{ color: "#64748B" }}>
+                <p className="text-sm font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.62)" }}>
                   Loading {selectedMeta?.displayName}...
                 </p>
               </div>
@@ -322,10 +328,10 @@ export default function FondosPage() {
               {/* Portfolio date stepper */}
               {snapshots.length > 1 && (
                 <div className="flex items-center gap-2 mb-4">
-                  <span className="text-xs font-medium mr-1" style={{ color: "#94A3B8" }}>Portfolio snapshot:</span>
+                  <span className="text-xs font-medium mr-1" style={{ color: "rgba(13,13,56,0.45)" }}>Portfolio snapshot:</span>
                   <div
                     className="flex items-center rounded-md overflow-hidden"
-                    style={{ border: "1px solid #E2E8F0", background: "#F8FAFC" }}
+                    style={{ border: "1px solid rgba(13,13,56,0.10)", background: "#F5F7FD" }}
                   >
                     <button
                       onClick={handlePrevDate}
@@ -334,18 +340,18 @@ export default function FondosPage() {
                       className="flex items-center justify-center transition-colors"
                       style={{
                         width: 32, height: 32,
-                        borderRight: "1px solid #E2E8F0",
-                        color: currentSnapshotIdx >= snapshots.length - 1 ? "#CBD5E1" : "#475569",
+                        borderRight: "1px solid rgba(13,13,56,0.10)",
+                        color: currentSnapshotIdx >= snapshots.length - 1 ? "rgba(13,13,56,0.28)" : "rgba(13,13,56,0.62)",
                         cursor: currentSnapshotIdx >= snapshots.length - 1 ? "not-allowed" : "pointer",
                         background: "transparent",
                       }}
                       onMouseEnter={(e) => {
                         if (currentSnapshotIdx < snapshots.length - 1)
-                          (e.currentTarget as HTMLButtonElement).style.color = "#1E3A8A";
+                          (e.currentTarget as HTMLButtonElement).style.color = "#001EAF";
                       }}
                       onMouseLeave={(e) => {
                         (e.currentTarget as HTMLButtonElement).style.color =
-                          currentSnapshotIdx >= snapshots.length - 1 ? "#CBD5E1" : "#475569";
+                          currentSnapshotIdx >= snapshots.length - 1 ? "rgba(13,13,56,0.28)" : "rgba(13,13,56,0.62)";
                       }}
                     >
                       <ChevronLeft size={15} />
@@ -356,7 +362,7 @@ export default function FondosPage() {
                       onChange={(e) => setSelectedId(e.target.value)}
                       style={{
                         border: "none", outline: "none", background: "transparent",
-                        fontSize: 13, fontWeight: 500, color: "#334155",
+                        fontSize: 13, fontWeight: 500, color: "#0D0D38",
                         padding: "0 10px", height: 32, cursor: "pointer",
                         appearance: "none", WebkitAppearance: "none",
                         minWidth: 140, textAlign: "center",
@@ -374,24 +380,24 @@ export default function FondosPage() {
                       className="flex items-center justify-center transition-colors"
                       style={{
                         width: 32, height: 32,
-                        borderLeft: "1px solid #E2E8F0",
-                        color: currentSnapshotIdx <= 0 ? "#CBD5E1" : "#475569",
+                        borderLeft: "1px solid rgba(13,13,56,0.10)",
+                        color: currentSnapshotIdx <= 0 ? "rgba(13,13,56,0.28)" : "rgba(13,13,56,0.62)",
                         cursor: currentSnapshotIdx <= 0 ? "not-allowed" : "pointer",
                         background: "transparent",
                       }}
                       onMouseEnter={(e) => {
                         if (currentSnapshotIdx > 0)
-                          (e.currentTarget as HTMLButtonElement).style.color = "#1E3A8A";
+                          (e.currentTarget as HTMLButtonElement).style.color = "#001EAF";
                       }}
                       onMouseLeave={(e) => {
                         (e.currentTarget as HTMLButtonElement).style.color =
-                          currentSnapshotIdx <= 0 ? "#CBD5E1" : "#475569";
+                          currentSnapshotIdx <= 0 ? "rgba(13,13,56,0.28)" : "rgba(13,13,56,0.62)";
                       }}
                     >
                       <ChevronRight size={15} />
                     </button>
                   </div>
-                  <span className="text-xs font-mono" style={{ color: "#94A3B8" }}>
+                  <span className="text-xs font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.45)" }}>
                     {currentSnapshotIdx + 1} / {snapshots.length}
                   </span>
                 </div>
@@ -409,7 +415,7 @@ export default function FondosPage() {
 
           {fondoData && !loadingData && fondoData.cartera.length === 0 && !fondoData.error && (
             <div className="flex items-center justify-center h-64 card">
-              <p style={{ color: "#64748B" }}>No portfolio data found for this fund</p>
+              <p style={{ color: "rgba(13,13,56,0.62)" }}>No portfolio data found for this fund</p>
             </div>
           )}
         </>

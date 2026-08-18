@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import type { ConsensusPoint } from "@/app/api/companies/[ticker]/route";
+import { PATRIA, FONT_SECONDARY } from "@/lib/patriaTheme";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -17,23 +18,23 @@ const CARDS: CardCfg[] = [
   {
     label:   "Revenue",
     aliases: ["REVENUE", "SALES"],
-    color:   "#059669",
-    bg:      "rgba(5,150,105,0.05)",
-    border:  "rgba(5,150,105,0.14)",
+    color:   PATRIA.darkBlue,
+    bg:      "rgba(13,13,56,0.05)",
+    border:  "rgba(13,13,56,0.14)",
   },
   {
     label:   "EBITDA",
     aliases: ["EBITDA"],
-    color:   "#2B5CE0",
-    bg:      "rgba(43,92,224,0.05)",
-    border:  "rgba(43,92,224,0.14)",
+    color:   PATRIA.kingBlue,
+    bg:      "rgba(32,68,220,0.05)",
+    border:  "rgba(32,68,220,0.14)",
   },
   {
     label:   "Net Income",
     aliases: ["NET_INCOME"],
-    color:   "#7C3AED",
-    bg:      "rgba(124,58,237,0.05)",
-    border:  "rgba(124,58,237,0.14)",
+    color:   PATRIA.orange,
+    bg:      "rgba(255,107,6,0.05)",
+    border:  "rgba(255,107,6,0.14)",
   },
 ];
 
@@ -125,7 +126,7 @@ export default function ConsensusCards({ data }: Props) {
     return (
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "center",
-        height: "100%", color: "#CBD5E1", fontSize: 12,
+        height: "100%", color: "rgba(13,13,56,0.28)", fontSize: 12,
       }}>
         No consensus estimates available
       </div>
@@ -138,7 +139,7 @@ export default function ConsensusCards({ data }: Props) {
       {/* Header */}
       <div style={{ marginBottom: 12 }}>
         <span style={{
-          fontSize: 10, fontWeight: 700, color: "#64748B",
+          fontSize: 10, fontWeight: 700, color: "rgba(13,13,56,0.62)",
           letterSpacing: "0.07em", textTransform: "uppercase",
         }}>
           Consensus Estimates — Latest Snapshot
@@ -191,8 +192,8 @@ export default function ConsensusCards({ data }: Props) {
                   <span style={{
                     fontSize: 9,
                     fontWeight: 700,
-                    fontFamily: "JetBrains Mono, monospace",
-                    color: growth >= 0 ? "#059669" : "#DC2626",
+                    fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
+                    color: growth >= 0 ? "#001EAF" : "#F8485E",
                   }}>
                     {growth >= 0 ? "▲" : "▼"} {Math.abs(growth).toFixed(1)}%
                   </span>
@@ -217,8 +218,8 @@ export default function ConsensusCards({ data }: Props) {
                     >
                       <span style={{
                         fontSize: 10,
-                        color: "#94A3B8",
-                        fontFamily: "JetBrains Mono, monospace",
+                        color: "rgba(13,13,56,0.45)",
+                        fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
                         fontWeight: 500,
                       }}>
                         {period}
@@ -226,8 +227,8 @@ export default function ConsensusCards({ data }: Props) {
                       <span style={{
                         fontSize: 13,
                         fontWeight: 700,
-                        fontFamily: "JetBrains Mono, monospace",
-                        color: v !== null ? card.color : "#CBD5E1",
+                        fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
+                        color: v !== null ? card.color : "rgba(13,13,56,0.28)",
                       }}>
                         {v !== null ? fmtCompact(v) : "—"}
                       </span>

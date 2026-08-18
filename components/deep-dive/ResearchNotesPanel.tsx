@@ -3,6 +3,8 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Loader2, Mail, X, ChevronDown, FileText, Pencil, Trash2, Save } from "lucide-react";
 import { useIsAdmin } from "@/lib/useIsAdmin";
+import { FONT_SECONDARY } from "@/lib/patriaTheme";
+import { prepareResearchHtml } from "@/lib/researchHtml";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -63,10 +65,10 @@ function categoryGroup(cat: string | null | undefined): Group {
 }
 
 const GROUP_COLORS: Record<Group, { bg: string; border: string; text: string }> = {
-  Earnings: { bg: "rgba(43,92,224,0.08)",   border: "rgba(43,92,224,0.22)",   text: "#1E3A8A" },
-  Update:   { bg: "rgba(5,150,105,0.08)",   border: "rgba(5,150,105,0.22)",   text: "#065F46" },
-  Cases:    { bg: "rgba(124,58,237,0.08)",  border: "rgba(124,58,237,0.22)",  text: "#4C1D95" },
-  Others:   { bg: "rgba(100,116,139,0.08)", border: "rgba(100,116,139,0.22)", text: "#334155" },
+  Earnings: { bg: "rgba(32,68,220,0.08)",   border: "rgba(32,68,220,0.22)",   text: "#001EAF" },
+  Update:   { bg: "rgba(0,30,175,0.08)",   border: "rgba(0,30,175,0.22)",   text: "#001EAF" },
+  Cases:    { bg: "rgba(0,30,175,0.08)",  border: "rgba(0,30,175,0.22)",  text: "#0D0D38" },
+  Others:   { bg: "rgba(13,13,56,0.08)", border: "rgba(13,13,56,0.22)", text: "#0D0D38" },
 };
 function groupColor(g: Group) { return GROUP_COLORS[g]; }
 
@@ -74,16 +76,16 @@ function groupColor(g: Group) { return GROUP_COLORS[g]; }
 function recColor(rec: string) {
   const t = rec.toUpperCase();
   if (/BUY|OVERWEIGHT|OUTPERFORM|ACCUMULATE|ADD|COMPRA|SOBREPONDERAR/.test(t))
-    return { bg: "rgba(5,150,105,0.10)",  border: "rgba(5,150,105,0.28)",  text: "#047857" };
+    return { bg: "rgba(0,30,175,0.10)",  border: "rgba(0,30,175,0.28)",  text: "#001EAF" };
   if (/SELL|UNDERWEIGHT|UNDERPERFORM|REDUCE|VENTA|SUBPONDERAR/.test(t))
-    return { bg: "rgba(220,38,38,0.10)",  border: "rgba(220,38,38,0.28)",  text: "#B91C1C" };
+    return { bg: "rgba(248,72,94,0.10)",  border: "rgba(248,72,94,0.28)",  text: "#F8485E" };
   if (/HOLD|NEUTRAL|MARKET|EQUAL|MANTENER|PERFORM/.test(t))
-    return { bg: "rgba(217,119,6,0.10)",  border: "rgba(217,119,6,0.28)",  text: "#B45309" };
-  return { bg: "rgba(100,116,139,0.10)", border: "rgba(100,116,139,0.26)", text: "#475569" };
+    return { bg: "rgba(255,107,6,0.10)",  border: "rgba(255,107,6,0.28)",  text: "#FF6B06" };
+  return { bg: "rgba(13,13,56,0.10)", border: "rgba(13,13,56,0.26)", text: "rgba(13,13,56,0.62)" };
 }
 
-const T3     = "#94A3B8";
-const BORDER = "rgba(15,23,42,0.08)";
+const T3     = "rgba(13,13,56,0.45)";
+const BORDER = "rgba(13,13,56,0.08)";
 
 const GRID = "95px minmax(150px,1fr) 120px 90px 120px 130px";
 
@@ -101,6 +103,9 @@ function DetailModal({
   const col   = groupColor(group);
   const tp    = fmtTarget(record.targetPrice);
   const rec   = cleanRec(record.recommendation);
+  // Solo el <body> del correo: el <style> de Word se descarta y las viñetas
+  // las pone `.research-html` (globals.css).
+  const bodyHtml = useMemo(() => prepareResearchHtml(record.html), [record.html]);
 
   // ── Admin edit state ──────────────────────────────────────────────────────
   const [editing, setEditing] = useState(false);
@@ -119,7 +124,7 @@ function DetailModal({
   const patch = (p: Partial<typeof form>) => setForm((f) => ({ ...f, ...p }));
   const editInput: React.CSSProperties = {
     width: "100%", boxSizing: "border-box", padding: "6px 9px", borderRadius: 7,
-    border: "1px solid rgba(15,23,42,0.14)", background: "#F8FAFF", fontSize: 12.5, color: "#0F172A", outline: "none",
+    border: "1px solid rgba(13,13,56,0.14)", background: "#F5F7FD", fontSize: 12.5, color: "#0D0D38", outline: "none",
   };
 
   async function save() {
@@ -173,7 +178,7 @@ function DetailModal({
       onClick={onClose}
       style={{
         position: "fixed", inset: 0, zIndex: 2000,
-        background: "rgba(15,23,42,0.55)",
+        background: "rgba(13,13,56,0.55)",
         backdropFilter: "blur(6px)",
         display: "flex", alignItems: "center", justifyContent: "center",
         padding: "32px 24px",
@@ -183,7 +188,7 @@ function DetailModal({
         onClick={(e) => e.stopPropagation()}
         style={{
           background: "#fff", borderRadius: 18,
-          boxShadow: "0 32px 80px rgba(15,23,42,0.28), 0 0 0 1px rgba(15,23,42,0.06)",
+          boxShadow: "0 32px 80px rgba(13,13,56,0.28), 0 0 0 1px rgba(13,13,56,0.06)",
           width: "100%", maxWidth: 1020,
           maxHeight: "90vh", display: "flex", flexDirection: "column",
           overflow: "hidden",
@@ -194,7 +199,7 @@ function DetailModal({
           display: "flex", alignItems: "flex-start", justifyContent: "space-between",
           padding: "22px 28px 18px",
           borderBottom: `1px solid ${BORDER}`,
-          background: "linear-gradient(to bottom, #F8FAFF, #fff)",
+          background: "linear-gradient(to bottom, #F5F7FD, #fff)",
           gap: 16, flexShrink: 0,
         }}>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -206,14 +211,14 @@ function DetailModal({
               }}>
                 {record.category}
               </span>
-              <span style={{ fontSize: 11, color: "#64748B", fontFamily: "JetBrains Mono, monospace", background: "#F1F5F9", borderRadius: 5, padding: "2px 7px" }}>
+              <span style={{ fontSize: 11, color: "rgba(13,13,56,0.62)", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", background: "#F5F7FD", borderRadius: 5, padding: "2px 7px" }}>
                 {formatDate(record.date)}
               </span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#2B5CE0", background: "rgba(43,92,224,0.07)", border: "1px solid rgba(43,92,224,0.18)", borderRadius: 6, padding: "2px 9px" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#2044DC", background: "rgba(32,68,220,0.07)", border: "1px solid rgba(32,68,220,0.18)", borderRadius: 6, padding: "2px 9px" }}>
                 {record.company}
               </span>
               {tp && (
-                <span style={{ fontSize: 11, fontWeight: 700, color: "#334155", background: "#F1F5F9", border: "1px solid rgba(15,23,42,0.10)", borderRadius: 6, padding: "2px 9px", fontFamily: "JetBrains Mono, monospace" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#0D0D38", background: "#F5F7FD", border: "1px solid rgba(13,13,56,0.10)", borderRadius: 6, padding: "2px 9px", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
                   TP {tp}
                 </span>
               )}
@@ -226,13 +231,13 @@ function DetailModal({
                 );
               })()}
             </div>
-            <div style={{ fontSize: 17, fontWeight: 800, color: "#0F172A", lineHeight: 1.3, letterSpacing: "-0.01em" }}>
+            <div style={{ fontSize: 17, fontWeight: 800, color: "#0D0D38", lineHeight: 1.3, letterSpacing: "-0.01em" }}>
               {record.title ?? record.subject ?? "No title"}
             </div>
             {record.from && (
               <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 7 }}>
                 <Mail size={11} style={{ color: T3, flexShrink: 0 }} />
-                <span style={{ fontSize: 11, color: "#64748B" }}>{record.from}</span>
+                <span style={{ fontSize: 11, color: "rgba(13,13,56,0.62)" }}>{record.from}</span>
               </div>
             )}
           </div>
@@ -245,8 +250,8 @@ function DetailModal({
                   title="Editar / mover esta nota"
                   style={{
                     display: "flex", alignItems: "center", gap: 5, height: 34, padding: "0 12px",
-                    borderRadius: 9, background: "rgba(43,92,224,0.07)", border: "1px solid rgba(43,92,224,0.22)",
-                    color: "#2B5CE0", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                    borderRadius: 9, background: "rgba(32,68,220,0.07)", border: "1px solid rgba(32,68,220,0.22)",
+                    color: "#2044DC", fontSize: 12, fontWeight: 600, cursor: "pointer",
                   }}
                 >
                   <Pencil size={13} /> Editar
@@ -258,8 +263,8 @@ function DetailModal({
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "center",
                     width: 34, height: 34, borderRadius: 9,
-                    background: "rgba(220,38,38,0.06)", border: "1px solid rgba(220,38,38,0.22)",
-                    color: "#DC2626", cursor: saving ? "not-allowed" : "pointer",
+                    background: "rgba(248,72,94,0.06)", border: "1px solid rgba(248,72,94,0.22)",
+                    color: "#F8485E", cursor: saving ? "not-allowed" : "pointer",
                   }}
                 >
                   <Trash2 size={15} />
@@ -272,10 +277,10 @@ function DetailModal({
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: 34, height: 34, borderRadius: 9, flexShrink: 0,
                 background: "transparent", border: `1px solid ${BORDER}`,
-                cursor: "pointer", color: "#64748B", transition: "all 0.12s",
+                cursor: "pointer", color: "rgba(13,13,56,0.62)", transition: "all 0.12s",
               }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(15,23,42,0.06)"; (e.currentTarget as HTMLElement).style.color = "#0F172A"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.color = "#64748B"; }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(13,13,56,0.06)"; (e.currentTarget as HTMLElement).style.color = "#0D0D38"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.color = "rgba(13,13,56,0.62)"; }}
             >
               <X size={16} />
             </button>
@@ -284,43 +289,43 @@ function DetailModal({
 
         {/* ── Admin edit form ─────────────────────────────────────────────── */}
         {editing && (
-          <div style={{ padding: "16px 28px", borderBottom: `1px solid ${BORDER}`, background: "#FBFCFE", flexShrink: 0 }}>
+          <div style={{ padding: "16px 28px", borderBottom: `1px solid ${BORDER}`, background: "#F5F7FD", flexShrink: 0 }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
               <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: "#64748B", letterSpacing: "0.05em", textTransform: "uppercase" }}>Company (mover)</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(13,13,56,0.62)", letterSpacing: "0.05em", textTransform: "uppercase" }}>Company (mover)</span>
                 <input value={form.company} onChange={(e) => patch({ company: e.target.value })} style={editInput} />
               </label>
               <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: "#64748B", letterSpacing: "0.05em", textTransform: "uppercase" }}>Categoría</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(13,13,56,0.62)", letterSpacing: "0.05em", textTransform: "uppercase" }}>Categoría</span>
                 <input value={form.category} onChange={(e) => patch({ category: e.target.value })} style={editInput} />
               </label>
               <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: "#64748B", letterSpacing: "0.05em", textTransform: "uppercase" }}>Fecha</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(13,13,56,0.62)", letterSpacing: "0.05em", textTransform: "uppercase" }}>Fecha</span>
                 <input type="date" value={form.date} onChange={(e) => patch({ date: e.target.value })} style={editInput} />
               </label>
               <label style={{ display: "flex", flexDirection: "column", gap: 4, gridColumn: "1 / -1" }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: "#64748B", letterSpacing: "0.05em", textTransform: "uppercase" }}>Título</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(13,13,56,0.62)", letterSpacing: "0.05em", textTransform: "uppercase" }}>Título</span>
                 <input value={form.title} onChange={(e) => patch({ title: e.target.value })} style={editInput} />
               </label>
               <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: "#64748B", letterSpacing: "0.05em", textTransform: "uppercase" }}>Target Price</span>
-                <input type="number" value={form.targetPrice} onChange={(e) => patch({ targetPrice: e.target.value })} style={{ ...editInput, fontFamily: "JetBrains Mono, monospace" }} />
+                <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(13,13,56,0.62)", letterSpacing: "0.05em", textTransform: "uppercase" }}>Target Price</span>
+                <input type="number" value={form.targetPrice} onChange={(e) => patch({ targetPrice: e.target.value })} style={{ ...editInput, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }} />
               </label>
               <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: "#64748B", letterSpacing: "0.05em", textTransform: "uppercase" }}>Recomendación</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(13,13,56,0.62)", letterSpacing: "0.05em", textTransform: "uppercase" }}>Recomendación</span>
                 <input value={form.recommendation} onChange={(e) => patch({ recommendation: e.target.value })} placeholder="BUY / HOLD / SELL…" style={editInput} />
               </label>
             </div>
 
             {err && (
-              <div style={{ marginTop: 10, fontSize: 12, color: "#B91C1C" }}>{err}</div>
+              <div style={{ marginTop: 10, fontSize: 12, color: "#F8485E" }}>{err}</div>
             )}
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
               <button
                 onClick={() => { setEditing(false); setErr(null); }}
                 disabled={saving}
-                style={{ padding: "7px 14px", borderRadius: 8, border: `1px solid ${BORDER}`, background: "#fff", color: "#64748B", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}
+                style={{ padding: "7px 14px", borderRadius: 8, border: `1px solid ${BORDER}`, background: "#fff", color: "rgba(13,13,56,0.62)", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}
               >
                 Cancelar
               </button>
@@ -330,7 +335,7 @@ function DetailModal({
                 style={{
                   display: "inline-flex", alignItems: "center", gap: 6,
                   padding: "7px 16px", borderRadius: 8, border: "none",
-                  background: saving ? "rgba(43,92,224,0.5)" : "#2B5CE0", color: "#fff",
+                  background: saving ? "rgba(32,68,220,0.5)" : "#2044DC", color: "#fff",
                   fontSize: 12.5, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer",
                 }}
               >
@@ -344,30 +349,31 @@ function DetailModal({
         {/* HTML body */}
         <div style={{ flex: 1, overflowY: "auto", background: "#fff" }}>
           {editing && (
-            <div style={{ maxWidth: 760, margin: "0 auto", padding: "14px 40px 0", display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 600, color: "#2B5CE0" }}>
+            <div style={{ maxWidth: 760, margin: "0 auto", padding: "14px 40px 0", display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 600, color: "#2044DC" }}>
               <Pencil size={12} /> Contenido editable — escribe directamente sobre el texto de la nota.
             </div>
           )}
           <div
             ref={bodyRef}
+            className="research-html"
             contentEditable={editing}
             suppressContentEditableWarning
             style={{
               maxWidth: 760, margin: "0 auto",
               padding: "24px 40px 48px",
-              fontSize: 14, lineHeight: 1.75, color: "#1E293B",
-              fontFamily: "Inter, -apple-system, sans-serif",
+              fontSize: 14, lineHeight: 1.75, color: "#0D0D38",
+              fontFamily: FONT_SECONDARY,
               ...(editing ? {
-                border: "1px solid rgba(43,92,224,0.35)",
+                border: "1px solid rgba(32,68,220,0.35)",
                 borderRadius: 10,
-                background: "#FDFEFF",
+                background: "#F5F7FD",
                 margin: "8px 24px 24px",
                 padding: "20px 28px",
                 minHeight: 140,
                 outline: "none",
               } : {}),
             }}
-            dangerouslySetInnerHTML={{ __html: record.html }}
+            dangerouslySetInnerHTML={{ __html: bodyHtml }}
           />
         </div>
       </div>
@@ -391,22 +397,22 @@ function NoteRow({ r, zebra, onClick }: { r: ResearchRecord; zebra: boolean; onC
         gap: "0 14px",
         padding: "11px 18px",
         alignItems: "center",
-        borderBottom: "1px solid rgba(15,23,42,0.05)",
-        background: zebra ? "rgba(15,23,42,0.012)" : "transparent",
+        borderBottom: "1px solid rgba(13,13,56,0.05)",
+        background: zebra ? "rgba(13,13,56,0.012)" : "transparent",
         cursor: "pointer",
         transition: "background 0.1s",
       }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(43,92,224,0.03)"; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = zebra ? "rgba(15,23,42,0.012)" : "transparent"; }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.03)"; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = zebra ? "rgba(13,13,56,0.012)" : "transparent"; }}
     >
       {/* Date */}
-      <div style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: "#64748B", whiteSpace: "nowrap" }}>
+      <div style={{ fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, color: "rgba(13,13,56,0.62)", whiteSpace: "nowrap" }}>
         {formatDate(r.date)}
       </div>
 
       {/* Title */}
-      <div style={{ fontSize: 12, color: "#334155", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-        {r.title ?? r.subject ?? <span style={{ color: "#CBD5E1", fontStyle: "italic" }}>No title</span>}
+      <div style={{ fontSize: 12, color: "#0D0D38", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        {r.title ?? r.subject ?? <span style={{ color: "rgba(13,13,56,0.28)", fontStyle: "italic" }}>No title</span>}
       </div>
 
       {/* Category badge */}
@@ -423,7 +429,7 @@ function NoteRow({ r, zebra, onClick }: { r: ResearchRecord; zebra: boolean; onC
       </div>
 
       {/* Target price */}
-      <div style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, fontWeight: 600, color: tp ? "#334155" : "#CBD5E1", whiteSpace: "nowrap" }}>
+      <div style={{ fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, fontWeight: 600, color: tp ? "#0D0D38" : "rgba(13,13,56,0.28)", whiteSpace: "nowrap" }}>
         {tp ?? "—"}
       </div>
 
@@ -440,14 +446,14 @@ function NoteRow({ r, zebra, onClick }: { r: ResearchRecord; zebra: boolean; onC
             {rec}
           </span>
         ) : (
-          <span style={{ fontSize: 11, color: "#CBD5E1" }}>—</span>
+          <span style={{ fontSize: 11, color: "rgba(13,13,56,0.28)" }}>—</span>
         )}
       </div>
 
       {/* From */}
       <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
-        <Mail size={10} style={{ flexShrink: 0, color: "#CBD5E1" }} />
-        <span style={{ fontSize: 11, color: "#64748B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        <Mail size={10} style={{ flexShrink: 0, color: "rgba(13,13,56,0.28)" }} />
+        <span style={{ fontSize: 11, color: "rgba(13,13,56,0.62)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
           {senderName(r.from)}
         </span>
       </div>
@@ -527,9 +533,9 @@ export default function ResearchNotesPanel({ ticker }: Props) {
   if (records.length === 0) {
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "52px 24px", gap: 10 }}>
-        <FileText size={28} style={{ color: "#E2E8F0" }} />
+        <FileText size={28} style={{ color: "rgba(13,13,56,0.10)" }} />
         <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "#64748B", marginBottom: 3 }}>No research notes for {ticker}</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(13,13,56,0.62)", marginBottom: 3 }}>No research notes for {ticker}</div>
           <div style={{ fontSize: 12, color: T3 }}>Notes are ingested automatically from email</div>
         </div>
       </div>
@@ -545,9 +551,9 @@ export default function ResearchNotesPanel({ ticker }: Props) {
         {/* Filter + count row */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span style={{
-            fontSize: 12, fontWeight: 700, fontFamily: "JetBrains Mono, monospace",
-            color: "#2B5CE0", background: "rgba(43,92,224,0.07)",
-            border: "1px solid rgba(43,92,224,0.18)",
+            fontSize: 12, fontWeight: 700, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
+            color: "#2044DC", background: "rgba(32,68,220,0.07)",
+            border: "1px solid rgba(32,68,220,0.18)",
             borderRadius: 7, padding: "3px 10px",
           }}>
             {visible.length} note{visible.length !== 1 ? "s" : ""}
@@ -563,11 +569,11 @@ export default function ResearchNotesPanel({ ticker }: Props) {
                   appearance: "none",
                   padding: "5px 26px 5px 10px",
                   borderRadius: 7,
-                  background: fGroup ? "rgba(43,92,224,0.07)" : "#F8FAFF",
-                  border: fGroup ? "1px solid rgba(43,92,224,0.28)" : `1px solid ${BORDER}`,
-                  color: fGroup ? "#1E3A8A" : "#64748B",
+                  background: fGroup ? "rgba(32,68,220,0.07)" : "#F5F7FD",
+                  border: fGroup ? "1px solid rgba(32,68,220,0.28)" : `1px solid ${BORDER}`,
+                  color: fGroup ? "#001EAF" : "rgba(13,13,56,0.62)",
                   fontSize: 12, fontWeight: fGroup ? 600 : 400,
-                  fontFamily: "Inter, sans-serif",
+                  fontFamily: FONT_SECONDARY,
                   cursor: "pointer", outline: "none",
                   minWidth: 130,
                 }}
@@ -575,7 +581,7 @@ export default function ResearchNotesPanel({ ticker }: Props) {
                 <option value="">All groups</option>
                 {groups.map((g) => <option key={g} value={g}>{g}</option>)}
               </select>
-              <ChevronDown size={12} style={{ position: "absolute", right: 7, pointerEvents: "none", color: fGroup ? "#2B5CE0" : T3 }} />
+              <ChevronDown size={12} style={{ position: "absolute", right: 7, pointerEvents: "none", color: fGroup ? "#2044DC" : T3 }} />
             </div>
           )}
 
@@ -585,8 +591,8 @@ export default function ResearchNotesPanel({ ticker }: Props) {
               style={{
                 display: "flex", alignItems: "center", gap: 4,
                 padding: "4px 8px", borderRadius: 6,
-                background: "transparent", border: "1px solid rgba(220,38,38,0.18)",
-                color: "#DC2626", fontSize: 11, fontWeight: 600,
+                background: "transparent", border: "1px solid rgba(248,72,94,0.18)",
+                color: "#F8485E", fontSize: 11, fontWeight: 600,
                 cursor: "pointer",
               }}
             >
@@ -608,8 +614,8 @@ export default function ResearchNotesPanel({ ticker }: Props) {
             gridTemplateColumns: GRID,
             gap: "0 14px",
             padding: "8px 18px",
-            background: "#F8FAFF",
-            borderBottom: "1px solid rgba(15,23,42,0.06)",
+            background: "#F5F7FD",
+            borderBottom: "1px solid rgba(13,13,56,0.06)",
           }}>
             {["Date", "Title", "Category", "Target Price", "Recommendation", "From"].map((h) => (
               <div key={h} style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.09em", color: T3, textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -632,13 +638,13 @@ export default function ResearchNotesPanel({ ticker }: Props) {
                     display: "flex", alignItems: "center", gap: 8,
                     padding: "7px 18px",
                     background: gc.bg,
-                    borderTop: "1px solid rgba(15,23,42,0.05)",
+                    borderTop: "1px solid rgba(13,13,56,0.05)",
                     borderBottom: `1px solid ${gc.border}`,
                   }}>
                     <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: gc.text }}>
                       {group}
                     </span>
-                    <span style={{ fontSize: 10, fontWeight: 600, color: gc.text, opacity: 0.7, fontFamily: "JetBrains Mono, monospace" }}>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: gc.text, opacity: 0.7, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
                       {rows.length}
                     </span>
                   </div>

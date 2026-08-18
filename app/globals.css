@@ -2,6 +2,44 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ══════════════════════════════════════════════════════════════════════════════
+   MANUAL DE IDENTIDAD — PATRIA INVESTMENTS / MONEDA PATRIA INVESTMENTS
+   Tokens espejo de tailwind.config.ts. Existen como CSS vars porque buena parte
+   de la plataforma pinta con estilos inline (Recharts, tablas) donde no llegan
+   las clases de Tailwind.
+   ══════════════════════════════════════════════════════════════════════════ */
+:root {
+  /* Main blues */
+  --patria-dark-blue:       #0D0D38;
+  --patria-blue:            #001EAF;
+  --patria-king-blue:       #2044DC;
+  --patria-dark-sky-blue:   #4571FF;
+  --patria-sky-blue:        #88AAFF;
+  /* Secondary */
+  --patria-orange:          #FF6B06;
+  --patria-light-orange:    #FFBB8D;
+  --patria-pink:            #F8485E;
+  --patria-light-pink:      #FF99AF;
+  --patria-turquoise:       #46E8E0;
+  --patria-light-turquoise: #B6FFE3;
+
+  /* Tipografía.
+     Aptos no está en Google Fonts: se resuelve desde la instalación local
+     (viene con Microsoft 365 / Windows 11). Para garantizarla en cualquier
+     equipo, dejar los .woff2 en /public/fonts y declarar el @font-face abajo. */
+  --font-primary:   'Aptos', 'Aptos Display', 'Segoe UI', system-ui, sans-serif;
+  --font-secondary: Arial, Helvetica, sans-serif;
+}
+
+/*
+@font-face {
+  font-family: 'Aptos';
+  src: local('Aptos'), url('/fonts/Aptos.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+}
+*/
+
 /* ── Base ────────────────────────────────────────────────────────────────────── */
 @layer base {
   * {
@@ -10,16 +48,17 @@
     box-sizing: border-box;
   }
 
+  /* Regla 4 — texto general: Arial, color patria-dark-blue. */
   body {
-    font-family: var(--font-sans, 'Figtree', system-ui, sans-serif);
-    color: #0F172A;
+    font-family: var(--font-secondary);
+    color: var(--patria-dark-blue);
   }
 
   /* Thin, elegant scrollbar */
   ::-webkit-scrollbar          { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track    { background: transparent; }
-  ::-webkit-scrollbar-thumb    { background: rgba(15,23,42,0.14); border-radius: 10px; }
-  ::-webkit-scrollbar-thumb:hover { background: rgba(15,23,42,0.26); }
+  ::-webkit-scrollbar-thumb    { background: rgba(13,13,56,0.14); border-radius: 10px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(13,13,56,0.26); }
   ::-webkit-scrollbar-corner   { background: transparent; }
 }
 
@@ -27,39 +66,105 @@
 @layer utilities {
   /* Subtle grid on body background */
   .grid-bg {
-    background-color: #EEF2F7;
+    background-color: #F5F7FD;
     background-image:
-      linear-gradient(rgba(15,23,42,0.028) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(15,23,42,0.028) 1px, transparent 1px);
+      linear-gradient(rgba(13,13,56,0.028) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(13,13,56,0.028) 1px, transparent 1px);
     background-size: 48px 48px;
   }
+
+  .font-primary   { font-family: var(--font-primary); }
+  .font-secondary { font-family: var(--font-secondary); }
 }
 
-/* ── Components ──────────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════════════
+   JERARQUÍA CORPORATIVA — Reglas 1 a 5
+   Primitivas para no re-derivar el manual en cada vista.
+   ══════════════════════════════════════════════════════════════════════════ */
 @layer components {
+
+  /* Regla 1 — Título principal: fondo dark-blue, texto blanco MAYÚSCULAS, Aptos Bold. */
+  .patria-title {
+    background: var(--patria-dark-blue);
+    color: #FFFFFF;
+    font-family: var(--font-primary);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  /* Regla 2 — Subtítulo: fondo king-blue, texto blanco, Arial Bold. */
+  .patria-subtitle {
+    background: var(--patria-king-blue);
+    color: #FFFFFF;
+    font-family: var(--font-secondary);
+    font-weight: 700;
+  }
+
+  /* Regla 3 — Destacado: fondo claro de la paleta, texto dark-blue Arial Bold.
+     El fondo por defecto es sky-blue; sobrescribir con bg-patria-light-orange,
+     bg-patria-light-turquoise, etc. según el caso. */
+  .patria-highlight {
+    background: var(--patria-sky-blue);
+    color: var(--patria-dark-blue);
+    font-family: var(--font-secondary);
+    font-weight: 700;
+  }
+
+  /* Reglas 4 y 5 — Tabla corporativa.
+     Cuerpo Arial / dark-blue; primera columna Arial Bold en king-blue.
+     Sobre fondo oscuro (.patria-table--dark) la primera columna va en blanco. */
+  .patria-table {
+    font-family: var(--font-secondary);
+    color: var(--patria-dark-blue);
+    border-collapse: collapse;
+    width: 100%;
+  }
+  .patria-table thead th {
+    background: var(--patria-king-blue);
+    color: #FFFFFF;
+    font-family: var(--font-secondary);
+    font-weight: 700;
+    text-align: right;
+  }
+  .patria-table thead th:first-child { text-align: left; }
+  .patria-table tbody td {
+    color: var(--patria-dark-blue);
+    text-align: right;
+    border-bottom: 1px solid rgba(13,13,56,0.08);
+  }
+  .patria-table tbody td:first-child,
+  .patria-table tbody th:first-child {
+    color: var(--patria-king-blue);
+    font-weight: 700;
+    text-align: left;
+  }
+  .patria-table--dark tbody td:first-child,
+  .patria-table--dark tbody th:first-child { color: #FFFFFF; }
+  .patria-table--dark tbody td { color: #FFFFFF; border-bottom-color: rgba(255,255,255,0.12); }
 
   /* Card — white surface, subtle border + shadow */
   .card {
     background: #FFFFFF;
-    border: 1px solid rgba(15,23,42,0.08);
+    border: 1px solid rgba(13,13,56,0.08);
     border-radius: 12px;
-    box-shadow: 0 1px 3px rgba(15,23,42,0.05), 0 1px 2px rgba(15,23,42,0.03);
+    box-shadow: 0 1px 3px rgba(13,13,56,0.05), 0 1px 2px rgba(13,13,56,0.03);
   }
 
-  /* Card with 3-px brand-blue top accent */
+  /* Card with 3-px king-blue top accent */
   .card-accent {
     background: #FFFFFF;
-    border: 1px solid rgba(15,23,42,0.08);
-    border-top: 3px solid #2B5CE0;
+    border: 1px solid rgba(13,13,56,0.08);
+    border-top: 3px solid var(--patria-king-blue);
     border-radius: 12px;
-    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+    box-shadow: 0 1px 3px rgba(13,13,56,0.05);
   }
 
   /* ── Loading spinner ──────────────────────────────────────────────────── */
   .spinner {
     border-radius: 50%;
-    border: 2px solid rgba(43,92,224,0.15);
-    border-top-color: #2B5CE0;
+    border: 2px solid rgba(32,68,220,0.15);
+    border-top-color: var(--patria-king-blue);
     animation: spin 0.75s linear infinite;
   }
 
@@ -71,12 +176,78 @@
     font-size: 10px;
     font-family: var(--font-mono, 'JetBrains Mono', monospace);
     letter-spacing: 0.03em;
-    background: rgba(15,23,42,0.04);
-    border: 1px solid rgba(15,23,42,0.09);
+    background: rgba(13,13,56,0.04);
+    border: 1px solid rgba(13,13,56,0.09);
     border-radius: 20px;
     padding: 3px 11px;
-    color: #64748B;
+    color: rgba(13,13,56,0.60);
     white-space: nowrap;
+  }
+
+  /* Variante para pills dentro de una banda de título dark-blue (Regla 1). */
+  .source-pill--on-dark {
+    background: rgba(255,255,255,0.10);
+    border-color: rgba(255,255,255,0.18);
+    color: rgba(255,255,255,0.72);
+  }
+
+  /* ── Cuerpo de las notas de research (HTML de email) ────────────────────
+     El preflight de Tailwind resetea `ol, ul { list-style: none; margin: 0;
+     padding: 0 }` y `p, h1-h6 { margin: 0 }`, así que las viñetas y la sangría
+     de los correos desaparecen. Acá se restauran, pero solo dentro del
+     contenedor de la nota para no revertir el reset en el resto de la app.
+     Ver lib/researchHtml.ts (limpia el <style> de Word antes de inyectar). */
+  .research-html {
+    overflow-wrap: break-word;
+    overflow-x: auto;
+  }
+  .research-html ul,
+  .research-html ol {
+    margin: 0.5em 0;
+    padding-left: 1.6em;
+  }
+  .research-html ul       { list-style: disc outside; }
+  .research-html ul ul    { list-style: circle outside; }
+  .research-html ul ul ul { list-style: square outside; }
+  .research-html ol       { list-style: decimal outside; }
+  .research-html ol ol    { list-style: lower-alpha outside; }
+  .research-html li       { margin: 0.2em 0; }
+  /* Word envuelve el contenido de cada <li> en <p class="MsoNormal">. */
+  .research-html li > p   { margin: 0; }
+
+  .research-html h1, .research-html h2, .research-html h3,
+  .research-html h4, .research-html h5, .research-html h6 {
+    font-weight: 700;
+    margin: 1em 0 0.4em;
+    line-height: 1.3;
+  }
+  .research-html h1 { font-size: 1.5em; }
+  .research-html h2 { font-size: 1.3em; }
+  .research-html h3 { font-size: 1.15em; }
+  .research-html h4,
+  .research-html h5,
+  .research-html h6 { font-size: 1em; }
+
+  .research-html a {
+    color: var(--patria-king-blue);
+    text-decoration: underline;
+  }
+  .research-html img {
+    max-width: 100%;
+    height: auto;
+  }
+  .research-html table {
+    max-width: 100%;
+    border-collapse: collapse;
+  }
+  .research-html blockquote {
+    margin: 0.6em 0;
+    padding-left: 0.9em;
+    border-left: 2px solid rgba(13,13,56,0.14);
+  }
+  .research-html hr {
+    margin: 1em 0;
+    border-top: 1px solid rgba(13,13,56,0.10);
   }
 }
 

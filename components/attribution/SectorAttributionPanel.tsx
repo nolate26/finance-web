@@ -2,20 +2,22 @@
 
 import { useState, useEffect, useCallback } from "react";
 import type { SectorAttributionPayload, SectorRow } from "@/app/api/attribution/sector/route";
+import { PATRIA, FONT_SECONDARY } from "@/lib/patriaTheme";
+import { PatriaTitle } from "@/components/patria/PatriaTitle";
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
-const BORDER    = "rgba(15,23,42,0.08)";
-const TEXT1     = "#0F172A";
-const TEXT2     = "#64748B";
-const GREEN     = "#059669";
-const RED       = "#DC2626";
-const BLUE      = "#2563EB";
-const PURPLE    = "#7C3AED";
+const BORDER    = "rgba(13,13,56,0.08)";
+const TEXT1     = PATRIA.darkBlue;   // Regla 4
+const TEXT2     = "rgba(13,13,56,0.62)";
+const GREEN     = PATRIA.blue;       // positivo
+const RED       = PATRIA.pink;       // negativo
+const BLUE      = PATRIA.kingBlue;   // Regla 5 / interactivo
+const PURPLE    = "#001EAF";
 const cardStyle: React.CSSProperties = {
   background: "#FFFFFF",
   border: `1px solid ${BORDER}`,
   borderRadius: 12,
-  boxShadow: "0 1px 4px rgba(15,23,42,0.06)",
+  boxShadow: "0 1px 4px rgba(13,13,56,0.06)",
 };
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -51,7 +53,7 @@ function KpiCard({ label, value, valueColor, sub }: {
       <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.10em", color: TEXT2, textTransform: "uppercase" }}>
         {label}
       </span>
-      <span style={{ fontSize: 26, fontWeight: 800, fontFamily: "JetBrains Mono, monospace", color: valueColor ?? TEXT1, letterSpacing: "-0.02em" }}>
+      <span style={{ fontSize: 26, fontWeight: 800, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", color: valueColor ?? TEXT1, letterSpacing: "-0.02em" }}>
         {value}
       </span>
       {sub && <span style={{ fontSize: 10, color: TEXT2 }}>{sub}</span>}
@@ -64,10 +66,10 @@ function EffectCell({ v, dec = 2 }: { v: number; dec?: number }) {
   const zero = Math.abs(v) < 1e-9;
   const pos  = v > 0;
   const color  = zero ? TEXT2 : pos ? GREEN : RED;
-  const bg     = zero ? "transparent" : pos ? "rgba(5,150,105,0.09)"  : "rgba(220,38,38,0.09)";
-  const border = zero ? "transparent" : pos ? "rgba(5,150,105,0.25)"  : "rgba(220,38,38,0.25)";
+  const bg     = zero ? "transparent" : pos ? "rgba(0,30,175,0.09)"  : "rgba(248,72,94,0.09)";
+  const border = zero ? "transparent" : pos ? "rgba(0,30,175,0.25)"  : "rgba(248,72,94,0.25)";
   return (
-    <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11, fontWeight: 700 }}>
+    <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, fontWeight: 700 }}>
       <span style={{ color, background: bg, border: `1px solid ${border}`, borderRadius: 4, padding: "2px 8px", display: "inline-block", minWidth: 64, textAlign: "right" }}>
         {fmtPct(v, dec)}
       </span>
@@ -123,9 +125,9 @@ export default function SectorAttributionPanel() {
 
   const selectStyle: React.CSSProperties = {
     padding: "6px 10px", borderRadius: 8,
-    background: "#F8FAFF", border: `1px solid ${BORDER}`,
+    background: "#F5F7FD", border: `1px solid ${BORDER}`,
     color: TEXT1, fontSize: 12, cursor: "pointer", outline: "none",
-    fontFamily: "JetBrains Mono, monospace",
+    fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
   };
 
   const Th = ({ col, label, right }: { col: SortKey; label: string; right?: boolean }) => (
@@ -137,8 +139,8 @@ export default function SectorAttributionPanel() {
         textTransform: "uppercase",
         color: sortKey === col ? BLUE : TEXT2,
         cursor: "pointer", userSelect: "none", whiteSpace: "nowrap",
-        background: "#F0F4FA",
-        borderBottom: "1px solid rgba(15,23,42,0.08)",
+        background: "#F5F7FD",
+        borderBottom: "1px solid rgba(13,13,56,0.08)",
       }}
     >
       {label}{sortKey === col ? (sortDir === "desc" ? " ↓" : " ↑") : ""}
@@ -172,24 +174,24 @@ export default function SectorAttributionPanel() {
 
         <span style={{
           fontSize: 10, fontWeight: 700, color: PURPLE,
-          background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.20)",
-          borderRadius: 6, padding: "3px 10px", fontFamily: "JetBrains Mono, monospace",
+          background: "rgba(0,30,175,0.08)", border: "1px solid rgba(0,30,175,0.20)",
+          borderRadius: 6, padding: "3px 10px", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
         }}>
           vs {fundInfo.bench}
         </span>
 
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ fontSize: 11, color: TEXT2, fontWeight: 600 }}>Period</span>
-          <div style={{ display: "flex", gap: 2, background: "rgba(15,23,42,0.04)", border: `1px solid ${BORDER}`, borderRadius: 8, padding: 3 }}>
+          <div style={{ display: "flex", gap: 2, background: "rgba(13,13,56,0.04)", border: `1px solid ${BORDER}`, borderRadius: 8, padding: 3 }}>
             {PERIODS.map((p) => {
               const active = period === p.value;
               return (
                 <button key={p.value} onClick={() => setPeriod(p.value)} style={{
                   padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
                   cursor: "pointer", transition: "all 0.1s",
-                  background: active ? "rgba(37,99,235,0.12)" : "transparent",
-                  color:      active ? "#1E3A8A" : TEXT2,
-                  border:     active ? "1px solid rgba(37,99,235,0.28)" : "1px solid transparent",
+                  background: active ? "rgba(32,68,220,0.12)" : "transparent",
+                  color:      active ? "#001EAF" : TEXT2,
+                  border:     active ? "1px solid rgba(32,68,220,0.28)" : "1px solid transparent",
                 }}>
                   {p.label}
                 </button>
@@ -199,7 +201,7 @@ export default function SectorAttributionPanel() {
         </div>
 
         {data && (
-          <span style={{ marginLeft: "auto", fontSize: 11, color: TEXT2, fontFamily: "JetBrains Mono, monospace" }}>
+          <span style={{ marginLeft: "auto", fontSize: 11, color: TEXT2, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
             Weights: {data.summary.reportDate} · Returns: {data.summary.snapshotDate} · {data.summary.nAssets} assets · {data.sectors.length} sectors
           </span>
         )}
@@ -215,8 +217,8 @@ export default function SectorAttributionPanel() {
       {/* ── Loading ── */}
       {loading && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "64px 0", gap: 12 }}>
-          <div style={{ width: 28, height: 28, borderRadius: "50%", border: "2px solid rgba(37,99,235,0.15)", borderTopColor: BLUE, animation: "spin 0.8s linear infinite" }} />
-          <span style={{ fontSize: 12, color: TEXT2, fontFamily: "JetBrains Mono, monospace" }}>
+          <div style={{ width: 28, height: 28, borderRadius: "50%", border: "2px solid rgba(32,68,220,0.15)", borderTopColor: BLUE, animation: "spin 0.8s linear infinite" }} />
+          <span style={{ fontSize: 12, color: TEXT2, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
             Computing sector attribution for {fundInfo.label}…
           </span>
         </div>
@@ -224,7 +226,7 @@ export default function SectorAttributionPanel() {
 
       {/* ── Error ── */}
       {error && !loading && (
-        <div style={{ background: "rgba(220,38,38,0.06)", border: "1px solid rgba(220,38,38,0.15)", borderRadius: 10, padding: "16px 24px", textAlign: "center" }}>
+        <div style={{ background: "rgba(248,72,94,0.06)", border: "1px solid rgba(248,72,94,0.15)", borderRadius: 10, padding: "16px 24px", textAlign: "center" }}>
           <p style={{ color: RED, fontSize: 13, marginBottom: 8 }}>{error}</p>
           <button onClick={fetchData} style={{ ...selectStyle, color: BLUE }}>Retry</button>
         </div>
@@ -256,7 +258,7 @@ export default function SectorAttributionPanel() {
           </div>
 
           {/* Methodology banner */}
-          <div style={{ ...cardStyle, padding: "10px 16px", background: "rgba(37,99,235,0.03)", borderColor: "rgba(37,99,235,0.12)" }}>
+          <div style={{ ...cardStyle, padding: "10px 16px", background: "rgba(32,68,220,0.03)", borderColor: "rgba(32,68,220,0.12)" }}>
             <div style={{ display: "flex", gap: 20, flexWrap: "wrap", alignItems: "baseline" }}>
               <span style={{ fontSize: 10, fontWeight: 700, color: BLUE, letterSpacing: "0.08em", textTransform: "uppercase" }}>
                 Brinson-Fachler · Sector Multi-Layer
@@ -272,7 +274,7 @@ export default function SectorAttributionPanel() {
               </span>
               <span style={{ fontSize: 11, color: TEXT2 }}>
                 <b style={{ color: TEXT1 }}>Identity:</b> Σ(A+S+I) = R<sub>p</sub> − R<sub>b</sub> =&nbsp;
-                <span style={{ fontFamily: "JetBrains Mono, monospace", fontWeight: 700, color: numColor(data.summary.totalAlpha) }}>
+                <span style={{ fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontWeight: 700, color: numColor(data.summary.totalAlpha) }}>
                   {fmtPct(data.summary.totalAlpha, 3)}
                 </span>
               </span>
@@ -281,27 +283,26 @@ export default function SectorAttributionPanel() {
 
           {/* Sector table */}
           <div style={{ ...cardStyle, overflow: "hidden" }}>
-            <div style={{ padding: "14px 16px 0", marginBottom: 4, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.10em", color: TEXT2, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ display: "inline-block", width: 3, height: 12, borderRadius: 2, background: BLUE }} />
-                Sector Attribution — {selPeriod.label}
-              </div>
-              <span style={{ fontSize: 11, color: TEXT2 }}>Click column headers to sort</span>
-            </div>
+            <PatriaTitle
+              style={{ borderRadius: 0, marginBottom: 4 }}
+              right={<span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: 11, opacity: 0.75 }}>Click column headers to sort</span>}
+            >
+              Sector Attribution — {selPeriod.label}
+            </PatriaTitle>
 
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
                   {/* Group row */}
                   <tr>
-                    <th colSpan={3} style={{ padding: "5px 10px", background: "#F0F4FA", fontSize: 9, fontWeight: 700, color: TEXT2, letterSpacing: "0.08em", textTransform: "uppercase", textAlign: "left", borderBottom: "1px solid rgba(15,23,42,0.08)" }} />
-                    <th colSpan={2} style={{ padding: "5px 10px", background: "rgba(37,99,235,0.06)", fontSize: 9, fontWeight: 800, color: BLUE, letterSpacing: "0.08em", textTransform: "uppercase", textAlign: "center", borderBottom: "2px solid rgba(37,99,235,0.20)", borderLeft: "1px solid rgba(15,23,42,0.07)" }}>
+                    <th colSpan={3} style={{ padding: "5px 10px", background: "#F5F7FD", fontSize: 9, fontWeight: 700, color: TEXT2, letterSpacing: "0.08em", textTransform: "uppercase", textAlign: "left", borderBottom: "1px solid rgba(13,13,56,0.08)" }} />
+                    <th colSpan={2} style={{ padding: "5px 10px", background: "rgba(32,68,220,0.06)", fontSize: 9, fontWeight: 800, color: BLUE, letterSpacing: "0.08em", textTransform: "uppercase", textAlign: "center", borderBottom: "2px solid rgba(32,68,220,0.20)", borderLeft: "1px solid rgba(13,13,56,0.07)" }}>
                       Sector Return
                     </th>
-                    <th colSpan={3} style={{ padding: "5px 10px", background: "rgba(16,185,129,0.06)", fontSize: 9, fontWeight: 800, color: GREEN, letterSpacing: "0.08em", textTransform: "uppercase", textAlign: "center", borderBottom: "2px solid rgba(16,185,129,0.20)", borderLeft: "1px solid rgba(15,23,42,0.07)" }}>
+                    <th colSpan={3} style={{ padding: "5px 10px", background: "rgba(0,30,175,0.06)", fontSize: 9, fontWeight: 800, color: GREEN, letterSpacing: "0.08em", textTransform: "uppercase", textAlign: "center", borderBottom: "2px solid rgba(0,30,175,0.20)", borderLeft: "1px solid rgba(13,13,56,0.07)" }}>
                       Attribution Effects
                     </th>
-                    <th style={{ padding: "5px 10px", background: "#F0F4FA", fontSize: 9, fontWeight: 800, color: TEXT1, letterSpacing: "0.08em", textTransform: "uppercase", textAlign: "center", borderBottom: "1px solid rgba(15,23,42,0.08)", borderLeft: "1px solid rgba(15,23,42,0.07)" }}>
+                    <th style={{ padding: "5px 10px", background: "#F5F7FD", fontSize: 9, fontWeight: 800, color: TEXT1, letterSpacing: "0.08em", textTransform: "uppercase", textAlign: "center", borderBottom: "1px solid rgba(13,13,56,0.08)", borderLeft: "1px solid rgba(13,13,56,0.07)" }}>
                       Total
                     </th>
                   </tr>
@@ -322,36 +323,36 @@ export default function SectorAttributionPanel() {
                     <tr
                       key={s.sectorName}
                       style={{
-                        background: i % 2 === 0 ? "#FFFFFF" : "rgba(15,23,42,0.018)",
-                        borderBottom: "1px solid rgba(15,23,42,0.05)",
+                        background: i % 2 === 0 ? "#FFFFFF" : "rgba(13,13,56,0.018)",
+                        borderBottom: "1px solid rgba(13,13,56,0.05)",
                         transition: "background 0.1s",
                       }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(37,99,235,0.04)"; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = i % 2 === 0 ? "#FFFFFF" : "rgba(15,23,42,0.018)"; }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.04)"; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = i % 2 === 0 ? "#FFFFFF" : "rgba(13,13,56,0.018)"; }}
                     >
                       {/* Sector */}
                       <td style={{ padding: "9px 10px", fontWeight: 700, color: TEXT1, fontSize: 12, whiteSpace: "nowrap" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           {s.sectorName}
-                          <span style={{ fontSize: 9, color: TEXT2, background: "rgba(15,23,42,0.05)", borderRadius: 4, padding: "1px 5px", fontFamily: "JetBrains Mono, monospace" }}>
+                          <span style={{ fontSize: 9, color: TEXT2, background: "rgba(13,13,56,0.05)", borderRadius: 4, padding: "1px 5px", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
                             {s.nAssets}
                           </span>
                         </div>
                       </td>
                       {/* Port. Weight */}
-                      <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: TEXT1 }}>
+                      <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, color: TEXT1 }}>
                         {fmtW(s.Wp)}
                       </td>
                       {/* Bench. Weight */}
-                      <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: TEXT2 }}>
+                      <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, color: TEXT2 }}>
                         {fmtW(s.Wb)}
                       </td>
                       {/* Port. Return */}
-                      <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11, fontWeight: 600, color: numColor(s.Rp), borderLeft: "1px solid rgba(15,23,42,0.05)" }}>
+                      <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, fontWeight: 600, color: numColor(s.Rp), borderLeft: "1px solid rgba(13,13,56,0.05)" }}>
                         {fmtPct(s.Rp)}
                       </td>
                       {/* Bench. Return */}
-                      <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: numColor(s.Rb) }}>
+                      <td style={{ padding: "9px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, color: numColor(s.Rb) }}>
                         {fmtPct(s.Rb)}
                       </td>
                       {/* Effects */}
@@ -367,14 +368,14 @@ export default function SectorAttributionPanel() {
                 {/* ── Totals footer ── */}
                 {totals && (
                   <tfoot>
-                    <tr style={{ background: "#F0F4FA", borderTop: "2px solid rgba(15,23,42,0.12)" }}>
-                      <td style={{ padding: "8px 10px", fontSize: 10, fontWeight: 700, color: TEXT2, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                    <tr style={{ background: "#F5F7FD", borderTop: "2px solid rgba(13,13,56,0.12)" }}>
+                      <td style={{ padding: "8px 10px", fontSize: 10, fontWeight: 700, color: PATRIA.kingBlue, fontFamily: FONT_SECONDARY, letterSpacing: "0.06em", textTransform: "uppercase" }}>
                         Σ Total
                       </td>
-                      <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11, fontWeight: 700, color: TEXT1 }}>
+                      <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, fontWeight: 700, color: TEXT1 }}>
                         {fmtW(totals.Wp)}
                       </td>
-                      <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11, fontWeight: 700, color: TEXT2 }}>
+                      <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, fontWeight: 700, color: TEXT2 }}>
                         {fmtW(totals.Wb)}
                       </td>
                       {/* Rp / Rb cells empty — weighted avg of sector returns ≠ global */}
@@ -383,16 +384,16 @@ export default function SectorAttributionPanel() {
                       </td>
                       {/* Effect totals */}
                       {([totals.allocation, totals.selection, totals.interaction] as number[]).map((v, idx) => (
-                        <td key={idx} style={{ padding: "8px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 11, fontWeight: 800, color: numColor(v) }}>
+                        <td key={idx} style={{ padding: "8px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, fontWeight: 800, color: numColor(v) }}>
                           {fmtPct(v, 3)}
                         </td>
                       ))}
                       {/* Total alpha — should equal summary.totalAlpha */}
-                      <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "JetBrains Mono, monospace", fontSize: 12, fontWeight: 800 }}>
+                      <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 12, fontWeight: 800 }}>
                         <span style={{
                           color: numColor(totals.totalAlpha),
-                          background: totals.totalAlpha > 0 ? "rgba(5,150,105,0.12)" : "rgba(220,38,38,0.12)",
-                          border: `1px solid ${totals.totalAlpha > 0 ? "rgba(5,150,105,0.30)" : "rgba(220,38,38,0.30)"}`,
+                          background: totals.totalAlpha > 0 ? "rgba(0,30,175,0.12)" : "rgba(248,72,94,0.12)",
+                          border: `1px solid ${totals.totalAlpha > 0 ? "rgba(0,30,175,0.30)" : "rgba(248,72,94,0.30)"}`,
                           borderRadius: 5, padding: "3px 10px",
                         }}>
                           {fmtPct(totals.totalAlpha, 3)}
@@ -400,7 +401,7 @@ export default function SectorAttributionPanel() {
                       </td>
                     </tr>
                     {/* Reconciliation check */}
-                    <tr style={{ background: "#F8FAFC" }}>
+                    <tr style={{ background: "#F5F7FD" }}>
                       <td colSpan={9} style={{ padding: "5px 10px", fontSize: 10, color: TEXT2, fontStyle: "italic" }}>
                         Reconciliation: Σ Total Alpha ({fmtPct(totals.totalAlpha, 3)}) should equal global alpha R<sub>p</sub> − R<sub>b</sub> ({fmtPct(data.summary.totalAlpha, 3)}).
                         &nbsp;Δ = {fmtPct(totals.totalAlpha - data.summary.totalAlpha, 4)}
@@ -413,13 +414,13 @@ export default function SectorAttributionPanel() {
             </div>
 
             {/* Legend */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", borderTop: "1px solid rgba(15,23,42,0.06)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", borderTop: "1px solid rgba(13,13,56,0.06)" }}>
               <div style={{ display: "flex", gap: 16 }}>
                 <span style={{ fontSize: 10, color: GREEN, fontWeight: 600 }}>● Positive contribution</span>
                 <span style={{ fontSize: 10, color: RED,   fontWeight: 600 }}>● Negative contribution</span>
                 <span style={{ fontSize: 10, color: TEXT2 }}>N = # assets in sector</span>
               </div>
-              <span style={{ fontSize: 10, color: "#CBD5E1" }}>Brinson-Fachler · Grouped by GICS industry</span>
+              <span style={{ fontSize: 10, color: "rgba(13,13,56,0.28)" }}>Brinson-Fachler · Grouped by GICS industry</span>
             </div>
           </div>
         </>

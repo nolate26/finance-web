@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { Plus, X, PlusCircle, Trash2, Paperclip, FileText } from "lucide-react";
 import { useIsAdmin } from "@/lib/useIsAdmin";
+import { FONT_SECONDARY } from "@/lib/patriaTheme";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -79,9 +80,9 @@ function SectorBadge({ sector }: { sector: string }) {
         fontWeight: 600,
         padding: "2px 7px",
         borderRadius: 4,
-        background: "rgba(43,92,224,0.07)",
-        color: "#2B5CE0",
-        border: "1px solid rgba(43,92,224,0.15)",
+        background: "rgba(32,68,220,0.07)",
+        color: "#2044DC",
+        border: "1px solid rgba(32,68,220,0.15)",
         letterSpacing: "0.04em",
         whiteSpace: "nowrap",
       }}
@@ -154,9 +155,9 @@ function AttachCell({
 
   if (uploading) {
     return (
-      <span className="text-xs text-slate-400 flex items-center gap-1">
+      <span className="text-xs text-patria-dark-blue/45 flex items-center gap-1">
         <span
-          className="inline-block w-3 h-3 rounded-full border border-slate-300 border-t-slate-500 animate-spin"
+          className="inline-block w-3 h-3 rounded-full border border-patria-dark-blue/20 border-t-slate-500 animate-spin"
         />
         Uploading…
       </span>
@@ -171,7 +172,7 @@ function AttachCell({
           target="_blank"
           rel="noopener noreferrer"
           download={pick.attachment.fileName}
-          className="flex items-center gap-1 bg-slate-100 border border-slate-200 text-slate-600 text-xs px-2 py-1 rounded hover:bg-slate-200 transition-colors max-w-[140px] overflow-hidden"
+          className="flex items-center gap-1 bg-patria-dark-blue/[0.06] border border-patria-dark-blue/10 text-patria-dark-blue/60 text-xs px-2 py-1 rounded hover:bg-patria-dark-blue/10 transition-colors max-w-[140px] overflow-hidden"
           title={pick.attachment.fileName}
         >
           <FileText size={11} className="shrink-0" />
@@ -180,7 +181,7 @@ function AttachCell({
         {isAdmin && (
           <button
             onClick={handleRemove}
-            className="text-slate-300 hover:text-red-400 transition-colors p-0.5"
+            className="text-patria-dark-blue/28 hover:text-patria-light-pink transition-colors p-0.5"
             title="Remove attachment"
           >
             <X size={11} />
@@ -204,7 +205,7 @@ function AttachCell({
       />
       <button
         onClick={() => inputRef.current?.click()}
-        className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 transition-colors"
+        className="flex items-center gap-1 text-xs text-patria-dark-blue/45 hover:text-patria-dark-blue/60 transition-colors"
         title="Attach PDF"
       >
         <Paperclip size={12} />
@@ -253,15 +254,15 @@ function CurrentView({
         }}
       >
         <div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "#0F172A", letterSpacing: "-0.02em" }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#0D0D38", letterSpacing: "-0.02em" }}>
             {period.title}
           </div>
           <div
             style={{
               fontSize: 11,
-              color: "#94A3B8",
+              color: "rgba(13,13,56,0.45)",
               marginTop: 3,
-              fontFamily: "JetBrains Mono, monospace",
+              fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
             }}
           >
             {period.date} · {allPicks.length} pick
@@ -278,9 +279,9 @@ function CurrentView({
               gap: 5,
               padding: "5px 10px",
               borderRadius: 6,
-              border: "1px solid rgba(220,38,38,0.22)",
-              background: "rgba(220,38,38,0.04)",
-              color: "#DC2626",
+              border: "1px solid rgba(248,72,94,0.22)",
+              background: "rgba(248,72,94,0.04)",
+              color: "#F8485E",
               cursor: "pointer",
               fontSize: 11,
               fontWeight: 500,
@@ -295,11 +296,11 @@ function CurrentView({
 
       {/* Committee rationale block */}
       {period.comment && (
-        <div className="bg-slate-50 border border-slate-200 rounded-md px-4 py-3 mb-5">
-          <div className="text-[9px] font-semibold text-slate-400 tracking-widest mb-1.5 uppercase">
+        <div className="bg-patria-dark-blue/[0.03] border border-patria-dark-blue/10 rounded-md px-4 py-3 mb-5">
+          <div className="text-[9px] font-semibold text-patria-dark-blue/45 tracking-widest mb-1.5 uppercase">
             Committee Rationale
           </div>
-          <p className="text-xs text-slate-600 leading-relaxed font-mono m-0">
+          <p className="text-xs text-patria-dark-blue/60 leading-relaxed font-secondary tabular-nums m-0">
             {period.comment}
           </p>
         </div>
@@ -307,7 +308,7 @@ function CurrentView({
 
       {/* Industry-grouped full-width rows */}
       {allPicks.length === 0 ? (
-        <p className="text-sm text-slate-400 italic py-5">No picks in this period.</p>
+        <p className="text-sm text-patria-dark-blue/45 italic py-5">No picks in this period.</p>
       ) : (
         <div>
           {ALL_SECTORS.map((sector) => {
@@ -316,13 +317,13 @@ function CurrentView({
             return (
               <div key={sector}>
                 <h3
-                  className="text-sm font-bold border-b-2 border-slate-200 pb-2 mt-8 mb-3"
-                  style={{ color: "#1E293B", letterSpacing: "0.01em" }}
+                  className="text-sm font-bold border-b-2 border-patria-dark-blue/10 pb-2 mt-8 mb-3"
+                  style={{ color: "#0D0D38", letterSpacing: "0.01em" }}
                 >
                   {sector}
                   <span
-                    className="ml-2 font-mono font-normal"
-                    style={{ fontSize: 10, color: "#94A3B8" }}
+                    className="ml-2 font-secondary tabular-nums font-normal"
+                    style={{ fontSize: 10, color: "rgba(13,13,56,0.45)" }}
                   >
                     {sectorPicks.length} pick{sectorPicks.length !== 1 ? "s" : ""}
                   </span>
@@ -334,22 +335,22 @@ function CurrentView({
                     return (
                       <div
                         key={`${sector}-${pick.company}-${i}`}
-                        className="flex flex-col md:flex-row bg-white border border-slate-200 shadow-sm rounded-lg"
+                        className="flex flex-col md:flex-row bg-white border border-patria-dark-blue/10 shadow-sm rounded-lg"
                         style={{ overflow: "hidden" }}
                       >
                         {/* Left — identity + target price */}
                         <div
                           className="flex flex-col justify-center gap-1 px-5 py-4 md:w-48 flex-shrink-0"
-                          style={{ borderRight: "1px solid #F1F5F9", background: "#FAFBFC" }}
+                          style={{ borderRight: "1px solid #F5F7FD", background: "#F5F7FD" }}
                         >
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-bold text-sm" style={{ color: "#0F172A" }}>
+                            <span className="font-bold text-sm" style={{ color: "#0D0D38" }}>
                               {pick.company}
                             </span>
                             {isNew && (
                               <span
                                 className="text-[9px] font-semibold px-1 py-0.5 rounded"
-                                style={{ background: "rgba(16,185,129,0.10)", color: "#059669", border: "1px solid rgba(16,185,129,0.22)" }}
+                                style={{ background: "rgba(0,30,175,0.10)", color: "#001EAF", border: "1px solid rgba(0,30,175,0.22)" }}
                               >
                                 NEW
                               </span>
@@ -357,7 +358,7 @@ function CurrentView({
                             {isOut && (
                               <span
                                 className="text-[9px] font-semibold px-1 py-0.5 rounded"
-                                style={{ background: "rgba(220,38,38,0.07)", color: "#DC2626", border: "1px solid rgba(220,38,38,0.18)" }}
+                                style={{ background: "rgba(248,72,94,0.07)", color: "#F8485E", border: "1px solid rgba(248,72,94,0.18)" }}
                               >
                                 OUT
                               </span>
@@ -366,24 +367,24 @@ function CurrentView({
                           <div className="flex flex-col gap-0.5 mt-1">
                             <span
                               className="text-[9px] font-semibold tracking-widest uppercase"
-                              style={{ color: "#94A3B8" }}
+                              style={{ color: "rgba(13,13,56,0.45)" }}
                             >
                               Target Price
                             </span>
                             {pick.tp ? (
                               <span
                                 className="font-bold"
-                                style={{ fontSize: 20, color: "#1D4ED8", letterSpacing: "-0.03em" }}
+                                style={{ fontSize: 20, color: "#2044DC", letterSpacing: "-0.03em" }}
                               >
                                 {pick.tp}
                               </span>
                             ) : (
-                              <span style={{ fontSize: 16, color: "#CBD5E1" }}>—</span>
+                              <span style={{ fontSize: 16, color: "rgba(13,13,56,0.28)" }}>—</span>
                             )}
                           </div>
                           <span
-                            className="font-mono mt-2"
-                            style={{ fontSize: 9, color: "#CBD5E1" }}
+                            className="font-secondary tabular-nums mt-2"
+                            style={{ fontSize: 9, color: "rgba(13,13,56,0.28)" }}
                           >
                             Added: {period.date}
                           </span>
@@ -394,7 +395,7 @@ function CurrentView({
                           <p
                             className="text-sm leading-relaxed m-0"
                             style={{
-                              color: pick.rationale ? "#334155" : "#CBD5E1",
+                              color: pick.rationale ? "#0D0D38" : "rgba(13,13,56,0.28)",
                               fontStyle: pick.rationale ? "normal" : "italic",
                             }}
                           >
@@ -405,7 +406,7 @@ function CurrentView({
                         {/* Right — attachment */}
                         <div
                           className="flex items-center justify-center px-4 py-4 flex-shrink-0"
-                          style={{ borderLeft: "1px solid #F1F5F9", minWidth: 100 }}
+                          style={{ borderLeft: "1px solid #F5F7FD", minWidth: 100 }}
                         >
                           <AttachCell
                             pick={pick}
@@ -467,9 +468,9 @@ function HistoricalView({ periods }: { periods: Period[] }) {
             width: 28,
             height: 28,
             borderRadius: 6,
-            border: "1px solid rgba(15,23,42,0.12)",
-            background: canPrev ? "#F8FAFF" : "transparent",
-            color: canPrev ? "#475569" : "#CBD5E1",
+            border: "1px solid rgba(13,13,56,0.12)",
+            background: canPrev ? "#F5F7FD" : "transparent",
+            color: canPrev ? "rgba(13,13,56,0.62)" : "rgba(13,13,56,0.28)",
             cursor: canPrev ? "pointer" : "not-allowed",
             fontSize: 14,
             display: "flex",
@@ -483,8 +484,8 @@ function HistoricalView({ periods }: { periods: Period[] }) {
           style={{
             fontSize: 16,
             fontWeight: 700,
-            color: "#0F172A",
-            fontFamily: "JetBrains Mono, monospace",
+            color: "#0D0D38",
+            fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
             minWidth: 44,
             textAlign: "center",
           }}
@@ -498,9 +499,9 @@ function HistoricalView({ periods }: { periods: Period[] }) {
             width: 28,
             height: 28,
             borderRadius: 6,
-            border: "1px solid rgba(15,23,42,0.12)",
-            background: canNext ? "#F8FAFF" : "transparent",
-            color: canNext ? "#475569" : "#CBD5E1",
+            border: "1px solid rgba(13,13,56,0.12)",
+            background: canNext ? "#F5F7FD" : "transparent",
+            color: canNext ? "rgba(13,13,56,0.62)" : "rgba(13,13,56,0.28)",
             cursor: canNext ? "pointer" : "not-allowed",
             fontSize: 14,
             display: "flex",
@@ -513,8 +514,8 @@ function HistoricalView({ periods }: { periods: Period[] }) {
         <span
           style={{
             fontSize: 11,
-            color: "#94A3B8",
-            fontFamily: "JetBrains Mono, monospace",
+            color: "rgba(13,13,56,0.45)",
+            fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
           }}
         >
           {yearPeriods.length} period{yearPeriods.length !== 1 ? "s" : ""}
@@ -524,7 +525,7 @@ function HistoricalView({ periods }: { periods: Period[] }) {
       {yearPeriods.length === 0 ? (
         <div
           style={{
-            color: "#94A3B8",
+            color: "rgba(13,13,56,0.45)",
             fontSize: 13,
             fontStyle: "italic",
             padding: "20px 0",
@@ -536,7 +537,7 @@ function HistoricalView({ periods }: { periods: Period[] }) {
         <div style={{ overflowX: "auto", width: "100%" }}>
           <table style={{ borderCollapse: "collapse", fontSize: 11, width: "100%" }}>
             <thead>
-              <tr style={{ background: "#F0F4FA" }}>
+              <tr style={{ background: "#F5F7FD" }}>
                 <th
                   className="sticky left-0 z-10"
                   style={{
@@ -544,11 +545,11 @@ function HistoricalView({ periods }: { periods: Period[] }) {
                     textAlign: "left",
                     fontSize: 10,
                     fontWeight: 600,
-                    color: "#475569",
+                    color: "rgba(13,13,56,0.62)",
                     letterSpacing: "0.07em",
-                    borderBottom: "2px solid rgba(15,23,42,0.10)",
-                    borderRight: "2px solid rgba(15,23,42,0.10)",
-                    background: "#F0F4FA",
+                    borderBottom: "2px solid rgba(13,13,56,0.10)",
+                    borderRight: "2px solid rgba(13,13,56,0.10)",
+                    background: "#F5F7FD",
                     whiteSpace: "nowrap",
                     minWidth: 190,
                   }}
@@ -571,16 +572,16 @@ function HistoricalView({ periods }: { periods: Period[] }) {
                       style={{
                         padding: "10px 16px",
                         textAlign: "center",
-                        borderBottom: "2px solid rgba(15,23,42,0.10)",
-                        borderLeft: "1px solid rgba(15,23,42,0.06)",
+                        borderBottom: "2px solid rgba(13,13,56,0.10)",
+                        borderLeft: "1px solid rgba(13,13,56,0.06)",
                         whiteSpace: "nowrap",
                         minWidth: 140,
                       }}
                     >
-                      <div style={{ fontSize: 11, fontWeight: 700, color: "#0F172A", fontFamily: "JetBrains Mono, monospace", letterSpacing: "-0.01em" }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "#0D0D38", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.01em" }}>
                         {p.title}
                       </div>
-                      <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2, fontFamily: "JetBrains Mono, monospace" }}>
+                      <div style={{ fontSize: 10, color: "rgba(13,13,56,0.45)", marginTop: 2, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
                         {formattedDate}
                       </div>
                     </th>
@@ -594,17 +595,17 @@ function HistoricalView({ periods }: { periods: Period[] }) {
                   key={sector}
                   style={{
                     background:
-                      si % 2 === 0 ? "transparent" : "rgba(15,23,42,0.015)",
-                    borderBottom: "1px solid rgba(15,23,42,0.05)",
+                      si % 2 === 0 ? "transparent" : "rgba(13,13,56,0.015)",
+                    borderBottom: "1px solid rgba(13,13,56,0.05)",
                   }}
                 >
                   <td
                     className="sticky left-0 z-10"
                     style={{
                       padding: "10px 14px",
-                      borderRight: "2px solid rgba(15,23,42,0.08)",
+                      borderRight: "2px solid rgba(13,13,56,0.08)",
                       background:
-                        si % 2 === 0 ? "#FFFFFF" : "rgba(248,250,255,1)",
+                        si % 2 === 0 ? "#FFFFFF" : "#F5F7FD",
                       verticalAlign: "top",
                     }}
                   >
@@ -618,12 +619,12 @@ function HistoricalView({ periods }: { periods: Period[] }) {
                         key={period.id}
                         style={{
                           padding: "10px 12px",
-                          borderLeft: "1px solid rgba(15,23,42,0.06)",
+                          borderLeft: "1px solid rgba(13,13,56,0.06)",
                           verticalAlign: "top",
                         }}
                       >
                         {picks.length === 0 ? (
-                          <span style={{ color: "#E2E8F0", fontSize: 11 }}>
+                          <span style={{ color: "rgba(13,13,56,0.10)", fontSize: 11 }}>
                             —
                           </span>
                         ) : (
@@ -643,16 +644,16 @@ function HistoricalView({ periods }: { periods: Period[] }) {
                                   justifyContent: "space-between",
                                   gap: 8,
                                   padding: "4px 0",
-                                  borderBottom: pi < picks.length - 1 ? "1px solid #F1F5F9" : "none",
+                                  borderBottom: pi < picks.length - 1 ? "1px solid #F5F7FD" : "none",
                                 }}
                               >
                                 <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                                   <span
                                     style={{
-                                      fontFamily: "JetBrains Mono, monospace",
+                                      fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
                                       fontWeight: 600,
                                       fontSize: 11,
-                                      color: "#1E293B",
+                                      color: "#0D0D38",
                                       whiteSpace: "nowrap",
                                     }}
                                   >
@@ -662,8 +663,8 @@ function HistoricalView({ periods }: { periods: Period[] }) {
                                     <span
                                       style={{
                                         fontSize: 9,
-                                        color: "#94A3B8",
-                                        fontFamily: "JetBrains Mono, monospace",
+                                        color: "rgba(13,13,56,0.45)",
+                                        fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
                                         whiteSpace: "nowrap",
                                       }}
                                     >
@@ -674,9 +675,9 @@ function HistoricalView({ periods }: { periods: Period[] }) {
                                 <span
                                   style={{
                                     fontSize: 10,
-                                    fontFamily: "JetBrains Mono, monospace",
+                                    fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
                                     fontWeight: 600,
-                                    color: "#1D4ED8",
+                                    color: "#2044DC",
                                     whiteSpace: "nowrap",
                                   }}
                                 >
@@ -772,11 +773,11 @@ function EditModal({
     width: "100%",
     padding: "7px 10px",
     borderRadius: 6,
-    border: "1px solid rgba(15,23,42,0.12)",
-    background: "#F8FAFF",
+    border: "1px solid rgba(13,13,56,0.12)",
+    background: "#F5F7FD",
     fontSize: 12,
-    color: "#0F172A",
-    fontFamily: "Inter, sans-serif",
+    color: "#0D0D38",
+    fontFamily: FONT_SECONDARY,
     outline: "none",
     boxSizing: "border-box",
   };
@@ -786,7 +787,7 @@ function EditModal({
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(15,23,42,0.45)",
+        background: "rgba(13,13,56,0.45)",
         zIndex: 50,
         display: "flex",
         alignItems: "flex-start",
@@ -801,7 +802,7 @@ function EditModal({
           borderRadius: 14,
           width: "100%",
           maxWidth: 780,
-          boxShadow: "0 20px 60px rgba(15,23,42,0.20)",
+          boxShadow: "0 20px 60px rgba(13,13,56,0.20)",
           overflow: "hidden",
         }}
       >
@@ -809,14 +810,14 @@ function EditModal({
         <div
           style={{
             padding: "18px 24px",
-            borderBottom: "1px solid rgba(15,23,42,0.08)",
+            borderBottom: "1px solid rgba(13,13,56,0.08)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            background: "#F8FAFF",
+            background: "#F5F7FD",
           }}
         >
-          <div style={{ fontSize: 15, fontWeight: 700, color: "#0F172A" }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "#0D0D38" }}>
             New Top Picks Period
           </div>
           <button
@@ -825,7 +826,7 @@ function EditModal({
               background: "none",
               border: "none",
               cursor: "pointer",
-              color: "#94A3B8",
+              color: "rgba(13,13,56,0.45)",
               padding: 4,
               borderRadius: 4,
             }}
@@ -856,7 +857,7 @@ function EditModal({
                 style={{
                   fontSize: 10,
                   fontWeight: 600,
-                  color: "#64748B",
+                  color: "rgba(13,13,56,0.62)",
                   display: "block",
                   marginBottom: 4,
                   letterSpacing: "0.06em",
@@ -876,7 +877,7 @@ function EditModal({
                 style={{
                   fontSize: 10,
                   fontWeight: 600,
-                  color: "#64748B",
+                  color: "rgba(13,13,56,0.62)",
                   display: "block",
                   marginBottom: 4,
                   letterSpacing: "0.06em",
@@ -899,7 +900,7 @@ function EditModal({
             style={{
               fontSize: 10,
               fontWeight: 600,
-              color: "#64748B",
+              color: "rgba(13,13,56,0.62)",
               letterSpacing: "0.08em",
               marginBottom: 14,
             }}
@@ -927,7 +928,7 @@ function EditModal({
                       alignItems: "center",
                       gap: 4,
                       fontSize: 11,
-                      color: "#2B5CE0",
+                      color: "#2044DC",
                       background: "none",
                       border: "none",
                       cursor: "pointer",
@@ -942,7 +943,7 @@ function EditModal({
                 {picks.length > 0 && (
                   <div
                     style={{
-                      border: "1px solid rgba(15,23,42,0.08)",
+                      border: "1px solid rgba(13,13,56,0.08)",
                       borderRadius: 8,
                       overflow: "hidden",
                     }}
@@ -954,9 +955,9 @@ function EditModal({
                           padding: "10px 12px",
                           borderBottom:
                             i < picks.length - 1
-                              ? "1px solid rgba(15,23,42,0.06)"
+                              ? "1px solid rgba(13,13,56,0.06)"
                               : "none",
-                          background: i % 2 === 0 ? "#FFFFFF" : "#FAFBFF",
+                          background: i % 2 === 0 ? "#FFFFFF" : "#F5F7FD",
                         }}
                       >
                         {/* Row 1: company dropdown, TP, delete */}
@@ -1017,18 +1018,18 @@ function EditModal({
                               background: "none",
                               border: "none",
                               cursor: "pointer",
-                              color: "#CBD5E1",
+                              color: "rgba(13,13,56,0.28)",
                               padding: 0,
                               display: "flex",
                               alignItems: "center",
                             }}
                             onMouseEnter={(e) => {
                               (e.currentTarget as HTMLElement).style.color =
-                                "#DC2626";
+                                "#F8485E";
                             }}
                             onMouseLeave={(e) => {
                               (e.currentTarget as HTMLElement).style.color =
-                                "#CBD5E1";
+                                "rgba(13,13,56,0.28)";
                             }}
                           >
                             <Trash2 size={14} />
@@ -1063,11 +1064,11 @@ function EditModal({
         <div
           style={{
             padding: "16px 24px",
-            borderTop: "1px solid rgba(15,23,42,0.08)",
+            borderTop: "1px solid rgba(13,13,56,0.08)",
             display: "flex",
             justifyContent: "flex-end",
             gap: 10,
-            background: "#F8FAFF",
+            background: "#F5F7FD",
           }}
         >
           <button
@@ -1076,9 +1077,9 @@ function EditModal({
               padding: "8px 18px",
               borderRadius: 7,
               fontSize: 13,
-              border: "1px solid rgba(15,23,42,0.12)",
+              border: "1px solid rgba(13,13,56,0.12)",
               background: "transparent",
-              color: "#64748B",
+              color: "rgba(13,13,56,0.62)",
               cursor: "pointer",
             }}
           >
@@ -1094,7 +1095,7 @@ function EditModal({
               fontWeight: 600,
               border: "none",
               background:
-                saving || !draft.title.trim() ? "#CBD5E1" : "#2B5CE0",
+                saving || !draft.title.trim() ? "rgba(13,13,56,0.28)" : "#2044DC",
               color: "#FFFFFF",
               cursor:
                 saving || !draft.title.trim() ? "not-allowed" : "pointer",
@@ -1217,8 +1218,8 @@ export default function TopPicks() {
         <div
           className="w-8 h-8 rounded-full border-2 animate-spin"
           style={{
-            borderColor: "rgba(43,92,224,0.15)",
-            borderTopColor: "#2B5CE0",
+            borderColor: "rgba(32,68,220,0.15)",
+            borderTopColor: "#2044DC",
           }}
         />
       </div>
@@ -1247,8 +1248,8 @@ export default function TopPicks() {
             gap: 2,
             padding: 3,
             borderRadius: 8,
-            background: "rgba(15,23,42,0.04)",
-            border: "1px solid rgba(15,23,42,0.08)",
+            background: "rgba(13,13,56,0.04)",
+            border: "1px solid rgba(13,13,56,0.08)",
           }}
         >
           {(["current", "historical"] as const).map((v) => (
@@ -1263,11 +1264,11 @@ export default function TopPicks() {
                 cursor: "pointer",
                 border:
                   view === v
-                    ? "1px solid rgba(43,92,224,0.25)"
+                    ? "1px solid rgba(32,68,220,0.25)"
                     : "1px solid transparent",
                 background:
-                  view === v ? "rgba(43,92,224,0.10)" : "transparent",
-                color: view === v ? "#1E3A8A" : "#64748B",
+                  view === v ? "rgba(32,68,220,0.10)" : "transparent",
+                color: view === v ? "#001EAF" : "rgba(13,13,56,0.62)",
                 transition: "all 0.12s",
               }}
             >
@@ -1289,15 +1290,15 @@ export default function TopPicks() {
               fontSize: 12,
               fontWeight: 600,
               border: "none",
-              background: "#2B5CE0",
+              background: "#2044DC",
               color: "#FFFFFF",
               cursor: "pointer",
             }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.background = "#1E3A8A";
+              (e.currentTarget as HTMLElement).style.background = "#001EAF";
             }}
             onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.background = "#2B5CE0";
+              (e.currentTarget as HTMLElement).style.background = "#2044DC";
             }}
           >
             <Plus size={14} />
@@ -1313,7 +1314,7 @@ export default function TopPicks() {
             style={{
               textAlign: "center",
               padding: "40px 0",
-              color: "#94A3B8",
+              color: "rgba(13,13,56,0.45)",
               fontSize: 13,
             }}
           >

@@ -74,12 +74,12 @@ const CustomTooltip = ({ active, payload, label }: any) => {
       className="rounded-lg px-3 py-2 text-xs"
       style={{
         background: "#FFFFFF",
-        border: "1px solid rgba(15,23,42,0.12)",
-        boxShadow: "0 4px 16px rgba(15,23,42,0.12)",
+        border: "1px solid rgba(13,13,56,0.12)",
+        boxShadow: "0 4px 16px rgba(13,13,56,0.12)",
       }}
     >
-      <div className="font-mono mb-1" style={{ color: "#64748B" }}>{label}</div>
-      <div className="font-semibold" style={{ color: "#2B5CE0" }}>
+      <div className="font-secondary tabular-nums mb-1" style={{ color: "rgba(13,13,56,0.62)" }}>{label}</div>
+      <div className="font-semibold" style={{ color: "#2044DC" }}>
         P/E: {typeof val === "number" ? val.toFixed(2) : "—"}x
       </div>
     </div>
@@ -91,7 +91,7 @@ export default function PEHistoryChart({
   selectedIndex,
   availableIndices,
   onIndexChange,
-  accentColor = "#2B5CE0",
+  accentColor = "#2044DC",
 }: Props) {
   const [period, setPeriod] = useState<Period>("1Y");
 
@@ -138,7 +138,7 @@ export default function PEHistoryChart({
       {/* Header */}
       <div
         className="px-4 py-3 border-b flex items-start justify-between gap-3"
-        style={{ borderColor: "rgba(15,23,42,0.07)" }}
+        style={{ borderColor: "rgba(13,13,56,0.07)" }}
       >
         <div className="flex items-center gap-2 min-w-0 flex-1">
           {hasDropdown ? (
@@ -149,14 +149,14 @@ export default function PEHistoryChart({
                 fontSize: 13,
                 fontWeight: 600,
                 color: accentColor,
-                background: "#F8FAFC",
-                border: "1px solid #CBD5E1",
+                background: "#F5F7FD",
+                border: "1px solid rgba(13,13,56,0.28)",
                 borderRadius: 6,
                 padding: "4px 14px 4px 10px",
                 cursor: "pointer",
                 fontFamily: "inherit",
                 outline: "none",
-                boxShadow: "0 1px 3px rgba(15,23,42,0.08)",
+                boxShadow: "0 1px 3px rgba(13,13,56,0.08)",
               }}
             >
               {availableIndices!.map((idx) => (
@@ -172,14 +172,14 @@ export default function PEHistoryChart({
 
         <div className="flex gap-3 text-xs shrink-0">
           <div className="text-right">
-            <div style={{ color: "#94A3B8", fontSize: 10 }}>Actual</div>
-            <div className="font-mono font-bold text-sm" style={{ color: "#0F172A" }}>
+            <div style={{ color: "rgba(13,13,56,0.45)", fontSize: 10 }}>Actual</div>
+            <div className="font-secondary tabular-nums font-bold text-sm" style={{ color: "#0D0D38" }}>
               {currentPE?.toFixed(1) ?? "—"}x
             </div>
           </div>
           <div className="text-right">
-            <div style={{ color: "#94A3B8", fontSize: 10 }}>Mediana {period}</div>
-            <div className="font-mono" style={{ color: "#475569", fontSize: 12 }}>
+            <div style={{ color: "rgba(13,13,56,0.45)", fontSize: 10 }}>Mediana {period}</div>
+            <div className="font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.62)", fontSize: 12 }}>
               {median?.toFixed(1) ?? "—"}x
             </div>
           </div>
@@ -192,11 +192,11 @@ export default function PEHistoryChart({
           <button
             key={p.value}
             onClick={() => setPeriod(p.value)}
-            className="px-2.5 py-1 text-xs font-mono rounded transition-all"
+            className="px-2.5 py-1 text-xs font-secondary tabular-nums rounded transition-all"
             style={{
-              background: period === p.value ? "rgba(43,92,224,0.10)" : "transparent",
-              color: period === p.value ? "#2B5CE0" : "#64748B",
-              border: `1px solid ${period === p.value ? "rgba(43,92,224,0.30)" : "transparent"}`,
+              background: period === p.value ? "rgba(32,68,220,0.10)" : "transparent",
+              color: period === p.value ? "#2044DC" : "rgba(13,13,56,0.62)",
+              border: `1px solid ${period === p.value ? "rgba(32,68,220,0.30)" : "transparent"}`,
             }}
           >
             {p.label}
@@ -207,17 +207,17 @@ export default function PEHistoryChart({
       {/* Chart */}
       <div className="px-2 pb-3 pt-2" style={{ height: 185 }}>
         {sampled.length === 0 ? (
-          <div className="flex items-center justify-center h-full" style={{ color: "#64748B", fontSize: 12 }}>
+          <div className="flex items-center justify-center h-full" style={{ color: "rgba(13,13,56,0.62)", fontSize: 12 }}>
             No hay datos para {selectedIndex}
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={sampled} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.06)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(13,13,56,0.06)" />
               <XAxis
                 dataKey="date"
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                tick={{ fill: "#64748B", fontSize: 10, dy: 8 } as any}
+                tick={{ fill: "rgba(13,13,56,0.62)", fontSize: 10, dy: 8 } as any}
                 axisLine={false}
                 tickLine={false}
                 interval="preserveStartEnd"
@@ -227,7 +227,7 @@ export default function PEHistoryChart({
               <YAxis
                 domain={yDomain}
                 ticks={yTicks}
-                tick={{ fill: "#475569", fontSize: 11 }}
+                tick={{ fill: "rgba(13,13,56,0.62)", fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(v) => `${(v as number).toFixed(0)}x`}
@@ -238,10 +238,10 @@ export default function PEHistoryChart({
               {median !== null && (
                 <ReferenceLine
                   y={median}
-                  stroke="#64748B"
+                  stroke="rgba(13,13,56,0.62)"
                   strokeOpacity={0.7}
                   strokeDasharray="5 3"
-                  label={{ value: `Md ${median.toFixed(1)}x`, position: "insideTopRight", fontSize: 9, fill: "#94A3B8" }}
+                  label={{ value: `Md ${median.toFixed(1)}x`, position: "insideTopRight", fontSize: 9, fill: "rgba(13,13,56,0.45)" }}
                 />
               )}
               {plus2sigma !== null && (
@@ -275,16 +275,16 @@ export default function PEHistoryChart({
       </div>
 
       {/* Legend */}
-      <div className="px-4 pb-3 flex items-center gap-3 text-[10px]" style={{ color: "#94A3B8" }}>
+      <div className="px-4 pb-3 flex items-center gap-3 text-[10px]" style={{ color: "rgba(13,13,56,0.45)" }}>
         <span className="flex items-center gap-1">
-          <span className="inline-block w-3" style={{ borderTop: "1px dashed rgba(100,116,139,0.6)" }} />
+          <span className="inline-block w-3" style={{ borderTop: "1px dashed rgba(13,13,56,0.6)" }} />
           Mediana
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block w-3" style={{ borderTop: "1px dashed rgba(100,116,139,0.35)" }} />
+          <span className="inline-block w-3" style={{ borderTop: "1px dashed rgba(13,13,56,0.35)" }} />
           ±2σ
         </span>
-        <span className="ml-auto" style={{ color: "#CBD5E1" }}>Fuente: Bloomberg</span>
+        <span className="ml-auto" style={{ color: "rgba(13,13,56,0.28)" }}>Fuente: Bloomberg</span>
       </div>
     </div>
   );

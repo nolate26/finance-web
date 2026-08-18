@@ -6,10 +6,11 @@ import { useIsAdmin } from "@/lib/useIsAdmin";
 import { OVERRIDE_FIELDS, FIELD_AFFECTS } from "@/lib/ssOverrideFields";
 import type { SsV1Company, SsV1Payload, SsV1Series, IndexLevel } from "@/app/api/chile/stock-selection-v1/route";
 import type { IndexMembershipPayload } from "@/app/api/chile/index-membership/route";
+import { PATRIA, FONT_SECONDARY, TEXT } from "@/lib/patriaTheme";
 
 // Amarillo para celdas editadas por admin (override) y sus dependientes.
-const EDIT_BG = "rgba(250,204,21,0.30)";
-const EDIT_BORDER = "#CA8A04";
+const EDIT_BG = "rgba(255,107,6,0.30)";
+const EDIT_BORDER = "#FF6B06";
 // Columnas afectadas (a pintar) dada la lista de campos overrideados de una compañía.
 const affectedCols = (overrides: string[] | undefined): Set<string> => {
   const s = new Set<string>();
@@ -21,31 +22,33 @@ const affectedCols = (overrides: string[] | undefined): Set<string> => {
 // Paleta sobria (grises pizarra). El único color con significado es verde/rojo en
 // variaciones y retornos; el resto de la tabla es monocromo para que se lea como
 // una planilla institucional y no como un semáforo.
-const TEXT1 = "#0F172A";
-const TEXT2 = "#475569";
-const TEXT3 = "#94A3B8";
-const BORDER = "rgba(15,23,42,0.09)";
-const SECTION_BORDER = "2px solid rgba(15,23,42,0.22)"; // separador entre secciones del orden fijo
-const NAVY = "#1E3A5F";      // azul marino: encabezado y acentos del chrome
-const NAVY_BAND = "#27496E"; // banda alterna por grupo, fila 1 del encabezado
-const NAVY_TEXT = "#E8EEF5"; // texto sobre marino
-const HEAD2_BG = "#D7E2EF";  // fila 2 del encabezado (etiquetas de columna)
-const HEAD2_BAND = "#CBD9EA";
-const HEAD2_TEXT = "#15304F";
-const INK = NAVY;            // acento del chrome (botones, barras)
-const SURFACE = "#F8FAFC";   // fondo de controles
-const ZEBRA = "#FAFBFC";     // fila par
-const BAND = "rgba(30,58,95,0.030)"; // banda alterna por grupo de columnas
-const POS = "#15803D";
-const NEG = "#B91C1C";
-const NUM = "#334155";       // números neutros
-const NM_TEXT = "#A8B2C1";   // "NM" / "—"
-// Tabla de índices (sumaproducto): tono teal para distinguirla de la de empresas.
-const IDX_HEAD = "#1F5B57";
-const IDX_HEAD_BAND = "#276B66";
-const IDX_HEAD_TEXT = "#E9F3F2";
-const IDX_TINT = "#F0F6F5";   // fondo de la tabla de índices
-const IDX_ZEBRA = "#E7F0EF";  // fila alterna
+const TEXT1 = PATRIA.darkBlue;   // Regla 4
+const TEXT2 = TEXT.label;
+const TEXT3 = TEXT.muted;
+const BORDER = "rgba(13,13,56,0.09)";
+const SECTION_BORDER = "2px solid rgba(13,13,56,0.22)"; // separador entre secciones del orden fijo
+// ── Chrome de la tabla — Manual de Identidad PATRIA ─────────────────────────────
+const NAVY = PATRIA.darkBlue;   // Regla 1 — fila 1 del encabezado
+const NAVY_BAND = PATRIA.kingBlue; // Regla 2 — banda alterna por grupo
+const NAVY_TEXT = PATRIA.white;
+const HEAD2_BG = "#F5F7FD";     // fila 2: etiquetas de columna sobre fondo claro
+const HEAD2_BAND = "rgba(32,68,220,0.10)";
+const HEAD2_TEXT = PATRIA.kingBlue; // Regla 5 — etiquetas de indicador
+const INK = PATRIA.kingBlue;    // acento del chrome (botones, barras)
+const SURFACE = "#F5F7FD";      // fondo de controles
+const ZEBRA = "#F5F7FD";        // fila par
+const BAND = "rgba(13,13,56,0.030)"; // banda alterna por grupo de columnas
+const POS = PATRIA.blue;        // positivo
+const NEG = PATRIA.pink;        // negativo
+const NUM = PATRIA.darkBlue;    // números neutros (Regla 4)
+const NM_TEXT = TEXT.disabled;  // "NM" / "—"
+// Tabla de índices (sumaproducto). Los encabezados siguen las Reglas 1 y 2 igual
+// que la de empresas; lo que la distingue es el tinte turquesa del cuerpo.
+const IDX_HEAD = PATRIA.darkBlue;
+const IDX_HEAD_BAND = PATRIA.kingBlue;
+const IDX_HEAD_TEXT = PATRIA.white;
+const IDX_TINT = "rgba(70,232,224,0.07)";  // fondo de la tabla de índices
+const IDX_ZEBRA = "rgba(70,232,224,0.14)"; // fila alterna
 
 // ── Formatters ──────────────────────────────────────────────────────────────────
 // Sentinela para "no significativo": múltiplos y variaciones sobre bases ≤ 0.
@@ -94,7 +97,7 @@ const varOf = (cur: number | null, base: number | null): number | null =>
 // Recomendación: texto coloreado (Comprar=verde, Mantener=ámbar, Vender=rojo; free-text neutro).
 const REC_STYLE: Record<string, { label: string; color: string }> = {
   comprar: { label: "Comprar", color: POS },
-  mantener: { label: "Mantener", color: "#A16207" },
+  mantener: { label: "Mantener", color: "#FF6B06" },
   vender: { label: "Vender", color: NEG },
 };
 const recCell = (rec: string | null): { text: string; color: string; weight?: number } => {
@@ -552,7 +555,7 @@ export default function StockSelectionV1() {
 
   if (loading) {
     return <div className="flex items-center justify-center" style={{ padding: 60 }}>
-      <div className="w-8 h-8 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(15,23,42,0.12)", borderTopColor: INK }} /></div>;
+      <div className="w-8 h-8 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(13,13,56,0.12)", borderTopColor: INK }} /></div>;
   }
   if (error || !data) {
     return <div style={{ textAlign: "center", padding: 40, color: TEXT3, fontSize: 13 }}>
@@ -649,7 +652,7 @@ export default function StockSelectionV1() {
         const edited = aff?.has(col.id);
         return (
           <td key={col.id}
-            style={{ padding: r.kind === "series" ? "3px 7px" : "5px 7px", textAlign: col.align ?? "right", fontFamily: "JetBrains Mono, monospace", fontSize: r.kind === "series" ? 10 : 10.5, color: out.color ?? TEXT1, fontWeight: edited ? 700 : out.weight ?? 400, borderBottom: `1px solid ${BORDER}`, borderTop: topBorder ? SECTION_BORDER : undefined, borderLeft: i === 0 ? `1px solid ${BORDER}` : "none", background: edited ? EDIT_BG : gIdx % 2 === 1 ? BAND : undefined, boxShadow: edited ? `inset 0 0 0 1px ${EDIT_BORDER}55` : undefined, whiteSpace: "nowrap" }}>
+            style={{ padding: r.kind === "series" ? "3px 7px" : "5px 7px", textAlign: col.align ?? "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: r.kind === "series" ? 10 : 10.5, color: out.color ?? TEXT1, fontWeight: edited ? 700 : out.weight ?? 400, borderBottom: `1px solid ${BORDER}`, borderTop: topBorder ? SECTION_BORDER : undefined, borderLeft: i === 0 ? `1px solid ${BORDER}` : "none", background: edited ? EDIT_BG : gIdx % 2 === 1 ? BAND : undefined, boxShadow: edited ? `inset 0 0 0 1px ${EDIT_BORDER}55` : undefined, whiteSpace: "nowrap" }}>
             {out.text}
           </td>
         );
@@ -671,7 +674,7 @@ export default function StockSelectionV1() {
           <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 8px", borderRadius: 6, border: `1px solid ${BORDER}`, background: SURFACE }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: TEXT2 }}>Período</span>
             <select value={activeKey} onChange={(e) => changePeriod(e.target.value)} disabled={loading || pricesLoading}
-              style={{ padding: "3px 6px", fontSize: 12, fontFamily: "JetBrains Mono, monospace", border: `1px solid ${BORDER}`, borderRadius: 4, background: "#fff", color: TEXT1, outline: "none", cursor: "pointer" }}>
+              style={{ padding: "3px 6px", fontSize: 12, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", border: `1px solid ${BORDER}`, borderRadius: 4, background: "#fff", color: TEXT1, outline: "none", cursor: "pointer" }}>
               {data.periods.map((p) => <option key={`${p.fy}-${p.q}`} value={`${p.fy}-${p.q}`}>{p.label}</option>)}
             </select>
           </div>
@@ -679,7 +682,7 @@ export default function StockSelectionV1() {
             <span style={{ fontSize: 11, fontWeight: 700, color: TEXT2 }}>TC USD/CLP</span>
             <input type="text" inputMode="decimal" value={tcInput} onChange={(e) => setTcInput(e.target.value)} onBlur={applyTc}
               onKeyDown={(e) => { if (e.key === "Enter") applyTc(); }}
-              style={{ width: 64, padding: "3px 6px", fontSize: 12, fontFamily: "JetBrains Mono, monospace", textAlign: "right", border: `1px solid ${BORDER}`, borderRadius: 4, background: "#fff", color: TEXT1, outline: "none" }} />
+              style={{ width: 64, padding: "3px 6px", fontSize: 12, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", textAlign: "right", border: `1px solid ${BORDER}`, borderRadius: 4, background: "#fff", color: TEXT1, outline: "none" }} />
           </div>
           <button onClick={() => load(true, selPeriod)} disabled={pricesLoading}
             style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: pricesLoading ? "default" : "pointer", color: "#fff", background: INK, border: "none", opacity: pricesLoading ? 0.7 : 1 }}>
@@ -719,10 +722,10 @@ export default function StockSelectionV1() {
           {sectors.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
         <button onClick={() => setSortKey(FIXED_KEY)} title="Volver al orden fijo por sector"
-          style={{ padding: "7px 12px", borderRadius: 6, border: `1px solid ${fixedMode ? "rgba(15,23,42,0.30)" : BORDER}`, background: fixedMode ? "rgba(15,23,42,0.06)" : SURFACE, color: fixedMode ? TEXT1 : TEXT2, fontSize: 12, fontWeight: 600, cursor: "pointer", outline: "none", whiteSpace: "nowrap" }}>
+          style={{ padding: "7px 12px", borderRadius: 6, border: `1px solid ${fixedMode ? "rgba(13,13,56,0.30)" : BORDER}`, background: fixedMode ? "rgba(13,13,56,0.06)" : SURFACE, color: fixedMode ? TEXT1 : TEXT2, fontSize: 12, fontWeight: 600, cursor: "pointer", outline: "none", whiteSpace: "nowrap" }}>
           Orden por sector
         </button>
-        <span style={{ fontSize: 11, color: TEXT3, fontFamily: "JetBrains Mono, monospace" }}>{groups.length} empresas · {totalRows} filas</span>
+        <span style={{ fontSize: 11, color: TEXT3, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>{groups.length} empresas · {totalRows} filas</span>
       </div>
 
       {!priced && (
@@ -737,7 +740,7 @@ export default function StockSelectionV1() {
 
       {/* Tabla — el contenedor tiene alto acotado y scroll propio: así el encabezado
           (2 filas) queda fijo arriba y la columna Empresa fija a la izquierda. */}
-      <div style={{ overflow: "auto", maxHeight: "calc(100vh - 230px)", minHeight: 320, border: "1px solid rgba(30,58,95,0.18)", borderRadius: 8, background: "#fff" }}>
+      <div style={{ overflow: "auto", maxHeight: "calc(100vh - 230px)", minHeight: 320, border: "1px solid rgba(13,13,56,0.18)", borderRadius: 8, background: "#fff" }}>
         <table style={{ borderCollapse: "separate", borderSpacing: 0, fontSize: 11, width: "100%" }}>
           <thead>
             <tr ref={headRowRef}>
@@ -761,7 +764,7 @@ export default function StockSelectionV1() {
                   const active = sortKey === col.id;
                   return (
                     <th key={col.id} onClick={() => col.sortVal && sortBy(col.id)}
-                      style={{ position: "sticky", top: headRowH, zIndex: 30, padding: "5px 7px", textAlign: col.align ?? "right", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: active ? "#fff" : HEAD2_TEXT, borderBottom: `2px solid ${NAVY}`, borderLeft: i === 0 ? "1px solid rgba(30,58,95,0.22)" : "none", whiteSpace: "nowrap", cursor: col.sortVal ? "pointer" : "default", userSelect: "none", background: active ? NAVY_BAND : gIdx % 2 === 1 ? HEAD2_BAND : HEAD2_BG }}>
+                      style={{ position: "sticky", top: headRowH, zIndex: 30, padding: "5px 7px", textAlign: col.align ?? "right", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: active ? "#fff" : HEAD2_TEXT, borderBottom: `2px solid ${NAVY}`, borderLeft: i === 0 ? "1px solid rgba(13,13,56,0.22)" : "none", whiteSpace: "nowrap", cursor: col.sortVal ? "pointer" : "default", userSelect: "none", background: active ? NAVY_BAND : gIdx % 2 === 1 ? HEAD2_BAND : HEAD2_BG }}>
                       {col.label}{col.sortVal && <span style={{ fontSize: 8, opacity: active ? 1 : 0.45, marginLeft: 3 }}>{active ? (sortDir === "asc" ? "▲" : "▼") : "↕"}</span>}
                     </th>
                   );
@@ -776,18 +779,18 @@ export default function StockSelectionV1() {
               return rows.map((r, ri) => {
                 const isSeries = r.kind === "series";
                 const topBorder = sectionStart && ri === 0;
-                const bg = isSeries ? "#F4F6F9" : gi % 2 === 0 ? "#fff" : ZEBRA;
+                const bg = isSeries ? "#F5F7FD" : gi % 2 === 0 ? "#fff" : ZEBRA;
                 return (
                   <tr key={`${r.company}-${r.label || "cons"}`} style={{ background: bg }}>
                     <td onClick={editMode && !isSeries ? () => { const c = companyByName.get(normName(r.company)); if (c) setEditCompany(c); } : undefined}
                       title={editMode && !isSeries ? "Editar valores de esta compañía" : undefined}
-                      style={{ ...stickyTd, borderTop: topBorder ? SECTION_BORDER : undefined, background: editMode && !isSeries ? "rgba(250,204,21,0.10)" : bg, paddingLeft: isSeries ? 18 : 8, cursor: editMode && !isSeries ? "pointer" : undefined }}>
+                      style={{ ...stickyTd, borderTop: topBorder ? SECTION_BORDER : undefined, background: editMode && !isSeries ? "rgba(255,107,6,0.10)" : bg, paddingLeft: isSeries ? 18 : 8, cursor: editMode && !isSeries ? "pointer" : undefined }}>
                       {isSeries ? (
                         <>
                           <div style={{ fontSize: 10, fontWeight: 600, color: TEXT2, whiteSpace: "nowrap" }}>
                             <span style={{ color: TEXT3 }}>↳</span> Serie {r.label}
                           </div>
-                          <div style={{ fontSize: 9, color: TEXT3, fontFamily: "JetBrains Mono, monospace", whiteSpace: "nowrap" }}>{r.seriesBBG ?? "—"}</div>
+                          <div style={{ fontSize: 9, color: TEXT3, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{r.seriesBBG ?? "—"}</div>
                         </>
                       ) : (
                         <>
@@ -797,7 +800,7 @@ export default function StockSelectionV1() {
                             {r.kind === "consolidated" && <span style={consBadge}>consol.</span>}
                             {r.overrides?.length ? <span style={editedBadge}>{r.overrides.length} ed.</span> : null}
                           </div>
-                          <div style={{ fontSize: 9, color: TEXT3, fontFamily: "JetBrains Mono, monospace", whiteSpace: "nowrap" }}>
+                          <div style={{ fontSize: 9, color: TEXT3, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
                             {r.tickerBBG ?? "—"}<span style={ccyBadge(r.ssCurrency)}>{r.ssCurrency}</span>
                           </div>
                         </>
@@ -864,13 +867,13 @@ export default function StockSelectionV1() {
                       <tr key={agg.index} style={{ background: bg }}>
                         <td style={{ position: "sticky", left: 0, zIndex: 2, background: bg, padding: "5px 10px", borderRight: `1px solid ${IDX_HEAD}22`, borderBottom: `1px solid ${IDX_HEAD}18`, whiteSpace: "nowrap" }}>
                           <span style={{ fontSize: 11, fontWeight: 700, color: IDX_HEAD }}>{agg.index}</span>
-                          <span style={{ fontSize: 9, color: TEXT3, marginLeft: 6, fontFamily: "JetBrains Mono, monospace" }}>{agg.count}</span>
+                          <span style={{ fontSize: 9, color: TEXT3, marginLeft: 6, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>{agg.count}</span>
                         </td>
                         {idxGroupDefs.map((g, gi) =>
                           idxCols(g).map((col, i) => {
                             const out = col.render(r);
                             return (
-                              <td key={col.id} style={{ padding: "5px 7px", textAlign: col.align ?? "right", fontFamily: "JetBrains Mono, monospace", fontSize: 10.5, color: out.color ?? TEXT1, fontWeight: out.weight ?? 400, borderBottom: `1px solid ${IDX_HEAD}18`, borderLeft: i === 0 ? `1px solid ${IDX_HEAD}18` : "none", background: gi % 2 === 1 ? "rgba(31,91,87,0.04)" : undefined, whiteSpace: "nowrap" }}>
+                              <td key={col.id} style={{ padding: "5px 7px", textAlign: col.align ?? "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 10.5, color: out.color ?? TEXT1, fontWeight: out.weight ?? 400, borderBottom: `1px solid ${IDX_HEAD}18`, borderLeft: i === 0 ? `1px solid ${IDX_HEAD}18` : "none", background: gi % 2 === 1 ? "rgba(0,30,175,0.04)" : undefined, whiteSpace: "nowrap" }}>
                                 {out.text}
                               </td>
                             );
@@ -905,7 +908,7 @@ export default function StockSelectionV1() {
                 {sec.items.map((it, idx) => (
                   <div key={idx} style={{ fontSize: 11.5, color: TEXT2, lineHeight: 1.55, marginTop: idx === 0 ? 0 : 6 }}>
                     <span style={{ fontWeight: 700, color: TEXT1 }}>{it.k}</span>
-                    {it.f && <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 10.5, color: NAVY, background: "rgba(30,58,95,0.08)", borderRadius: 3, padding: "1px 5px", margin: "0 5px", whiteSpace: "nowrap" }}>{it.f}</span>}
+                    {it.f && <span style={{ fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 10.5, color: NAVY, background: "rgba(13,13,56,0.08)", borderRadius: 3, padding: "1px 5px", margin: "0 5px", whiteSpace: "nowrap" }}>{it.f}</span>}
                     {it.v && <span>{it.f ? "" : " — "}{it.v}</span>}
                   </div>
                 ))}
@@ -1014,9 +1017,9 @@ function IndexMembershipEditor({ onClose, onSaved }: { onClose: () => void; onSa
 
   return (
     <div onClick={tryClose}
-      style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(13,13,56,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div onClick={(e) => e.stopPropagation()}
-        style={{ background: "#fff", borderRadius: 12, width: "min(1100px, 96vw)", maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 12px 48px rgba(15,23,42,0.35)", overflow: "hidden" }}>
+        style={{ background: "#fff", borderRadius: 12, width: "min(1100px, 96vw)", maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 12px 48px rgba(13,13,56,0.35)", overflow: "hidden" }}>
         {/* Encabezado */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "13px 16px", background: NAVY, color: NAVY_TEXT }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
@@ -1049,11 +1052,11 @@ function IndexMembershipEditor({ onClose, onSaved }: { onClose: () => void; onSa
           <div style={{ flex: 1 }} />
           {savedMsg && <span style={{ fontSize: 12, color: POS, fontWeight: 600 }}>{savedMsg}</span>}
           {error && <span style={{ fontSize: 12, color: NEG, fontWeight: 600 }}>{error}</span>}
-          <span style={{ fontSize: 12, color: changes.length ? AMBER_INK : TEXT3, fontWeight: 600, fontFamily: "JetBrains Mono, monospace" }}>
+          <span style={{ fontSize: 12, color: changes.length ? AMBER_INK : TEXT3, fontWeight: 600, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
             {changes.length ? `${changes.length} sin guardar` : "sin cambios"}
           </span>
           <button onClick={save} disabled={!changes.length || saving}
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6, fontSize: 12.5, fontWeight: 600, border: "none", cursor: changes.length && !saving ? "pointer" : "default", color: "#fff", background: changes.length ? NAVY : "#94A3B8", opacity: saving ? 0.7 : 1 }}>
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6, fontSize: 12.5, fontWeight: 600, border: "none", cursor: changes.length && !saving ? "pointer" : "default", color: "#fff", background: changes.length ? NAVY : "rgba(13,13,56,0.45)", opacity: saving ? 0.7 : 1 }}>
             <Save size={13} /> {saving ? "Guardando…" : "Guardar"}
           </button>
         </div>
@@ -1088,7 +1091,7 @@ function IndexMembershipEditor({ onClose, onSaved }: { onClose: () => void; onSa
                     {indices.map((i) => {
                       const k = memberKeyC(i, c), on = members.has(k), dirty = on !== orig.has(k);
                       return (
-                        <td key={i} style={{ padding: 0, textAlign: "center", borderLeft: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}`, background: dirty ? "rgba(217,119,6,0.10)" : undefined }}>
+                        <td key={i} style={{ padding: 0, textAlign: "center", borderLeft: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}`, background: dirty ? "rgba(255,107,6,0.10)" : undefined }}>
                           <button onClick={() => toggle(i, c)} title={`${c} · ${i} → ${on ? "quitar" : "agregar"}`}
                             style={{ width: "100%", height: 26, display: "inline-flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", cursor: "pointer" }}>
                             <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 17, height: 17, borderRadius: 4, border: on ? `1px solid ${NAVY}` : `1px solid ${BORDER}`, background: on ? NAVY : "#fff", color: "#fff" }}>
@@ -1175,8 +1178,8 @@ function SsV1OverrideEditor({ company, fy, q, onClose, onSaved }: { company: SsV
   for (const f of fields) { if (!byGroup.has(f.group)) { byGroup.set(f.group, []); groupsOrder.push(f.group); } byGroup.get(f.group)!.push(f); }
 
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, width: "min(560px, 96vw)", maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 12px 48px rgba(15,23,42,0.35)", overflow: "hidden" }}>
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(13,13,56,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, width: "min(560px, 96vw)", maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 12px 48px rgba(13,13,56,0.35)", overflow: "hidden" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "13px 16px", background: EDIT_BORDER, color: "#fff" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
             <Pencil size={15} />
@@ -1202,7 +1205,7 @@ function SsV1OverrideEditor({ company, fy, q, onClose, onSaved }: { company: SsV
                     <input value={edits[f.key] ?? ""} inputMode="decimal"
                       onChange={(e) => setEdits((p) => ({ ...p, [f.key]: e.target.value }))}
                       placeholder="—"
-                      style={{ width: 120, padding: "5px 8px", fontSize: 12, fontFamily: "JetBrains Mono, monospace", textAlign: "right", borderRadius: 6, border: `1px solid ${isOv ? EDIT_BORDER : BORDER}`, background: isOv ? EDIT_BG : "#fff", color: TEXT1, outline: "none" }} />
+                      style={{ width: 120, padding: "5px 8px", fontSize: 12, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", textAlign: "right", borderRadius: 6, border: `1px solid ${isOv ? EDIT_BORDER : BORDER}`, background: isOv ? EDIT_BG : "#fff", color: TEXT1, outline: "none" }} />
                     <button onClick={() => setEdits((p) => ({ ...p, [f.key]: "" }))} title="Revertir al valor base"
                       disabled={(edits[f.key] ?? "") === ""}
                       style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 6, border: `1px solid ${BORDER}`, background: "#fff", color: (edits[f.key] ?? "") === "" ? TEXT3 : EDIT_BORDER, cursor: (edits[f.key] ?? "") === "" ? "default" : "pointer" }}>
@@ -1220,10 +1223,10 @@ function SsV1OverrideEditor({ company, fy, q, onClose, onSaved }: { company: SsV
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "10px 16px", borderTop: `1px solid ${BORDER}`, background: SURFACE }}>
           {error && <span style={{ fontSize: 12, color: NEG, fontWeight: 600, marginRight: "auto" }}>{error}</span>}
-          <span style={{ fontSize: 12, color: changes.length ? EDIT_BORDER : TEXT3, fontWeight: 600, fontFamily: "JetBrains Mono, monospace" }}>{changes.length ? `${changes.length} sin guardar` : "sin cambios"}</span>
+          <span style={{ fontSize: 12, color: changes.length ? EDIT_BORDER : TEXT3, fontWeight: 600, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>{changes.length ? `${changes.length} sin guardar` : "sin cambios"}</span>
           <button onClick={onClose} style={{ padding: "7px 14px", borderRadius: 6, fontSize: 12.5, fontWeight: 600, border: `1px solid ${BORDER}`, background: "#fff", color: TEXT2, cursor: "pointer" }}>Cancelar</button>
           <button onClick={save} disabled={!changes.length || saving}
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 16px", borderRadius: 6, fontSize: 12.5, fontWeight: 600, border: "none", cursor: changes.length && !saving ? "pointer" : "default", color: "#fff", background: changes.length ? EDIT_BORDER : "#94A3B8", opacity: saving ? 0.7 : 1 }}>
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 16px", borderRadius: 6, fontSize: 12.5, fontWeight: 600, border: "none", cursor: changes.length && !saving ? "pointer" : "default", color: "#fff", background: changes.length ? EDIT_BORDER : "rgba(13,13,56,0.45)", opacity: saving ? 0.7 : 1 }}>
             <Save size={13} /> {saving ? "Guardando…" : "Guardar"}
           </button>
         </div>
@@ -1233,12 +1236,12 @@ function SsV1OverrideEditor({ company, fy, q, onClose, onSaved }: { company: SsV
 }
 
 // ── Style helpers ────────────────────────────────────────────────────────────────
-const AMBER_INK = "#B45309"; // acento ámbar para "cambios sin guardar"
+const AMBER_INK = "#FF6B06"; // acento ámbar para "cambios sin guardar"
 const miniBtn: React.CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 6, border: `1px solid ${BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" };
-const stickyTh: React.CSSProperties = { position: "sticky", left: 0, padding: "4px 8px", textAlign: "left", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: NAVY_TEXT, background: NAVY, borderBottom: `2px solid ${NAVY}`, borderRight: "1px solid rgba(30,58,95,0.20)", whiteSpace: "nowrap" };
-const stickyTd: React.CSSProperties = { position: "sticky", left: 0, zIndex: 10, padding: "4px 8px", borderBottom: `1px solid ${BORDER}`, borderRight: "1px solid rgba(30,58,95,0.20)", verticalAlign: "middle" };
+const stickyTh: React.CSSProperties = { position: "sticky", left: 0, padding: "4px 8px", textAlign: "left", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: NAVY_TEXT, background: NAVY, borderBottom: `2px solid ${NAVY}`, borderRight: "1px solid rgba(13,13,56,0.20)", whiteSpace: "nowrap" };
+const stickyTd: React.CSSProperties = { position: "sticky", left: 0, zIndex: 10, padding: "4px 8px", borderBottom: `1px solid ${BORDER}`, borderRight: "1px solid rgba(13,13,56,0.20)", verticalAlign: "middle" };
 const retryBtn: React.CSSProperties = { marginTop: 10, padding: "6px 16px", borderRadius: 6, background: SURFACE, border: `1px solid ${BORDER}`, color: TEXT1, cursor: "pointer", fontSize: 13 };
 // USD se marca algo más fuerte que CLP (es la excepción en un listado mayormente CLP).
-const ccyBadge = (ccy: "CLP" | "USD"): React.CSSProperties => ({ marginLeft: 5, fontSize: 9, fontWeight: 700, color: ccy === "USD" ? TEXT1 : TEXT3, background: ccy === "USD" ? "rgba(15,23,42,0.09)" : "rgba(15,23,42,0.05)", borderRadius: 3, padding: "1px 4px" });
-const consBadge: React.CSSProperties = { marginLeft: 6, fontSize: 8.5, fontWeight: 700, color: NAVY, background: "rgba(30,58,95,0.10)", borderRadius: 3, padding: "1px 5px", textTransform: "uppercase", letterSpacing: "0.04em" };
-const editedBadge: React.CSSProperties = { marginLeft: 6, fontSize: 8.5, fontWeight: 700, color: "#854D0E", background: "rgba(250,204,21,0.35)", borderRadius: 3, padding: "1px 5px", letterSpacing: "0.02em" };
+const ccyBadge = (ccy: "CLP" | "USD"): React.CSSProperties => ({ marginLeft: 5, fontSize: 9, fontWeight: 700, color: ccy === "USD" ? TEXT1 : TEXT3, background: ccy === "USD" ? "rgba(13,13,56,0.09)" : "rgba(13,13,56,0.05)", borderRadius: 3, padding: "1px 4px" });
+const consBadge: React.CSSProperties = { marginLeft: 6, fontSize: 8.5, fontWeight: 700, color: NAVY, background: "rgba(13,13,56,0.10)", borderRadius: 3, padding: "1px 5px", textTransform: "uppercase", letterSpacing: "0.04em" };
+const editedBadge: React.CSSProperties = { marginLeft: 6, fontSize: 8.5, fontWeight: 700, color: "#FF6B06", background: "rgba(255,107,6,0.35)", borderRadius: 3, padding: "1px 5px", letterSpacing: "0.02em" };
