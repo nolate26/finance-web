@@ -8,6 +8,7 @@ import type {
   BankKpiRow,
 } from "@/app/api/companies/[ticker]/bank-model/route";
 import { consensusScaleFactor } from "@/lib/consensusScale";
+import { ccySuffix } from "@/lib/ccySuffix";
 import ModelEstimateChart, { buildEstimateRows, type EstimateMetric, type EstimateRow } from "@/components/deep-dive/ModelEstimateChart";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 
@@ -567,7 +568,7 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
     rows.push(Array.from({ length: 1 + years.length }, () => null));
 
     rows.push([
-      xc(`CCY${header.currency ? ` : ${header.currency}` : ""}`, {
+      xc(`CCY${ccySuffix(header.currency, header.unit)}`, {
         font: { bold: true, sz: 10, color: { rgb: "FFFFFF" } }, fill: F_HDR,
         alignment: { horizontal: "left", vertical: "center" },
       }),
@@ -813,7 +814,7 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
                 padding: "7px 10px", background: C.HDR, color: C.WHITE,
                 fontWeight: 700, fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", textAlign: "left",
               }}>
-                Reported CCY{header.currency ? ` : ${header.currency}` : ""}
+                Reported CCY{ccySuffix(header.currency, header.unit)}
               </th>
               {years.map(yr => {
                 const isEst = yr >= now;

@@ -755,6 +755,7 @@ model BankHeader {
   tp          Float?                      // Target Price
   analyst     String?  @db.VarChar(100)
   currency    String?  @db.VarChar(20)   // Ej: "CLP mm"
+  unit        String?  @db.VarChar(50)   // NUEVO
   thesis      String?  @db.Text
   link        String?  @db.Text
 
@@ -774,6 +775,9 @@ model BankFinancials {
   ticker      String   @db.VarChar(100)
   updateDate  DateTime @map("update_date") @db.Date
   year        Int
+
+  fxConsensus Float? @map("fx_consensus")
+  fxEop       Float? @map("fx_eop")
 
   // --- Income Statement (filas 12–31) ---
   netInterestIncome  Float? @map("net_interest_income")  // 12 Net interest income ($)

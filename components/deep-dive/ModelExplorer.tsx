@@ -8,6 +8,7 @@ import type {
   ModelKpiRow,
 } from "@/app/api/companies/[ticker]/model/route";
 import { consensusScaleFactor } from "@/lib/consensusScale";
+import { ccySuffix } from "@/lib/ccySuffix";
 import ModelEstimateChart, { buildEstimateRows, type EstimateMetric, type EstimateRow } from "@/components/deep-dive/ModelEstimateChart";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 
@@ -632,7 +633,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
 
     // Year header row
     rows.push([
-      xc(`CCY${header.currency ? ` : ${header.currency}` : ""}`, {
+      xc(`CCY${ccySuffix(header.currency, header.unit)}`, {
         font: { bold: true, sz: 10, color: { rgb: "FFFFFF" } },
         fill: F_HDR,
         alignment: { horizontal: "left", vertical: "center" },
@@ -981,7 +982,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                 fontWeight: 700, fontSize: 10, letterSpacing: "0.06em",
                 textTransform: "uppercase", textAlign: "left",
               }}>
-                Reported CCY{header.currency ? ` : ${header.currency}` : ""}
+                Reported CCY{ccySuffix(header.currency, header.unit)}
               </th>
               {years.map(yr => {
                 const isEst = yr >= now;

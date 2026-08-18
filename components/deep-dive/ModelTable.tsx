@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Download } from "lucide-react";
 import type { ModelHistoryPayload, ModelFinancialRow } from "@/app/api/companies/[ticker]/model/route";
 import { downloadExcel } from "@/lib/exportExcel";
+import { ccySuffix } from "@/lib/ccySuffix";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const BLUE   = "#1D4ED8";
@@ -542,7 +543,7 @@ export default function ModelTable({ ticker }: { ticker: string }) {
                 textTransform: "uppercase",
                 borderBottom:  "1px solid rgba(255,255,255,0.12)",
               }}>
-                Reported CCY
+                Reported CCY{ccySuffix(header.currency, header.unit)}
               </th>
               {years.map((yr) => (
                 <th key={yr} style={{

@@ -67,6 +67,7 @@ export interface BankModelHeaderSnap {
   analyst:    string | null;
   link:       string | null;
   currency:   string | null;
+  unit:       string | null;
   thesis:     string | null;
 }
 
@@ -185,6 +186,7 @@ export async function GET(
         analyst:    true,
         link:       true,
         currency:   true,
+        unit:       true,
         thesis:     true,
         financials: {
           orderBy: { year: "asc" },
@@ -225,6 +227,7 @@ export async function GET(
         analyst:    h.analyst  ?? null,
         link:       h.link     ?? null,
         currency:   h.currency ?? null,
+        unit:       h.unit     ?? null,
         thesis:     h.thesis   ?? null,
       },
       financials: h.financials.map(mapRow),

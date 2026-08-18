@@ -163,6 +163,7 @@ export async function POST(request: Request) {
               tp:       bHeader.tp,
               analyst:  bHeader.analyst,
               currency: bHeader.currency,
+              unit:     bHeader.unit,
               thesis:   bHeader.thesis,
               link:     bHeader.link
             },
@@ -172,6 +173,7 @@ export async function POST(request: Request) {
               tp:         bHeader.tp,
               analyst:    bHeader.analyst,
               currency:   bHeader.currency,
+              unit:       bHeader.unit,
               thesis:     bHeader.thesis,
               link:       bHeader.link
             }
