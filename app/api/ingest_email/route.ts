@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
- 
+import { normalizeTickerList } from '@/lib/issuer';
+
 export async function POST(request: Request) {
   try {
     const data = await request.json();
@@ -26,9 +27,20 @@ export async function POST(request: Request) {
       );
     }
  
-    // Asegurar array
-    const companies = Array.isArray(company) ? company : [company];
- 
+    // Normalizar el/los ticker(s). El origen manda a veces un string con varios
+    // tickers separados por coma ("MELI US EQUITY, ITUB4 BZ EQUITY"): al partirlo
+    // upstream sin trim, todos menos el primero llegaban con un espacio inicial y
+    // quedaban huérfanos (no matcheaban empresas_industrias_v2, generando una
+    // compañía fantasma en el sidebar). Acá se parte, se trimea, se pasa a
+    // MAYÚSCULAS y se deduplica antes de escribir.
+    const companies = normalizeTickerList(company);
+    if (companies.length === 0) {
+      return NextResponse.json(
+        { error: 'El campo company no contiene ningún ticker válido' },
+        { status: 400 }
+      );
+    }
+
     // Convertir target_price a número
     const parsedTargetPrice =
       target_price !== undefined &&

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
+import { normalizeTicker } from "@/lib/issuer";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -47,7 +48,15 @@ export async function PATCH(
   }
 
   const data: Prisma.EmailResearchUpdateInput = {};
-  if (body.company        !== undefined) data.company        = body.company.trim();
+  // `company` es el ticker Bloomberg: se guarda canónico (sin espacios, MAYÚSCULAS)
+  // para que case con empresas_industrias_v2 y no vuelva a quedar huérfana.
+  if (body.company !== undefined) {
+    const ticker = normalizeTicker(body.company);
+    if (!ticker) {
+      return NextResponse.json({ error: "company no puede quedar vacío" }, { status: 400 });
+    }
+    data.company = ticker;
+  }
   if (body.category       !== undefined) data.category       = body.category.trim();
   if (body.title          !== undefined) data.title          = body.title?.trim() || null;
   if (body.subject        !== undefined) data.subject        = body.subject?.trim() || null;

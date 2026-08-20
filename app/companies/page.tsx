@@ -11,6 +11,8 @@ import AnalystDonut from "@/components/deep-dive/AnalystDonut";
 import ConsensusMomentumCards from "@/components/deep-dive/ConsensusMomentumCards";
 import RelatedReports from "@/components/deep-dive/RelatedReports";
 import ResearchNotesPanel from "@/components/deep-dive/ResearchNotesPanel";
+import UnmappedTickersAlert from "@/components/deep-dive/UnmappedTickersAlert";
+import OrphanNotesPanel from "@/components/deep-dive/OrphanNotesPanel";
 import ScorecardGrid from "@/components/deep-dive/ScorecardGrid";
 import ModelExplorer from "@/components/deep-dive/ModelExplorer";
 import BankModelExplorer from "@/components/deep-dive/BankModelExplorer";
@@ -18,6 +20,7 @@ import type { CompanyListItem } from "@/app/api/companies/list/route";
 import type { DeepDivePayload, PortfolioWeightSnap } from "@/app/api/companies/[ticker]/route";
 import { PATRIA, FONT_PRIMARY, FONT_SECONDARY, TEXT_ON_DARK } from "@/lib/patriaTheme";
 import { PatriaTitle } from "@/components/patria/PatriaTitle";
+import { useIsAdmin } from "@/lib/useIsAdmin";
 
 // ── Shared card style ─────────────────────────────────────────────────────────
 const CARD: React.CSSProperties = {
@@ -189,6 +192,7 @@ function ActiveWeightBadge({ weights }: { weights: PortfolioWeightSnap[] }) {
 
 function CompaniesPageContent() {
   const searchParams = useSearchParams();
+  const isAdmin = useIsAdmin();
   const [companies, setCompanies] = useState<CompanyListItem[]>([]);
   const [listLoading, setListLoading] = useState(true);
 
@@ -287,6 +291,12 @@ function CompaniesPageContent() {
 
         {/* ── Main content ──────────────────────────────────────────────────── */}
         <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", display: "flex", flexDirection: "column", gap: 0 }}>
+
+          {/* Alertas de admin, arriba de todo y en cualquier pestaña:
+              1) notas de research cuyo ticker no existe en la maestra (asignables),
+              2) tickers con modelos/consensus que no existen en la maestra. */}
+          {isAdmin && <OrphanNotesPanel />}
+          {isAdmin && <UnmappedTickersAlert />}
 
           {/* No selection */}
           {!selectedItem && !diveLoading && <EmptyState />}
