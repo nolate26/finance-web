@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -19,7 +19,7 @@ import { Download, AlertTriangle, X, RotateCcw } from "lucide-react";
 import { downloadExcel } from "@/lib/exportExcel";
 import type {
   BetaExposurePayload,
-  BetaExposureFundsPayload,
+  BetaExposureBootstrapPayload,
   FactorDetailPayload,
   AllFactorsDetailPayload,
   FactorExposure,
@@ -544,21 +544,30 @@ export default function BetaExposurePanel() {
 
   const [exporting, setExporting] = useState(false);
 
-  // ── Load fund catalogue ────────────────────────────────────────────────────
+  // Key of the exposure already in `data`, so the bootstrap response isn't
+  // immediately re-fetched by the effect below.
+  const loadedKey = useRef<string | null>(null);
+
+  // ── Bootstrap: catalogue + first exposure in a single round trip ───────────
   useEffect(() => {
-    fetch("/api/latam/beta-exposure")
+    fetch("/api/latam/beta-exposure?bootstrap=1")
       .then((r) => r.json())
-      .then((d: BetaExposureFundsPayload & { error?: string }) => {
-        if (d.error || !d.funds?.length) {
+      .then((d: BetaExposureBootstrapPayload & { error?: string }) => {
+        if (!d.funds?.length) {
           setError(d.error ?? "No funds available");
           setLoading(false);
           return;
         }
         setFunds(d.funds);
-        // Prefer a LATAM fund as the default selection
-        const first = d.funds.find((f) => f.region === "LATAM") ?? d.funds[0];
-        setFundName(first.fundName);
-        setReportDate(first.dates[0] ?? "");
+        setFundName(d.fundName);
+        setReportDate(d.reportDate);
+        if (d.error) {
+          setError(d.error);
+        } else {
+          setData(d);
+          loadedKey.current = `${d.fundName}|${d.reportDate}|true|`;
+        }
+        setLoading(false);
       })
       .catch(() => { setError("Failed to load funds"); setLoading(false); });
   }, []);
@@ -568,6 +577,10 @@ export default function BetaExposurePanel() {
   // ── Load exposures ─────────────────────────────────────────────────────────
   const fetchExposure = useCallback(() => {
     if (!fundName || !reportDate) return;
+    const key = `${fundName}|${reportDate}|${guard}|${droppedParam}`;
+    if (loadedKey.current === key) return;   // bootstrap already delivered this
+    loadedKey.current = key;
+
     setLoading(true);
     setError(null);
     const qs = new URLSearchParams({ fundName, reportDate });

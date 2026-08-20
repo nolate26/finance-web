@@ -157,6 +157,9 @@ export interface BetaExposureFundsPayload {
   funds: FundOption[];
 }
 
+/** `?bootstrap=1` — catalogue + the default fund's exposure, in one response */
+export type BetaExposureBootstrapPayload = BetaExposurePayload & { funds: FundOption[] };
+
 // ── Raw query rows ────────────────────────────────────────────────────────────
 
 interface FactorRow {
@@ -228,20 +231,29 @@ export async function GET(request: NextRequest) {
   // ?factor=USDCLP switches to the per-position drill-down for that factor
   const factorParam = searchParams.get("factor");
 
+  // ?bootstrap=1 returns the fund catalogue AND the default fund's exposure in
+  // a single response, so first paint costs one round trip instead of two.
+  const bootstrap = searchParams.get("bootstrap") === "1" && !fundName;
+
   try {
     // ── Mode 1: dropdown catalogue (fund → available report dates) ──────────
-    if (!fundName) {
-      const distinct = await prisma.fundPortfolioWeight.findMany({
-        select:   { fundName: true, reportDate: true },
-        distinct: ["fundName", "reportDate"],
-        orderBy:  [{ fundName: "asc" }, { reportDate: "desc" }],
-      });
+    //
+    // Raw DISTINCT, not prisma.findMany({ distinct }) — the Prisma variant
+    // de-duplicates in the client, so it drags all ~19 k weight rows over the
+    // wire to hand back ~213 pairs. Against a remote database that is ~150 ms
+    // of pure transfer for nothing.
+    if (!fundName || bootstrap) {
+      const distinct = await prisma.$queryRaw<{ fund_name: string; report_date: Date | string }[]>`
+        SELECT DISTINCT fund_name, report_date
+        FROM fund_portfolio_weights
+        ORDER BY fund_name ASC, report_date DESC
+      `;
 
       const byFund = new Map<string, string[]>();
       for (const r of distinct) {
-        const list = byFund.get(r.fundName) ?? [];
-        list.push(r.reportDate.toISOString().slice(0, 10));
-        byFund.set(r.fundName, list);
+        const list = byFund.get(r.fund_name) ?? [];
+        list.push(toDateStr(r.report_date)!);
+        byFund.set(r.fund_name, list);
       }
 
       const funds: FundOption[] = Array.from(byFund.entries()).map(([name, dates]) => ({
@@ -251,8 +263,26 @@ export async function GET(request: NextRequest) {
         dates:       dates.sort((a, b) => b.localeCompare(a)),
       }));
 
-      const payload: BetaExposureFundsPayload = { funds };
-      return NextResponse.json(payload);
+      // Plain catalogue request
+      if (!bootstrap) {
+        const payload: BetaExposureFundsPayload = { funds };
+        return NextResponse.json(payload);
+      }
+
+      // Bootstrap: resolve the default selection here and return the catalogue
+      // together with its exposure, so the panel opens in one round trip
+      // instead of catalogue-then-exposure.
+      const first = funds.find((f) => f.region === "LATAM") ?? funds[0];
+      if (!first) {
+        return NextResponse.json({ error: "No funds available" }, { status: 404 });
+      }
+      const exposure = await buildExposure(
+        first.fundName, first.dates[0], betaLimit, maxAbsBeta, dropped
+      );
+      if ("error" in exposure) {
+        return NextResponse.json({ funds, ...exposure }, { status: 404 });
+      }
+      return NextResponse.json({ funds, ...exposure } satisfies BetaExposureBootstrapPayload);
     }
 
     // ── Resolve report date (default: latest available for the fund) ────────
@@ -461,6 +491,29 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(detail);
     }
 
+    const exposure = await buildExposure(fundName, dateStr, betaLimit, maxAbsBeta, dropped);
+    if ("error" in exposure) {
+      return NextResponse.json(exposure, { status: 404 });
+    }
+    return NextResponse.json(exposure);
+  } catch (e) {
+    console.error("[latam/beta-exposure]", e);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
+// ── Exposure builder ──────────────────────────────────────────────────────────
+// Shared by the plain exposure request and the bootstrap response. The three
+// queries are independent, so they go out together: against a remote database
+// each round trip is ~220 ms, and running them in sequence made the tab feel
+// slow for no reason.
+async function buildExposure(
+  fundName:   string,
+  dateStr:    string,
+  betaLimit:  number,
+  maxAbsBeta: number,
+  dropped:    string[]
+): Promise<BetaExposurePayload | { error: string }> {
     // ── Query A: factor exposures, aggregated in SQL ────────────────────────
     //
     //   Portfolio_Beta(f) = Σ_i  w_p,i · β_i,f
@@ -483,7 +536,7 @@ export async function GET(request: NextRequest) {
     //
     // beta_sensitivity is keyed on (company, factor), so there is at most one
     // beta per ticker/factor pair — no de-duplication needed on that side.
-    const factorRows = await prisma.$queryRaw<FactorRow[]>`
+    const factorRowsP = prisma.$queryRaw<FactorRow[]>`
       WITH holdings AS (
         SELECT
           LOWER(TRIM(fpw.company))          AS name_key,
@@ -526,7 +579,12 @@ export async function GET(request: NextRequest) {
     // portfolio actually carries beta data — without it the exposures above
     // silently understate whenever a name is missing from beta_sensitivity —
     // and which names had their beta blended across multiple listings.
-    const positionRows = await prisma.$queryRaw<PositionRow[]>`
+    //
+    // `has_beta` comes from a LEFT JOIN against a pre-aggregated ticker set,
+    // NOT a correlated EXISTS. The EXISTS form re-scanned beta_sensitivity once
+    // per listing (loops=682, ~10 k buffer hits) and cost 560 ms of execution;
+    // the hash join does the same work in under 3 ms.
+    const positionRowsP = prisma.$queryRaw<PositionRow[]>`
       WITH holdings AS (
         SELECT
           fpw.company                       AS company,
@@ -538,17 +596,22 @@ export async function GET(request: NextRequest) {
         WHERE fpw.fund_name   = ${fundName}
           AND fpw.report_date = ${dateStr}::date
       ),
+      beta_tickers AS (
+        SELECT DISTINCT UPPER(TRIM(company)) AS tkey
+        FROM beta_sensitivity
+        WHERE ABS(beta) <= ${betaLimit}
+      ),
       listings AS (
         SELECT
           LOWER(TRIM(ei.nombre_latam)) AS name_key,
           ei.ticker_bloomberg          AS ticker,
-          EXISTS (
-            SELECT 1 FROM beta_sensitivity bs
-            WHERE UPPER(TRIM(bs.company)) = UPPER(TRIM(ei.ticker_bloomberg))
-              AND ABS(bs.beta) <= ${betaLimit}
-              AND NOT (UPPER(TRIM(ei.ticker_bloomberg)) = ANY(${dropped}))
+          (
+            bt.tkey IS NOT NULL
+            AND NOT (UPPER(TRIM(ei.ticker_bloomberg)) = ANY(${dropped}))
           )                            AS has_beta
         FROM empresas_industrias_v2 ei
+        LEFT JOIN beta_tickers bt
+          ON bt.tkey = UPPER(TRIM(ei.ticker_bloomberg))
         WHERE ei.nombre_latam     IS NOT NULL AND ei.nombre_latam     <> ''
           AND ei.ticker_bloomberg IS NOT NULL AND ei.ticker_bloomberg <> ''
       )
@@ -567,8 +630,8 @@ export async function GET(request: NextRequest) {
     `;
 
     // ── Query C: what the outlier guard threw away, for this fund only ───────
-    const excludedRows = maxAbsBeta > 0
-      ? await prisma.$queryRaw<{ company: string; ticker: string; factor: string; beta: number | string }[]>`
+    const excludedRowsP = maxAbsBeta > 0
+      ? prisma.$queryRaw<{ company: string; ticker: string; factor: string; beta: number | string }[]>`
           SELECT
             ei.nombre_latam     AS company,
             ei.ticker_bloomberg AS ticker,
@@ -584,13 +647,15 @@ export async function GET(request: NextRequest) {
             AND ABS(bs.beta) > ${betaLimit}
           ORDER BY ABS(bs.beta) DESC
         `
-      : [];
+      : Promise.resolve([]);
+
+    // One round trip's worth of latency instead of three
+    const [factorRows, positionRows, excludedRows] = await Promise.all([
+      factorRowsP, positionRowsP, excludedRowsP,
+    ]);
 
     if (positionRows.length === 0) {
-      return NextResponse.json(
-        { error: `No holdings for '${fundName}' on ${dateStr}` },
-        { status: 404 }
-      );
+      return { error: `No holdings for '${fundName}' on ${dateStr}` };
     }
 
     // ── Coverage ─────────────────────────────────────────────────────────────
@@ -685,9 +750,5 @@ export async function GET(request: NextRequest) {
       })),
     };
 
-    return NextResponse.json(payload);
-  } catch (e) {
-    console.error("[latam/beta-exposure]", e);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
+    return payload;
 }
