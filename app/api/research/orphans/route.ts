@@ -40,7 +40,7 @@ export async function GET() {
       FROM email_research er
       WHERE NOT EXISTS (
         SELECT 1 FROM empresas_industrias_v2 ei
-        WHERE UPPER(BTRIM(ei.ticker_bloomberg)) = UPPER(BTRIM(er.company))
+        WHERE ei.ticker_bloomberg = er.company
       )
       ORDER BY date DESC, id DESC
     `;

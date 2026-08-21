@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { normalizeTicker } from "@/lib/issuer";
 
 export const dynamic = "force-dynamic";
 
@@ -225,7 +226,7 @@ export async function GET(request: NextRequest) {
   // drill-down and the export can never disagree.
   const dropped = (searchParams.get("excludeTickers") ?? "")
     .split(",")
-    .map((t) => t.trim().toUpperCase())
+    .map(normalizeTicker)
     .filter(Boolean);
 
   // ?factor=USDCLP switches to the per-position drill-down for that factor
@@ -331,10 +332,10 @@ export async function GET(request: NextRequest) {
             bs.factor                    AS factor,
             bs.beta                      AS beta,
             ABS(bs.beta) > ${betaLimit}                        AS outlier,
-            UPPER(TRIM(ei.ticker_bloomberg)) = ANY(${dropped}) AS user_dropped
+            ei.ticker_bloomberg = ANY(${dropped}) AS user_dropped
           FROM empresas_industrias_v2 ei
           JOIN beta_sensitivity bs
-            ON UPPER(TRIM(bs.company)) = UPPER(TRIM(ei.ticker_bloomberg))
+            ON bs.company = ei.ticker_bloomberg
           WHERE ei.nombre_latam     IS NOT NULL AND ei.nombre_latam     <> ''
             AND ei.ticker_bloomberg IS NOT NULL AND ei.ticker_bloomberg <> ''
         )
@@ -431,10 +432,10 @@ export async function GET(request: NextRequest) {
             ei.ticker_bloomberg          AS ticker,
             bs.beta                      AS beta,
             ABS(bs.beta) > ${betaLimit}                              AS outlier,
-            UPPER(TRIM(ei.ticker_bloomberg)) = ANY(${dropped})       AS user_dropped
+            ei.ticker_bloomberg = ANY(${dropped})       AS user_dropped
           FROM empresas_industrias_v2 ei
           JOIN beta_sensitivity bs
-            ON UPPER(TRIM(bs.company)) = UPPER(TRIM(ei.ticker_bloomberg))
+            ON bs.company = ei.ticker_bloomberg
           WHERE bs.factor = ${factorParam}
             AND ei.nombre_latam     IS NOT NULL AND ei.nombre_latam     <> ''
             AND ei.ticker_bloomberg IS NOT NULL AND ei.ticker_bloomberg <> ''
@@ -554,11 +555,11 @@ async function buildExposure(
           MAX(bs.calculation_date)     AS calc_date
         FROM empresas_industrias_v2 ei
         JOIN beta_sensitivity bs
-          ON UPPER(TRIM(bs.company)) = UPPER(TRIM(ei.ticker_bloomberg))
+          ON bs.company = ei.ticker_bloomberg
         WHERE ei.nombre_latam     IS NOT NULL AND ei.nombre_latam     <> ''
           AND ei.ticker_bloomberg IS NOT NULL AND ei.ticker_bloomberg <> ''
           AND ABS(bs.beta) <= ${betaLimit}
-          AND NOT (UPPER(TRIM(ei.ticker_bloomberg)) = ANY(${dropped}))
+          AND NOT (ei.ticker_bloomberg = ANY(${dropped}))
         GROUP BY 1, 2
       )
       SELECT
@@ -597,7 +598,7 @@ async function buildExposure(
           AND fpw.report_date = ${dateStr}::date
       ),
       beta_tickers AS (
-        SELECT DISTINCT UPPER(TRIM(company)) AS tkey
+        SELECT DISTINCT company AS tkey
         FROM beta_sensitivity
         WHERE ABS(beta) <= ${betaLimit}
       ),
@@ -607,11 +608,11 @@ async function buildExposure(
           ei.ticker_bloomberg          AS ticker,
           (
             bt.tkey IS NOT NULL
-            AND NOT (UPPER(TRIM(ei.ticker_bloomberg)) = ANY(${dropped}))
+            AND NOT (ei.ticker_bloomberg = ANY(${dropped}))
           )                            AS has_beta
         FROM empresas_industrias_v2 ei
         LEFT JOIN beta_tickers bt
-          ON bt.tkey = UPPER(TRIM(ei.ticker_bloomberg))
+          ON bt.tkey = ei.ticker_bloomberg
         WHERE ei.nombre_latam     IS NOT NULL AND ei.nombre_latam     <> ''
           AND ei.ticker_bloomberg IS NOT NULL AND ei.ticker_bloomberg <> ''
       )
@@ -641,7 +642,7 @@ async function buildExposure(
           JOIN empresas_industrias_v2 ei
             ON LOWER(TRIM(ei.nombre_latam)) = LOWER(TRIM(fpw.company))
           JOIN beta_sensitivity bs
-            ON UPPER(TRIM(bs.company)) = UPPER(TRIM(ei.ticker_bloomberg))
+            ON bs.company = ei.ticker_bloomberg
           WHERE fpw.fund_name   = ${fundName}
             AND fpw.report_date = ${dateStr}::date
             AND ABS(bs.beta) > ${betaLimit}

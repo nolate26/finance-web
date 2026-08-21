@@ -83,22 +83,24 @@ export async function GET(request: NextRequest) {
       ORDER BY name ASC
     `);
 
-    // ── 2. Series de múltiplos (peFwd, evEbitdaFwd) — join UPPER(ticker) ──────
+    // ── 2. Series de múltiplos (peFwd, evEbitdaFwd) ───────────────────────────
+    // Join por igualdad directa: los tickers están canónicos en la base, así que
+    // usa valuation_history_pkey en vez de escanear las 193k filas.
     const seriesRows = await prisma.$queryRawUnsafe<SeriesRow[]>(`
-      SELECT UPPER(v.ticker) AS tk, v."peFwd" AS pe, v."evEbitdaFwd" AS ev
+      SELECT v.ticker AS tk, v."peFwd" AS pe, v."evEbitdaFwd" AS ev
       FROM valuation_history v
-      JOIN empresas_industrias_v2 e ON UPPER(e.ticker_bloomberg) = UPPER(v.ticker)
+      JOIN empresas_industrias_v2 e ON e.ticker_bloomberg = v.ticker
       WHERE ${CHILE_FILTER}
     `);
 
     // ── 3. Consenso NET_INCOME / EBITDA del año forward más cercano (latest) ──
     const consRows = await prisma.$queryRawUnsafe<ConsRow[]>(`
-      SELECT DISTINCT ON (UPPER(ce.ticker), ce.metric)
-             UPPER(ce.ticker) AS tk, ce.metric AS metric, ce.value AS value
+      SELECT DISTINCT ON (ce.ticker, ce.metric)
+             ce.ticker AS tk, ce.metric AS metric, ce.value AS value
       FROM consensus_estimates ce
-      JOIN empresas_industrias_v2 e ON UPPER(e.ticker_bloomberg) = UPPER(ce.ticker)
+      JOIN empresas_industrias_v2 e ON e.ticker_bloomberg = ce.ticker
       WHERE ce.metric IN ('NET_INCOME', 'EBITDA') AND ${CHILE_FILTER}
-      ORDER BY UPPER(ce.ticker), ce.metric, ce.period ASC, ce.date DESC
+      ORDER BY ce.ticker, ce.metric, ce.period ASC, ce.date DESC
     `);
     const [{ asof }] = await prisma.$queryRawUnsafe<{ asof: Date | null }[]>(
       `SELECT MAX(date) AS asof FROM valuation_history`,
@@ -112,7 +114,7 @@ export async function GET(request: NextRequest) {
         AND record_type = 'company'
     `);
 
-    // ── Group by UPPER(ticker) ───────────────────────────────────────────────
+    // ── Agrupación por ticker (ya canónico en ambos lados) ───────────────────
     const peByTk = new Map<string, (number | null)[]>();
     const evByTk = new Map<string, (number | null)[]>();
     for (const r of seriesRows) {
@@ -136,7 +138,7 @@ export async function GET(request: NextRequest) {
       ndByName.get((c.latam ?? "").toLowerCase().trim()) ?? null;
 
     const companies: ADCompany[] = companyRows.map((c) => {
-      const tk = c.ticker.toUpperCase();
+      const tk = c.ticker;
       return {
         ticker:      c.ticker,
         name:        c.name,

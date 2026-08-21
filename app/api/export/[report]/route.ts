@@ -106,32 +106,32 @@ async function latestSnapshot<T extends { id: number; snapshotDate: Date }>(
 
 async function exportValuationHistory(): Promise<Record<string, unknown>[]> {
   const rows = await prisma.valuationHistory.findMany({ orderBy: [{ date: 'asc' }, { ticker: 'asc' }] });
-  return rows.map(({ id: _id, date, ...rest }) => ({ date: date.toISOString().slice(0, 10), ...rest }));
+  return rows.map(({ date, ...rest }) => ({ date: date.toISOString().slice(0, 10), ...rest }));
 }
 
 async function exportConsensusEstimate(): Promise<Record<string, unknown>[]> {
   const rows = await prisma.consensusEstimate.findMany({ orderBy: [{ date: 'asc' }, { ticker: 'asc' }] });
-  return rows.map(({ id: _id, date, ...rest }) => ({ date: date.toISOString().slice(0, 10), ...rest }));
+  return rows.map(({ date, ...rest }) => ({ date: date.toISOString().slice(0, 10), ...rest }));
 }
 
 async function exportPriceVsEarnings(): Promise<Record<string, unknown>[]> {
   const rows = await prisma.priceVsEarnings.findMany({ orderBy: [{ date: 'asc' }, { ticker: 'asc' }] });
-  return rows.map(({ id: _id, date, ...rest }) => ({ date: date.toISOString().slice(0, 10), ...rest }));
+  return rows.map(({ date, ...rest }) => ({ date: date.toISOString().slice(0, 10), ...rest }));
 }
 
 async function exportShortInterest(): Promise<Record<string, unknown>[]> {
   const rows = await prisma.shortInterest.findMany({ orderBy: [{ date: 'asc' }, { ticker: 'asc' }] });
-  return rows.map(({ id: _id, date, ...rest }) => ({ date: date.toISOString().slice(0, 10), ...rest }));
+  return rows.map(({ date, ...rest }) => ({ date: date.toISOString().slice(0, 10), ...rest }));
 }
 
 async function exportPriceRange52w(): Promise<Record<string, unknown>[]> {
   const rows = await prisma.priceRange52w.findMany({ orderBy: [{ date: 'asc' }, { ticker: 'asc' }] });
-  return rows.map(({ id: _id, date, ...rest }) => ({ date: date.toISOString().slice(0, 10), ...rest }));
+  return rows.map(({ date, ...rest }) => ({ date: date.toISOString().slice(0, 10), ...rest }));
 }
 
 async function exportAnalystRecommendation(): Promise<Record<string, unknown>[]> {
   const rows = await prisma.analystRecommendation.findMany({ orderBy: [{ date: 'asc' }, { ticker: 'asc' }] });
-  return rows.map(({ id: _id, date, ...rest }) => ({ date: date.toISOString().slice(0, 10), ...rest }));
+  return rows.map(({ date, ...rest }) => ({ date: date.toISOString().slice(0, 10), ...rest }));
 }
 
 // ---------------------------------------------------------------------------

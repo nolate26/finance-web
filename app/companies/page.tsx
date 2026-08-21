@@ -12,7 +12,6 @@ import ConsensusMomentumCards from "@/components/deep-dive/ConsensusMomentumCard
 import RelatedReports from "@/components/deep-dive/RelatedReports";
 import ResearchNotesPanel from "@/components/deep-dive/ResearchNotesPanel";
 import UnmappedTickersAlert from "@/components/deep-dive/UnmappedTickersAlert";
-import OrphanNotesPanel from "@/components/deep-dive/OrphanNotesPanel";
 import ScorecardGrid from "@/components/deep-dive/ScorecardGrid";
 import ModelExplorer from "@/components/deep-dive/ModelExplorer";
 import BankModelExplorer from "@/components/deep-dive/BankModelExplorer";
@@ -292,12 +291,6 @@ function CompaniesPageContent() {
         {/* ── Main content ──────────────────────────────────────────────────── */}
         <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", display: "flex", flexDirection: "column", gap: 0 }}>
 
-          {/* Alertas de admin, arriba de todo y en cualquier pestaña:
-              1) notas de research cuyo ticker no existe en la maestra (asignables),
-              2) tickers con modelos/consensus que no existen en la maestra. */}
-          {isAdmin && <OrphanNotesPanel />}
-          {isAdmin && <UnmappedTickersAlert />}
-
           {/* No selection */}
           {!selectedItem && !diveLoading && <EmptyState />}
 
@@ -535,17 +528,23 @@ function CompaniesPageContent() {
 
               {/* ══ Analyst Models tab ══════════════════════════════════════════ */}
               {analysisTab === "model" && (
-                selectedItem!.kind === "bank" ? (
-                  <BankModelExplorer
-                    ticker={selectedItem!.ticker}
-                    consensusEstimates={deepDive.consensusEstimates}
-                  />
-                ) : (
-                  <ModelExplorer
-                    ticker={selectedItem!.ticker}
-                    consensusEstimates={deepDive.consensusEstimates}
-                  />
-                )
+                <>
+                  {selectedItem!.kind === "bank" ? (
+                    <BankModelExplorer
+                      ticker={selectedItem!.ticker}
+                      consensusEstimates={deepDive.consensusEstimates}
+                    />
+                  ) : (
+                    <ModelExplorer
+                      ticker={selectedItem!.ticker}
+                      consensusEstimates={deepDive.consensusEstimates}
+                    />
+                  )}
+
+                  {/* Alerta de admin al pie: tickers con modelos o consensus cargados
+                      que no existen en la maestra y por eso no salen en el sidebar. */}
+                  {isAdmin && <UnmappedTickersAlert />}
+                </>
               )}
 
               {/* ══ Scorecard tab ═══════════════════════════════════════════════ */}

@@ -121,7 +121,6 @@ model top_picks {
 
 // ─── Tabla 7: Total Return Index con dividendos brutos ───────────────────
 model TotalReturnIndex {
-  id Int @id @default(autoincrement())
   ticker String
   date DateTime @db.Date
   triToday Float? @map("tri_today")
@@ -130,9 +129,10 @@ model TotalReturnIndex {
   tri6m Float? @map("tri_6m")
   tri1y Float? @map("tri_1y")
   tri2y Float? @map("tri_2y")
- 
-  @@unique([ticker, date])
-  @@index([ticker])
+
+  // PK natural: (ticker, date) ya era la llave real. El `id` autoincremental no lo
+  // referenciaba nadie y duplicaba un índice. El @@index([ticker]) sobraba: es prefijo de la PK.
+  @@id([ticker, date])
   @@map("total_return_index")
 }
 
@@ -410,7 +410,6 @@ model EquityCompsSnapshot {
 
 // ─── Tabla 1: Valuación histórica (SERIE MENSUAL, 10Y) ────────────────────
 model ValuationHistory {
-  id          Int      @id @default(autoincrement())
   ticker      String
   date        DateTime @db.Date
   peFwd       Float?
@@ -418,72 +417,65 @@ model ValuationHistory {
   pbv         Float?
   roeFwd      Float?
 
-  @@unique([ticker, date])
-  @@index([ticker])
+  // @@index([date]) se mantiene: NO es prefijo de la PK, y las vistas filtran por fecha.
+  @@id([ticker, date])
   @@index([date])
   @@map("valuation_history")
 }
 
 // ─── Tabla 2: Consenso de estimaciones (SERIE mensual) ───────────────────
 model ConsensusEstimate {
-  id      Int      @id @default(autoincrement())
   ticker  String
   date    DateTime @db.Date
   metric  String
   period  String   // AHORA: '1FY' o '2FY' (antes '2026Y')
   value   Float
 
-  @@unique([ticker, date, metric, period])
-  @@index([ticker])
+  // (ticker, metric) y (period) NO son prefijos de la PK → se conservan.
+  // El @@index([ticker]) sí lo era y se eliminó.
+  @@id([ticker, date, metric, period])
   @@index([ticker, metric])
-  @@index([period]) // NUEVO: para filtrar rápido 1FY vs 2FY
+  @@index([period])
   @@map("consensus_estimates")
 }
 
 // ─── Tabla 3: Precio vs Net Income (SERIE MENSUAL 5Y, solo 1BF blended) ────────────────────────
 model PriceVsEarnings {
-  id      Int      @id @default(autoincrement())
   ticker  String
   date    DateTime @db.Date
   pxLast  Float
   ni1bf   Float?   // NUEVO: Net Income blended 12m
 
-  @@unique([ticker, date])
-  @@index([ticker])
+  @@id([ticker, date])
   @@index([date])
   @@map("price_vs_earnings")
 }
 
 // ─── Tabla 4: Short Interest (FOTO acumulada) ────────────────────────────
 model ShortInterest {
-  id            Int      @id @default(autoincrement())
   ticker        String
   date          DateTime @db.Date
   shortIntRatio Float
 
-  @@unique([ticker, date])
-  @@index([ticker])
+  @@id([ticker, date])
   @@map("short_interest")
 }
 
 // ─── Tabla 5: Rango 52 semanas (FOTO acumulada) ─────────────────────────
 model PriceRange52w {
-    id       Int      @id @default(autoincrement())
     ticker   String
     date     DateTime @db.Date
     pxLast   Float            // requerido, sin ?
     high52w  Float?           // ahora opcional
     low52w   Float?           // ahora opcional
     pctRange Float?
- 
-    @@unique([ticker, date])
-    @@index([ticker])
+
+    @@id([ticker, date])
     @@map("price_range_52w")
 }
 
 // ─── Tabla 6: Recomendaciones de analistas (FOTO acumulada) ──────────────
 model AnalystRecommendation {
-  id          Int      @id @default(autoincrement())
   ticker      String
   date        DateTime @db.Date
   totAnalysts Int
@@ -493,8 +485,7 @@ model AnalystRecommendation {
   consenso    String?
   targetPrice Float?   // <--- NUEVO CAMPO AGREGADO
 
-  @@unique([ticker, date])
-  @@index([ticker])
+  @@id([ticker, date])
   @@map("analyst_recommendations")
 }
 // ─── Tracking de corridas incrementales ──────────────────────────────────
@@ -527,8 +518,8 @@ model SignalRaw {
   // Flags
   top20      Boolean? // True si la empresa entró al Top 20 esa semana
 
+  // @@index([signalDate]) eliminado: es prefijo de la PK. El de ticker no lo es → se conserva.
   @@id([signalDate, ticker])
-  @@index([signalDate])
   @@index([ticker])
   @@map("signals_raw")
 }
@@ -543,9 +534,9 @@ model MomentumSignal {
   score      Float?   // puntaje rank-percentil 0-100 (rank 1 = 100)
   zscore     Float?   @map("z_score") // sigmas vs media cross-section de la fecha
   rank       Int?     // puesto ordinal (1 = mejor momentum)
- 
+
+  // @@index([signalDate]) eliminado: es prefijo de la PK.
   @@id([signalDate, ticker])
-  @@index([signalDate])
   @@index([ticker])
   @@map("momentum_signals")
 
@@ -582,7 +573,6 @@ model Presentation {
 // ==========================================
 
 model EarningsSurprise {
-  id               Int      @id @default(autoincrement())
   tickerBloomberg  String   @map("ticker_bloomberg") @db.VarChar(100)
   quarter          String   @db.VarChar(10) // ej: '1Q26', '4Q25'
   reportDate       DateTime @map("report_date") @db.Date
@@ -608,8 +598,7 @@ model EarningsSurprise {
   niYoy            Float?   @map("ni_yoy")
   niQoq            Float?   @map("ni_qoq")
 
-  @@unique([tickerBloomberg, quarter])
-  @@index([tickerBloomberg])
+  @@id([tickerBloomberg, quarter])
   @@map("earnings_surprise")
 }
 
@@ -649,7 +638,6 @@ model ModelHeader {
 // MODELO ACTUALIZADO - ModelFinancials
 // ==========================================
 model ModelFinancials {
-  id               Int      @id @default(autoincrement())
   ticker           String   @db.VarChar(100)
   updateDate       DateTime @map("update_date") @db.Date
   year             Int
@@ -688,28 +676,39 @@ model ModelFinancials {
   sharePrice       Float?   @map("share_price")
   marketCap        Float?   @map("market_cap")
   header           ModelHeader @relation(fields: [ticker, updateDate], references: [ticker, updateDate], onDelete: Cascade)
-  @@unique([ticker, updateDate, year])
+  @@id([ticker, updateDate, year])
   @@map("model_financials")
 }
 // ==========================================
 // NUEVO MODELO - ModelKPI (Company Specific)
 // ==========================================
+// La unicidad va por (kpiName + kpiOrder), no por uno solo de los dos:
+//   · Solo kpiName  → colisionan las filas que repiten nombre en una sección
+//                     ("Var %"), y el loader las descartaba silenciosamente.
+//   · Solo kpiOrder → colisionan las secciones que la planilla parte en dos
+//                     sub-bloques y reinician el contador (RDOR3, TLEVICPO).
+// Con ambos campos las dos formas quedan cubiertas. Misma llave que BankKPI.
+//
+// `id` se conserva a propósito: NO es una PK sustituta muerta, es el orden de
+// visualización. Las rutas model|bank-model leen los KPIs con orderBy:{id:"asc"}
+// para respetar el orden de la planilla, que no se puede reconstruir desde
+// sectionName/kpiOrder (el orden de las secciones es el de inserción).
 model ModelKPI {
   id           Int      @id @default(autoincrement())
   ticker       String   @db.VarChar(100)
   updateDate   DateTime @map("update_date") @db.Date
   year         Int
-  
+
   // Identificadores de la sección/KPI
   sectionName  String   @map("section_name") @db.VarChar(100)  // Ej: "Argentina", "Brazil Beer"
   kpiName      String   @map("kpi_name") @db.VarChar(100)      // Ej: "Volumes", "Prices", "Revenue", "EBITDA"
-  kpiOrder     Int      @map("kpi_order")                      // Orden de visualización
-  
+  kpiOrder     Int      @map("kpi_order")                      // Orden dentro de la sección
+
   // Valor del KPI
   value        Float?
-  
+
   header       ModelHeader @relation(fields: [ticker, updateDate], references: [ticker, updateDate], onDelete: Cascade)
-  @@unique([ticker, updateDate, year, sectionName, kpiName])
+  @@unique([ticker, updateDate, year, sectionName, kpiName, kpiOrder])
   @@map("model_kpis")
 }
 
@@ -734,6 +733,14 @@ model EmailResearch {
   receivedAt  DateTime? @map("received_at")
   messageId   String?   @map("message_id") @db.VarChar(255)
 
+  // Llave natural de la ingesta: un correo puede traer varios tickers y genera una
+  // fila por ticker, así que el messageId solo NO identifica la nota — el par sí.
+  // Con esto reprocesar la bandeja es idempotente en vez de duplicar todo.
+  // (messageId es nullable: en Postgres los NULL no chocan, las notas creadas a mano
+  // sin messageId quedan fuera de la restricción, que es el comportamiento deseado.)
+  //
+  // `id` se conserva: lo usan /api/research/[id] (PATCH y DELETE).
+  @@unique([messageId, company])
   @@index([company, date])
   @@map("email_research")
 }
@@ -747,7 +754,6 @@ model EmailResearch {
 // Mismos campos que el header de compañías, pero tabla aparte.
 // ------------------------------------------
 model BankHeader {
-  id          Int      @id @default(autoincrement())
   ticker      String   @db.VarChar(100)
   updateDate  DateTime @map("update_date") @db.Date
 
@@ -762,7 +768,10 @@ model BankHeader {
   financials  BankFinancials[]
   kpis        BankKPI[]
 
-  @@unique([ticker, updateDate])
+  // PK compuesta, igual que ModelHeader: los hijos ya apuntaban a (ticker, updateDate)
+  // y el `id` no lo referenciaba nadie. El selector de Prisma sigue siendo
+  // `ticker_updateDate`, así que el upsert del ingest no cambia.
+  @@id([ticker, updateDate])
   @@map("bank_headers")
 }
 
@@ -771,7 +780,6 @@ model BankHeader {
 // Estructura específica de banco (filas 12–60 de la planilla).
 // ------------------------------------------
 model BankFinancials {
-  id          Int      @id @default(autoincrement())
   ticker      String   @db.VarChar(100)
   updateDate  DateTime @map("update_date") @db.Date
   year        Int
@@ -834,14 +842,16 @@ model BankFinancials {
 
   header      BankHeader @relation(fields: [ticker, updateDate], references: [ticker, updateDate], onDelete: Cascade)
 
-  @@unique([ticker, updateDate, year])
+  @@id([ticker, updateDate, year])
   @@map("bank_financials")
 }
 
 // ------------------------------------------
 // KPI (Company Specific) — filas 62+ de la planilla
-// Unicidad por kpiOrder (no por kpiName) para permitir nombres
-// repetidos como "Var %" dentro de una misma sección.
+// Unicidad por (kpiName + kpiOrder), idéntica a ModelKPI: permite tanto nombres
+// repetidos dentro de una sección ("Var %") como contadores de orden que se
+// reinician cuando la planilla parte una sección en sub-bloques.
+// `id` se conserva como orden de visualización (orderBy:{id:"asc"} en la ruta).
 // ------------------------------------------
 model BankKPI {
   id          Int      @id @default(autoincrement())
@@ -857,7 +867,7 @@ model BankKPI {
 
   header      BankHeader @relation(fields: [ticker, updateDate], references: [ticker, updateDate], onDelete: Cascade)
 
-  @@unique([ticker, updateDate, year, sectionName, kpiOrder])
+  @@unique([ticker, updateDate, year, sectionName, kpiName, kpiOrder])
   @@map("bank_kpis")
 }
 
@@ -900,7 +910,8 @@ model EmpresasIndustriasV2 {
   companyDescription String?  @db.Text @map("company_description")
   yahooFinanceTicker String?  @map("yahoo_finance_ticker") // <-- NUEVA COLUMNA AGREGADA
 
-  @@index([tickerBloomberg])
+  // @@index([tickerBloomberg]) eliminado: era un duplicado literal del índice que ya
+  // crea el @unique de esa misma columna.
   @@index([isin])
   @@map("empresas_industrias_v2")
 }
@@ -919,9 +930,9 @@ model StockSelectionV1 {
   periodLabel  String   @map("period_label") @db.VarChar(10) // "1Q 2026"
   value        Float?
  
+  // @@index([company]) eliminado: es prefijo de la PK. Los otros dos no lo son.
   @@id([company, metric, series, fiscalYear, quarter])
   @@index([metric])
-  @@index([company])
   @@index([fiscalYear, quarter])
   @@map("stock_selection_v1")
 }
@@ -952,8 +963,8 @@ model IndexMembership {
   company     String  @db.VarChar(120)                     // nombre tal como en Pivotes
   weight      Float   @default(1)                          // 1 = pertenece (sumaproducto)
  
+  // @@index([indexName]) eliminado: es prefijo de la PK.
   @@id([indexName, company])
-  @@index([indexName])
   @@index([company])
   @@map("index_membership")
 }
@@ -965,8 +976,8 @@ model BetaSensitivity {
   beta            Float    @map("beta")                     // Coeficiente beta calculado
   calculationDate DateTime @map("calculation_date")         // Fecha del cálculo
  
+  // @@index([company]) eliminado: es prefijo de la PK.
   @@id([company, factor])
-  @@index([company])
   @@index([factor])
   @@map("beta_sensitivity")
 }

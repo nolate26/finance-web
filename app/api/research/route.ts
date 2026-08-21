@@ -26,15 +26,14 @@ export async function GET(request: NextRequest) {
     // mandó a BCH US, se ve en BCH US aunque CHILE CI quede sin notas.
     const ticker = companyParam ? normalizeTicker(companyParam) : null;
 
-    // Lectura defensiva: se compara contra UPPER(BTRIM(company)). El ingest ya
-    // normaliza y la base fue saneada, pero si una nota entrara con espacios o en
-    // minúsculas por otra vía, igual aparece bajo su ticker en vez de perderse.
+    // `company` está normalizado en la base y `ticker` viene de normalizeTicker(),
+    // así que se comparan con igualdad directa y el índice (company, date) sirve.
     const records = ticker
       ? await prisma.$queryRaw<RawRow[]>`
           SELECT id, company, date, category, title, subject, "from",
                  html, target_price AS "targetPrice", recommendation
           FROM email_research
-          WHERE UPPER(BTRIM(company)) = ${ticker}
+          WHERE company = ${ticker}
           ORDER BY date DESC, id DESC
         `
       : await prisma.$queryRaw<RawRow[]>`
@@ -50,11 +49,12 @@ export async function GET(request: NextRequest) {
       where:  { tickerBloomberg: { in: uniqueCompanies } },
       select: { tickerBloomberg: true, industriaGics: true },
     });
-    // v2 guarda los tickers en MAYÚSCULAS → indexamos y consultamos en mayúsculas
+    // Ambos lados del mapa pasan por normalizeTicker: la clave se arma igual que
+    // se consulta, sin depender de que .toUpperCase() y la forma canónica coincidan.
     const industryMap: Record<string, string> = Object.fromEntries(
       empresas
         .filter((e) => e.tickerBloomberg)
-        .map((e) => [e.tickerBloomberg.toUpperCase(), e.industriaGics ?? "Other"])
+        .map((e) => [normalizeTicker(e.tickerBloomberg), e.industriaGics ?? "Other"])
     );
 
     const enriched = records.map((r) => {

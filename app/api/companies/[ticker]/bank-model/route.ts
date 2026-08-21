@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { normalizeTicker } from "@/lib/issuer";
 import { requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -170,13 +171,13 @@ export async function GET(
   { params }: { params: Promise<{ ticker: string }> },
 ) {
   const { ticker: rawTicker } = await params;
-  const ticker = decodeURIComponent(rawTicker);
+  const ticker = normalizeTicker(decodeURIComponent(rawTicker));
 
   try {
     const headers = await prisma.bankHeader.findMany({
       // El ticker llega desde companies/list en MAYÚSCULAS (empresas_industrias_v2) y
       // bank_headers usa su propia capitalización → comparar con UPPER en ambos lados.
-      where:   { ticker: { equals: ticker, mode: "insensitive" } },
+      where:   { ticker },
       orderBy: { updateDate: "desc" },
       take:    12,
       select:  {
@@ -222,7 +223,7 @@ export async function GET(
     // Precio de mercado más reciente (px_last). Match case-insensitive: los tickers difieren
     // en casing/espacios entre tablas (price_range_52w está limpio; el param viene de empresas).
     const priceRow = await prisma.priceRange52w.findFirst({
-      where:   { ticker: { equals: ticker, mode: "insensitive" } },
+      where:   { ticker },
       orderBy: { date: "desc" },
       select:  { pxLast: true, date: true },
     });
@@ -269,7 +270,7 @@ export async function DELETE(
   if (deny) return deny;
 
   const { ticker: rawTicker } = await params;
-  const ticker = decodeURIComponent(rawTicker).trim();
+  const ticker = normalizeTicker(decodeURIComponent(rawTicker));
   const updateDate = req.nextUrl.searchParams.get("updateDate");
 
   if (!updateDate) {
@@ -282,7 +283,7 @@ export async function DELETE(
 
   try {
     const { count } = await prisma.bankHeader.deleteMany({
-      where: { ticker: { equals: ticker, mode: "insensitive" }, updateDate: date },
+      where: { ticker, updateDate: date },
     });
     if (count === 0) {
       return NextResponse.json({ error: "Versión no encontrada" }, { status: 404 });

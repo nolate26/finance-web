@@ -1,5 +1,6 @@
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { normalizeTicker } from "@/lib/issuer";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
   // entrega el ticker en MAYÚSCULAS (empresas_industrias_v2) → comparar UPPER ambos lados.
   const [row, momentumRow] = await Promise.all([
     prisma.signalRaw.findFirst({
-      where:   { ticker: { equals: ticker, mode: "insensitive" } },
+      where:   { ticker: normalizeTicker(ticker) },
       orderBy: { signalDate: "desc" },
       select: {
         signalDate: true,
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
       },
     }),
     prisma.momentumSignal.findFirst({
-      where:   { ticker: { equals: ticker, mode: "insensitive" } },
+      where:   { ticker: normalizeTicker(ticker) },
       orderBy: { signalDate: "desc" },
       select:  { signalDate: true, signal: true, score: true, zscore: true, rank: true },
     }),

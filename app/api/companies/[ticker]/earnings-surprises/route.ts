@@ -1,5 +1,6 @@
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { normalizeTicker } from "@/lib/issuer";
 
 export const dynamic = "force-dynamic";
 
@@ -22,11 +23,11 @@ export async function GET(
   { params }: { params: Promise<{ ticker: string }> }
 ) {
   const { ticker } = await params;
-  const decodedTicker = decodeURIComponent(ticker);
+  const decodedTicker = normalizeTicker(decodeURIComponent(ticker));
 
   try {
     const rows = await prisma.earningsSurprise.findMany({
-      where: { tickerBloomberg: { equals: decodedTicker, mode: "insensitive" } },
+      where: { tickerBloomberg: decodedTicker },
       orderBy: { reportDate: "desc" },
       select: {
         quarter:        true,

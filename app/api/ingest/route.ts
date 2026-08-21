@@ -139,7 +139,8 @@ export async function POST(request: Request) {
           bFinancials.map((f: any) => ({ ...bankKey, ...f }))
         );
 
-        // Unicidad por kpiOrder, no por kpiName: la planilla repite nombres como "Var %".
+        // Unicidad por (kpiName + kpiOrder): la planilla repite nombres como "Var %"
+        // dentro de una sección, y a veces reinicia el contador de orden en sub-bloques.
         const bankKpiRows = normalizeRows(
           dedupeBy(
             (Array.isArray(bKpis) ? bKpis : []).map((k: any) => ({
@@ -150,7 +151,7 @@ export async function POST(request: Request) {
               kpiOrder:    k.kpiOrder,
               value:       k.value,
             })),
-            (r) => `${r.year}|${r.sectionName}|${r.kpiOrder}`
+            (r) => `${r.year}|${r.sectionName}|${r.kpiName}|${r.kpiOrder}`
           )
         );
 
@@ -315,7 +316,9 @@ export async function POST(request: Request) {
           financials.map((f: any) => ({ ...modelKey, ...f }))
         );
 
-        // Acá la unicidad es por kpiName (a diferencia de BankKPI, que usa kpiOrder).
+        // Unicidad por (kpiName + kpiOrder), igual que BankKPI. Antes deduplicaba solo
+        // por kpiName y descartaba en silencio las filas que repiten nombre dentro de
+        // una sección (el típico "Var %"): así se perdieron 649 KPIs en 12 modelos.
         const modelKpiRows = normalizeRows(
           dedupeBy(
             (Array.isArray(kpis) ? kpis : []).map((k: any) => ({
@@ -326,7 +329,7 @@ export async function POST(request: Request) {
               kpiOrder:    k.kpiOrder,
               value:       k.value,
             })),
-            (r) => `${r.year}|${r.sectionName}|${r.kpiName}`
+            (r) => `${r.year}|${r.sectionName}|${r.kpiName}|${r.kpiOrder}`
           )
         );
 

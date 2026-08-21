@@ -1,5 +1,6 @@
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { normalizeTicker } from "@/lib/issuer";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
   // signals_raw usa su propia capitalización y el ticker puede llegar en MAYÚSCULAS
   // (empresas_industrias_v2) → comparar con UPPER en ambos lados.
   const rows = await prisma.signalRaw.findMany({
-    where: { ticker: { equals: ticker, mode: "insensitive" } },
+    where: { ticker: normalizeTicker(ticker) },
     orderBy: { signalDate: "asc" },
     select: { signalDate: true, price: true, top20: true, score: true },
   });

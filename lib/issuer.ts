@@ -13,9 +13,19 @@
  * mandó a BCH US, vive en BCH US aunque CHILE CI quede sin notas.
  */
 
-/** Normaliza un ticker: sin espacios sobrantes y en MAYÚSCULAS. */
+/**
+ * Lleva un ticker a la forma canónica de la base.
+ *
+ * Tiene que ser el equivalente EXACTO del SQL con el que se normalizó la data:
+ *   UPPER(regexp_replace(BTRIM(x), '[[:space:]]+', ' ', 'g'))
+ *
+ * Es la única transformación que queda: se aplica UNA vez sobre el valor que
+ * entra (parámetro de ruta, query string, payload) y de ahí en adelante las
+ * queries comparan con igualdad directa. Nada de UPPER() sobre la columna: eso
+ * anulaba los índices y obligaba a escanear las tablas enteras.
+ */
 export function normalizeTicker(raw: string | null | undefined): string {
-  return (raw ?? "").trim().toUpperCase();
+  return (raw ?? "").trim().replace(/\s+/g, " ").toUpperCase();
 }
 
 /**

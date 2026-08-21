@@ -1,5 +1,6 @@
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { normalizeTicker } from "@/lib/issuer";
 
 export const dynamic = "force-dynamic";
 
@@ -83,14 +84,14 @@ export async function GET(
   { params }: { params: Promise<{ ticker: string }> }
 ) {
   const { ticker } = await params;
-  const decodedTicker = decodeURIComponent(ticker);
+  // Se normaliza UNA vez acá; de ahí en adelante todo compara por igualdad.
+  const decodedTicker = normalizeTicker(decodeURIComponent(ticker));
 
   try {
-    const where = { equals: decodedTicker, mode: "insensitive" as const };
 
     // Step A: resolve nombre_latam from ticker (needed for portfolio weights join)
     const empresa = await prisma.empresasIndustriasV2.findFirst({
-      where: { tickerBloomberg: { equals: decodedTicker, mode: "insensitive" } },
+      where: { tickerBloomberg: decodedTicker },
       select: { nombreLatam: true, companyDescription: true },
     });
 
@@ -98,42 +99,42 @@ export async function GET(
       await Promise.all([
         // 1. Valuation history — ascending date
         prisma.valuationHistory.findMany({
-          where: { ticker: where },
+          where: { ticker: decodedTicker },
           orderBy: { date: "asc" },
           select: { date: true, peFwd: true, evEbitdaFwd: true, pbv: true, roeFwd: true },
         }),
 
         // 2. Price vs Earnings — ascending date
         prisma.priceVsEarnings.findMany({
-          where: { ticker: where },
+          where: { ticker: decodedTicker },
           orderBy: { date: "asc" },
           select: { date: true, pxLast: true, ni1bf: true },
         }),
 
         // 3. Consensus estimates — all periods
         prisma.consensusEstimate.findMany({
-          where: { ticker: where },
+          where: { ticker: decodedTicker },
           orderBy: { date: "asc" },
           select: { date: true, metric: true, period: true, value: true },
         }),
 
         // 4. Analyst recommendation — most recent
         prisma.analystRecommendation.findFirst({
-          where: { ticker: where },
+          where: { ticker: decodedTicker },
           orderBy: { date: "desc" },
           select: { totAnalysts: true, buy: true, hold: true, sell: true, consenso: true, targetPrice: true },
         }),
 
         // 5. 52-week price range — most recent
         prisma.priceRange52w.findFirst({
-          where: { ticker: where },
+          where: { ticker: decodedTicker },
           orderBy: { date: "desc" },
           select: { date: true, pxLast: true, high52w: true, low52w: true, pctRange: true },
         }),
 
         // 6. Short interest — most recent
         prisma.shortInterest.findFirst({
-          where: { ticker: where },
+          where: { ticker: decodedTicker },
           orderBy: { date: "desc" },
           select: { shortIntRatio: true },
         }),
@@ -149,7 +150,7 @@ export async function GET(
 
         // 8. Total Return Index — most recent snapshot
         prisma.totalReturnIndex.findFirst({
-          where:   { ticker: { equals: decodedTicker, mode: "insensitive" } },
+          where:   { ticker: decodedTicker },
           orderBy: { date: "desc" },
           select:  { date: true, triToday: true, tri1m: true, tri3m: true, tri1y: true, tri2y: true },
         }),

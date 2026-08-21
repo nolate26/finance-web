@@ -25,11 +25,15 @@ export interface CompanyListItem {
 export async function GET() {
   try {
     // Un solo escaneo por tabla, sin N+1. `have_data` colapsa las cinco fuentes a un
-    // set de tickers normalizados (UPPER + BTRIM) y el INNER JOIN contra la maestra
-    // garantiza una fila por ticker real y descarta cualquier basura de origen.
+    // set de tickers y el INNER JOIN contra la maestra garantiza una fila por ticker
+    // real y descarta cualquier basura de origen.
+    //
+    // Los tickers están normalizados en la base (Fase 1), así que se comparan con
+    // igualdad directa: nada de UPPER()/BTRIM() sobre la columna, que impedía usar
+    // los índices y forzaba escaneo secuencial de tablas enteras.
     const rows = await prisma.$queryRaw<{ ticker: string; nombre: string; kind: string }[]>`
       WITH have_data AS (
-        SELECT UPPER(BTRIM(ei.ticker_bloomberg)) AS ticker
+        SELECT ei.ticker_bloomberg AS ticker
         FROM fund_portfolio_weights fpw
         JOIN empresas_industrias_v2 ei ON fpw.company = ei.nombre_latam
         WHERE fpw.fund_name IN (
@@ -38,35 +42,34 @@ export async function GET() {
         )
 
         UNION
-        SELECT UPPER(BTRIM(mh.ticker)) FROM model_headers mh
+        SELECT mh.ticker FROM model_headers mh
 
         UNION
-        SELECT UPPER(BTRIM(bh.ticker)) FROM bank_headers bh
+        SELECT bh.ticker FROM bank_headers bh
 
         UNION
         -- Consensus coverage: aparece aunque no sea holding ni tenga modelo local.
-        SELECT UPPER(BTRIM(ce.ticker)) FROM consensus_estimates ce
-        WHERE ce.ticker IS NOT NULL AND BTRIM(ce.ticker) <> ''
+        SELECT ce.ticker FROM consensus_estimates ce
+        WHERE ce.ticker IS NOT NULL AND ce.ticker <> ''
 
         UNION
         -- Research notes: email_research.company es el ticker Bloomberg.
-        SELECT UPPER(BTRIM(er.company)) FROM email_research er
-        WHERE er.company IS NOT NULL AND BTRIM(er.company) <> ''
+        SELECT er.company FROM email_research er
+        WHERE er.company IS NOT NULL AND er.company <> ''
       )
-      SELECT DISTINCT ON (UPPER(BTRIM(ei.ticker_bloomberg)))
-             UPPER(BTRIM(ei.ticker_bloomberg)) AS ticker,
+      SELECT ei.ticker_bloomberg AS ticker,
              ei.nombre_latam AS nombre,
              CASE
                WHEN EXISTS (SELECT 1 FROM bank_headers bh
-                            WHERE UPPER(BTRIM(bh.ticker)) = UPPER(BTRIM(ei.ticker_bloomberg)))
+                            WHERE bh.ticker = ei.ticker_bloomberg)
                 AND NOT EXISTS (SELECT 1 FROM model_headers mh
-                            WHERE UPPER(BTRIM(mh.ticker)) = UPPER(BTRIM(ei.ticker_bloomberg)))
+                            WHERE mh.ticker = ei.ticker_bloomberg)
                THEN 'bank' ELSE 'company'
              END AS kind
       FROM empresas_industrias_v2 ei
-      JOIN have_data d ON d.ticker = UPPER(BTRIM(ei.ticker_bloomberg))
-      WHERE ei.ticker_bloomberg IS NOT NULL AND BTRIM(ei.ticker_bloomberg) <> ''
-      ORDER BY UPPER(BTRIM(ei.ticker_bloomberg)) ASC;
+      JOIN have_data d ON d.ticker = ei.ticker_bloomberg
+      WHERE ei.ticker_bloomberg IS NOT NULL AND ei.ticker_bloomberg <> ''
+      ORDER BY ei.ticker_bloomberg ASC;
     `;
 
     const companies: CompanyListItem[] = rows.map((r) => ({

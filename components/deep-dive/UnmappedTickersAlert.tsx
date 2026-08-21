@@ -175,7 +175,7 @@ export default function UnmappedTickersAlert() {
     <div style={{
       background: "rgba(255,107,6,0.045)",
       border: "1px solid rgba(255,107,6,0.28)",
-      borderRadius: 10, overflow: "hidden", marginBottom: 16,
+      borderRadius: 10, overflow: "hidden", marginTop: 16,
     }}>
       <button
         onClick={() => setOpen((o) => !o)}

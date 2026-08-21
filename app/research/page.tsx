@@ -5,6 +5,7 @@ import { Loader2, Search, X, ChevronDown, Mail, ExternalLink, Copy, Check, Send,
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { FONT_SECONDARY } from "@/lib/patriaTheme";
 import { prepareResearchHtml } from "@/lib/researchHtml";
+import OrphanNotesPanel from "@/components/deep-dive/OrphanNotesPanel";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1205,6 +1206,10 @@ export default function ResearchPage() {
           })
         )}
       </div>
+
+      {/* ── Bandeja de admin al pie: notas cuyo ticker no existe en la maestra ─
+           No son visibles en ninguna compañía del deep-dive hasta que se asignen. */}
+      {isAdmin && <OrphanNotesPanel onResolved={reload} />}
 
       {/* ── Detail modal ─────────────────────────────────────────────────── */}
       {selected && (

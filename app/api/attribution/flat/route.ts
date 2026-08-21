@@ -132,7 +132,7 @@ export async function GET(request: NextRequest) {
         ON ei.nombre_latam = lw.company
        AND ei.nombre_latam IS NOT NULL AND ei.nombre_latam <> ''
       INNER JOIN latest_snapshots ls
-        ON UPPER(ls.ticker) = UPPER(ei.ticker_bloomberg)
+        ON ls.ticker = ei.ticker_bloomberg
        AND ei.ticker_bloomberg IS NOT NULL AND ei.ticker_bloomberg <> ''
     `;
 

@@ -58,7 +58,7 @@ export interface UnmappedDetail {
 async function isUnmapped(ticker: string): Promise<boolean> {
   const hit = await prisma.$queryRaw<{ n: bigint }[]>`
     SELECT COUNT(*) AS n FROM empresas_industrias_v2 ei
-    WHERE UPPER(BTRIM(ei.ticker_bloomberg)) = ${ticker}
+    WHERE ei.ticker_bloomberg = ${ticker}
   `;
   return Number(hit[0]?.n ?? 0) === 0;
 }
@@ -75,25 +75,25 @@ export async function GET(request: NextRequest) {
       ticker: string; modelRows: bigint; bankRows: bigint; consensusRows: bigint;
     }[]>`
       WITH src AS (
-        SELECT UPPER(BTRIM(mh.ticker)) AS ticker FROM model_headers mh
+        SELECT mh.ticker AS ticker FROM model_headers mh
         UNION
-        SELECT UPPER(BTRIM(bh.ticker)) FROM bank_headers bh
+        SELECT bh.ticker FROM bank_headers bh
         UNION
-        SELECT UPPER(BTRIM(ce.ticker)) FROM consensus_estimates ce
-        WHERE ce.ticker IS NOT NULL AND BTRIM(ce.ticker) <> ''
+        SELECT ce.ticker FROM consensus_estimates ce
+        WHERE ce.ticker IS NOT NULL AND ce.ticker <> ''
       )
       SELECT src.ticker,
              (SELECT COUNT(*) FROM model_headers mh
-              WHERE UPPER(BTRIM(mh.ticker)) = src.ticker)      AS "modelRows",
+              WHERE mh.ticker = src.ticker)      AS "modelRows",
              (SELECT COUNT(*) FROM bank_headers bh
-              WHERE UPPER(BTRIM(bh.ticker)) = src.ticker)      AS "bankRows",
+              WHERE bh.ticker = src.ticker)      AS "bankRows",
              (SELECT COUNT(*) FROM consensus_estimates ce
-              WHERE UPPER(BTRIM(ce.ticker)) = src.ticker)      AS "consensusRows"
+              WHERE ce.ticker = src.ticker)      AS "consensusRows"
       FROM src
       WHERE src.ticker <> ''
         AND NOT EXISTS (
           SELECT 1 FROM empresas_industrias_v2 ei
-          WHERE UPPER(BTRIM(ei.ticker_bloomberg)) = src.ticker
+          WHERE ei.ticker_bloomberg = src.ticker
         )
       ORDER BY src.ticker
     `;
@@ -143,12 +143,12 @@ async function detail(ticker: string) {
     const [modelHeaders, bankHeaders, consensusAgg, otherData] = await Promise.all([
       prisma.$queryRaw<{ updateDate: Date; analyst: string | null; recc: string | null; tp: number | null; currency: string | null }[]>`
         SELECT update_date AS "updateDate", analyst, recc, tp, currency
-        FROM model_headers WHERE UPPER(BTRIM(ticker)) = ${ticker}
+        FROM model_headers WHERE ticker = ${ticker}
         ORDER BY update_date DESC
       `,
       prisma.$queryRaw<{ updateDate: Date; analyst: string | null; recc: string | null; tp: number | null; currency: string | null }[]>`
         SELECT update_date AS "updateDate", analyst, recc, tp, currency
-        FROM bank_headers WHERE UPPER(BTRIM(ticker)) = ${ticker}
+        FROM bank_headers WHERE ticker = ${ticker}
         ORDER BY update_date DESC
       `,
       prisma.$queryRaw<{ rows: bigint; metrics: string[] | null; periods: string[] | null; minDate: Date | null; maxDate: Date | null }[]>`
@@ -156,16 +156,16 @@ async function detail(ticker: string) {
                ARRAY_AGG(DISTINCT metric) AS metrics,
                ARRAY_AGG(DISTINCT period) AS periods,
                MIN(date) AS "minDate", MAX(date) AS "maxDate"
-        FROM consensus_estimates WHERE UPPER(BTRIM(ticker)) = ${ticker}
+        FROM consensus_estimates WHERE ticker = ${ticker}
       `,
       // Rastro del ticker en el resto del deep-dive. Se muestra pero NO se borra:
       // son series de mercado que no dependen de la maestra.
       prisma.$queryRaw<{ table: string; rows: bigint }[]>`
-        SELECT 'valuation_history' AS "table", COUNT(*) AS "rows" FROM valuation_history WHERE UPPER(BTRIM(ticker)) = ${ticker}
-        UNION ALL SELECT 'price_vs_earnings', COUNT(*) FROM price_vs_earnings WHERE UPPER(BTRIM(ticker)) = ${ticker}
-        UNION ALL SELECT 'short_interest', COUNT(*) FROM short_interest WHERE UPPER(BTRIM(ticker)) = ${ticker}
-        UNION ALL SELECT 'price_range_52w', COUNT(*) FROM price_range_52w WHERE UPPER(BTRIM(ticker)) = ${ticker}
-        UNION ALL SELECT 'analyst_recommendations', COUNT(*) FROM analyst_recommendations WHERE UPPER(BTRIM(ticker)) = ${ticker}
+        SELECT 'valuation_history' AS "table", COUNT(*) AS "rows" FROM valuation_history WHERE ticker = ${ticker}
+        UNION ALL SELECT 'price_vs_earnings', COUNT(*) FROM price_vs_earnings WHERE ticker = ${ticker}
+        UNION ALL SELECT 'short_interest', COUNT(*) FROM short_interest WHERE ticker = ${ticker}
+        UNION ALL SELECT 'price_range_52w', COUNT(*) FROM price_range_52w WHERE ticker = ${ticker}
+        UNION ALL SELECT 'analyst_recommendations', COUNT(*) FROM analyst_recommendations WHERE ticker = ${ticker}
       `,
     ]);
 
@@ -223,9 +223,9 @@ export async function DELETE(request: NextRequest) {
 
     // Los headers cascadean a model_financials / model_kpis / bank_* por FK.
     const [models, banks, consensus] = await prisma.$transaction([
-      prisma.$executeRaw`DELETE FROM model_headers      WHERE UPPER(BTRIM(ticker)) = ${ticker}`,
-      prisma.$executeRaw`DELETE FROM bank_headers       WHERE UPPER(BTRIM(ticker)) = ${ticker}`,
-      prisma.$executeRaw`DELETE FROM consensus_estimates WHERE UPPER(BTRIM(ticker)) = ${ticker}`,
+      prisma.$executeRaw`DELETE FROM model_headers      WHERE ticker = ${ticker}`,
+      prisma.$executeRaw`DELETE FROM bank_headers       WHERE ticker = ${ticker}`,
+      prisma.$executeRaw`DELETE FROM consensus_estimates WHERE ticker = ${ticker}`,
     ]);
 
     return NextResponse.json({
