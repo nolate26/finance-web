@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import {
+  YEAR_METRICS, ROW_YEAR, normEmpresa, buildOverrideIndex, getOverride, pctChange,
+  type YearMetric, type OverrideRecord, type OverrideIndex,
+} from "@/lib/proyeccionOverrideFields";
 
 // ── Shared types ──────────────────────────────────────────────────────────────
 
@@ -28,23 +32,69 @@ export interface DeltaSet {
   utilidad: DeltaBlock | null;
 }
 
+/**
+ * Firma de una celda editada a mano. `prev`/`prevText` es el valor que la celda tenía
+ * justo antes (venga del Excel o de una edición anterior) y `prevAt` su fecha, así que
+ * `pct` es exactamente "la variación con la fecha anterior" que se muestra al pasar
+ * por encima.
+ */
+export interface CellEdit {
+  by:       string | null;
+  at:       string;          // "YYYY-MM-DD HH:mm"
+  prev:     number | null;
+  prevText: string | null;
+  prevAt:   string | null;   // "YYYY-MM-DD HH:mm"
+  pct:      number | null;
+}
+
+export interface EditBlock {
+  y0: CellEdit | null;
+  y1: CellEdit | null;
+  y2: CellEdit | null;
+}
+
+export interface EditSet {
+  ingresos: EditBlock | null;
+  ebitda:   EditBlock | null;
+  ebit:     EditBlock | null;
+  utilidad: EditBlock | null;
+  moneda:   CellEdit | null;
+  analyst:  CellEdit | null;
+  pool_div: CellEdit | null;
+}
+
 export interface ProjectionRowAPI {
   empresa:   string;
   moneda:    string;
   sector:    string;
-  base_year: number;
+  analyst:   string | null;
+  payout:    number | null;
+  /**
+   * Ancla de los bloques. La API ya re-ancla TODAS las filas al año base global, así que
+   * y0/y1/y2 son siempre las mismas tres columnas de calendario para todo el mundo.
+   * Eso es lo que permite editar años fuera del window original de la fila.
+   */
+  base_year:       number;
+  /** base_year con el que el Excel publicó esta fila (para el badge "base 2025"). */
+  sourceBaseYear:  number;
   ingresos:  MetricBlock | null;
   ebitda:    MetricBlock | null;
   ebit:      MetricBlock | null;
   utilidad:  MetricBlock | null;
   /** null when no prior snapshot exists for this company */
   delta:     DeltaSet | null;
+  /** null cuando la fila no tiene ninguna celda editada a mano */
+  edits:     EditSet | null;
+  /** ediciones que el último reporte del Excel dejó atrás (ya no se aplican) */
+  supersededEdits: number;
 }
 
 // ── Prisma row shape (subset we need) ─────────────────────────────────────────
 type PrismaRow = {
   empresa:      string;
   moneda:       string | null;
+  analyst:      string | null;
+  pool_div:     number | null;
   base_year:    number;
   ingresos_y0:  number | null;
   ingresos_y1:  number | null;
@@ -94,42 +144,6 @@ function getYearValue(
   return null; // calendar year is outside this snapshot's window
 }
 
-/** Percentage change: ((curr / prev) - 1) * 100.  null when prev is 0 or missing. */
-function pctDelta(curr: number | null, prev: number | null): number | null {
-  if (curr == null || prev == null || prev === 0) return null;
-  return ((curr / prev) - 1) * 100;
-}
-
-/**
- * Calendar-aware delta.
- * For each y-slot in `curr` (which represents calendar year currBase + n),
- * looks up the corresponding value in `prev` using `getYearValue`.
- * Returns null when there is no overlap at all.
- */
-function deltaBlockCalendar(
-  currBlock: MetricBlock | null,
-  currBase:  number,
-  prevBlock: MetricBlock | null,
-  prevBase:  number,
-): DeltaBlock | null {
-  // Calculate pct delta for each current year-slot against the matching prev value
-  const d0 = pctDelta(
-    currBlock?.y0 ?? null,
-    getYearValue(prevBlock, prevBase, currBase),       // currBase + 0
-  );
-  const d1 = pctDelta(
-    currBlock?.y1 ?? null,
-    getYearValue(prevBlock, prevBase, currBase + 1),
-  );
-  const d2 = pctDelta(
-    currBlock?.y2 ?? null,
-    getYearValue(prevBlock, prevBase, currBase + 2),
-  );
-
-  if (d0 === null && d1 === null && d2 === null) return null;
-  return { y0: d0, y1: d1, y2: d2 };
-}
-
 function buildBlocks(row: PrismaRow) {
   return {
     ingresos: blockOrNull(row.ingresos_y0, row.ingresos_y1, row.ingresos_y2),
@@ -138,6 +152,26 @@ function buildBlocks(row: PrismaRow) {
     utilidad: blockOrNull(row.utilidad_y0, row.utilidad_y1, row.utilidad_y2),
   };
 }
+
+const fmtTs = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ` +
+  `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
+
+const fmtTsShort = (d: Date | null) => (d ? fmtTs(d).slice(0, 16) : null);
+
+/** Traduce un override a la firma que consume el tooltip. */
+function toCellEdit(o: OverrideRecord, effective: number | null): CellEdit {
+  return {
+    by:       o.editedBy,
+    at:       fmtTs(o.editedAt).slice(0, 16),
+    prev:     o.baseValue,
+    prevText: o.baseText,
+    prevAt:   fmtTsShort(o.baseAt),
+    pct:      pctChange(effective, o.baseValue),
+  };
+}
+
+const isEmptyEditBlock = (b: EditBlock) => !b.y0 && !b.y1 && !b.y2;
 
 // ── Route handler ─────────────────────────────────────────────────────────────
 
@@ -171,6 +205,19 @@ export async function GET() {
       ? allProyecciones.filter((p) => p.generated_at.getTime() === prevTs.getTime())
       : [];
 
+    // ── Ediciones manuales ────────────────────────────────────────────────────
+    // Resiliente: si la tabla todavía no existe (falta `prisma db push`), la vista sale
+    // con los datos del Excel en vez de romperse.
+    let overrideRows: OverrideRecord[] = [];
+    try {
+      overrideRows = await prisma.proyeccionOverride.findMany();
+    } catch (e) {
+      console.warn("[projections] overrides no disponibles (¿falta db push?):", String(e).slice(0, 140));
+    }
+    // Todas las filas mostradas vienen del mismo snapshot, así que la foto contra la que
+    // compite cada edición es la misma: latestTs.
+    const ovrIndex: OverrideIndex = buildOverrideIndex(overrideRows, () => latestTs);
+
     // ── Industry lookup ───────────────────────────────────────────────────────
     const industryMap = new Map<string, string>();
     for (const ind of allIndustries) {
@@ -193,41 +240,115 @@ export async function GET() {
     const dominantBaseYear = Math.max(...latestRows.map((r) => r.base_year ?? 2025));
 
     const rows: ProjectionRowAPI[] = latestRows.map((proj) => {
-      const key    = proj.empresa.toLowerCase().trim();
+      const key    = normEmpresa(proj.empresa);
       const sector = industryMap.get(key) ?? "Unclassified";
       const prev   = prevMap.get(key) ?? null;
 
       const currBase  = proj.base_year ?? dominantBaseYear;
       const prevBase  = prev ? (prev.base_year ?? dominantBaseYear) : dominantBaseYear;
 
-      const { ingresos, ebitda, ebit, utilidad }     = buildBlocks(proj as PrismaRow);
-      const { ingresos: pIng, ebitda: pEbd, ebit: pEbt, utilidad: pUtl } =
-        prev ? buildBlocks(prev as PrismaRow) : { ingresos: null, ebitda: null, ebit: null, utilidad: null };
+      const baseBlocks = buildBlocks(proj as PrismaRow);
+      const prevBlocks = prev
+        ? buildBlocks(prev as PrismaRow)
+        : { ingresos: null, ebitda: null, ebit: null, utilidad: null };
+
+      // ── Re-anclado al año base global + overlay de ediciones ────────────────
+      // Cada columna es un año calendario fijo (dominantBaseYear + ci) para TODAS las
+      // filas. Así una fila con base 2025 aporta sus valores donde corresponde y, sobre
+      // todo, puede recibir una edición para un año que el Excel nunca proyectó.
+      const values:  Record<YearMetric, MetricBlock> = {
+        ingresos: { y0: null, y1: null, y2: null },
+        ebitda:   { y0: null, y1: null, y2: null },
+        ebit:     { y0: null, y1: null, y2: null },
+        utilidad: { y0: null, y1: null, y2: null },
+      };
+      const deltas: Record<YearMetric, DeltaBlock> = {
+        ingresos: { y0: null, y1: null, y2: null },
+        ebitda:   { y0: null, y1: null, y2: null },
+        ebit:     { y0: null, y1: null, y2: null },
+        utilidad: { y0: null, y1: null, y2: null },
+      };
+      const edits: Record<YearMetric, EditBlock> = {
+        ingresos: { y0: null, y1: null, y2: null },
+        ebitda:   { y0: null, y1: null, y2: null },
+        ebit:     { y0: null, y1: null, y2: null },
+        utilidad: { y0: null, y1: null, y2: null },
+      };
+
+      const slots = ["y0", "y1", "y2"] as const;
+      for (const metric of YEAR_METRICS) {
+        for (let ci = 0; ci < 3; ci++) {
+          const calYear = dominantBaseYear + ci;
+          const slot    = slots[ci];
+
+          const fromExcel = getYearValue(baseBlocks[metric], currBase, calYear);
+          const ovr       = getOverride(ovrIndex, key, metric, calYear);
+          const effective = ovr ? ovr.value : fromExcel;
+
+          values[metric][slot] = effective;
+          if (ovr) edits[metric][slot] = toCellEdit(ovr, effective);
+
+          // Δ contra el reporte anterior, calculado sobre el valor EFECTIVO (regla de
+          // negocio: da igual si el número vino del Excel o de una edición).
+          deltas[metric][slot] = pctChange(
+            effective,
+            getYearValue(prevBlocks[metric], prevBase, calYear),
+          );
+        }
+      }
+
+      // ── Campos de fila (moneda / analista / payout) ─────────────────────────
+      const rowOvr = (metric: "moneda" | "analyst" | "pool_div") =>
+        getOverride(ovrIndex, key, metric, ROW_YEAR);
+
+      const oMoneda  = rowOvr("moneda");
+      const oAnalyst = rowOvr("analyst");
+      const oPayout  = rowOvr("pool_div");
+
+      const moneda  = oMoneda?.textValue  ?? proj.moneda   ?? "";
+      const analyst = oAnalyst?.textValue ?? proj.analyst  ?? null;
+      const payout  = oPayout?.value      ?? proj.pool_div ?? null;
+
+      const editSet: EditSet = {
+        ingresos: isEmptyEditBlock(edits.ingresos) ? null : edits.ingresos,
+        ebitda:   isEmptyEditBlock(edits.ebitda)   ? null : edits.ebitda,
+        ebit:     isEmptyEditBlock(edits.ebit)     ? null : edits.ebit,
+        utilidad: isEmptyEditBlock(edits.utilidad) ? null : edits.utilidad,
+        moneda:   oMoneda  ? toCellEdit(oMoneda,  null)   : null,
+        analyst:  oAnalyst ? toCellEdit(oAnalyst, null)   : null,
+        pool_div: oPayout  ? toCellEdit(oPayout,  payout) : null,
+      };
+      const hasEdits = Object.values(editSet).some((v) => v !== null);
+
+      const blockOf = (m: YearMetric): MetricBlock | null =>
+        blockOrNull(values[m].y0, values[m].y1, values[m].y2);
+      const deltaOf = (m: YearMetric): DeltaBlock | null =>
+        deltas[m].y0 === null && deltas[m].y1 === null && deltas[m].y2 === null ? null : deltas[m];
 
       return {
         empresa:   proj.empresa,
-        moneda:    proj.moneda ?? "",
+        moneda,
         sector,
-        base_year: currBase,
-        ingresos,
-        ebitda,
-        ebit,
-        utilidad,
+        analyst,
+        payout,
+        base_year:      dominantBaseYear,   // los bloques ya vienen re-anclados acá
+        sourceBaseYear: currBase,
+        ingresos:  blockOf("ingresos"),
+        ebitda:    blockOf("ebitda"),
+        ebit:      blockOf("ebit"),
+        utilidad:  blockOf("utilidad"),
         delta: prev
           ? {
-              ingresos: deltaBlockCalendar(ingresos, currBase, pIng, prevBase),
-              ebitda:   deltaBlockCalendar(ebitda,   currBase, pEbd, prevBase),
-              ebit:     deltaBlockCalendar(ebit,     currBase, pEbt, prevBase),
-              utilidad: deltaBlockCalendar(utilidad, currBase, pUtl, prevBase),
+              ingresos: deltaOf("ingresos"),
+              ebitda:   deltaOf("ebitda"),
+              ebit:     deltaOf("ebit"),
+              utilidad: deltaOf("utilidad"),
             }
           : null,
+        edits: hasEdits ? editSet : null,
+        supersededEdits: ovrIndex.superseded.get(key) ?? 0,
       };
     });
-
-    // ── Format timestamps ─────────────────────────────────────────────────────
-    const fmtTs = (d: Date) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ` +
-      `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
 
     return NextResponse.json({
       generatedAt: fmtTs(latestTs),

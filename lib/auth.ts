@@ -118,3 +118,17 @@ export async function requireAdmin(): Promise<NextResponse | null> {
   }
   return null;
 }
+
+/**
+ * Guard para API routes mutantes abiertas a CUALQUIER usuario autenticado (user o admin).
+ * Mismo uso que requireAdmin(): devuelve una NextResponse 401 si no hay sesión, o null si
+ * puede continuar. Lo usa la edición de proyecciones, donde el permiso no es de admin pero
+ * el cambio igual queda firmado en la bitácora con el email de quien lo hizo.
+ */
+export async function requireAuth(): Promise<NextResponse | null> {
+  const user = await getSessionUser();
+  if (!user) {
+    return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  }
+  return null;
+}

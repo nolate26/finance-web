@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import YahooFinance from "yahoo-finance2";
 import { OVERRIDE_FIELD_KEYS } from "@/lib/ssOverrideFields";
+import {
+  buildOverrideIndex, getOverride, ROW_YEAR,
+  type OverrideRecord, type OverrideIndex,
+} from "@/lib/proyeccionOverrideFields";
 // Parche de tickers Yahoo rotos en la fuente. Vive en lib/ porque el panel de admin
 // necesita mostrar qué filas está reescribiendo (y Next no deja exportarlo desde acá).
 import { fixYahooTicker } from "@/lib/yahooTickerFixes";
@@ -83,9 +87,13 @@ export interface SsV1Company {
   tp:      number | null;    // target price, moneda del listado (sin conv)
 
   // Campos con override de admin aplicado en este período (para pintarlos en la vista).
+  // Incluye los campos de proyección que llegaron editados desde /projections, que se
+  // pintan igual pero NO se editan acá.
   overrides?: string[];
   // Valor base (previo al override) de esos campos, para mostrarlo en el panel de edición.
   baseValues?: Record<string, number | null>;
+  // Firma de los campos de proyección editados a mano en /projections (sólo lectura acá).
+  projEdits?: Record<string, { by: string | null; at: string }>;
 }
 
 export interface SsV1Period { fy: number; q: number; label: string; }
@@ -358,6 +366,9 @@ export async function GET(request: NextRequest) {
     } catch (e) {
       console.warn("[stock-selection-v1] overrides no disponibles (¿falta db push?):", String(e).slice(0, 120));
     }
+    // El filtro por OVERRIDE_FIELD_KEYS también es el que neutraliza cualquier override
+    // viejo sobre un campo de proyección: esos campos salieron de la lista editable, así
+    // que las filas que hayan quedado en la base se ignoran acá sin migrar nada.
     const overridesByCompany = new Map<string, Map<string, number>>();
     for (const o of overrideRows) {
       if (o.value == null || !OVERRIDE_FIELD_KEYS.has(o.field)) continue;
@@ -365,14 +376,36 @@ export async function GET(request: NextRequest) {
       let m = overridesByCompany.get(k); if (!m) { m = new Map(); overridesByCompany.set(k, m); }
       m.set(o.field, o.value);
     }
+
+    // ── Proyecciones: esta vista sólo CONSUME ─────────────────────────────────
+    // EBITDA/Utilidad 26E-27E, la moneda proyectada y el payout salen de Proyecciones y
+    // son de sólo lectura acá. La única forma de editarlos a mano es /projections, que
+    // resuelve el valor ganador con su propia regla (gana la foto más fresca entre el
+    // último Excel y la última edición manual). Acá se lee ese ganador y se muestra.
+    let proyOverrideRows: OverrideRecord[] = [];
+    try {
+      proyOverrideRows = await prisma.proyeccionOverride.findMany();
+    } catch (e) {
+      console.warn("[stock-selection-v1] ediciones de proyecciones no disponibles (¿falta db push?):", String(e).slice(0, 120));
+    }
     // Campos numéricos que se asignan directo al objeto compañía (los demás son shares).
-    const DIRECT_FIELDS = new Set(["debtN", "debtN4", "equityN", "equityN4", "minorityN", "minorityN4", "ebitdaN", "ebitdaN4", "ebitdaLtm", "ebitda2026E", "ebitda2027E", "utilidadN", "utilidadN4", "utilidadLtm", "utilidad2026E", "utilidad2027E", "revenueLtm", "ebitLtm"]);
+    // Sin los 26E/27E: esos ya no se editan desde acá.
+    const DIRECT_FIELDS = new Set(["debtN", "debtN4", "equityN", "equityN4", "minorityN", "minorityN4", "ebitdaN", "ebitdaN4", "ebitdaLtm", "utilidadN", "utilidadN4", "utilidadLtm", "revenueLtm", "ebitLtm"]);
+
+    // Campos cuyo valor llegó de una edición manual hecha en /projections, con su firma.
+    // No son overrides de esta vista (nadie los editó acá): se listan aparte para poder
+    // pintarlos y decir de dónde salieron, pero el panel los muestra en sólo lectura.
+    const projEditedFields = new Map<string, string[]>();
+    const projEditInfo = new Map<string, Record<string, { by: string | null; at: string }>>();
+
     const applyOverrides = (co: SsV1Company): void => {
-      const ov = overridesByCompany.get(norm(co.company));
-      if (!ov || !ov.size) return;
-      const applied: string[] = [];
+      const key = norm(co.company);
+      const ov = overridesByCompany.get(key);
+      const fromProj = projEditedFields.get(key) ?? [];
+      const applied: string[] = [...fromProj];
       const baseValues: Record<string, number | null> = {};
-      for (const [field, value] of ov) {
+
+      for (const [field, value] of ov ?? []) {
         if (field === "sharesTotal") {
           if (!co.dual) { baseValues[field] = co.sharesTotal; co.sharesTotal = value; if (co.series[0]) co.series[0].shares = value; applied.push(field); }
         } else if (field === "sharesA") {
@@ -385,11 +418,13 @@ export async function GET(request: NextRequest) {
         }
       }
       // Doble serie: sharesTotal coherente con A+B tras editar acciones (prorrateo).
-      if (co.dual && (ov.has("sharesA") || ov.has("sharesB"))) {
+      if (co.dual && (ov?.has("sharesA") || ov?.has("sharesB"))) {
         const a = co.series[0]?.shares, b = co.series[1]?.shares;
         if (a != null && b != null) co.sharesTotal = a + b;
       }
       if (applied.length) { co.overrides = applied; co.baseValues = baseValues; }
+      const info = projEditInfo.get(key);
+      if (info) co.projEdits = info;
     };
     const ltmLabels = (() => { const o: string[] = []; let f = selFy, q = selQ; for (let i = 0; i < 4; i++) { o.push(labelOf(f, q)); q--; if (q === 0) { q = 4; f--; } } return o.reverse(); })();
 
@@ -442,6 +477,39 @@ export async function GET(request: NextRequest) {
       if (!pick) return null; const off = cal - pick.base_year; if (off < 0 || off > 2) return null; return pick[arr][off] ?? null;
     };
 
+    // Ediciones manuales de /projections. Cada una compite contra el snapshot vigente DE SU
+    // empresa (projAt): si el Excel se corrió después, la edición ya no aplica.
+    const proyIndex: OverrideIndex = buildOverrideIndex(
+      proyOverrideRows,
+      (key) => { const ts = projAt.get(key); return ts == null ? null : new Date(ts); },
+    );
+
+    // Valor ganador de una celda de proyección: la edición manual si le gana al snapshot,
+    // si no el del Excel. La decisión ya la tomó buildOverrideIndex; acá sólo se lee.
+    const projYearEff = (
+      key: string, pick: ProjPick | undefined, arr: "ebitda" | "utilidad", cal: number, field: string,
+    ): number | null => {
+      const o = getOverride(proyIndex, key, arr, cal);
+      if (!o) return projYear(pick, arr, cal);
+
+      const list = projEditedFields.get(key) ?? [];
+      list.push(field);
+      projEditedFields.set(key, list);
+
+      const info = projEditInfo.get(key) ?? {};
+      info[field] = { by: o.editedBy, at: o.editedAt.toISOString() };
+      projEditInfo.set(key, info);
+      return o.value;
+    };
+
+    const monedaEff = (key: string, pick: ProjPick | undefined): "CLP" | "USD" | null => {
+      const t = getOverride(proyIndex, key, "moneda", ROW_YEAR)?.textValue?.toUpperCase();
+      if (t === "USD" || t === "CLP") return t;
+      return pick?.moneda ?? null;
+    };
+    const payoutEff = (key: string, pick: ProjPick | undefined): number | null =>
+      getOverride(proyIndex, key, "pool_div", ROW_YEAR)?.value ?? pick?.pool_div ?? null;
+
     // ── Construir universo ────────────────────────────────────────────────────
     const companies: SsV1Company[] = [];
     const seen = new Set<string>();
@@ -481,7 +549,7 @@ export async function GET(request: NextRequest) {
 
       const co: SsV1Company = {
         company: r.company, tickerBBG: resolved.tickerBBG, industria: resolved.industria, gics: resolved.gics, dual,
-        ssCurrency: f.currency, projCurrency: pick?.moneda ?? null,
+        ssCurrency: f.currency, projCurrency: monedaEff(k, pick),
         series, sharesTotal,
         rec: coRec?.rec ?? null, recDate: coRec?.recDate ?? null, tp: coRec?.tp ?? null,
         ebitdaN: at(f, "ebitda", nKey), ebitdaN4: at(f, "ebitda", n4Key), ebitdaLtm: ltmSum(f, "ebitda"),
@@ -490,9 +558,11 @@ export async function GET(request: NextRequest) {
         debtN: at(f, "debt", nKey), debtN4: at(f, "debt", n4Key),
         equityN: at(f, "equity", nKey), equityN4: at(f, "equity", n4Key),
         minorityN: at(f, "minority_interest", nKey), minorityN4: at(f, "minority_interest", n4Key),
-        ebitda2026E: projYear(pick, "ebitda", 2026), ebitda2027E: projYear(pick, "ebitda", 2027),
-        utilidad2026E: projYear(pick, "utilidad", 2026), utilidad2027E: projYear(pick, "utilidad", 2027),
-        divLabel: pick?.div ?? null, payout: pick?.pool_div ?? null,
+        ebitda2026E:   projYearEff(k, pick, "ebitda",   2026, "ebitda2026E"),
+        ebitda2027E:   projYearEff(k, pick, "ebitda",   2027, "ebitda2027E"),
+        utilidad2026E: projYearEff(k, pick, "utilidad", 2026, "utilidad2026E"),
+        utilidad2027E: projYearEff(k, pick, "utilidad", 2027, "utilidad2027E"),
+        divLabel: pick?.div ?? null, payout: payoutEff(k, pick),
       };
       applyOverrides(co); // capa de overrides de admin (in place)
       companies.push(co);

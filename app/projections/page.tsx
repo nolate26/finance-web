@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import ProjectionsTable from "@/components/projections/ProjectionsTable";
 import type { ProjectionRowAPI } from "@/app/api/projections/route";
 import { Calendar } from "lucide-react";
@@ -26,12 +26,16 @@ export default function ProjectionsPage() {
   const [error, setError]             = useState(false);
   const [selectedSector, setSelectedSector] = useState<string>("");
 
-  useEffect(() => {
+  // Se reusa al guardar una edición: la vista vuelve a pedir los datos ya con el overlay
+  // aplicado, así el Δ y la firma de la celda quedan al día sin recargar la página.
+  const load = useCallback(() => {
     fetch("/api/projections")
       .then((r) => r.json())
       .then((d) => { setData(d as ProjectionsData); setLoading(false); })
       .catch(() => { setError(true); setLoading(false); });
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const uniqueSectors = useMemo(() => {
     if (!data) return [];
@@ -157,6 +161,7 @@ export default function ProjectionsPage() {
         rows={filteredRows}
         base_year={data.base_year ?? 2025}
         prevAt={data.prevAt}
+        onSaved={load}
       />
     </div>
   );

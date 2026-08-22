@@ -9,6 +9,7 @@ export const ENTITY = {
   empresas: "empresas_industrias_v2",
   ssOverride: "stock_selection_override",
   indexMembership: "index_membership",
+  proyeccionOverride: "proyecciones_override",
 } as const;
 
 export interface AdminLogEntry {

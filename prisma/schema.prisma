@@ -264,6 +264,49 @@ model proyecciones_financieras {
   @@id([generated_at, empresa])
 }
 
+// Capa de ediciones manuales (cualquier usuario autenticado) sobre proyecciones_financieras.
+// NO se edita esa tabla: es un historial de snapshots inmutables del Excel, con PK
+// [generated_at, empresa]. Un edit escrito ahí perdería el valor base y quedaría pegado a
+// un snapshot que la próxima corrida deja atrás.
+//
+// INDEXADA POR AÑO CALENDARIO, no por y0/y1/y2: la vista alinea todo por calendario, así
+// que si el Excel mueve base_year (2025 → 2026) un override guardado como "ebitda_y1"
+// pasaría a apuntar a otro año sin que nadie se entere. Con (metric, calendar_year) el
+// override es inmune al corrimiento.
+//
+// PRECEDENCIA — GANA LA FOTO MÁS FRESCA: el override aplica sólo si `edited_at` es
+// posterior al `generated_at` del snapshot vigente de esa empresa. Volver a correr el
+// script del Excel publica datos más nuevos y por lo tanto pisa las ediciones anteriores
+// (siguen acá y en admin_change_log, pero dejan de aplicarse). La misma regla la usan
+// /api/projections y stock-selection-v1, para que las dos vistas nunca muestren números
+// distintos de la misma celda.
+//
+// calendar_year = 0 es el centinela de los campos de FILA (moneda, analyst, pool_div), que
+// no cuelgan de un año. Postgres no admite NULL en la PK, de ahí el 0 en vez de nullable.
+// value / text_value: se usa uno u otro según el campo (pool_div y las 4 métricas son
+// numéricos; moneda y analyst son texto). Ambos null = celda revertida al valor del Excel.
+// base_value / base_text / base_at: la foto de lo que había JUSTO ANTES de esta edición
+// (venga del Excel o de una edición previa) con su fecha — es lo que alimenta el "cambió de
+// X a Y (+Z%) respecto del DD/MM" del tooltip, sin tener que releer la bitácora.
+model ProyeccionOverride {
+  empresa      String    @db.VarChar(200)
+  metric       String    @db.VarChar(12)  // ingresos | ebitda | ebit | utilidad | moneda | analyst | pool_div
+  calendarYear Int       @map("calendar_year") // 2026, 2027, … | 0 = campo de fila
+  value        Float?
+  textValue    String?   @map("text_value") @db.VarChar(200)
+  baseValue    Float?    @map("base_value")
+  baseText     String?   @map("base_text") @db.VarChar(200)
+  baseAt       DateTime? @map("base_at")
+  editedBy     String?   @map("edited_by") @db.VarChar(200)
+  editedAt     DateTime  @default(now()) @updatedAt @map("edited_at")
+  note         String?   @db.VarChar(500)
+
+  // @@index([empresa]) omitido: es prefijo de la PK.
+  @@id([empresa, metric, calendarYear])
+  @@index([editedAt])
+  @@map("proyecciones_override")
+}
+
 model LatamEquitySnapshot {
   id            Int      @id @default(autoincrement())
   snapshotDate  DateTime @default(now())

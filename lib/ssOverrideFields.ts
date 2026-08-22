@@ -23,23 +23,45 @@ export const OVERRIDE_FIELDS: OverrideFieldDef[] = [
   { key: "minorityN",   label: "Int. minoritario (n)",  group: "Balance", scope: "both" },
   { key: "minorityN4",  label: "Int. minoritario (n-4)",group: "Balance", scope: "both" },
 
+  // Los EBITDA / Utilidad editables acá son los HISTÓRICOS: salen de stock_selection_v1
+  // (trimestrales). Los proyectados (2026E/2027E) NO están en esta lista a propósito —
+  // ver PROJECTION_FIELDS abajo.
   { key: "ebitdaN",     label: "EBITDA (Ac, n)",   group: "EBITDA", scope: "both" },
   { key: "ebitdaN4",    label: "EBITDA (Ac-1, n-4)",group: "EBITDA", scope: "both" },
   { key: "ebitdaLtm",   label: "EBITDA LTM",       group: "EBITDA", scope: "both" },
-  { key: "ebitda2026E", label: "EBITDA 2026E",     group: "EBITDA", scope: "both" },
-  { key: "ebitda2027E", label: "EBITDA 2027E",     group: "EBITDA", scope: "both" },
 
   { key: "utilidadN",     label: "Utilidad (Ac, n)",    group: "Utilidad", scope: "both" },
   { key: "utilidadN4",    label: "Utilidad (Ac-1, n-4)",group: "Utilidad", scope: "both" },
   { key: "utilidadLtm",   label: "Utilidad LTM",        group: "Utilidad", scope: "both" },
-  { key: "utilidad2026E", label: "Utilidad 2026E",      group: "Utilidad", scope: "both" },
-  { key: "utilidad2027E", label: "Utilidad 2027E",      group: "Utilidad", scope: "both" },
 
   { key: "revenueLtm",  label: "Ventas LTM", group: "Otros", scope: "both" },
   { key: "ebitLtm",     label: "EBIT LTM",   group: "Otros", scope: "both" },
 ];
 
 export const OVERRIDE_FIELD_KEYS = new Set(OVERRIDE_FIELDS.map((f) => f.key));
+
+/**
+ * Campos de esta vista cuya fuente de verdad es PROYECCIONES, no Stock Selection.
+ * Son de sólo lectura acá: la única forma de editarlos a mano es /projections, que aplica
+ * su propia capa (proyecciones_override) con la regla "gana la foto más fresca". Esta vista
+ * se limita a mostrar el valor ganador.
+ *
+ * No están en OVERRIDE_FIELDS, así que:
+ *   · el panel de edición no les dibuja input (los muestra en un bloque de sólo lectura),
+ *   · PUT /api/chile/stock-selection-v1/overrides los rechaza con 400,
+ *   · cualquier override viejo que haya quedado en la base para estos campos se ignora al
+ *     leer (el filtro por OVERRIDE_FIELD_KEYS lo descarta), sin necesidad de migrar nada.
+ *
+ * Siguen en FIELD_AFFECTS porque el pintado de las columnas derivadas (FV/EBITDA, P/U…)
+ * sí aplica cuando el valor viene de una edición manual hecha en Proyecciones.
+ */
+export const PROJECTION_FIELDS: { key: string; label: string }[] = [
+  { key: "ebitda2026E",   label: "EBITDA 2026E" },
+  { key: "ebitda2027E",   label: "EBITDA 2027E" },
+  { key: "utilidad2026E", label: "Utilidad 2026E" },
+  { key: "utilidad2027E", label: "Utilidad 2027E" },
+];
+export const PROJECTION_FIELD_KEYS = new Set(PROJECTION_FIELDS.map((f) => f.key));
 
 // field → columnas (claves del value bag) que quedan afectadas y se pintan de amarillo.
 // Incluye la columna propia del campo (si se muestra) y todas las derivadas.

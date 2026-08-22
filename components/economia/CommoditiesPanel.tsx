@@ -1,8 +1,9 @@
 "use client";
 
-import { PATRIA, FONT_SECONDARY } from "@/lib/patriaTheme";
+import { PATRIA, FONT_SECONDARY, TEXT, TEXT_ON_DARK, BORDER, SURFACE } from "@/lib/patriaTheme";
 
 import React, { useState } from "react";
+import { Search, X } from "lucide-react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -192,23 +193,59 @@ function HistoricalPanel({
       {/* Left — table */}
       <div className="card" style={{ overflow: "hidden", padding: 0, alignSelf: "start" }}>
         {/* Search bar */}
-        <div style={{ padding: "8px 14px", borderBottom: "1px solid rgba(13,13,56,0.07)" }}>
-          <input
-            type="text"
-            placeholder="Search commodities…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            style={{
-              width: "100%",
-              fontSize: 11,
-              padding: "5px 10px",
-              borderRadius: 6,
-              border: "1px solid rgba(13,13,56,0.12)",
-              background: "#F5F7FD",
-              color: "#0D0D38",
-              outline: "none",
-            }}
-          />
+        <div style={{ padding: "9px 14px", borderBottom: BORDER.base, background: SURFACE.zebra }}>
+          <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+            <Search
+              size={13}
+              style={{ position: "absolute", left: 9, color: TEXT.muted, pointerEvents: "none" }}
+            />
+            <input
+              type="text"
+              placeholder="Buscar commodity…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="placeholder:text-[rgba(13,13,56,0.45)]"
+              style={{
+                width: "100%",
+                fontSize: 12,
+                fontFamily: FONT_SECONDARY,
+                padding: "6px 26px 6px 27px",
+                borderRadius: 6,
+                border: `1px solid ${BORDER.strong}`,
+                background: SURFACE.card,
+                color: TEXT.body,
+                outline: "none",
+                transition: "border-color 0.12s, box-shadow 0.12s",
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = PATRIA.kingBlue;
+                e.currentTarget.style.boxShadow = "0 0 0 2px rgba(32,68,220,0.14)";
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = BORDER.strong;
+                e.currentTarget.style.boxShadow = "none";
+              }}
+            />
+            {query && (
+              <button
+                onClick={() => setQuery("")}
+                title="Limpiar búsqueda"
+                style={{
+                  position: "absolute",
+                  right: 7,
+                  display: "flex",
+                  alignItems: "center",
+                  color: TEXT.muted,
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 0,
+                }}
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
         </div>
         <div style={{ maxHeight: 600, overflowY: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -358,26 +395,47 @@ function HistoricalPanel({
               Daily history · Spot: <span className="font-secondary tabular-nums font-semibold" style={{ color: PATRIA.turquoise }}>{fmtNum(selectedMeta?.spot ?? null, dec)}</span>
             </p>
           </div>
-          <div className="flex items-center gap-0.5">
-            {(["1W","1M","6M","1Y","3Y","5Y"] as Range[]).map((r) => (
-              <button
-                key={r}
-                onClick={() => setRange(r)}
-                style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  padding: "3px 7px",
-                  borderRadius: 5,
-                  border: range === r ? "1px solid rgba(32,68,220,0.30)" : "1px solid transparent",
-                  background: range === r ? "rgba(32,68,220,0.10)" : "transparent",
-                  color: range === r ? "#001EAF" : "rgba(13,13,56,0.45)",
-                  cursor: "pointer",
-                  transition: "all 0.1s",
-                }}
-              >
-                {r}
-              </button>
-            ))}
+          {/* Selector de rango — vive sobre fondo dark-blue, así que usa los tonos onDark */}
+          <div
+            className="flex items-center gap-0.5 p-0.5 rounded-lg"
+            style={{ background: "rgba(255,255,255,0.08)", border: `1px solid ${BORDER.onDark}` }}
+          >
+            {(["1W","1M","6M","1Y","3Y","5Y"] as Range[]).map((r) => {
+              const active = range === r;
+              return (
+                <button
+                  key={r}
+                  onClick={() => setRange(r)}
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    fontFamily: FONT_SECONDARY,
+                    letterSpacing: "0.02em",
+                    padding: "3px 8px",
+                    borderRadius: 5,
+                    border: "1px solid transparent",
+                    background: active ? PATRIA.turquoise : "transparent",
+                    color: active ? PATRIA.darkBlue : TEXT_ON_DARK.label,
+                    cursor: "pointer",
+                    transition: "all 0.12s",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!active) {
+                      e.currentTarget.style.background = "rgba(255,255,255,0.14)";
+                      e.currentTarget.style.color = PATRIA.white;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!active) {
+                      e.currentTarget.style.background = "transparent";
+                      e.currentTarget.style.color = TEXT_ON_DARK.label;
+                    }
+                  }}
+                >
+                  {r}
+                </button>
+              );
+            })}
           </div>
         </div>
         <div className="px-2 py-4 flex-1" style={{ minHeight: 280 }}>

@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { RefreshCw, LayoutGrid, X, Check, Plus, Save, Search, Pencil, RotateCcw } from "lucide-react";
+import { RefreshCw, LayoutGrid, X, Check, Plus, Save, Search, Pencil, RotateCcw, Lock } from "lucide-react";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import SsV1AdminPanel from "./SsV1AdminPanel";
-import { OVERRIDE_FIELDS, FIELD_AFFECTS } from "@/lib/ssOverrideFields";
+import { OVERRIDE_FIELDS, PROJECTION_FIELDS, FIELD_AFFECTS } from "@/lib/ssOverrideFields";
 import type { SsV1Company, SsV1Payload, SsV1Series, IndexLevel } from "@/app/api/chile/stock-selection-v1/route";
 import type { IndexMembershipPayload } from "@/app/api/chile/index-membership/route";
 import { PATRIA, FONT_SECONDARY, TEXT } from "@/lib/patriaTheme";
@@ -843,7 +843,11 @@ export default function StockSelectionV1() {
                             {editMode && <Pencil size={11} color={EDIT_BORDER} />}
                             {r.company}
                             {r.kind === "consolidated" && <span style={consBadge}>consol.</span>}
-                            {r.overrides?.length ? <span style={editedBadge}>{r.overrides.length} ed.</span> : null}
+                            {r.overrides?.length ? (
+                              <span style={editedBadge} title="Celdas con valor editado a mano: overrides de esta vista y/o ediciones hechas en Proyecciones">
+                                {r.overrides.length} ed.
+                              </span>
+                            ) : null}
                           </div>
                           <div style={{ fontSize: 9, color: TEXT3, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
                             {r.tickerBBG ?? "—"}<span style={ccyBadge(r.ssCurrency)}>{r.ssCurrency}</span>
@@ -1261,6 +1265,48 @@ function SsV1OverrideEditor({ company, fy, q, onClose, onSaved }: { company: SsV
               })}
             </div>
           ))}
+          {/* Proyecciones — sólo lectura. La fuente de verdad es /projections. */}
+          <div style={{ marginTop: 14, border: `1px dashed ${BORDER}`, borderRadius: 8, padding: "9px 11px", background: SURFACE }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: TEXT2, marginBottom: 7 }}>
+              <Lock size={11} /> Proyecciones · sólo lectura
+            </div>
+            {PROJECTION_FIELDS.map((f) => {
+              const v = curFieldValue(company, f.key);
+              const sig = company.projEdits?.[f.key];
+              return (
+                <div key={f.key} style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "2px 0" }}>
+                  <div style={{ flex: 1, fontSize: 12, color: TEXT1 }}>
+                    {f.label}
+                    {sig && (
+                      <span style={{ fontSize: 10, color: EDIT_BORDER, marginLeft: 6 }}>
+                        editado por {sig.by ?? "usuario"} · {fmtDate(sig.at.slice(0, 10))}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 12, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", color: TEXT1, fontWeight: sig ? 700 : 400 }}>
+                    {v == null ? "—" : v.toLocaleString("en-US")}
+                  </div>
+                </div>
+              );
+            })}
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "2px 0" }}>
+              <div style={{ flex: 1, fontSize: 12, color: TEXT1 }}>Moneda proyectada</div>
+              <div style={{ fontSize: 12, fontFamily: FONT_SECONDARY, color: TEXT1 }}>{company.projCurrency ?? "—"}</div>
+            </div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "2px 0" }}>
+              <div style={{ flex: 1, fontSize: 12, color: TEXT1 }}>Payout (div.)</div>
+              <div style={{ fontSize: 12, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", color: TEXT1 }}>
+                {company.payout == null ? "—" : `${(Math.abs(company.payout) <= 1 ? company.payout * 100 : company.payout).toFixed(0)}%`}
+              </div>
+            </div>
+            <div style={{ fontSize: 10.5, color: TEXT3, marginTop: 8, lineHeight: 1.5 }}>
+              Estos valores salen de Proyecciones y no se editan desde acá. Para cambiarlos andá a{" "}
+              <a href="/projections" style={{ color: INK, fontWeight: 600 }}>/projections</a>, que es la única
+              fuente de edición manual: ahí se resuelve cuál valor manda —el más reciente entre el último
+              Excel cargado y la última edición de un analista— y esta vista muestra ese ganador.
+            </div>
+          </div>
+
           <div style={{ fontSize: 10.5, color: TEXT3, marginTop: 12, lineHeight: 1.5 }}>
             Valores en la moneda reportada (millones), igual que el dato base. Vaciar un campo = revertir al valor base. Los cambios no tocan la tabla fuente; viven en una capa de overrides por período.
           </div>
