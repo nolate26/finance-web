@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw, LayoutGrid, X, Check, Plus, Save, Search, Pencil, RotateCcw } from "lucide-react";
 import { useIsAdmin } from "@/lib/useIsAdmin";
+import SsV1AdminPanel from "./SsV1AdminPanel";
 import { OVERRIDE_FIELDS, FIELD_AFFECTS } from "@/lib/ssOverrideFields";
 import type { SsV1Company, SsV1Payload, SsV1Series, IndexLevel } from "@/app/api/chile/stock-selection-v1/route";
 import type { IndexMembershipPayload } from "@/app/api/chile/index-membership/route";
@@ -49,6 +50,10 @@ const IDX_HEAD_BAND = PATRIA.kingBlue;
 const IDX_HEAD_TEXT = PATRIA.white;
 const IDX_TINT = "rgba(70,232,224,0.07)";  // fondo de la tabla de índices
 const IDX_ZEBRA = "rgba(70,232,224,0.14)"; // fila alterna
+// Bloque de Retornos: fuente y fecha distintas a las del precio (Bloomberg vs Yahoo en
+// vivo), así que se separa con tinte propio en vez de dejarlo en el bandeado general.
+const RET_TINT = "rgba(69,113,255,0.075)"; // cuerpo — dark-sky-blue al 7.5%
+const RET_HEAD = PATRIA.darkSkyBlue;       // encabezado del grupo
 
 // ── Formatters ──────────────────────────────────────────────────────────────────
 // Sentinela para "no significativo": múltiplos y variaciones sobre bases ≤ 0.
@@ -198,6 +203,7 @@ interface DisplayRow {
   seriesBBG: string | null;
   v: Record<string, number | null>;
   overrides?: string[];     // campos con override de admin (para pintar)
+  retAsOf?: string | null;  // fecha del snapshot de retornos que aplicó a esta fila
 }
 // Unidad agregable para el sumaproducto por índice: los primitivos aditivos (Alloc en
 // USD mn) + su M.Cap + su dividendo estimado. `key` = nombre normalizado (single/consol
@@ -256,7 +262,7 @@ function computeGroup(c: SsV1Company, tc: number): CompanyGroup {
     const s = c.series[0];
     const v = withPriceFields(computeV(seriesMcaps[0], whole), s);
     return {
-      cons: { company: c.company, tickerBBG: c.tickerBBG, ssCurrency: ss, industria: c.industria, divLabel: c.divLabel, payout: c.payout, rec: c.rec, recDate: c.recDate, tp: c.tp, label: "", kind: "single", seriesBBG: c.tickerBBG, v, overrides: ovr },
+      cons: { company: c.company, tickerBBG: c.tickerBBG, ssCurrency: ss, industria: c.industria, divLabel: c.divLabel, payout: c.payout, rec: c.rec, recDate: c.recDate, tp: c.tp, label: "", kind: "single", seriesBBG: c.tickerBBG, v, overrides: ovr, retAsOf: s?.retAsOf ?? null },
       series: [],
       units: [{ key: base, u: { alloc: whole, mcap: seriesMcaps[0], dividendos: dividendosOf(whole) } }],
     };
@@ -273,7 +279,7 @@ function computeGroup(c: SsV1Company, tc: number): CompanyGroup {
     const sAlloc = scaleAlloc(w);
     const v = withPriceFields(computeV(seriesMcaps[i], sAlloc), s);
     seriesUnits.push({ key: `${base}-${s.label.toLowerCase()}`, u: { alloc: sAlloc, mcap: seriesMcaps[i], dividendos: dividendosOf(sAlloc) } });
-    return { company: c.company, tickerBBG: c.tickerBBG, ssCurrency: ss, industria: c.industria, divLabel: c.divLabel, payout: c.payout, rec: s.rec ?? null, recDate: s.recDate ?? null, tp: s.tp ?? null, label: s.label, kind: "series", seriesBBG: s.bbg, v, overrides: ovr };
+    return { company: c.company, tickerBBG: c.tickerBBG, ssCurrency: ss, industria: c.industria, divLabel: c.divLabel, payout: c.payout, rec: s.rec ?? null, recDate: s.recDate ?? null, tp: s.tp ?? null, label: s.label, kind: "series", seriesBBG: s.bbg, v, overrides: ovr, retAsOf: s.retAsOf ?? null };
   });
 
   // Unidades: consolidada (por nombre base) + cada serie (nombre-a / nombre-b).
@@ -344,7 +350,10 @@ function computeIndexAggregates(
     // Precio y crecimientos: nivel real del índice + retornos con la metodología de las
     // compañías (sólo IPSA/IGPA los tienen; el resto queda en blanco). NO se aproximan.
     v.price = lvl?.price ?? null;
-    for (const f of RET_FIELDS) v[f] = lvl?.[f] ?? null;
+    // Retornos del índice: en blanco. Los de las compañías vienen del snapshot de
+    // Bloomberg por ticker, y un índice no tiene ticker en esa tabla. Ponderar los de
+    // los miembros daría un número que no es el retorno del índice, así que no se aproxima.
+    for (const f of RET_FIELDS) v[f] = null;
     return { index: idx, count: a.count, v };
   });
 }
@@ -352,7 +361,7 @@ function computeIndexAggregates(
 // Grupos de columnas de la tabla de índices: las mismas que la de empresas salvo
 // Recomendación (no agrega). "Precio" queda "—" (un índice no tiene precio único); los
 // retornos van ponderados por M.Cap. Se reusan las definiciones de columnas de buildGroups.
-const IDX_GROUP_IDS = ["precRet", "size", "ebitdaRep", "utilRep", "ebitdaUsd", "fvEbitda", "utilUsd", "pu", "otros", "div", "roicG"];
+const IDX_GROUP_IDS = ["price", "ret", "size", "ebitdaRep", "utilRep", "ebitdaUsd", "fvEbitda", "utilUsd", "pu", "otros", "div", "roicG"];
 
 // ── Column model ─────────────────────────────────────────────────────────────────
 interface ColDef {
@@ -361,7 +370,9 @@ interface ColDef {
   sortVal?: (r: DisplayRow) => number | string | null;
   align?: "left" | "right" | "center";
 }
-interface Group { id: string; title: string; hint?: string; cols: ColDef[]; collapsible?: boolean; primary?: string }
+// tint/headBg: override del bandeado por defecto. Se usa para que el bloque de Retornos
+// (Bloomberg, a una fecha distinta) no se lea como parte del de Precio (Yahoo, en vivo).
+interface Group { id: string; title: string; hint?: string; cols: ColDef[]; collapsible?: boolean; primary?: string; tint?: string; headBg?: string }
 const num = (id: string) => (r: DisplayRow) => r.v[id];
 // columnas visibles de un grupo: si es colapsable y está cerrado → solo la "primary" (o la 1ª)
 const visibleCols = (g: Group, expanded: Set<string>): ColDef[] =>
@@ -369,7 +380,7 @@ const visibleCols = (g: Group, expanded: Set<string>): ColDef[] =>
     ? [g.cols.find((c) => c.id === g.primary) ?? g.cols[0]]
     : g.cols;
 
-function buildGroups(periodN: string | null, periodN4: string | null): Group[] {
+function buildGroups(periodN: string | null, periodN4: string | null, returnsAsOf: string | null): Group[] {
   // Retornos y variaciones: único lugar donde se usa color (verde/rojo).
   const retCol = (id: string, label: string): ColDef => ({
     id, label, align: "right", sortVal: num(id),
@@ -390,10 +401,18 @@ function buildGroups(periodN: string | null, periodN4: string | null): Group[] {
   });
 
   return [
-    { id: "precRet", title: "Precios y Retornos", hint: "Retorno total (con dividendos reinvertidos). L3Y y L5Y anualizados.", cols: [
+    // Precio y Retornos van SEPARADOS a propósito: no son del mismo momento ni de la
+    // misma fuente. El precio es de Yahoo y se refresca al apretar "Traer precios"; los
+    // retornos son el snapshot de Bloomberg cargado por script, con su propia fecha.
+    { id: "price", title: "Precio", hint: "Último precio de mercado (Yahoo), en la moneda de cotización. Se actualiza al traer precios.", cols: [
       { id: "price", label: "Precio", align: "right", sortVal: num("price"), render: (r) => ({ text: fmtPrice(r.v.price), color: TEXT1, weight: 600 }) },
-      retCol("retMonth", "Mes"), retCol("retYtd", "YTD"), retCol("retYear", "Año"), retCol("ret3y", "L3Y a."), retCol("ret5y", "L5Y a."),
     ] },
+    { id: "ret", title: returnsAsOf ? `Retornos · al ${fmtDate(returnsAsOf)}` : "Retornos · sin cargar",
+      hint: returnsAsOf
+        ? `Total return con dividendos brutos reinvertidos (Bloomberg), al ${fmtDate(returnsAsOf)} — fecha distinta a la del precio. L3Y y L5Y anualizados.`
+        : "Sin snapshot cargado. Se cargan desde el script de Bloomberg vía POST /api/ingest.",
+      tint: RET_TINT, headBg: RET_HEAD,
+      cols: [retCol("retMonth", "Mes"), retCol("retYtd", "YTD"), retCol("retYear", "Año"), retCol("ret3y", "L3Y a."), retCol("ret5y", "L5Y a.")] },
     { id: "size", title: "Tamaño / EV", hint: "M.Cap, deuda neta y firm value — USD mn", cols: [mnCol("mcap", "M.Cap"), mnCol("dn", "DN"), mnCol("fv", "FV", TEXT1)] },
     { id: "ebitdaRep", title: "EBITDA a/a", hint: `EBITDA reportado, trimestre ${periodN4 ?? "n-4"} → ${periodN ?? "n"} — USD mn`, collapsible: true, primary: "ebitdaVar", cols: [mnCol("ebitdaN4", "Ac-1"), mnCol("ebitdaN", "Ac"), retCol("ebitdaVar", "Var%")] },
     { id: "utilRep", title: "Utilidad a/a", hint: `Utilidad reportada, trimestre ${periodN4 ?? "n-4"} → ${periodN ?? "n"} — USD mn`, collapsible: true, primary: "utilVar", cols: [mnCol("utilidadN4", "Ac-1"), mnCol("utilidadN", "Ac"), retCol("utilVar", "Var%")] },
@@ -491,7 +510,7 @@ export default function StockSelectionV1() {
 
   const changePeriod = (key: string) => { setSelPeriod(key); load(data?.withPrices ?? false, key); };
 
-  const groupDefs = useMemo(() => buildGroups(data?.periodN ?? null, data?.periodN4 ?? null), [data]);
+  const groupDefs = useMemo(() => buildGroups(data?.periodN ?? null, data?.periodN4 ?? null, data?.returnsAsOf ?? null), [data]);
   const allCols = useMemo(() => groupDefs.flatMap((g) => g.cols), [groupDefs]);
   const colById = useMemo(() => new Map(allCols.map((c) => [c.id, c])), [allCols]);
 
@@ -578,13 +597,18 @@ export default function StockSelectionV1() {
       { k: "Series A/B", v: "cada serie usa su propio precio y nº de acciones; las filas A/B prorratean los fundamentales por su % de acciones; la consolidada usa el fundamental completo contra el M.Cap total (Σ de las series)." },
       { k: "Orden", v: "por defecto, orden fijo por sector (los bordes separan secciones; las dobles van A → B → consolidada). Clic en una columna para reordenar; “Orden por sector” vuelve al fijo. Compañías fuera del listado → al final." },
     ] },
-    { title: "Precios y retornos", items: [
+    { title: "Precio (Yahoo, en vivo)", items: [
       { k: "Precio", v: "regularMarketPrice de Yahoo, en la moneda de cotización y con el ticker propio de cada serie. Se valida contra el último cierre: si difiere más de 15% se usa el cierre, porque en papeles sin volumen Yahoo devuelve ahí un precio indicativo irreal (AFP Capital informaba 310 contra un cierre de 247,5 tras 14 ruedas sin operar)." },
-      { k: "Retorno total", v: "se reconstruye a partir del cierre y de los dividendos pagados (cada dividendo se reinvierte al cierre previo a su ex-date). NO se usa el adjclose de Yahoo: en varias acciones chilenas sólo trae aplicado el último dividendo (BLUMAR.SN ajusta 1,7% habiendo repartido 40 CLP en 5 años), lo que subestimaba los retornos largos y los hacía no comparables entre compañías." },
-      { k: "Mes · YTD · Año", f: "valor actual / valor base − 1", v: "retorno acumulado. Bases — Mes: −30 días · YTD: cierre del 31-dic previo · Año: −1 año calendario." },
-      { k: "L3Y a. · L5Y a.", f: "(actual / base)^(1/n) − 1", v: "retorno total ANUALIZADO (CAGR) a 3 y 5 años calendario, que es la convención de mercado para horizontes de varios años. Ojo: no es el retorno acumulado del período." },
-      { k: "Control de dividendos", v: "se descarta el dividendo que supera el precio de la acción: es imposible y delata un dato corrupto de Yahoo (Soquicom traía 23.842 CLP sobre un precio de 408, que disparaba el YTD a +5.608%). El mayor dividendo legítimo del universo es Colbún con 42,6% del precio." },
-      { k: "Precisión", v: "contrastado contra una fuente externa sobre 88 papeles: el desvío mediano es de 0,03 pp en Mes, 0,13 en Año, 0,39 en L3Y y 0,63 en L5Y. La cola que queda viene de huecos en el historial de dividendos de Yahoo (a Andina le falta 1 pago de 4 en varios años), por lo que L3Y y L5Y quedan levemente SUBESTIMADOS — la mediana del sesgo es −0,2 pp en L3Y y −0,4 pp en L5Y, con casos puntuales de 5 a 7 pp. Para cifras auditables a 3-5 años conviene contrastar contra Bloomberg." },
+      { k: "Cuándo se actualiza", v: "al apretar “Traer precios (Yahoo)”. Es el dato del momento, y NO comparte fecha con las columnas de retorno." },
+    ] },
+    { title: "Retornos (Bloomberg, snapshot)", wide: true, items: [
+      { k: "Fuente", v: "TOTAL RETURN GROSS DIVIDENDS calculado en Bloomberg y cargado a ticker_return_snapshot por el mismo canal que el resto de las tablas: POST /api/ingest con table “TickerReturnSnapshot”. La app NO los calcula: sólo los lee y los muestra. El cruce con cada serie es por ticker Bloomberg." },
+      { k: "Fecha", v: "la que dice el encabezado del bloque (“al DD/MM/AA”). Es la fecha del último ingest, distinta a la del precio — por eso el bloque va con fondo y encabezado propios." },
+      { k: "Reemplazo total", v: "cada ingest BORRA el snapshot anterior y escribe el nuevo: la tabla guarda un solo estado vigente, no historia. Un payload vacío o ilegible se rechaza sin borrar nada." },
+      { k: "Mes · YTD · Año", v: "retorno total acumulado del período, tal como lo entrega Bloomberg." },
+      { k: "L3Y a. · L5Y a.", f: "(actual / base)^(1/n) − 1", v: "retorno total ANUALIZADO (CAGR) a 3 y 5 años. Ojo: no es el retorno acumulado del período." },
+      { k: "Por qué ya no se calculan con Yahoo", v: "la serie diaria de Yahoo para .SN inventa barras (volumen 0 y OHLC plano copiando el último cierre real: 24 de las últimas 120 en TODOS los papeles líquidos, con un bloque de 13 días hábiles seguidos) y omite sesiones (falta el 31-dic-2025, que es la base del YTD). Con esa serie, CAP daba Mes −15,7% contra −14,8% real y YTD −28,2% contra −29,0%, porque la fecha base caía sobre una barra inventada o faltante. El dato que falta no se puede reconstruir, así que se cambió la fuente." },
+      { k: "Filas en blanco", v: "una serie sin fila en el snapshot muestra “—”. Suele ser un ticker Bloomberg que no homologa: la respuesta del ingest devuelve en “orphans” los tickers cargados que no existen en empresas_industrias_v2." },
     ] },
     { title: "Tamaño / EV (USD mn)", items: [
       { k: "M.Cap", f: "Precio × nº de acciones", v: "convertido a USD. Doble serie: consolidada = Σ M.Cap de cada serie." },
@@ -652,7 +676,8 @@ export default function StockSelectionV1() {
         const edited = aff?.has(col.id);
         return (
           <td key={col.id}
-            style={{ padding: r.kind === "series" ? "3px 7px" : "5px 7px", textAlign: col.align ?? "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: r.kind === "series" ? 10 : 10.5, color: out.color ?? TEXT1, fontWeight: edited ? 700 : out.weight ?? 400, borderBottom: `1px solid ${BORDER}`, borderTop: topBorder ? SECTION_BORDER : undefined, borderLeft: i === 0 ? `1px solid ${BORDER}` : "none", background: edited ? EDIT_BG : gIdx % 2 === 1 ? BAND : undefined, boxShadow: edited ? `inset 0 0 0 1px ${EDIT_BORDER}55` : undefined, whiteSpace: "nowrap" }}>
+            title={g.id === "ret" && r.retAsOf ? `Retorno al ${fmtDate(r.retAsOf)} · Bloomberg` : undefined}
+            style={{ padding: r.kind === "series" ? "3px 7px" : "5px 7px", textAlign: col.align ?? "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: r.kind === "series" ? 10 : 10.5, color: out.color ?? TEXT1, fontWeight: edited ? 700 : out.weight ?? 400, borderBottom: `1px solid ${BORDER}`, borderTop: topBorder ? SECTION_BORDER : undefined, borderLeft: i === 0 ? `1px solid ${BORDER}` : "none", background: edited ? EDIT_BG : g.tint ?? (gIdx % 2 === 1 ? BAND : undefined), boxShadow: edited ? `inset 0 0 0 1px ${EDIT_BORDER}55` : undefined, whiteSpace: "nowrap" }}>
             {out.text}
           </td>
         );
@@ -662,6 +687,11 @@ export default function StockSelectionV1() {
 
   return (
     <div>
+      {/* Panel de administración — homologación de tickers + bitácora de cambios.
+          Va arriba de todo porque lo que se toca acá (qué ticker se consulta) decide
+          qué muestra la tabla de abajo. */}
+      {isAdmin && <SsV1AdminPanel onSourceChanged={() => load(priced, selPeriod)} />}
+
       {/* Header / controls */}
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
         <div>
@@ -730,12 +760,27 @@ export default function StockSelectionV1() {
 
       {!priced && (
         <div style={{ fontSize: 11.5, color: TEXT2, marginBottom: 10 }}>
-          Apretá <strong>Traer precios (Yahoo)</strong> para llenar Precio, retornos, M.Cap, FV y los múltiplos que dependen del precio (incluye precios por serie A/B).
+          Apretá <strong>Traer precios (Yahoo)</strong> para llenar Precio, M.Cap, FV y los múltiplos que dependen del precio (incluye precios por serie A/B). Los retornos ya están cargados: no dependen de Yahoo.
         </div>
       )}
 
+      {/* Precio y retornos son de fuentes y momentos distintos: se dice explícito, porque
+          leer la fila de corrido invita a suponer que son del mismo día. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 10.5, marginBottom: 6 }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: TEXT2, fontWeight: 600 }}>
+          <span style={{ width: 9, height: 9, borderRadius: 2, background: NAVY, display: "inline-block" }} />
+          Precio · Yahoo {priced ? "en vivo" : "(sin traer)"}
+        </span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: data.returnsAsOf ? TEXT2 : NEG, fontWeight: 600 }}>
+          <span style={{ width: 9, height: 9, borderRadius: 2, background: RET_HEAD, display: "inline-block" }} />
+          {data.returnsAsOf
+            ? <>Retornos · Bloomberg al {fmtDate(data.returnsAsOf)} <span style={{ color: TEXT3, fontWeight: 400 }}>({data.returnsMatched} de {totalRows} filas{data.returnsSource ? ` · ${data.returnsSource}` : ""})</span></>
+            : <>Retornos sin cargar — falta correr el ingest de <code style={{ fontFamily: FONT_SECONDARY }}>TickerReturnSnapshot</code></>}
+        </span>
+      </div>
+
       <div style={{ fontSize: 10.5, color: TEXT3, marginBottom: 6 }}>
-        Montos en USD mn (÷ TC si es CLP) · Retornos = retorno total; <strong style={{ color: TEXT2 }}>L3Y y L5Y anualizados</strong> · <strong style={{ color: TEXT2 }}>NM</strong> = no significativo · Los grupos con <span style={{ color: TEXT2, fontWeight: 700 }}>▸</span> muestran 1 columna — clic en el encabezado para desplegar el resto.
+        Montos en USD mn (÷ TC si es CLP) · Retornos = total return con dividendos brutos; <strong style={{ color: TEXT2 }}>L3Y y L5Y anualizados</strong> · <strong style={{ color: TEXT2 }}>NM</strong> = no significativo · Los grupos con <span style={{ color: TEXT2, fontWeight: 700 }}>▸</span> muestran 1 columna — clic en el encabezado para desplegar el resto.
       </div>
 
       {/* Tabla — el contenedor tiene alto acotado y scroll propio: así el encabezado
@@ -751,7 +796,7 @@ export default function StockSelectionV1() {
                   <th key={g.id} colSpan={visibleCols(g, expandedGroups).length}
                     onClick={() => g.collapsible && toggleGroup(g.id)}
                     title={[g.hint, g.collapsible ? (open ? "Clic para contraer" : "Clic para desplegar") : null].filter(Boolean).join(" · ") || undefined}
-                    style={{ position: "sticky", top: 0, zIndex: 30, padding: "5px 7px", textAlign: "center", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: NAVY_TEXT, borderLeft: "1px solid rgba(255,255,255,0.14)", whiteSpace: "nowrap", background: gIdx % 2 === 1 ? NAVY_BAND : NAVY, cursor: g.collapsible ? "pointer" : "default", userSelect: "none" }}>
+                    style={{ position: "sticky", top: 0, zIndex: 30, padding: "5px 7px", textAlign: "center", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: NAVY_TEXT, borderLeft: "1px solid rgba(255,255,255,0.14)", whiteSpace: "nowrap", background: g.headBg ?? (gIdx % 2 === 1 ? NAVY_BAND : NAVY), cursor: g.collapsible ? "pointer" : "default", userSelect: "none" }}>
                     {g.collapsible && <span style={{ fontSize: 8, marginRight: 3, opacity: 0.7 }}>{open ? "▾" : "▸"}</span>}
                     {g.title}
                   </th>
@@ -764,7 +809,7 @@ export default function StockSelectionV1() {
                   const active = sortKey === col.id;
                   return (
                     <th key={col.id} onClick={() => col.sortVal && sortBy(col.id)}
-                      style={{ position: "sticky", top: headRowH, zIndex: 30, padding: "5px 7px", textAlign: col.align ?? "right", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: active ? "#fff" : HEAD2_TEXT, borderBottom: `2px solid ${NAVY}`, borderLeft: i === 0 ? "1px solid rgba(13,13,56,0.22)" : "none", whiteSpace: "nowrap", cursor: col.sortVal ? "pointer" : "default", userSelect: "none", background: active ? NAVY_BAND : gIdx % 2 === 1 ? HEAD2_BAND : HEAD2_BG }}>
+                      style={{ position: "sticky", top: headRowH, zIndex: 30, padding: "5px 7px", textAlign: col.align ?? "right", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: active ? "#fff" : HEAD2_TEXT, borderBottom: `2px solid ${g.headBg ?? NAVY}`, borderLeft: i === 0 ? "1px solid rgba(13,13,56,0.22)" : "none", whiteSpace: "nowrap", cursor: col.sortVal ? "pointer" : "default", userSelect: "none", background: active ? NAVY_BAND : g.tint ?? (gIdx % 2 === 1 ? HEAD2_BAND : HEAD2_BG) }}>
                       {col.label}{col.sortVal && <span style={{ fontSize: 8, opacity: active ? 1 : 0.45, marginLeft: 3 }}>{active ? (sortDir === "asc" ? "▲" : "▼") : "↕"}</span>}
                     </th>
                   );
@@ -834,7 +879,7 @@ export default function StockSelectionV1() {
               <div style={{ width: 3, height: 18, background: IDX_HEAD, borderRadius: 2 }} />
               <h3 style={{ fontSize: 14, fontWeight: 700, color: IDX_HEAD, letterSpacing: "-0.01em", margin: 0 }}>Índices — sumaproducto de sus miembros</h3>
               <span style={{ fontSize: 10.5, color: TEXT3 }}>
-                Cada índice = Σ (M.Cap y fundamentales × peso); los múltiplos salen de esas sumas. Precio y retornos: nivel real y crecimientos del índice (solo IPSA/IGPA); el resto en blanco. {priced ? "" : "Traé precios para llenar."}
+                Cada índice = Σ (M.Cap y fundamentales × peso); los múltiplos salen de esas sumas. Precio = nivel real del índice (solo IPSA/IGPA). Los retornos van en blanco: el snapshot de Bloomberg es por ticker de acción, y ponderar los de los miembros no da el retorno del índice. {priced ? "" : "Traé precios para llenar."}
               </span>
             </div>
             <div style={{ overflow: "auto", maxHeight: "60vh", border: `1px solid ${IDX_HEAD}33`, borderRadius: 8, background: IDX_TINT }}>

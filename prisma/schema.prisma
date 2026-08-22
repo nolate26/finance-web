@@ -958,6 +958,62 @@ model StockSelectionOverride {
   @@map("stock_selection_override")
 }
 
+// Retornos de Stock Selection, calculados FUERA de la app (Bloomberg: TOTAL RETURN GROSS
+// DIVIDENDS) y cargados por el mismo canal que el resto de las tablas: POST /api/ingest
+// con { table: "TickerReturnSnapshot", units, rows } desde el script de Bloomberg.
+//
+// Se dejó de calcularlos con Yahoo porque su serie diaria de .SN inserta barras falsas
+// (volumen 0 y OHLC plano copiando el último cierre real: 24 de las últimas 120 en TODOS
+// los papeles líquidos, con un bloque de 13 días hábiles seguidos) y omite sesiones
+// (falta 2025-12-31, que es la base del YTD). Con esa serie el retorno a 1 mes y el YTD
+// salen mal por ~1pp. El PRECIO sí se sigue tomando de Yahoo: para el último dato puntual
+// es correcto y se contrasta contra el cierre.
+//
+// SNAPSHOT, NO HISTORIAL: cada corrida del script BORRA la tabla y la vuelve a escribir.
+// Guarda un solo estado —el vigente— con su fecha. Si algún día se quiere serie histórica,
+// hay que cambiar la @id (hoy el ticker) por [tickerBBG, asOf] y sacar el borrado del script.
+// El cruce con la vista es por ticker Bloomberg normalizado (sin el sufijo " Equity").
+model TickerReturnSnapshot {
+  tickerBBG  String   @id @map("ticker_bbg") @db.VarChar(40) // "CAP CI" — normalizado, sin " Equity"
+  company    String?  @db.VarChar(120)  // sólo informativo, para leer la tabla a ojo
+  asOf       DateTime @map("as_of") @db.Date // fecha a la que corresponden los retornos
+  currency   String?  @db.VarChar(8)
+  price      Float?   // precio de la fuente — control contra el de Yahoo, NO se muestra
+  retMonth   Float?   @map("ret_month") // decimales (0.0512 = +5.12%), no porcentaje
+  retYtd     Float?   @map("ret_ytd")
+  retYear    Float?   @map("ret_year")
+  ret3y      Float?   @map("ret_3y")    // anualizado (CAGR)
+  ret5y      Float?   @map("ret_5y")    // anualizado (CAGR)
+  source     String?  @db.VarChar(40)   // "bloomberg", nombre del archivo, etc.
+  ingestedAt DateTime @default(now()) @map("ingested_at")
+
+  @@index([asOf])
+  @@map("ticker_return_snapshot")
+}
+
+// Bitácora de TODO cambio que un admin hace desde la web (tickers de homologación,
+// overrides de Stock Selection, membresía de índices…). Append-only: nunca se pisa
+// una fila, así que a diferencia de stock_selection_override sí guarda historial y
+// permite revertir a cualquier valor previo, no sólo al base.
+model AdminChangeLog {
+  id        Int      @id @default(autoincrement())
+  entity    String   @db.VarChar(60)   // tabla tocada: "empresas_industrias_v2", "stock_selection_override", ...
+  entityKey String   @map("entity_key") @db.VarChar(200) // id de la fila (ticker BBG, "empresa|campo", ...)
+  label     String?  @db.VarChar(200)  // nombre legible para la vista (empresa)
+  field     String   @db.VarChar(60)   // columna tocada
+  oldValue  String?  @map("old_value") @db.VarChar(300)  // null = no había valor (o era el base)
+  newValue  String?  @map("new_value") @db.VarChar(300)  // null = se borró / volvió al base
+  context   String?  @db.VarChar(60)   // período u otro alcance del cambio ("2026 Q2")
+  action    String   @default("update") @db.VarChar(10)  // create | update | delete
+  editedBy  String?  @map("edited_by") @db.VarChar(200)
+  editedAt  DateTime @default(now()) @map("edited_at")
+
+  @@index([editedAt])
+  @@index([entity, editedAt])
+  @@index([entityKey])
+  @@map("admin_change_log")
+}
+
 model IndexMembership {
   indexName   String  @map("index_name") @db.VarChar(40)   // "IPSA", "IGPA MC", ...
   company     String  @db.VarChar(120)                     // nombre tal como en Pivotes

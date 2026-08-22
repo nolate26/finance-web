@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { normBBG } from '@/lib/bbg';
 // ❌ ELIMINADO: import { table } from 'console'; (Esto rompe la API en producción)
 
 // createMany necesita que todas las filas tengan el mismo set de claves:
@@ -475,7 +476,97 @@ export async function POST(request: Request) {
         });
         break;
 
-        
+      // --- RETORNOS DE STOCK SELECTION (SNAPSHOT: REEMPLAZO TOTAL) ---
+      // ⚠️ ÚNICO caso que BORRA antes de insertar. El resto de las tablas acumulan
+      // historia; ésta guarda un solo estado vigente, así que cada corrida pisa la
+      // anterior. Si algún día se quiere serie, hay que cambiar la @id del modelo a
+      // [tickerBBG, asOf] y sacar el deleteMany de acá.
+      //
+      // Payload:
+      //   { table: "TickerReturnSnapshot", units: "pct" | "dec", source: "bloomberg",
+      //     rows: [{ ticker, company, as_of, currency, price,
+      //              ret_month, ret_ytd, ret_year, ret_3y, ret_5y }, ...] }
+      //   units: "dec" (default) → 0.0512 = +5,12% · "pct" → 5.12 = +5,12%.
+      //   ret_3y / ret_5y se guardan ANUALIZADOS (CAGR), que es como los muestra la vista.
+      case 'TickerReturnSnapshot': {
+        const units = String(data.units ?? 'dec').toLowerCase();
+        if (units !== 'dec' && units !== 'pct') {
+          return NextResponse.json({ error: `units debe ser "dec" o "pct" (recibí "${units}")` }, { status: 400 });
+        }
+        const scale = units === 'pct' ? 0.01 : 1;
+
+        const numOf = (v: any): number | null => {
+          if (v === null || v === undefined || v === '') return null;
+          const n = typeof v === 'number' ? v : Number(String(v).replace('%', '').trim());
+          return Number.isFinite(n) ? n : null;
+        };
+        const retOf = (v: any): number | null => { const n = numOf(v); return n === null ? null : n * scale; };
+
+        // El ticker se normaliza acá (no en Python): "CAP CI Equity" → "CAP CI", que es
+        // la forma con la que la vista hace el cruce. Así da igual cómo lo mande el script.
+        const snapRows = dedupeBy(
+          (rows as any[])
+            .map((r: any) => {
+              const rawDate = r.asOf ?? r.as_of ?? r.date ?? r.fecha;
+              const asOf = rawDate ? new Date(rawDate) : null;
+              const ccy = r.currency ?? r.moneda ?? null;
+              return {
+                tickerBBG: normBBG(r.tickerBBG ?? r.ticker_bbg ?? r.ticker ?? r.Ticker),
+                company:   r.company ?? r.empresa ?? null,
+                asOf,
+                currency:  typeof ccy === 'string' ? ccy.trim().toUpperCase() || null : null,
+                price:     numOf(r.price ?? r.px_last ?? r.pxLast ?? r.PX_LAST),
+                retMonth:  retOf(r.retMonth ?? r.ret_month ?? r.mes),
+                retYtd:    retOf(r.retYtd   ?? r.ret_ytd   ?? r.ytd),
+                retYear:   retOf(r.retYear  ?? r.ret_year  ?? r.year),
+                ret3y:     retOf(r.ret3y    ?? r.ret_3y    ?? r.l3y),
+                ret5y:     retOf(r.ret5y    ?? r.ret_5y    ?? r.l5y),
+                source:    r.source ?? data.source ?? 'bloomberg',
+              };
+            })
+            // Sin ticker o sin fecha la fila no sirve: no se puede cruzar ni fechar.
+            .filter((r) => r.tickerBBG && r.asOf && !isNaN((r.asOf as Date).getTime())),
+          (r) => r.tickerBBG as string,
+        );
+
+        // Guarda: nunca borrar el snapshot vigente por un payload vacío o ilegible.
+        if (snapRows.length === 0) {
+          return NextResponse.json(
+            { error: 'Ninguna fila válida (falta ticker o fecha). NO se borró el snapshot anterior.' },
+            { status: 400 },
+          );
+        }
+
+        const [{ count: deleted }] = await prisma.$transaction([
+          prisma.tickerReturnSnapshot.deleteMany({}),
+          prisma.tickerReturnSnapshot.createMany({ data: snapRows as any }),
+        ]);
+
+        // Chequeo de unidades: un retorno de ±150% en este universo delata que el payload
+        // venía en porcentaje declarado como decimal (o al revés). Se avisa, no se bloquea.
+        const allRets = snapRows.flatMap((r) => [r.retMonth, r.retYtd, r.retYear, r.ret3y, r.ret5y])
+          .filter((v): v is number => v !== null);
+        const maxAbs = allRets.length ? Math.max(...allRets.map(Math.abs)) : 0;
+        const warning = maxAbs > 1.5
+          ? `Hay retornos de hasta ${(maxAbs * 100).toFixed(0)}%. ¿El payload venía en porcentaje? Reenviá con units:"pct".`
+          : null;
+
+        // Cruce: un ticker que no homologa contra empresas_industrias_v2 queda invisible
+        // en Stock Selection. Se devuelve la lista para que el script lo muestre.
+        const empresas = await prisma.empresasIndustriasV2.findMany({ select: { tickerBloomberg: true } });
+        const known = new Set(empresas.map((e) => normBBG(e.tickerBloomberg)).filter(Boolean));
+        const orphans = snapRows.map((r) => r.tickerBBG as string).filter((t) => !known.has(t));
+
+        return NextResponse.json({
+          success: true,
+          message: `Snapshot de retornos reemplazado: ${deleted} filas borradas, ${snapRows.length} escritas (units=${units}).`,
+          replaced: deleted,
+          written: snapRows.length,
+          warning,
+          orphans, // tickers sin homologación → no se ven en la vista
+        });
+      }
+
       default:
         return NextResponse.json({ error: `Tabla ${table} no reconocida` }, { status: 400 });
     }

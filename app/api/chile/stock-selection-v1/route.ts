@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import YahooFinance from "yahoo-finance2";
 import { OVERRIDE_FIELD_KEYS } from "@/lib/ssOverrideFields";
+// Parche de tickers Yahoo rotos en la fuente. Vive en lib/ porque el panel de admin
+// necesita mostrar qué filas está reescribiendo (y Next no deja exportarlo desde acá).
+import { fixYahooTicker } from "@/lib/yahooTickerFixes";
+import { normBBG } from "@/lib/bbg";
 
 export const dynamic = "force-dynamic";
 
@@ -22,14 +26,18 @@ export interface SsV1Series {
   rec?:     string | null;
   recDate?: string | null;    // YYYY-MM-DD
   tp?:      number | null;     // target price, moneda del listado (sin conv)
-  // Precios / retornos (solo con ?withPrices=true)
+  // Precio: Yahoo, en vivo (solo con ?withPrices=true)
   price?:    number | null;
   currency?: string | null;   // moneda del precio (CLP / USD / GBp…)
+  // Retornos: ticker_return_snapshot (Bloomberg, cargado por script). NO se calculan acá
+  // ni dependen de ?withPrices — vienen de la base, así que están siempre disponibles y
+  // corresponden a `retAsOf`, que casi nunca es el día del precio.
   retMonth?: number | null;
   retYtd?:   number | null;
   retYear?:  number | null;
-  ret3y?:    number | null;
-  ret5y?:    number | null;
+  ret3y?:    number | null;   // anualizado
+  ret5y?:    number | null;   // anualizado
+  retAsOf?:  string | null;   // YYYY-MM-DD del snapshot que aplicó a esta serie
 }
 
 export interface SsV1Company {
@@ -82,12 +90,9 @@ export interface SsV1Company {
 
 export interface SsV1Period { fy: number; q: number; label: string; }
 
-export interface IndexLevel {
-  price: number | null; currency: string | null;
-  // Retornos con la MISMA metodología que las compañías (fetchPrice sobre el símbolo del
-  // índice). El chart de estos índices suele venir vacío en Yahoo → quedan en null.
-  retMonth: number | null; retYtd: number | null; retYear: number | null; ret3y: number | null; ret5y: number | null;
-}
+// Nivel del índice (Yahoo). Sin retornos: los de la vista salen de ticker_return_snapshot
+// y los agregados por índice se calculan ponderando a los miembros.
+export interface IndexLevel { price: number | null; currency: string | null }
 
 export interface SsV1Payload {
   withPrices: boolean;
@@ -98,6 +103,12 @@ export interface SsV1Payload {
   selFy:      number;       // período n activo
   selQ:       number;
   companies:  SsV1Company[];
+  // Retornos: fecha del snapshot vigente y cuántas series machearon. La vista lo muestra
+  // como "al DD/MM/YY" sobre las columnas de retorno, que NO son del día del precio.
+  returnsAsOf:     string | null; // YYYY-MM-DD
+  returnsSource:   string | null;
+  returnsMatched:  number;        // series de la vista con retorno
+  returnsRows:     number;        // filas totales del snapshot
   // Nivel real de cada índice (solo con ?withPrices). Sólo los que Yahoo sirve por quote:
   // IPSA (^IPSA) e IGPA (IGPA.SN). Los sub-índices IGPA y los "Mon" no existen en Yahoo.
   indexLevels?: Record<string, IndexLevel>;
@@ -121,105 +132,45 @@ const SERIES_NAMES: Record<string, { A: string; B: string }> = {
   soquimich: { A: "sqm-a",      B: "sqm-b" },
 };
 
-// Correcciones de tickers Yahoo mal cargados en empresas_industrias_v2.yahoo_finance_ticker
-// (clave = valor en la tabla, en MAYÚSCULAS). Reportar al usuario para que arregle la fuente.
-// Los 6 de abajo devolvían "No data found, symbol may be delisted" → la fila quedaba sin
-// precio ni retornos. Los símbolos nuevos fueron verificados contra el precio de referencia.
-const YAHOO_OVERRIDE: Record<string, string> = {
-  "POTASIO-A.SN": "POTASIOS-A.SN",
-  "POTASIO-B.SN": "POTASIOS-B.SN",
-  "BICECORP.SN": "BICE.SN",           // Bicecorp
-  "CENCOMALL.SN": "CENCOMALLS.SN",    // Cencosud Shopping
-  "OROBLANCO.SN": "ORO-BLANCO.SN",    // Oro Blanco
-  "MULTIX.SN": "MULTI-X.SN",          // MultiX (ex Multiexport Foods)
-  "LASCONDES.SN": "LAS-CONDES.SN",    // Clínica Las Condes
-  "SANTARITA.SN": "SANTA-RITA.SN",    // Viña Santa Rita
-};
-
-// ── Precios / retornos (Yahoo) ──────────────────────────────────────────────────
+// ── Precio (Yahoo) ──────────────────────────────────────────────────────────────
+// SÓLO el último precio. Los retornos ya NO se calculan acá: se cargan a
+// ticker_return_snapshot desde Bloomberg (POST /api/ingest, table "TickerReturnSnapshot").
+//
+// Por qué se sacaron: la serie diaria de Yahoo para .SN inventa barras — volumen 0 y
+// OHLC plano copiando el último cierre real — 24 de las últimas 120 en TODOS los papeles
+// líquidos, con un bloque de 13 días hábiles seguidos; y omite sesiones (falta 2025-12-31,
+// que es la base del YTD). Contra Bloomberg, CAP daba 1 mes −15.7% vs −14.8% y YTD −28.2%
+// vs −29.0%, porque la fecha base caía sobre una barra inventada o faltante. El último
+// precio puntual sí es correcto y se contrasta contra el cierre, así que se conserva.
 const DAY = 86400000;
-interface ChartPoint { t: number; v: number; }
-function priceAsOf(series: ChartPoint[], targetMs: number): number | null {
-  let res: number | null = null;
-  for (const p of series) { if (p.t <= targetMs) res = p.v; else break; }
-  return res;
-}
-const retOf = (cur: number, base: number | null): number | null => (base != null && base > 0 ? cur / base - 1 : null);
-// Fecha calendario n años atrás (no 365·n días: eso se corre 1-2 días por los bisiestos).
-const yearsAgo = (ms: number, years: number): number => {
-  const d = new Date(ms);
-  d.setUTCFullYear(d.getUTCFullYear() - years);
-  return d.getTime();
-};
-
-interface YChartQuote { date: Date; close: number | null; adjclose?: number | null; }
-interface YChartDiv { date: Date; amount?: number | null; }
-interface YChart { meta?: { currency?: string; regularMarketPrice?: number }; quotes: YChartQuote[]; events?: { dividends?: YChartDiv[] }; }
-interface PriceData { price: number | null; currency: string | null; retMonth: number | null; retYtd: number | null; retYear: number | null; ret3y: number | null; ret5y: number | null; }
+interface YChartQuote { date: Date; close: number | null }
+interface YChart { meta?: { currency?: string; regularMarketPrice?: number }; quotes: YChartQuote[] }
+interface PriceData { price: number | null; currency: string | null }
 
 async function fetchPrice(ticker: string): Promise<PriceData | null> {
   try {
     const period2 = new Date();
-    const period1 = new Date(yearsAgo(period2.getTime(), 5) - 45 * DAY);
-    const chart = (await yf.chart(ticker, { period1, period2, interval: "1d", events: "div" })) as YChart;
+    // 90 días: suficiente para tener un cierre real incluso en los papeles que pasan
+    // semanas sin operar (AFPCAPITAL.SN no transa desde jun-2026).
+    const period1 = new Date(period2.getTime() - 90 * DAY);
+    const chart = (await yf.chart(ticker, { period1, period2, interval: "1d" })) as YChart;
 
-    // Cierre crudo. NO usamos adjclose: en varios .SN Yahoo sólo aplica el último
-    // dividendo (BLUMAR.SN ajusta 1.7% habiendo repartido 40 CLP en 5 años, mientras
-    // CENCOSUD.SN sí ajusta el 29%), así que los retornos no eran comparables entre
-    // compañías. Reconstruimos el retorno total con los eventos de dividendos.
-    const px: ChartPoint[] = [];
+    let last: number | null = null, lastT = -Infinity;
     for (const q of chart.quotes ?? []) {
-      if (q.close != null && isFinite(q.close) && q.date) px.push({ t: new Date(q.date).getTime(), v: q.close });
+      if (q.close == null || !isFinite(q.close) || !q.date) continue;
+      const t = new Date(q.date).getTime();
+      if (t >= lastT) { lastT = t; last = q.close; }
     }
-    px.sort((a, b) => a.t - b.t);
-    if (!px.length) return null;
+    if (last == null) return null;
 
-    const divs = (chart.events?.dividends ?? [])
-      .map((e) => ({ t: new Date(e.date).getTime(), amt: e.amount ?? 0 }))
-      .filter((e) => e.amt > 0 && isFinite(e.amt))
-      .sort((a, b) => a.t - b.t);
-
-    // Serie de retorno total: en cada ex-date el dividendo se reinvierte al cierre previo.
-    // Guarda de sanidad: se descarta el dividendo que supera el precio de la acción — es
-    // imposible en la realidad y delata un dato corrupto de Yahoo. Caso real: SOQUICOM.SN
-    // trae 23.842,6 CLP el 2026-05-11 sobre un precio de 408 (5.840%), que sin este filtro
-    // disparaba el YTD a +5.608%. El mayor dividendo legítimo del universo es Colbún con
-    // 42,6% del precio, así que el umbral de 100% deja un margen amplio.
-    const tr: ChartPoint[] = [];
-    let acc = 1, di = 0;
-    for (let i = 0; i < px.length; i++) {
-      while (di < divs.length && divs[di].t <= px[i].t) {
-        const prev = px[i - 1]?.v ?? px[i].v;
-        if (prev > 0 && divs[di].amt <= prev) acc *= (prev + divs[di].amt) / prev;
-        di++;
-      }
-      tr.push({ t: px[i].t, v: px[i].v * acc });
-    }
-
-    const lastPx = px[px.length - 1], curT = lastPx.t, cur = tr[tr.length - 1].v;
-    const yearStart = Date.UTC(new Date(curT).getUTCFullYear(), 0, 1) - 1;
-    // Hasta 1 año: retorno acumulado. L3Y / L5Y: anualizado (CAGR), que es la
-    // convención de mercado para horizontes de varios años.
-    const cagr = (base: number | null, years: number): number | null => {
-      const r = retOf(cur, base);
-      return r == null ? null : Math.pow(1 + r, 1 / years) - 1;
-    };
-    // Precio: meta.regularMarketPrice suele ir un día más adelante que la serie de cierres
-    // y es el que calza con la referencia, así que se prefiere. Pero en papeles sin volumen
-    // Yahoo devuelve ahí un precio indicativo que no corresponde: AFPCAPITAL.SN informa 310
+    // meta.regularMarketPrice suele ir un día más adelante que la serie de cierres y es el
+    // que calza con la referencia, así que se prefiere. Pero en papeles sin volumen Yahoo
+    // devuelve ahí un precio indicativo que no corresponde: AFPCAPITAL.SN informa 310
     // contra un último cierre real de 247,5 (+25%) tras 14 ruedas sin operar. Por eso se
     // acepta sólo si está dentro de ±15% del último cierre; si no, se cae al cierre.
     const meta = chart.meta?.regularMarketPrice;
-    const metaOk = meta != null && isFinite(meta) && meta > 0 && lastPx.v > 0 && Math.abs(meta / lastPx.v - 1) <= 0.15;
-    return {
-      price: metaOk ? meta : lastPx.v,
-      currency: chart.meta?.currency ?? null,
-      retMonth: retOf(cur, priceAsOf(tr, curT - 30 * DAY)),
-      retYtd: retOf(cur, priceAsOf(tr, yearStart)),
-      retYear: retOf(cur, priceAsOf(tr, yearsAgo(curT, 1))),
-      ret3y: cagr(priceAsOf(tr, yearsAgo(curT, 3)), 3),
-      ret5y: cagr(priceAsOf(tr, yearsAgo(curT, 5)), 5),
-    };
+    const metaOk = meta != null && isFinite(meta) && meta > 0 && last > 0 && Math.abs(meta / last - 1) <= 0.15;
+    return { price: metaOk ? meta : last, currency: chart.meta?.currency ?? null };
   } catch {
     return null;
   }
@@ -234,8 +185,6 @@ async function fetchIndexLevels(): Promise<Record<string, IndexLevel>> {
   const out: Record<string, IndexLevel> = {};
   await Promise.all(
     Object.entries(INDEX_TICKERS).map(async ([name, tk]) => {
-      // Retornos por la misma vía que las compañías (fetchPrice). Para estos índices el
-      // chart suele venir vacío → retornos null.
       const pd = await fetchPrice(tk);
       // Nivel actual por quote: más confiable que el chart para índices.
       let level: number | null = null, ccy: string | null = null;
@@ -244,12 +193,7 @@ async function fetchIndexLevels(): Promise<Record<string, IndexLevel>> {
         if (q?.regularMarketPrice != null && isFinite(q.regularMarketPrice)) { level = q.regularMarketPrice; ccy = q.currency ?? null; }
       } catch { /* sin quote */ }
       if (pd == null && level == null) return;
-      out[name] = {
-        price: level ?? pd?.price ?? null,
-        currency: ccy ?? pd?.currency ?? null,
-        retMonth: pd?.retMonth ?? null, retYtd: pd?.retYtd ?? null, retYear: pd?.retYear ?? null,
-        ret3y: pd?.ret3y ?? null, ret5y: pd?.ret5y ?? null,
-      };
+      out[name] = { price: level ?? pd?.price ?? null, currency: ccy ?? pd?.currency ?? null };
     }),
   );
   return out;
@@ -310,13 +254,8 @@ export async function GET(request: NextRequest) {
     }
     // Ticker Yahoo: 1) empresas_industrias_v2.yahoo_finance_ticker (fuente curada),
     // 2) fallback company_isins por ISIN. Luego aplica overrides de tickers rotos.
-    const fixYahoo = (y: string | null | undefined): string | null => {
-      if (!y || !y.trim()) return null;
-      const t = y.trim();
-      return YAHOO_OVERRIDE[t.toUpperCase()] ?? t;
-    };
     const yahooOf = (row: EmpRow): string | null =>
-      fixYahoo(row.yahooFinanceTicker) ?? fixYahoo(row.isin ? yahooByIsin.get(row.isin.trim()) : null);
+      fixYahooTicker(row.yahooFinanceTicker) ?? fixYahooTicker(row.isin ? yahooByIsin.get(row.isin.trim()) : null);
     const empByName = (key: string): EmpRow | null => byName.get(norm(key))?.[0] ?? null;
     const resolveName = (company: string): ResolvedName | null => {
       const key = norm(company);
@@ -354,6 +293,38 @@ export async function GET(request: NextRequest) {
       });
     }
     const recOf = (bbg: string | null | undefined): RecInfo | null => (bbg ? recByBbg.get(bbg.toUpperCase()) ?? null : null);
+
+    // ── Retornos (ticker_return_snapshot, cargado por POST /api/ingest) ──────────
+    // Resiliente igual que los overrides: si falta la tabla (`prisma db push` pendiente)
+    // la vista sale con los retornos vacíos en vez de romperse.
+    interface RetRow { tickerBBG: string; asOf: Date; source: string | null; retMonth: number | null; retYtd: number | null; retYear: number | null; ret3y: number | null; ret5y: number | null }
+    let retRows: RetRow[] = [];
+    try {
+      retRows = await prisma.tickerReturnSnapshot.findMany({
+        select: { tickerBBG: true, asOf: true, source: true, retMonth: true, retYtd: true, retYear: true, ret3y: true, ret5y: true },
+      });
+    } catch (e) {
+      console.warn("[stock-selection-v1] retornos no disponibles (¿falta db push o el ingest?):", String(e).slice(0, 120));
+    }
+    const retByBbg = new Map<string, RetRow>();
+    for (const r of retRows) { const k = normBBG(r.tickerBBG); if (k) retByBbg.set(k, r); }
+    let returnsMatched = 0;
+    // Aplica el snapshot a una serie. Se machea por el BBG de la CLASE (Andina-A y
+    // Andina-B tienen retornos distintos), no por el de la compañía.
+    const applyReturns = (s: SsV1Series): void => {
+      const rr = retByBbg.get(normBBG(s.bbg) ?? "");
+      if (!rr) { s.retMonth = s.retYtd = s.retYear = s.ret3y = s.ret5y = null; s.retAsOf = null; return; }
+      s.retMonth = rr.retMonth; s.retYtd = rr.retYtd; s.retYear = rr.retYear;
+      s.ret3y = rr.ret3y; s.ret5y = rr.ret5y;
+      s.retAsOf = rr.asOf.toISOString().slice(0, 10);
+      returnsMatched++;
+    };
+    // Fecha del snapshot: la más reciente de la tabla. El script carga un solo lote, así
+    // que en la práctica es una sola fecha para todos.
+    const returnsAsOf = retRows.length
+      ? retRows.reduce((mx, r) => (r.asOf > mx ? r.asOf : mx), retRows[0].asOf).toISOString().slice(0, 10)
+      : null;
+    const returnsSource = retRows.find((r) => r.source)?.source ?? null;
 
     // ── Periodo n (seleccionable vía ?fy=&q=) ─────────────────────────────────
     const qKey = (fy: number, q: number) => fy * 10 + q;
@@ -504,6 +475,8 @@ export async function GET(request: NextRequest) {
       }
       // Rec/Date/TP por BBG: cada serie por su clase; nivel compañía por tickerBBG.
       for (const s of series) { const ri = recOf(s.bbg); s.rec = ri?.rec ?? null; s.recDate = ri?.recDate ?? null; s.tp = ri?.tp ?? null; }
+      // Retornos por BBG de la clase. Independientes de ?withPrices: vienen de la base.
+      for (const s of series) applyReturns(s);
       const coRec = recOf(resolved.tickerBBG);
 
       const co: SsV1Company = {
@@ -532,12 +505,11 @@ export async function GET(request: NextRequest) {
       const tickers = [...new Set(companies.flatMap((c) => c.series.map((s) => s.yahooTicker)).filter((t): t is string => !!t))];
       const [priceMap, levels] = await Promise.all([fetchPricesChunked(tickers), fetchIndexLevels()]);
       indexLevels = levels;
+      // Sólo precio y moneda: los retornos ya quedaron puestos desde el snapshot.
       for (const c of companies)
         for (const s of c.series) {
           const pd = s.yahooTicker ? priceMap.get(s.yahooTicker) ?? null : null;
           s.price = pd?.price ?? null; s.currency = pd?.currency ?? null;
-          s.retMonth = pd?.retMonth ?? null; s.retYtd = pd?.retYtd ?? null; s.retYear = pd?.retYear ?? null;
-          s.ret3y = pd?.ret3y ?? null; s.ret5y = pd?.ret5y ?? null;
         }
     }
 
@@ -546,6 +518,7 @@ export async function GET(request: NextRequest) {
       periodN: selFy ? labelOf(selFy, selQ) : null,
       periodN4: selFy ? labelOf(selFy - 1, selQ) : null,
       ltmLabels, periods, selFy, selQ, companies, indexLevels,
+      returnsAsOf, returnsSource, returnsMatched, returnsRows: retRows.length,
     };
     return NextResponse.json(payload);
   } catch (e) {
