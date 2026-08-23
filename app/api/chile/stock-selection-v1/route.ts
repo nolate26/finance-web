@@ -73,6 +73,14 @@ export interface SsV1Company {
   minorityN:   number | null;
   minorityN4:  number | null;
 
+  // Bases de las variaciones de EBITDA que muestra la tabla de índices. Son ESTRICTAS:
+  // si falta algún trimestre de la ventana el campo va null, porque comparar 9 meses
+  // contra 12 daría un crecimiento inventado. (El ebitdaLtm de arriba sigue siendo laxo:
+  // es el monto que se muestra, y ahí sumar lo que haya es preferible a un hueco.)
+  ebitdaLtm4:    number | null;  // LTM del período n, con los 4 trimestres presentes
+  ebitdaLtmPrev: number | null;  // LTM del período n-4 (misma ventana, un año antes)
+  ebitdaFyPrev:  number | null;  // año calendario anterior al de las proyecciones
+
   // Proyecciones (moneda projCurrency, millones)
   ebitda2026E:   number | null;
   ebitda2027E:   number | null;
@@ -121,6 +129,12 @@ export interface SsV1Payload {
   // IPSA (^IPSA) e IGPA (IGPA.SN). Los sub-índices IGPA y los "Mon" no existen en Yahoo.
   indexLevels?: Record<string, IndexLevel>;
 }
+
+// Año base de las proyecciones que muestra esta vista. Los nombres de los campos
+// (ebitda2026E, utilidad2027E) están fijos, así que si esto cambia hay que renombrarlos
+// y actualizar las etiquetas de las columnas en el componente.
+const PROJ_Y0 = 2026;
+const PROJ_Y1 = PROJ_Y0 + 1;
 
 // ── Homologación / overrides ───────────────────────────────────────────────────
 const norm = (s: string | null | undefined) => (s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
@@ -353,6 +367,10 @@ export async function GET(request: NextRequest) {
     }
     const nKey = qKey(selFy, selQ), n4Key = qKey(selFy - 1, selQ);
     const ltmKeys: number[] = []; { let f = selFy, q = selQ; for (let i = 0; i < 4; i++) { ltmKeys.push(qKey(f, q)); q--; if (q === 0) { q = 4; f--; } } }
+    // Ventana LTM de un año antes (n-4) y año calendario previo al de las proyecciones:
+    // son las bases contra las que la tabla de índices calcula el crecimiento de EBITDA.
+    const ltmPrevKeys: number[] = []; { let f = selFy - 1, q = selQ; for (let i = 0; i < 4; i++) { ltmPrevKeys.push(qKey(f, q)); q--; if (q === 0) { q = 4; f--; } } }
+    const fyPrevKeys = [1, 2, 3, 4].map((q) => qKey(PROJ_Y0 - 1, q));
 
     // ── Overrides de admin para el período activo (norm(company) → field → value) ──
     // Resiliente: si la tabla aún no existe (falta `prisma db push`), se ignora y la vista
@@ -450,6 +468,13 @@ export async function GET(request: NextRequest) {
       const mm = f.metrics.get(metric); if (!mm) return null;
       let s = 0, c = 0; for (const key of ltmKeys) { const v = mm.get(key); if (v != null) { s += v; c++; } }
       return c ? s : null;
+    };
+    // Suma sólo si TODOS los trimestres de la ventana existen; si falta uno, null.
+    const sumStrict = (f: Fund, metric: string, keys: number[]): number | null => {
+      const mm = f.metrics.get(metric); if (!mm) return null;
+      let s = 0;
+      for (const key of keys) { const v = mm.get(key); if (v == null) return null; s += v; }
+      return s;
     };
     const latestOf = (mm: Map<number, number> | undefined): number | null => {
       if (!mm) return null;
@@ -558,10 +583,13 @@ export async function GET(request: NextRequest) {
         debtN: at(f, "debt", nKey), debtN4: at(f, "debt", n4Key),
         equityN: at(f, "equity", nKey), equityN4: at(f, "equity", n4Key),
         minorityN: at(f, "minority_interest", nKey), minorityN4: at(f, "minority_interest", n4Key),
-        ebitda2026E:   projYearEff(k, pick, "ebitda",   2026, "ebitda2026E"),
-        ebitda2027E:   projYearEff(k, pick, "ebitda",   2027, "ebitda2027E"),
-        utilidad2026E: projYearEff(k, pick, "utilidad", 2026, "utilidad2026E"),
-        utilidad2027E: projYearEff(k, pick, "utilidad", 2027, "utilidad2027E"),
+        ebitdaLtm4:    sumStrict(f, "ebitda", ltmKeys),
+        ebitdaLtmPrev: sumStrict(f, "ebitda", ltmPrevKeys),
+        ebitdaFyPrev:  sumStrict(f, "ebitda", fyPrevKeys),
+        ebitda2026E:   projYearEff(k, pick, "ebitda",   PROJ_Y0, "ebitda2026E"),
+        ebitda2027E:   projYearEff(k, pick, "ebitda",   PROJ_Y1, "ebitda2027E"),
+        utilidad2026E: projYearEff(k, pick, "utilidad", PROJ_Y0, "utilidad2026E"),
+        utilidad2027E: projYearEff(k, pick, "utilidad", PROJ_Y1, "utilidad2027E"),
         divLabel: pick?.div ?? null, payout: payoutEff(k, pick),
       };
       applyOverrides(co); // capa de overrides de admin (in place)

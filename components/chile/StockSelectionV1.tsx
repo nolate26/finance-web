@@ -5,6 +5,7 @@ import { RefreshCw, LayoutGrid, X, Check, Plus, Save, Search, Pencil, RotateCcw,
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import SsV1AdminPanel from "./SsV1AdminPanel";
 import { OVERRIDE_FIELDS, PROJECTION_FIELDS, FIELD_AFFECTS } from "@/lib/ssOverrideFields";
+import { normName, orderIdx, sectionIdx, FIXED_KEY } from "@/lib/chileCompanyOrder";
 import type { SsV1Company, SsV1Payload, SsV1Series, IndexLevel } from "@/app/api/chile/stock-selection-v1/route";
 import type { IndexMembershipPayload } from "@/app/api/chile/index-membership/route";
 import { PATRIA, FONT_SECONDARY, TEXT } from "@/lib/patriaTheme";
@@ -53,6 +54,21 @@ const IDX_ZEBRA = "rgba(70,232,224,0.14)"; // fila alterna
 // Bloque de Retornos: fuente y fecha distintas a las del precio (Bloomberg vs Yahoo en
 // vivo), así que se separa con tinte propio en vez de dejarlo en el bandeado general.
 const RET_TINT = "rgba(69,113,255,0.075)"; // cuerpo — dark-sky-blue al 7.5%
+// Los encabezados y la columna izquierda son STICKY: si su fondo es translúcido, las filas
+// se ven a través al hacer scroll. Estas son las mismas tintas ya aplanadas sobre blanco,
+// para usarlas SÓLO en las celdas pegadas (el cuerpo sigue con el rgba original).
+const RET_TINT_SOLID   = "#F1F4FF";  // = RET_TINT sobre blanco
+const HEAD2_BAND_SOLID = "#E9ECFC";  // = HEAD2_BAND sobre blanco
+const EDIT_ROW_SOLID   = "#FFF0E6";  // = rgba(255,107,6,0.10) sobre blanco
+const IDX_TINT_SOLID   = "#F2FDFD";  // = IDX_TINT sobre blanco
+const IDX_ZEBRA_SOLID  = "#E5FCFB";  // = IDX_ZEBRA sobre blanco
+const SOLID_TINT: Record<string, string> = { "rgba(69,113,255,0.075)": RET_TINT_SOLID };
+/** Tinte opaco equivalente, para fondos de celdas sticky. */
+const solidTint = (c: string | undefined): string | undefined => (c ? SOLID_TINT[c] ?? c : undefined);
+
+// Escala única de z-index de las tablas pegadas. El bug de solapamiento venía de que la
+// fila 1 y la fila 2 del encabezado empataban en 30 y de fondos translúcidos.
+const Z = { corner: 60, head: 50, leftCol: 30, body: 1 } as const;
 const RET_HEAD = PATRIA.darkSkyBlue;       // encabezado del grupo
 
 // ── Formatters ──────────────────────────────────────────────────────────────────
@@ -116,47 +132,8 @@ const fmtDate = (d: string | null): string => {
   return y && m && day ? `${day}/${m}/${y.slice(2)}` : d;
 };
 
-// ── Orden fijo por sector ──────────────────────────────────────────────────────
-// Cada sub-array es una SECCIÓN; entre secciones se dibuja un borde. Se machea por
-// nombre de compañía (stock_selection_v1.company, normalizado → case-insensitive).
-// Las dobles (Andina, Embonor, Soquimich, Aguas, Potasios) se ubican por su nombre
-// base y se muestran A → B → consolidada. Compañías no listadas → sección "Otros" al final.
-const normName = (s: string | null | undefined) => (s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
-const FIXED_SECTIONS: string[][] = [
-  ["CAP", "Cintac"],
-  ["Provida", "Habitat", "AFPCapital", "Cuprum"],
-  ["Watts", "Carozzi"],
-  ["Bsantander", "Chile", "BCI", "Itaucl", "Nubank"],
-  ["ILC", "Bicecorp", "Banvida"],
-  ["Andina", "CCU", "Embonor"],
-  ["Cencosud", "Falabella", "Mercado Libre", "SMU", "Ripley", "Nuevapolar", "Hites", "Forus", "Tricot"],
-  ["Mallplaza", "Cencoshopp", "Parauco"],
-  ["Quinenco", "SK", "Cristales", "Elecmetal"],
-  ["Salfacorp", "Besalco", "EISA"],
-  ["Socovesa", "Paz", "Manquehue", "Ingevec", "Moller", "Enjoy"],
-  ["EnelAM", "EnelChile", "EnelGxCh", "Colbun", "ECL", "Pehuenche", "Edelpa"],
-  ["Enaex"],
-  ["Copec", "CMPC", "Masisa"],
-  ["Antarchile", "Almendral", "Minera", "IAM", "Naviera", "Vapores", "Invercap", "Nortegran", "Oro Blanco", "Potasios"],
-  ["Molymet"],
-  ["Pucobre", "Soquimich", "Soquicom"],
-  ["MultiX", "Salmocam", "Camanchaca", "Blumar"],
-  ["Las Condes", "Indisa"],
-  ["Gasco", "Aguas", "Lipigas"],
-  ["Sonda"],
-  ["Entel"],
-  ["LTM", "SMSAAM", "Ventanas", "Fepasa"],
-  ["ConchaToro", "VSPT", "Santa Rita"],
-];
-const FIXED_ORDER = new Map<string, number>();   // norm(name) → posición global
-const FIXED_SECTION = new Map<string, number>(); // norm(name) → índice de sección
-FIXED_SECTIONS.forEach((sec, si) =>
-  sec.forEach((nm) => { FIXED_ORDER.set(normName(nm), FIXED_ORDER.size); FIXED_SECTION.set(normName(nm), si); }),
-);
-const OTHERS_SECTION = FIXED_SECTIONS.length;
-const orderIdx = (name: string): number => FIXED_ORDER.get(normName(name)) ?? 1e6; // no listadas → al final (orden estable = alfabético)
-const sectionIdx = (name: string): number => FIXED_SECTION.get(normName(name)) ?? OTHERS_SECTION;
-const FIXED_KEY = "__order__";
+// El orden fijo por sector vive en lib/chileCompanyOrder.ts: lo comparte /projections.
+
 
 // ── Computed value bag (USD mn) ────────────────────────────────────────────────
 interface Alloc {
@@ -166,6 +143,13 @@ interface Alloc {
   utilLtmUsd: number | null; util26Usd: number | null; util27Usd: number | null; revLtmUsd: number | null;
   ebitLtmUsd: number | null; ebitdaN: number | null; ebitdaN4: number | null; utilidadN: number | null;
   utilidadN4: number | null; payout: number | null;
+  // Sumandos APAREADOS de las variaciones de EBITDA. Un miembro entra al numerador y al
+  // denominador sólo si tiene los DOS términos; si no, el crecimiento del índice saldría
+  // sesgado (una compañía sumando en 27E pero no en 26E infla el numerador).
+  // El % del índice es Σnum / Σden − 1: ratio de sumas, no promedio de ratios.
+  ebLtmVarNum: number | null; ebLtmVarDen: number | null;   // LTM(n) vs LTM(n-4)
+  eb26VarNum:  number | null; eb26VarDen:  number | null;   // 2026E vs FY2025 reportado
+  eb27VarNum:  number | null; eb27VarDen:  number | null;   // 2027E vs 2026E
 }
 
 function computeV(mcap: number | null, a: Alloc): Record<string, number | null> {
@@ -179,6 +163,9 @@ function computeV(mcap: number | null, a: Alloc): Record<string, number | null> 
     ebitdaN4: a.ebitdaN4, ebitdaN: a.ebitdaN, ebitdaVar: varOf(a.ebitdaN, a.ebitdaN4),
     utilidadN4: a.utilidadN4, utilidadN: a.utilidadN, utilVar: varOf(a.utilidadN, a.utilidadN4),
     ebitdaLtmUsd: a.ebitdaLtmUsd, ebitda26Usd: a.ebitda26Usd, ebitda27Usd: a.ebitda27Usd,
+    ebitdaLtmVar: varOf(a.ebLtmVarNum, a.ebLtmVarDen),
+    ebitda26Var:  varOf(a.eb26VarNum,  a.eb26VarDen),
+    ebitda27Var:  varOf(a.eb27VarNum,  a.eb27VarDen),
     fvEbitdaLtm: mult(fv, a.ebitdaLtmUsd), fvEbitda26: mult(fv, a.ebitda26Usd), fvEbitda27: mult(fv, a.ebitda27Usd),
     utilLtmUsd: a.utilLtmUsd, util26Usd: a.util26Usd, util27Usd: a.util27Usd,
     puLtm: mult(mcap, a.utilLtmUsd), pu26: mult(mcap, a.util26Usd), pu27: mult(mcap, a.util27Usd),
@@ -222,6 +209,18 @@ function mcapOf(s: SsV1Series, tc: number): number | null {
   return s.currency === "CLP" ? raw / tc : s.currency === "USD" ? raw : null;
 }
 
+/** Aparea numerador y denominador: si falta cualquiera de los dos, el par entero queda nulo. */
+function pairs(
+  ltm: [number | null, number | null],
+  y26: [number | null, number | null],
+  y27: [number | null, number | null],
+): Pick<Alloc, "ebLtmVarNum" | "ebLtmVarDen" | "eb26VarNum" | "eb26VarDen" | "eb27VarNum" | "eb27VarDen"> {
+  const ok = ([n, d]: [number | null, number | null]): [number | null, number | null] =>
+    n == null || d == null ? [null, null] : [n, d];
+  const [a1, a2] = ok(ltm), [b1, b2] = ok(y26), [c1, c2] = ok(y27);
+  return { ebLtmVarNum: a1, ebLtmVarDen: a2, eb26VarNum: b1, eb26VarDen: b2, eb27VarNum: c1, eb27VarDen: c2 };
+}
+
 function computeGroup(c: SsV1Company, tc: number): CompanyGroup {
   const conv = makeConv(tc);
   const ss = c.ssCurrency, pj = c.projCurrency;
@@ -236,6 +235,14 @@ function computeGroup(c: SsV1Company, tc: number): CompanyGroup {
     ebitdaN: conv(c.ebitdaN, ss), ebitdaN4: conv(c.ebitdaN4, ss),
     utilidadN: conv(c.utilidadN, ss), utilidadN4: conv(c.utilidadN4, ss),
     payout: c.payout,
+    ...pairs(
+      // LTM estricto (los 4 trimestres presentes) de n y de n-4. El LTM "laxo" que se
+      // muestra como monto no sirve de base: compararía 9 meses contra 12.
+      [conv(c.ebitdaLtm4, ss),      conv(c.ebitdaLtmPrev, ss)],
+      // 2026E (moneda de proyecciones) contra el año calendario 2025 reportado.
+      [conv(c.ebitda2026E, pj),     conv(c.ebitdaFyPrev, ss)],
+      [conv(c.ebitda2027E, pj),     conv(c.ebitda2026E, pj)],
+    ),
   };
   const scaleAlloc = (w: number): Alloc => {
     const out = {} as Alloc;
@@ -297,6 +304,7 @@ const ALLOC_SUM_FIELDS: (keyof Alloc)[] = [
   "dn", "debtN4Usd", "equityNUsd", "equityN4Usd", "minorityNUsd", "minorityN4Usd",
   "ebitdaLtmUsd", "ebitda26Usd", "ebitda27Usd", "utilLtmUsd", "util26Usd", "util27Usd",
   "revLtmUsd", "ebitLtmUsd", "ebitdaN", "ebitdaN4", "utilidadN", "utilidadN4",
+  "ebLtmVarNum", "ebLtmVarDen", "eb26VarNum", "eb26VarDen", "eb27VarNum", "eb27VarDen",
 ];
 const emptyAlloc = (): Alloc => {
   const a = { payout: null } as Alloc;
@@ -374,6 +382,22 @@ interface ColDef {
 // (Bloomberg, a una fecha distinta) no se lea como parte del de Precio (Yahoo, en vivo).
 interface Group { id: string; title: string; hint?: string; cols: ColDef[]; collapsible?: boolean; primary?: string; tint?: string; headBg?: string }
 const num = (id: string) => (r: DisplayRow) => r.v[id];
+// Retornos y variaciones: único lugar donde se usa color (verde/rojo). Vive acá arriba
+// (y no dentro de buildGroups) porque la tabla de índices arma columnas propias con él.
+const retCol = (id: string, label: string): ColDef => ({
+  id, label, align: "right", sortVal: num(id),
+  render: (r) => { const p = pct(r.v[id]); return { text: p.text, color: p.color, weight: 600 }; },
+});
+
+// La tabla de índices muestra CRECIMIENTO en vez de montos para el bloque de EBITDA: en un
+// agregado el nivel absoluto en USD mn no dice nada (depende de cuántos miembros tenga el
+// índice), la variación sí. La tabla de compañías sigue mostrando los montos.
+const IDX_EBITDA_VAR_COLS: ColDef[] = [
+  retCol("ebitdaLtmVar", "LTM a/a"),
+  retCol("ebitda26Var",  "26E/25"),
+  retCol("ebitda27Var",  "27E/26"),
+];
+const IDX_GROUP_TITLE: Record<string, string> = { ebitdaUsd: "EBITDA — crecimiento" };
 // columnas visibles de un grupo: si es colapsable y está cerrado → solo la "primary" (o la 1ª)
 const visibleCols = (g: Group, expanded: Set<string>): ColDef[] =>
   g.collapsible && !expanded.has(g.id)
@@ -381,11 +405,6 @@ const visibleCols = (g: Group, expanded: Set<string>): ColDef[] =>
     : g.cols;
 
 function buildGroups(periodN: string | null, periodN4: string | null, returnsAsOf: string | null): Group[] {
-  // Retornos y variaciones: único lugar donde se usa color (verde/rojo).
-  const retCol = (id: string, label: string): ColDef => ({
-    id, label, align: "right", sortVal: num(id),
-    render: (r) => { const p = pct(r.v[id]); return { text: p.text, color: p.color, weight: 600 }; },
-  });
   const mnCol = (id: string, label: string, color = NUM): ColDef => ({
     id, label, align: "right", sortVal: num(id),
     render: (r) => ({ text: fmtMn(r.v[id]), color: r.v[id] == null || isNM(r.v[id]) ? NM_TEXT : color }),
@@ -450,7 +469,7 @@ export default function StockSelectionV1() {
   const [sector, setSector] = useState("all");
   const [sortKey, setSortKey] = useState(FIXED_KEY);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const [showMethod, setShowMethod] = useState(true);
+  const [showMethod, setShowMethod] = useState(false);   // colapsada al cargar
   const [selPeriod, setSelPeriod] = useState<string | null>(null); // "fy-q"; null = más reciente
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(["fvEbitda", "pu"])); // grupos colapsables abiertos (los múltiplos clave parten desplegados)
   const [showIndexEditor, setShowIndexEditor] = useState(false); // editor de membresía de índices (solo admin)
@@ -785,18 +804,18 @@ export default function StockSelectionV1() {
 
       {/* Tabla — el contenedor tiene alto acotado y scroll propio: así el encabezado
           (2 filas) queda fijo arriba y la columna Empresa fija a la izquierda. */}
-      <div style={{ overflow: "auto", maxHeight: "calc(100vh - 230px)", minHeight: 320, border: "1px solid rgba(13,13,56,0.18)", borderRadius: 8, background: "#fff" }}>
+      <div style={{ overflow: "auto", maxHeight: "calc(100vh - 160px)", minHeight: 480, border: "1px solid rgba(13,13,56,0.18)", borderRadius: 8, background: "#fff" }}>
         <table style={{ borderCollapse: "separate", borderSpacing: 0, fontSize: 11, width: "100%" }}>
           <thead>
             <tr ref={headRowRef}>
-              <th style={{ ...stickyTh, top: 0, zIndex: 40 }} rowSpan={2}>Empresa</th>
+              <th style={{ ...stickyTh, top: 0, zIndex: Z.corner }} rowSpan={2}>Empresa</th>
               {groupDefs.map((g, gIdx) => {
                 const open = !g.collapsible || expandedGroups.has(g.id);
                 return (
                   <th key={g.id} colSpan={visibleCols(g, expandedGroups).length}
                     onClick={() => g.collapsible && toggleGroup(g.id)}
                     title={[g.hint, g.collapsible ? (open ? "Clic para contraer" : "Clic para desplegar") : null].filter(Boolean).join(" · ") || undefined}
-                    style={{ position: "sticky", top: 0, zIndex: 30, padding: "5px 7px", textAlign: "center", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: NAVY_TEXT, borderLeft: "1px solid rgba(255,255,255,0.14)", whiteSpace: "nowrap", background: g.headBg ?? (gIdx % 2 === 1 ? NAVY_BAND : NAVY), cursor: g.collapsible ? "pointer" : "default", userSelect: "none" }}>
+                    style={{ position: "sticky", top: 0, zIndex: Z.head, padding: "5px 7px", textAlign: "center", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: NAVY_TEXT, borderLeft: "1px solid rgba(255,255,255,0.14)", whiteSpace: "nowrap", background: g.headBg ?? (gIdx % 2 === 1 ? NAVY_BAND : NAVY), cursor: g.collapsible ? "pointer" : "default", userSelect: "none" }}>
                     {g.collapsible && <span style={{ fontSize: 8, marginRight: 3, opacity: 0.7 }}>{open ? "▾" : "▸"}</span>}
                     {g.title}
                   </th>
@@ -809,7 +828,7 @@ export default function StockSelectionV1() {
                   const active = sortKey === col.id;
                   return (
                     <th key={col.id} onClick={() => col.sortVal && sortBy(col.id)}
-                      style={{ position: "sticky", top: headRowH, zIndex: 30, padding: "5px 7px", textAlign: col.align ?? "right", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: active ? "#fff" : HEAD2_TEXT, borderBottom: `2px solid ${g.headBg ?? NAVY}`, borderLeft: i === 0 ? "1px solid rgba(13,13,56,0.22)" : "none", whiteSpace: "nowrap", cursor: col.sortVal ? "pointer" : "default", userSelect: "none", background: active ? NAVY_BAND : g.tint ?? (gIdx % 2 === 1 ? HEAD2_BAND : HEAD2_BG) }}>
+                      style={{ position: "sticky", top: headRowH, zIndex: Z.head, padding: "5px 7px", textAlign: col.align ?? "right", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: active ? "#fff" : HEAD2_TEXT, borderBottom: `2px solid ${g.headBg ?? NAVY}`, borderLeft: i === 0 ? "1px solid rgba(13,13,56,0.22)" : "none", whiteSpace: "nowrap", cursor: col.sortVal ? "pointer" : "default", userSelect: "none", background: active ? NAVY_BAND : solidTint(g.tint) ?? (gIdx % 2 === 1 ? HEAD2_BAND_SOLID : HEAD2_BG) }}>
                       {col.label}{col.sortVal && <span style={{ fontSize: 8, opacity: active ? 1 : 0.45, marginLeft: 3 }}>{active ? (sortDir === "asc" ? "▲" : "▼") : "↕"}</span>}
                     </th>
                   );
@@ -829,7 +848,7 @@ export default function StockSelectionV1() {
                   <tr key={`${r.company}-${r.label || "cons"}`} style={{ background: bg }}>
                     <td onClick={editMode && !isSeries ? () => { const c = companyByName.get(normName(r.company)); if (c) setEditCompany(c); } : undefined}
                       title={editMode && !isSeries ? "Editar valores de esta compañía" : undefined}
-                      style={{ ...stickyTd, borderTop: topBorder ? SECTION_BORDER : undefined, background: editMode && !isSeries ? "rgba(255,107,6,0.10)" : bg, paddingLeft: isSeries ? 18 : 8, cursor: editMode && !isSeries ? "pointer" : undefined }}>
+                      style={{ ...stickyTd, borderTop: topBorder ? SECTION_BORDER : undefined, background: editMode && !isSeries ? EDIT_ROW_SOLID : bg, paddingLeft: isSeries ? 18 : 8, cursor: editMode && !isSeries ? "pointer" : undefined }}>
                       {isSeries ? (
                         <>
                           <div style={{ fontSize: 10, fontWeight: 600, color: TEXT2, whiteSpace: "nowrap" }}>
@@ -872,7 +891,10 @@ export default function StockSelectionV1() {
         const idxGroupDefs = groupDefs.filter((g) => IDX_GROUP_IDS.includes(g.id));
         // Mismo formato que compañías, TODAS las columnas (sin respetar el colapso), salvo
         // Pol Div (dentro de "div") y el grupo Recomendación (Rec/Date/TP, ya excluido).
-        const idxCols = (g: Group): ColDef[] => (g.id === "div" ? g.cols.filter((c) => c.id !== "polDiv") : g.cols);
+        const idxCols = (g: Group): ColDef[] =>
+          g.id === "div"       ? g.cols.filter((c) => c.id !== "polDiv")
+          : g.id === "ebitdaUsd" ? IDX_EBITDA_VAR_COLS
+          : g.cols;
         const idxRow = (agg: (typeof indexAggregates)[number]): DisplayRow => ({
           company: agg.index, tickerBBG: null, ssCurrency: "USD", industria: null, divLabel: null,
           payout: null, rec: null, recDate: null, tp: null, label: "", kind: "single", seriesBBG: null, v: agg.v,
@@ -886,22 +908,22 @@ export default function StockSelectionV1() {
                 Cada índice = Σ (M.Cap y fundamentales × peso); los múltiplos salen de esas sumas. Precio = nivel real del índice (solo IPSA/IGPA). Los retornos van en blanco: el snapshot de Bloomberg es por ticker de acción, y ponderar los de los miembros no da el retorno del índice. {priced ? "" : "Traé precios para llenar."}
               </span>
             </div>
-            <div style={{ overflow: "auto", maxHeight: "60vh", border: `1px solid ${IDX_HEAD}33`, borderRadius: 8, background: IDX_TINT }}>
+            <div style={{ overflow: "auto", maxHeight: "72vh", border: `1px solid ${IDX_HEAD}33`, borderRadius: 8, background: IDX_TINT }}>
               <table style={{ borderCollapse: "separate", borderSpacing: 0, fontSize: 11, width: "100%" }}>
                 <thead>
                   <tr ref={idxHeadRef}>
-                    <th style={{ position: "sticky", left: 0, top: 0, zIndex: 5, textAlign: "left", padding: "5px 10px", background: IDX_HEAD, color: IDX_HEAD_TEXT, fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }} rowSpan={2}>Índice</th>
+                    <th style={{ position: "sticky", left: 0, top: 0, zIndex: Z.corner, textAlign: "left", padding: "5px 10px", background: IDX_HEAD, color: IDX_HEAD_TEXT, fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }} rowSpan={2}>Índice</th>
                     {idxGroupDefs.map((g, gi) => (
                       <th key={g.id} colSpan={idxCols(g).length}
-                        style={{ position: "sticky", top: 0, zIndex: 4, padding: "5px 7px", textAlign: "center", fontSize: 9, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: IDX_HEAD_TEXT, background: gi % 2 === 1 ? IDX_HEAD_BAND : IDX_HEAD, borderLeft: "1px solid rgba(255,255,255,0.12)", whiteSpace: "nowrap" }}>
-                        {g.title}
+                        style={{ position: "sticky", top: 0, zIndex: Z.head, padding: "5px 7px", textAlign: "center", fontSize: 9, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: IDX_HEAD_TEXT, background: gi % 2 === 1 ? IDX_HEAD_BAND : IDX_HEAD, borderLeft: "1px solid rgba(255,255,255,0.12)", whiteSpace: "nowrap" }}>
+                        {IDX_GROUP_TITLE[g.id] ?? g.title}
                       </th>
                     ))}
                   </tr>
                   <tr>
                     {idxGroupDefs.map((g, gi) =>
                       idxCols(g).map((col, i) => (
-                        <th key={col.id} style={{ position: "sticky", top: idxHeadTop, zIndex: 4, padding: "4px 7px", textAlign: col.align ?? "right", fontSize: 9, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: IDX_HEAD, background: gi % 2 === 1 ? IDX_ZEBRA : IDX_TINT, borderBottom: `2px solid ${IDX_HEAD}`, borderLeft: i === 0 ? `1px solid ${IDX_HEAD}22` : "none", whiteSpace: "nowrap" }}>
+                        <th key={col.id} style={{ position: "sticky", top: idxHeadTop, zIndex: Z.head, padding: "4px 7px", textAlign: col.align ?? "right", fontSize: 9, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: IDX_HEAD, background: gi % 2 === 1 ? IDX_ZEBRA_SOLID : IDX_TINT_SOLID, borderBottom: `2px solid ${IDX_HEAD}`, borderLeft: i === 0 ? `1px solid ${IDX_HEAD}22` : "none", whiteSpace: "nowrap" }}>
                           {col.label}
                         </th>
                       )),
@@ -912,9 +934,10 @@ export default function StockSelectionV1() {
                   {indexAggregates.map((agg, ri) => {
                     const r = idxRow(agg);
                     const bg = ri % 2 === 0 ? IDX_TINT : IDX_ZEBRA;
+                    const bgSolid = ri % 2 === 0 ? IDX_TINT_SOLID : IDX_ZEBRA_SOLID;
                     return (
                       <tr key={agg.index} style={{ background: bg }}>
-                        <td style={{ position: "sticky", left: 0, zIndex: 2, background: bg, padding: "5px 10px", borderRight: `1px solid ${IDX_HEAD}22`, borderBottom: `1px solid ${IDX_HEAD}18`, whiteSpace: "nowrap" }}>
+                        <td style={{ position: "sticky", left: 0, zIndex: Z.leftCol, background: bgSolid, padding: "5px 10px", borderRight: `1px solid ${IDX_HEAD}22`, borderBottom: `1px solid ${IDX_HEAD}18`, whiteSpace: "nowrap" }}>
                           <span style={{ fontSize: 11, fontWeight: 700, color: IDX_HEAD }}>{agg.index}</span>
                           <span style={{ fontSize: 9, color: TEXT3, marginLeft: 6, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>{agg.count}</span>
                         </td>
@@ -1330,7 +1353,7 @@ function SsV1OverrideEditor({ company, fy, q, onClose, onSaved }: { company: SsV
 const AMBER_INK = "#FF6B06"; // acento ámbar para "cambios sin guardar"
 const miniBtn: React.CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 6, border: `1px solid ${BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" };
 const stickyTh: React.CSSProperties = { position: "sticky", left: 0, padding: "4px 8px", textAlign: "left", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: NAVY_TEXT, background: NAVY, borderBottom: `2px solid ${NAVY}`, borderRight: "1px solid rgba(13,13,56,0.20)", whiteSpace: "nowrap" };
-const stickyTd: React.CSSProperties = { position: "sticky", left: 0, zIndex: 10, padding: "4px 8px", borderBottom: `1px solid ${BORDER}`, borderRight: "1px solid rgba(13,13,56,0.20)", verticalAlign: "middle" };
+const stickyTd: React.CSSProperties = { position: "sticky", left: 0, zIndex: 30, padding: "4px 8px", borderBottom: `1px solid ${BORDER}`, borderRight: "1px solid rgba(13,13,56,0.20)", verticalAlign: "middle" };
 const retryBtn: React.CSSProperties = { marginTop: 10, padding: "6px 16px", borderRadius: 6, background: SURFACE, border: `1px solid ${BORDER}`, color: TEXT1, cursor: "pointer", fontSize: 13 };
 // USD se marca algo más fuerte que CLP (es la excepción en un listado mayormente CLP).
 const ccyBadge = (ccy: "CLP" | "USD"): React.CSSProperties => ({ marginLeft: 5, fontSize: 9, fontWeight: 700, color: ccy === "USD" ? TEXT1 : TEXT3, background: ccy === "USD" ? "rgba(13,13,56,0.09)" : "rgba(13,13,56,0.05)", borderRadius: 3, padding: "1px 4px" });

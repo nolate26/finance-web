@@ -9,6 +9,7 @@ import type {
 import type { CellState, OverridesPayload } from "@/app/api/projections/overrides/route";
 import { PATRIA, FONT_SECONDARY, TEXT, BORDER, SURFACE } from "@/lib/patriaTheme";
 import { YEAR_METRICS, ROW_YEAR, type YearMetric } from "@/lib/proyeccionOverrideFields";
+import { orderIdx, sectionIdx, FIXED_KEY } from "@/lib/chileCompanyOrder";
 
 export type { ProjectionRowAPI as ProjectionRow };
 
@@ -96,6 +97,72 @@ function fmtDelta(pct: number): string {
 }
 
 const numStr = (n: number | null | undefined): string => (n == null ? "" : String(n));
+
+/**
+ * Parsea lo que el usuario tipeó en un campo numérico.
+ *
+ * El PUNTO es decimal, igual que en la tabla (que formatea en-US: 237,724.5). Antes el
+ * parser hacía `replace(/\./g, "")`, o sea trataba el punto como separador de miles al
+ * estilo es-CL: quien escribía 1234.5 guardaba 12345 sin darse cuenta.
+ *
+ * Reglas, pensadas para no romperle la mano a nadie:
+ *  · hay punto Y coma  → el ÚLTIMO separador es el decimal, el otro es de miles
+ *                        ("1,234.5" → 1234.5 · "1.234,5" → 1234.5)
+ *  · un solo separador → es el decimal ("1234.5" y "1234,5" dan lo mismo)
+ *  · el mismo repetido → son todos de miles ("1.234.567" → 1234567)
+ *
+ * Devuelve null si no queda un número finito, para poder marcar el campo en rojo en vez
+ * de guardar cualquier cosa.
+ */
+const GROUPED_DOT   = /^-?\d{1,3}(\.\d{3})*$/;   // 1.234.567
+const GROUPED_COMMA = /^-?\d{1,3}(,\d{3})*$/;    // 1,234,567
+
+function parseNum(raw: string): number | null {
+  const t = raw.trim().replace(/[\s'  ]/g, "");
+  if (!t) return null;
+
+  const dots = (t.match(/\./g) ?? []).length;
+  const commas = (t.match(/,/g) ?? []).length;
+
+  // Qué separador es el decimal (null = no hay decimales) y cuál el de miles.
+  let dec: "." | "," | null = null;
+  let thou: "." | "," | null = null;
+  if (dots && commas) {
+    dec = t.lastIndexOf(".") > t.lastIndexOf(",") ? "." : ",";
+    thou = dec === "." ? "," : ".";
+  } else if (commas === 1) dec = ",";
+  else if (commas > 1) thou = ",";
+  else if (dots === 1) dec = ".";
+  else if (dots > 1) thou = ".";
+
+  // El decimal aparece una sola vez; lo que sigue son sólo dígitos.
+  let intPart = t, decPart = "";
+  if (dec) {
+    const i = t.lastIndexOf(dec);
+    if (t.indexOf(dec) !== i) return null;   // dos decimales: "1.2.3"
+    intPart = t.slice(0, i);
+    decPart = t.slice(i + 1);
+    if (!/^\d*$/.test(decPart)) return null;
+  }
+
+  // La parte entera: dígitos sueltos, o grupos de 3 separados por el de miles.
+  // Esto es lo que rechaza "1..2" en vez de convertirlo en 12.
+  // Regex literales y no `new RegExp(\`…\`)`: dentro de un template literal \d pierde la
+  // barra y \${thou} escapa el $, así que la interpolación ni siquiera ocurre.
+  const ok = thou
+    ? (thou === "." ? GROUPED_DOT : GROUPED_COMMA).test(intPart)
+    : /^-?\d*$/.test(intPart);
+  if (!ok) return null;
+
+  const clean = (thou ? intPart.split(thou).join("") : intPart) + (decPart ? `.${decPart}` : "");
+  if (clean === "" || clean === "-") return null;
+  const v = Number(clean);
+  return Number.isFinite(v) ? v : null;
+}
+
+/** Cómo va a quedar el número, en el mismo formato que muestra la tabla. */
+const fmtPreview = (v: number): string =>
+  v.toLocaleString("en-US", { maximumFractionDigits: 2 });
 
 // ── Delta badge ───────────────────────────────────────────────────────────────
 
@@ -267,6 +334,7 @@ function MetricCell({
 // keys. getVal resolves via atCalendarYear so a stale row sorts correctly too.
 
 type SortKey =
+  | typeof FIXED_KEY
   | "empresa" | "sector" | "analyst" | "payout"
   | "ingresos_y0" | "ingresos_y1" | "ingresos_y2"
   | "ebitda_y0"   | "ebitda_y1"   | "ebitda_y2"
@@ -278,6 +346,7 @@ interface SortState { key: SortKey; dir: "asc" | "desc" }
 // Defined inside the component to capture globalBaseYear
 function makeGetVal(globalBaseYear: number) {
   return function getVal(row: ProjectionRowAPI, key: SortKey): number | string | null {
+    if (key === FIXED_KEY) return orderIdx(row.empresa);
     if (key === "empresa") return row.empresa;
     if (key === "sector")  return row.sector;
     if (key === "analyst") return row.analyst ?? "";
@@ -293,7 +362,8 @@ function makeGetVal(globalBaseYear: number) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function ProjectionsTable({ rows, base_year: globalBaseYear, prevAt, onSaved }: Props) {
-  const [sort, setSort] = useState<SortState>({ key: "empresa", dir: "asc" });
+  // Arranca en el MISMO orden fijo por sector que Stock Selection (lib/chileCompanyOrder).
+  const [sort, setSort] = useState<SortState>({ key: FIXED_KEY, dir: "asc" });
   const [hover, setHover] = useState<HoverInfo | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [editing, setEditing] = useState<ProjectionRowAPI | null>(null);
@@ -330,18 +400,25 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
     );
   }
 
-  const sorted = [...rows].sort((a, b) => {
-    const av = getVal(a, sort.key);
-    const bv = getVal(b, sort.key);
-    if (av === null && bv === null) return 0;
-    if (av === null) return 1;
-    if (bv === null) return -1;
-    const cmp =
-      typeof av === "string" && typeof bv === "string"
-        ? av.localeCompare(bv)
-        : (av as number) - (bv as number);
-    return sort.dir === "asc" ? cmp : -cmp;
-  });
+  const fixedMode = sort.key === FIXED_KEY;
+
+  // Orden fijo: sort estable, así que las empresas que no están en la lista (29 de 116,
+  // las que no forman parte del universo de Stock Selection) quedan al final en el orden
+  // alfabético con el que llegan de la API. Idéntico a lo que hace /chile.
+  const sorted = fixedMode
+    ? [...rows].sort((a, b) => orderIdx(a.empresa) - orderIdx(b.empresa))
+    : [...rows].sort((a, b) => {
+        const av = getVal(a, sort.key);
+        const bv = getVal(b, sort.key);
+        if (av === null && bv === null) return 0;
+        if (av === null) return 1;
+        if (bv === null) return -1;
+        const cmp =
+          typeof av === "string" && typeof bv === "string"
+            ? av.localeCompare(bv)
+            : (av as number) - (bv as number);
+        return sort.dir === "asc" ? cmp : -cmp;
+      });
 
   function thStyle(active: boolean): React.CSSProperties {
     return {
@@ -403,7 +480,20 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
             {supersededTotal} edición{supersededTotal === 1 ? "" : "es"} reemplazada{supersededTotal === 1 ? "" : "s"} por el Excel
           </span>
         )}
-        <div style={{ marginLeft: "auto" }}>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+          <button
+            onClick={() => setSort({ key: FIXED_KEY, dir: "asc" })}
+            title="Volver al orden fijo por sector — el mismo que usa Stock Selection"
+            style={{
+              padding: "5px 12px", borderRadius: 6, fontSize: 12, fontWeight: 600,
+              border: `1px solid ${fixedMode ? "rgba(13,13,56,0.30)" : BORDER.strong}`,
+              background: fixedMode ? "rgba(13,13,56,0.06)" : SURFACE.card,
+              color: fixedMode ? TEXT.body : TEXT.label,
+              cursor: "pointer", whiteSpace: "nowrap",
+            }}
+          >
+            Orden fijo
+          </button>
           {canEdit ? (
             <button
               onClick={() => setEditMode((e) => !e)}
@@ -562,6 +652,9 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
             {sorted.map((row, i) => {
               // Badge to signal that this row's data was shifted (stale base_year)
               const isStale  = row.sourceBaseYear < globalBaseYear;
+              // Borde entre secciones del orden fijo, igual que en Stock Selection.
+              const sectionStart =
+                fixedMode && i > 0 && sectionIdx(row.empresa) !== sectionIdx(sorted[i - 1].empresa);
               const nEdits   = row.edits
                 ? [row.edits.ingresos, row.edits.ebitda, row.edits.ebit, row.edits.utilidad]
                     .reduce((s, b) => s + (b ? [b.y0, b.y1, b.y2].filter(Boolean).length : 0), 0)
@@ -572,7 +665,10 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
                 <tr
                   key={i}
                   className="transition-colors"
-                  style={{ borderBottom: BORDER_LIGHT }}
+                  style={{
+                    borderBottom: BORDER_LIGHT,
+                    borderTop: sectionStart ? "2px solid rgba(13,13,56,0.22)" : undefined,
+                  }}
                   onMouseEnter={(e) =>
                     ((e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.03)")
                   }
@@ -796,15 +892,30 @@ function ProjectionRowEditor({
         out.push({ metric, calendarYear: ROW_YEAR, text: cur === "" ? null : cur });
       } else {
         if (cur === "") { out.push({ metric, calendarYear, value: null }); continue; }
-        const v = Number(cur.replace(/\./g, "").replace(",", "."));
-        if (Number.isFinite(v)) out.push({ metric, calendarYear, value: v });
+        const v = parseNum(cur);
+        if (v != null) out.push({ metric, calendarYear, value: v });
       }
     }
     return out;
   }, [edits, initial]);
 
+  // Campos numéricos con texto que no parsea: se marcan en rojo y bloquean el guardado,
+  // en vez de descartarse en silencio (que es lo que pasaba antes).
+  const invalidKeys = useMemo(() => {
+    const out = new Set<string>();
+    for (const k of Object.keys(edits)) {
+      const [metric] = k.split("|");
+      if (metric === "moneda" || metric === "analyst") continue;
+      const t = (edits[k] ?? "").trim();
+      if (t !== "" && parseNum(t) == null) out.add(k);
+    }
+    return out;
+  }, [edits]);
+
+  const undoAll = () => setEdits(initial);
+
   const save = () => {
-    if (!changes.length || saving) return;
+    if (!changes.length || saving || invalidKeys.size) return;
     setSaving(true); setError(null);
     fetch("/api/projections/overrides", {
       method: "PUT",
@@ -856,7 +967,7 @@ function ProjectionRowEditor({
           {!loading && state && (
             <>
               {/* Métricas por año */}
-              <div style={{ display: "grid", gridTemplateColumns: "110px repeat(3, 1fr)", gap: 6, alignItems: "center" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "110px repeat(3, 1fr)", gap: "10px 6px", alignItems: "start" }}>
                 <div />
                 {columns.map((y) => (
                   <div key={y} style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.05em", textAlign: "center", color: TEXT.label }}>
@@ -869,9 +980,10 @@ function ProjectionRowEditor({
                     metric={metric}
                     columns={columns}
                     edits={edits}
+                    initial={initial}
                     setEdits={setEdits}
                     cellOf={cellOf}
-                    inputStyle={inputStyle}
+                    invalidKeys={invalidKeys}
                   />
                 ))}
               </div>
@@ -887,27 +999,54 @@ function ProjectionRowEditor({
               ]).map((f) => {
                 const k = `${f.key}|${ROW_YEAR}`;
                 const c = cellOf(f.key, ROW_YEAR);
-                const edited = c?.applied ?? false;
+                const raw = edits[k] ?? "";
+                const hasOverride = c?.applied ?? false;
+                const dirty = raw.trim() !== (initial[k] ?? "").trim();
+                const bad = invalidKeys.has(k);
+                const parsed = f.kind === "number" && raw.trim() !== "" ? parseNum(raw) : null;
                 const excel = c?.excelText ?? numStr(c?.excel);
                 return (
-                  <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0" }}>
+                  <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0" }}>
                     <div style={{ flex: 1, fontSize: 12, color: TEXT.body }}>
                       {f.label}
                       <span style={{ fontSize: 10, color: TEXT.disabled, marginLeft: 6 }}>
                         Excel: {excel || "—"}
                       </span>
                     </div>
+                    {parsed != null && (
+                      <span style={{ fontSize: 9.5, color: dirty ? EDIT_INK : TEXT.muted, fontFamily: FONT_SECONDARY }}>
+                        = {fmtPreview(parsed)}
+                      </span>
+                    )}
+                    {bad && <span style={{ fontSize: 9.5, color: "#F8485E", fontWeight: 600 }}>no es un número</span>}
+                    {dirty && (
+                      <MiniAction
+                        onClick={() => setEdits((p) => ({ ...p, [k]: initial[k] ?? "" }))}
+                        color={TEXT.label}
+                        title="Volver al valor que tenía al abrir el panel"
+                      >
+                        Deshacer
+                      </MiniAction>
+                    )}
                     <input
-                      value={edits[k] ?? ""}
+                      value={raw}
                       onChange={(e) => setEdits((p) => ({ ...p, [k]: e.target.value }))}
                       placeholder="—"
                       inputMode={f.kind === "number" ? "decimal" : undefined}
-                      style={{ ...inputStyle(edited), width: 150, textAlign: f.kind === "number" ? "right" : "left" }}
+                      style={{
+                        width: 150, padding: "5px 8px", fontSize: 12,
+                        fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
+                        textAlign: f.kind === "number" ? "right" : "left", borderRadius: 6,
+                        border: `1px solid ${bad ? "#F8485E" : dirty || hasOverride ? EDIT_INK : BORDER.strong}`,
+                        background: bad ? "rgba(248,72,94,0.08)" : dirty || hasOverride ? EDIT_BG : PATRIA.white,
+                        color: TEXT.body, outline: "none",
+                      }}
                     />
                     <button
                       onClick={() => setEdits((p) => ({ ...p, [k]: "" }))}
-                      title="Vaciar → vuelve al valor del Excel"
-                      style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 6, border: `1px solid ${BORDER.base}`, background: PATRIA.white, color: (edits[k] ?? "") === "" ? TEXT.disabled : EDIT_INK, cursor: "pointer" }}
+                      disabled={!hasOverride && raw.trim() === ""}
+                      title="Borrar la edición: el campo vuelve al valor del Excel"
+                      style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 6, border: `1px solid ${BORDER.base}`, background: PATRIA.white, color: hasOverride || raw.trim() !== "" ? EDIT_INK : TEXT.disabled, cursor: hasOverride || raw.trim() !== "" ? "pointer" : "default" }}
                     >
                       <RotateCcw size={13} />
                     </button>
@@ -916,8 +1055,12 @@ function ProjectionRowEditor({
               })}
 
               <div style={{ fontSize: 10.5, color: TEXT.disabled, marginTop: 14, lineHeight: 1.5 }}>
-                Valores en la moneda reportada, en millones. Vaciar un campo borra la edición y la
-                celda vuelve al valor del Excel. Los cambios no tocan <code>proyecciones_financieras</code>:
+                <b>Decimales con punto</b> (1234.5). El punto es separador DECIMAL, no de miles —
+                debajo de cada campo ves cómo va a quedar el número antes de guardar. También se
+                acepta coma (1234,5). <b>Deshacer</b> vuelve al valor con el que abriste el panel;
+                <b>Borrar edición</b> (o vaciar el campo) elimina tu edición y la celda vuelve al
+                valor del Excel.<br />
+                Valores en la moneda reportada, en millones. Los cambios no tocan <code>proyecciones_financieras</code>:
                 viven en una capa aparte, firmada con tu usuario y registrada en la bitácora.
                 Si el script del Excel se vuelve a correr <b>después</b> de esta edición, manda el
                 Excel (la foto más fresca) y esta edición deja de aplicarse.
@@ -927,7 +1070,24 @@ function ProjectionRowEditor({
         </div>
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "10px 16px", borderTop: `1px solid ${BORDER.base}`, background: SURFACE.subtle }}>
-          {error && <span style={{ fontSize: 12, color: "#F8485E", fontWeight: 600, marginRight: "auto" }}>{error}</span>}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginRight: "auto" }}>
+            {changes.length > 0 && (
+              <button
+                onClick={undoAll}
+                title="Descartar todos los cambios de este panel y volver a como estaba al abrirlo"
+                style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 12px", borderRadius: 6, fontSize: 12.5, fontWeight: 600, border: `1px solid ${BORDER.base}`, background: PATRIA.white, color: TEXT.label, cursor: "pointer" }}
+              >
+                <RotateCcw size={13} /> Deshacer todo
+              </button>
+            )}
+            {error
+              ? <span style={{ fontSize: 12, color: "#F8485E", fontWeight: 600 }}>{error}</span>
+              : invalidKeys.size > 0 && (
+                <span style={{ fontSize: 12, color: "#F8485E", fontWeight: 600 }}>
+                  {invalidKeys.size} campo{invalidKeys.size === 1 ? "" : "s"} sin un número válido
+                </span>
+              )}
+          </div>
           <span style={{ fontSize: 12, color: changes.length ? EDIT_INK : TEXT.disabled, fontWeight: 600, fontFamily: FONT_SECONDARY }}>
             {changes.length ? `${changes.length} sin guardar` : "sin cambios"}
           </span>
@@ -936,8 +1096,8 @@ function ProjectionRowEditor({
           </button>
           <button
             onClick={save}
-            disabled={!changes.length || saving}
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 16px", borderRadius: 6, fontSize: 12.5, fontWeight: 600, border: "none", cursor: changes.length && !saving ? "pointer" : "default", color: PATRIA.white, background: changes.length ? EDIT_INK : TEXT.muted, opacity: saving ? 0.7 : 1 }}
+            disabled={!changes.length || saving || invalidKeys.size > 0}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 16px", borderRadius: 6, fontSize: 12.5, fontWeight: 600, border: "none", cursor: changes.length && !saving && !invalidKeys.size ? "pointer" : "default", color: PATRIA.white, background: changes.length && !invalidKeys.size ? EDIT_INK : TEXT.muted, opacity: saving ? 0.7 : 1 }}
           >
             <Save size={13} /> {saving ? "Guardando…" : "Guardar"}
           </button>
@@ -947,40 +1107,105 @@ function ProjectionRowEditor({
   );
 }
 
+// Acción textual chiquita (Deshacer / Borrar edición). Botón, no <a>: no navega.
+function MiniAction({ onClick, color, children, title }: {
+  onClick: () => void; color: string; children: React.ReactNode; title?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      style={{
+        background: "none", border: "none", padding: 0, cursor: "pointer",
+        fontSize: 9.5, fontWeight: 600, color, textDecoration: "underline",
+        textDecorationStyle: "dotted", textUnderlineOffset: 2, lineHeight: 1.3,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 function ProjEditorMetricRow({
-  metric, columns, edits, setEdits, cellOf, inputStyle,
+  metric, columns, edits, initial, setEdits, cellOf, invalidKeys,
 }: {
   metric: YearMetric;
   columns: number[];
   edits: Record<string, string>;
+  initial: Record<string, string>;
   setEdits: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   cellOf: (metric: string, year: number) => CellState | null;
-  inputStyle: (edited: boolean) => React.CSSProperties;
+  invalidKeys: Set<string>;
 }) {
   const LABEL: Record<YearMetric, string> = {
     ingresos: "Ingresos", ebitda: "EBITDA", ebit: "EBIT", utilidad: "Utilidad",
   };
   return (
     <>
-      <div style={{ fontSize: 12, color: TEXT.body, fontWeight: 600 }}>{LABEL[metric]}</div>
+      <div style={{ fontSize: 12, color: TEXT.body, fontWeight: 600, paddingTop: 6 }}>{LABEL[metric]}</div>
       {columns.map((y) => {
         const k = `${metric}|${y}`;
         const c = cellOf(metric, y);
-        const isOverride = c?.applied ?? false;
+        const raw = edits[k] ?? "";
+        const hasOverride = c?.applied ?? false;   // edición ya guardada y vigente
+        const dirty = raw.trim() !== (initial[k] ?? "").trim();  // tocado en este panel
+        const bad = invalidKeys.has(k);
+        const parsed = raw.trim() === "" ? null : parseNum(raw);
+
         return (
           <div key={y}>
             <input
-              value={edits[k] ?? ""}
+              value={raw}
               inputMode="decimal"
               onChange={(e) => setEdits((p) => ({ ...p, [k]: e.target.value }))}
               placeholder="—"
-              style={inputStyle(isOverride)}
+              style={{
+                width: "100%", padding: "5px 8px", fontSize: 12,
+                fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
+                textAlign: "right", borderRadius: 6,
+                border: `1px solid ${bad ? "#F8485E" : dirty || hasOverride ? EDIT_INK : BORDER.strong}`,
+                background: bad ? "rgba(248,72,94,0.08)" : dirty || hasOverride ? EDIT_BG : PATRIA.white,
+                color: TEXT.body, outline: "none",
+              }}
             />
-            {isOverride && (
-              <div style={{ fontSize: 9, color: TEXT.disabled, textAlign: "right", marginTop: 1 }}>
-                Excel: {c?.excel == null ? "—" : fmtVal(c.excel)}
-              </div>
-            )}
+
+            {/* Cómo se va a interpretar lo tipeado. Es la respuesta al "puse un punto y
+                me guardó otro número": el usuario ve el valor final antes de guardar. */}
+            <div style={{ fontSize: 9.5, textAlign: "right", marginTop: 2, minHeight: 12, fontFamily: FONT_SECONDARY }}>
+              {bad
+                ? <span style={{ color: "#F8485E", fontWeight: 600 }}>no es un número</span>
+                : parsed != null
+                  ? <span style={{ color: dirty ? EDIT_INK : TEXT.muted }}>= {fmtPreview(parsed)}</span>
+                  : raw.trim() === "" && hasOverride
+                    ? <span style={{ color: TEXT.muted }}>vuelve al Excel</span>
+                    : null}
+            </div>
+
+            <div style={{ display: "flex", gap: 7, justifyContent: "flex-end", flexWrap: "wrap", marginTop: 1 }}>
+              {hasOverride && (
+                <span style={{ fontSize: 9.5, color: TEXT.disabled, fontFamily: FONT_SECONDARY }}>
+                  Excel: {c?.excel == null ? "—" : fmtVal(c.excel)}
+                </span>
+              )}
+              {dirty && (
+                <MiniAction
+                  onClick={() => setEdits((p) => ({ ...p, [k]: initial[k] ?? "" }))}
+                  color={TEXT.label}
+                  title="Volver al valor que tenía al abrir el panel"
+                >
+                  Deshacer
+                </MiniAction>
+              )}
+              {hasOverride && raw.trim() !== "" && (
+                <MiniAction
+                  onClick={() => setEdits((p) => ({ ...p, [k]: "" }))}
+                  color={EDIT_INK}
+                  title="Borra la edición guardada: la celda vuelve al valor del Excel"
+                >
+                  Borrar edición
+                </MiniAction>
+              )}
+            </div>
           </div>
         );
       })}
