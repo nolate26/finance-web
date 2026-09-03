@@ -359,24 +359,28 @@ interface KpiSection {
   kpis: { kpiName: string; kpiOrder: number; byYear: Map<number, number | null> }[];
 }
 
+// Indexado por kpiOrder (NO por kpiName): dentro de una misma sección la planilla
+// repite nombres — CCU tiene tres "Var %" en Chile (volumen, revenue y EBITDA, en
+// kpi_order 3, 5 y 7). Agrupar por nombre los fusionaba en una sola fila que además
+// mostraba los valores del último, o sea el dato equivocado en la posición equivocada.
 function buildKpiSections(kpis: ModelKpiRow[]): KpiSection[] {
   // `kpis` llega en orden de inserción (≈ planilla); el Map preserva el orden de
   // primer-encuentro de cada sección, así respetamos el orden de origen.
-  const sectionMap = new Map<string, Map<string, { order: number; byYear: Map<number, number | null> }>>();
+  const sectionMap = new Map<string, Map<number, { kpiName: string; order: number; byYear: Map<number, number | null> }>>();
 
   for (const k of kpis) {
     if (!sectionMap.has(k.sectionName)) sectionMap.set(k.sectionName, new Map());
     const sec = sectionMap.get(k.sectionName)!;
-    if (!sec.has(k.kpiName)) sec.set(k.kpiName, { order: k.kpiOrder, byYear: new Map() });
-    sec.get(k.kpiName)!.byYear.set(k.year, k.value);
+    if (!sec.has(k.kpiOrder)) sec.set(k.kpiOrder, { kpiName: k.kpiName, order: k.kpiOrder, byYear: new Map() });
+    sec.get(k.kpiOrder)!.byYear.set(k.year, k.value);
   }
 
   return Array.from(sectionMap.entries())
     .map(([sectionName, kpiMap]) => ({
       sectionName,
-      kpis: Array.from(kpiMap.entries())
-        .sort((a, b) => a[1].order - b[1].order)
-        .map(([kpiName, { order, byYear }]) => ({ kpiName, kpiOrder: order, byYear })),
+      kpis: Array.from(kpiMap.values())
+        .sort((a, b) => a.order - b.order)
+        .map(({ kpiName, order, byYear }) => ({ kpiName, kpiOrder: order, byYear })),
     }));
 }
 
@@ -1164,13 +1168,14 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                       </td>
                     </tr>
 
-                    {kpis.map(({ kpiName, byYear: kByYear }) => {
+                    {kpis.map(({ kpiName, kpiOrder, byYear: kByYear }) => {
                       const hasPct = kpiName.includes("%");   // sólo '%' → azul + porcentaje
                       const fmt: Fmt = hasPct ? "pct_plain" : "abs";
 
                       return (
                         <tr
-                          key={`kpi-${sectionName}-${kpiName}`}
+                          // Por kpiOrder, no por nombre: "Var %" se repite dentro de la sección.
+                          key={`kpi-${sectionName}-${kpiOrder}`}
                           style={{ borderBottom: `1px solid ${C.BDR}` }}
                           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.04)"; }}
                           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ""; }}
