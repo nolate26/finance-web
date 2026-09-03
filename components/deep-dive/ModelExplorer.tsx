@@ -9,13 +9,17 @@ import type {
 } from "@/app/api/companies/[ticker]/model/route";
 import { consensusScaleFactor } from "@/lib/consensusScale";
 import { ccySuffix } from "@/lib/ccySuffix";
-import ModelEstimateChart, { buildEstimateRows, type EstimateMetric, type EstimateRow } from "@/components/deep-dive/ModelEstimateChart";
+import ModelEstimateChart, { buildEstimateRows, buildRecommendationRows, type EstimateMetric, type EstimateRow } from "@/components/deep-dive/ModelEstimateChart";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { PATRIA, FONT_PRIMARY, FONT_SECONDARY, TEXT, BORDER } from "@/lib/patriaTheme";
 
-// ── Estimate-evolution chart metrics (Net Income default) ────────────────────────
+// ── Estimate-evolution chart metrics (Recommendation por defecto) ───────────────
 // Orden de priorización del manual sobre fondo claro: dark-blue → blue → king-blue.
+// "RECC" no pivotea por año: es el target price a lo largo de las revisiones, con
+// cada punto pintado según la recomendación vigente ese día.
 const ESTIMATE_METRICS: EstimateMetric[] = [
+  { key: "RECC",   label: "Recommendation", gradId: "me_recc", kind: "recommendation",
+    colors: [PATRIA.darkBlue] },
   { key: "NI",     label: "Net Income", gradId: "me_ni",   colors: [PATRIA.darkBlue,  PATRIA.darkSkyBlue] },
   { key: "EBITDA", label: "EBITDA",     gradId: "me_ebd",  colors: [PATRIA.kingBlue,  PATRIA.skyBlue] },
   { key: "FCFE",   label: "FCFE",       gradId: "me_fcfe", colors: [PATRIA.turquoise, PATRIA.lightTurquoise] },
@@ -30,8 +34,13 @@ const C = {
   EST_BG:  "rgba(255,107,6,0.06)",    // años estimados: tinte naranja del manual
   DRV_BG:  "#F5F7FD",                 // filas derivadas: dark-blue al 3%
   CON_BG:  "rgba(255,107,6,0.06)",
-  LIVE_BG: PATRIA.lightTurquoise,     // Regla 3 — destacado sobre fondo claro
+  // Precio de mercado. Antes era lightTurquoise sólido (#B6FFE3): sobre una paleta
+  // azul leía como un bloque de resaltador verdoso. Ahora sigue el idioma del resto
+  // del archivo — tinte suave + acento turquesa que carga la señal — en vez de un
+  // relleno saturado.
+  LIVE_BG:  "rgba(70,232,224,0.16)",
   LIVE_TXT: PATRIA.darkBlue,
+  LIVE_ACC: PATRIA.turquoise,
   BDR:     BORDER.base,
   BLUE:    PATRIA.blue,               // positivo / buy
   ACC:     PATRIA.kingBlue,           // botones y elementos interactivos
@@ -445,6 +454,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
     const cy = new Date().getFullYear();
     const yrs = [cy, cy + 1];
     const rowsByMetric: Record<string, EstimateRow[]> = {
+      RECC:   buildRecommendationRows(snaps),
       NI:     buildEstimateRows(snaps, yrs, (r) => r.netIncome),
       EBITDA: buildEstimateRows(snaps, yrs, (r) => r.ebitda),
       FCFE:   buildEstimateRows(snaps, yrs, (r) => r.fcfe),
@@ -600,7 +610,9 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
     const F_GRAY   = fill("F5F7FD");
     const F_POS    = fill("B6FFE3");   // patria-light-turquoise
     const F_NEG    = fill("FF99AF");   // patria-light-pink
-    const F_LIVE   = fill("B6FFE3");   // celdas de precio de mercado (price_range_52w)
+    // Excel no soporta alpha: E1FBFA es el turquesa al 16% ya compuesto sobre blanco,
+    // el mismo tinte que en pantalla.
+    const F_LIVE   = fill("E1FBFA");   // celdas de precio de mercado (price_range_52w)
 
     const bdr = (rgb = "9CA3AF") => ({
       top:    { style: "thin", color: { rgb } },
@@ -874,7 +886,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
             metrics={ESTIMATE_METRICS}
             rowsByMetric={estimate.rowsByMetric}
             years={estimate.years}
-            defaultMetric="NI"
+            defaultMetric="RECC"
           />
         </div>
       </div>
@@ -901,9 +913,9 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
             padding: "5px 12px", borderRadius: 5,
             background: C.LIVE_BG, color: C.LIVE_TXT,
             fontWeight: 700, fontSize: 11, letterSpacing: "0.02em",
-            border: "1px solid rgba(0,30,175,0.28)",
+            border: `1px solid ${C.LIVE_ACC}`,
           }}>
-            <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.LIVE_TXT, flexShrink: 0 }} />
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.LIVE_ACC, flexShrink: 0 }} />
             Price {fmtSmall(livePrice.value)} @ {fmtDate(livePrice.date)}
           </span>
         )}
@@ -1117,6 +1129,9 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                             ...yearColW, padding: CELL_PAD, textAlign: "center",
                             background: liveCell ? C.LIVE_BG : cellBg,
                             color:      liveCell ? C.LIVE_TXT : color,
+                            // El subrayado turquesa marca "precio de mercado" sin
+                            // necesidad de un relleno fuerte que compita con la tabla.
+                            boxShadow:  liveCell ? `inset 0 -2px 0 ${C.LIVE_ACC}` : undefined,
                             fontWeight: liveCell ? 800 : isDerived ? 400 : 600,
                             fontStyle:  isDerived ? "italic" : "normal",
                             fontSize:   isDerived ? 10.5 : 11,

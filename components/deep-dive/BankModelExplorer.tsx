@@ -37,8 +37,11 @@ const C = {
   TXT:     PATRIA.darkBlue,           // Regla 4
   TXT2:    TEXT.label,
   WHITE:   PATRIA.white,
-  LIVE_BG: PATRIA.lightTurquoise,     // Regla 3 — destacado sobre fondo claro
+  // Mismo criterio que ModelExplorer: tinte + acento turquesa en vez del relleno
+  // lightTurquoise sólido, que sobre la paleta azul leía como resaltador verdoso.
+  LIVE_BG:  "rgba(70,232,224,0.16)",
   LIVE_TXT: PATRIA.darkBlue,
+  LIVE_ACC: PATRIA.turquoise,
 };
 
 // ── Safe math ──────────────────────────────────────────────────────────────────
@@ -581,7 +584,10 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
     const F_GRAY   = fill("F5F7FD");
     const F_POS    = fill("B6FFE3");   // patria-light-turquoise
     const F_NEG    = fill("FF99AF");   // patria-light-pink
-    const F_LIVE   = fill("B6FFE3");   // celdas de precio de mercado (price_range_52w)
+    // Turquesa al 16% ya compuesto sobre blanco (Excel no soporta alpha). Distinto de
+    // F_POS a propósito: antes ambos eran B6FFE3 y una celda de precio vivo se veía
+    // igual que una que le gana al consenso.
+    const F_LIVE   = fill("E1FBFA");   // celdas de precio de mercado (price_range_52w)
 
     const bdr = (rgb = "9CA3AF") => ({
       top:    { style: "thin", color: { rgb } },
@@ -880,9 +886,9 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
             padding: "5px 12px", borderRadius: 5,
             background: C.LIVE_BG, color: C.LIVE_TXT,
             fontWeight: 700, fontSize: 11, letterSpacing: "0.02em",
-            border: "1px solid rgba(0,30,175,0.28)",
+            border: `1px solid ${C.LIVE_ACC}`,
           }}>
-            <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.LIVE_TXT, flexShrink: 0 }} />
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.LIVE_ACC, flexShrink: 0 }} />
             Price {fmtMoney(livePrice.value)} @ {fmtDate(livePrice.date)}
           </span>
         )}
@@ -985,6 +991,7 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
                             ...yearColW, padding: CELL_PAD, textAlign: "center",
                             background: liveCell ? C.LIVE_BG : cellBg,
                             color:      liveCell ? C.LIVE_TXT : color,
+                            boxShadow:  liveCell ? `inset 0 -2px 0 ${C.LIVE_ACC}` : undefined,
                             fontWeight: isDerived ? 400 : 600,
                             fontStyle:  isDerived ? "italic" : "normal",
                             fontSize:   isDerived ? 10.5 : 11,

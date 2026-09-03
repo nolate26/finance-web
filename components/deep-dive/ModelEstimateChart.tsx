@@ -21,9 +21,55 @@ export interface EstimateMetric {
   label:  string;
   colors: string[];   // one color per year slot (index 0 = solid, 1 = dashed…)
   gradId: string;
+  /**
+   * "years" (default): una serie por año proyectado, la forma clásica del panel.
+   * "recommendation": una sola serie con el target price a lo largo de las
+   * revisiones, y cada punto pintado según la recomendación vigente ese día.
+   */
+  kind?:  "years" | "recommendation";
 }
 
 export type EstimateRow = { date: string } & Record<string, number | string | null>;
+
+/**
+ * Colores de recomendación. El manual PATRIA no incluye verde ni rojo, así que se
+ * usa la misma dupla que el resto de la plataforma (ver ReccBadge): azul profundo
+ * para comprar, rosado corporativo para vender, y el gris-azulado semántico para
+ * el neutral.
+ */
+export const RECC_COLORS = {
+  buy:     PATRIA.blue,
+  sell:    PATRIA.pink,
+  hold:    "rgba(13,13,56,0.45)",
+} as const;
+
+export type ReccKind = keyof typeof RECC_COLORS;
+
+/** Clasifica el texto libre del analista. Mismo criterio que ReccBadge. */
+export function reccKind(recc: string | null | undefined): ReccKind {
+  const u = (recc ?? "").toUpperCase();
+  if (u.includes("BUY")  || u === "OW") return "buy";
+  if (u.includes("SELL") || u === "UW") return "sell";
+  return "hold";
+}
+
+/**
+ * Serie de target price por revisión, con la recomendación de cada fecha.
+ * A diferencia de buildEstimateRows esto NO pivotea por año: el TP es un único
+ * valor por snapshot, y lo que aporta información es cómo se movió y con qué
+ * recomendación lo acompañó el analista.
+ */
+export function buildRecommendationRows(
+  snapshots: { header: { updateDate: string; tp: number | null; recc: string | null } }[],
+): EstimateRow[] {
+  return [...snapshots]
+    .sort((a, b) => a.header.updateDate.localeCompare(b.header.updateDate))
+    .map((s) => ({
+      date: s.header.updateDate,
+      tp:   s.header.tp ?? null,
+      recc: s.header.recc ?? null,
+    }));
+}
 
 /**
  * Pivots the analyst's historical model snapshots into one row per snapshot
@@ -169,6 +215,94 @@ function EvoLegend({ cfg, years }: { cfg: EstimateMetric; years: string[] }) {
   );
 }
 
+// ── Recommendation: tooltip, leyenda y punto coloreado ───────────────────────
+const RECC_LABEL: Record<ReccKind, string> = { buy: "Buy", hold: "Hold", sell: "Sell" };
+
+function ReccTooltip({
+  active, payload, label,
+}: {
+  active?:  boolean;
+  payload?: { payload?: EstimateRow }[];
+  label?:   string;
+}) {
+  if (!active || !payload?.length) return null;
+  const row = payload[0]?.payload;
+  if (!row) return null;
+
+  const tp   = typeof row.tp === "number" ? row.tp : null;
+  const recc = typeof row.recc === "string" ? row.recc : null;
+  const kind = reccKind(recc);
+
+  return (
+    <div style={{
+      background: "#fff",
+      border: "1px solid rgba(13,13,56,0.10)",
+      borderRadius: 6,
+      padding: "8px 13px",
+      fontSize: 11,
+      fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
+      boxShadow: "0 4px 16px rgba(13,13,56,0.12)",
+      minWidth: 160,
+    }}>
+      <div style={{
+        color: "rgba(13,13,56,0.45)", fontSize: 10,
+        marginBottom: 6, paddingBottom: 5,
+        borderBottom: "1px solid rgba(13,13,56,0.06)",
+      }}>
+        {label ? fmtFullDate(label) : ""}
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 20, marginBottom: 4 }}>
+        <span style={{ color: "rgba(13,13,56,0.62)" }}>Target price</span>
+        <span style={{ color: PATRIA.darkBlue, fontWeight: 700 }}>
+          {tp != null ? fmtCompact(tp) : "—"}
+        </span>
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 20, alignItems: "center" }}>
+        <span style={{ color: "rgba(13,13,56,0.62)" }}>Recommendation</span>
+        <span style={{
+          color: RECC_COLORS[kind], fontWeight: 800, letterSpacing: "0.05em",
+          fontSize: 10.5, textTransform: "uppercase",
+        }}>
+          {recc ?? "—"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function ReccLegend() {
+  return (
+    <div style={{
+      display: "flex", gap: 14, justifyContent: "flex-end",
+      fontSize: 10, color: "rgba(13,13,56,0.45)",
+      fontFamily: FONT_SECONDARY,
+      marginBottom: 6,
+    }}>
+      {(Object.keys(RECC_COLORS) as ReccKind[]).map((k) => (
+        <span key={k} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <span style={{
+            display: "inline-block", width: 8, height: 8, borderRadius: "50%",
+            background: RECC_COLORS[k],
+          }} />
+          {RECC_LABEL[k]}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** Punto del TP pintado según la recomendación de esa revisión. */
+function ReccDot(props: { cx?: number; cy?: number; payload?: EstimateRow; r?: number }) {
+  const { cx, cy, payload, r = 4 } = props;
+  if (cx == null || cy == null || payload?.tp == null) return null;
+  const color = RECC_COLORS[reccKind(typeof payload.recc === "string" ? payload.recc : null)];
+  return (
+    <circle cx={cx} cy={cy} r={r} fill={color} stroke="#fff" strokeWidth={1.5} />
+  );
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 interface Props {
   metrics:        EstimateMetric[];
@@ -188,7 +322,10 @@ export default function ModelEstimateChart({
   );
 
   const chartData = rowsByMetric[cfg?.key ?? ""] ?? [];
-  const hasData = chartData.some((row) => years.some((y) => row[y] != null));
+  const isRecc  = cfg?.kind === "recommendation";
+  const hasData = isRecc
+    ? chartData.some((row) => row.tp != null)
+    : chartData.some((row) => years.some((y) => row[y] != null));
 
   if (!cfg) return null;
 
@@ -236,12 +373,14 @@ export default function ModelEstimateChart({
       </PatriaTitle>
 
       {/* ── Legend ──────────────────────────────────────────────────────────── */}
-      {years.length > 0 && <EvoLegend cfg={cfg} years={years} />}
+      {isRecc
+        ? <ReccLegend />
+        : years.length > 0 && <EvoLegend cfg={cfg} years={years} />}
 
       {/* ── Chart ───────────────────────────────────────────────────────────── */}
       {!hasData ? (
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(13,13,56,0.28)", fontSize: 12 }}>
-          No {cfg.label} estimate history
+          {isRecc ? "No recommendation history" : `No ${cfg.label} estimate history`}
         </div>
       ) : (
         <div style={{ flex: 1, minHeight: 130 }}>
@@ -276,13 +415,27 @@ export default function ModelEstimateChart({
               />
 
               <Tooltip
-                content={<EvoTooltip cfg={cfg} years={years} />}
+                content={isRecc ? <ReccTooltip /> : <EvoTooltip cfg={cfg} years={years} />}
                 cursor={{ stroke: "rgba(13,13,56,0.08)", strokeWidth: 1 }}
               />
 
               <Legend content={() => null} />
 
-              {years.map((year, i) => {
+              {/* Recommendation: una sola línea de TP; el color lo aporta cada punto. */}
+              {isRecc && (
+                <Line
+                  type="monotone"
+                  dataKey="tp"
+                  stroke="rgba(13,13,56,0.28)"
+                  strokeWidth={1.5}
+                  dot={<ReccDot />}
+                  activeDot={<ReccDot r={6} />}
+                  isAnimationActive={false}
+                  connectNulls
+                />
+              )}
+
+              {!isRecc && years.map((year, i) => {
                 const color = cfg.colors[i] ?? cfg.colors[cfg.colors.length - 1];
                 const dash  = DASH_STYLES[i] ?? DASH_STYLES[DASH_STYLES.length - 1];
                 const hasValues = chartData.some((r) => r[year] != null);
