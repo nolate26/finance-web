@@ -291,6 +291,16 @@ function CompaniesPageContent() {
         {/* ── Main content ──────────────────────────────────────────────────── */}
         <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", display: "flex", flexDirection: "column", gap: 0 }}>
 
+          {/* Alerta de admin, arriba de todo: tickers con modelos o consensus cargados que
+              no existen en la maestra y por eso no salen en el sidebar. Va acá y no dentro
+              del tab de modelos porque ahí quedaba a cuatro clicks (elegir compañía → tab →
+              scrollear al pie → desplegar) y en la práctica no se veía. */}
+          {isAdmin && (
+            <div style={{ marginBottom: 16 }}>
+              <UnmappedTickersAlert />
+            </div>
+          )}
+
           {/* No selection */}
           {!selectedItem && !diveLoading && <EmptyState />}
 
@@ -541,9 +551,6 @@ function CompaniesPageContent() {
                     />
                   )}
 
-                  {/* Alerta de admin al pie: tickers con modelos o consensus cargados
-                      que no existen en la maestra y por eso no salen en el sidebar. */}
-                  {isAdmin && <UnmappedTickersAlert />}
                 </>
               )}
 

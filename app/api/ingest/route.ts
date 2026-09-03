@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { normalizeTicker } from '@/lib/issuer';
 import { normBBG } from '@/lib/bbg';
 // ❌ ELIMINADO: import { table } from 'console'; (Esto rompe la API en producción)
 
@@ -133,8 +134,20 @@ export async function POST(request: Request) {
           );
         }
 
+        // El ticker se canoniza acá (trim + espacios colapsados + MAYÚSCULA). Es la misma
+        // forma que usa empresas_industrias_v2, y es lo que permite que el deep-dive lo
+        // encuentre: si entra "BCI CI Equity" queda huérfano de la maestra y el modelo se
+        // vuelve inalcanzable desde la UI aunque los datos estén bien cargados.
+        const bankTicker = normalizeTicker(bHeader.ticker);
+        if (!bankTicker) {
+          return NextResponse.json(
+            { error: 'Payload inválido: el header del modelo de banco no trae ticker' },
+            { status: 400 }
+          );
+        }
+
         const bankDate = new Date(bHeader.updateDate);
-        const bankKey = { ticker: bHeader.ticker, updateDate: bankDate };
+        const bankKey = { ticker: bankTicker, updateDate: bankDate };
 
         const bankFinRows = normalizeRows(
           bFinancials.map((f: any) => ({ ...bankKey, ...f }))
@@ -196,7 +209,7 @@ export async function POST(request: Request) {
 
         return NextResponse.json({
           success: true,
-          message: `Snapshot de banco ${bHeader.ticker} guardado: ${bankFinRows.length} años + ${bankKpiRows.length} KPIs.`
+          message: `Snapshot de banco ${bankTicker} guardado: ${bankFinRows.length} años + ${bankKpiRows.length} KPIs.`
         });
       }
 
@@ -310,8 +323,17 @@ export async function POST(request: Request) {
           );
         }
 
+        // Mismo criterio que BankModel: ticker canónico en MAYÚSCULA.
+        const modelTicker = normalizeTicker(header.ticker);
+        if (!modelTicker) {
+          return NextResponse.json(
+            { error: 'Payload inválido: el header del modelo no trae ticker' },
+            { status: 400 }
+          );
+        }
+
         const modelDate = new Date(header.updateDate);
-        const modelKey = { ticker: header.ticker, updateDate: modelDate };
+        const modelKey = { ticker: modelTicker, updateDate: modelDate };
 
         const modelFinRows = normalizeRows(
           financials.map((f: any) => ({ ...modelKey, ...f }))
@@ -374,7 +396,7 @@ export async function POST(request: Request) {
 
         return NextResponse.json({
           success: true,
-          message: `Snapshot de ${header.ticker} guardado: ${modelFinRows.length} años + ${modelKpiRows.length} KPIs.`
+          message: `Snapshot de ${modelTicker} guardado: ${modelFinRows.length} años + ${modelKpiRows.length} KPIs.`
         });
       }
       // 👆 HASTA AQUÍ 👆

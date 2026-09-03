@@ -1,11 +1,37 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, ChevronDown, ChevronRight, Loader2, Trash2 } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, Link2, Loader2, Plus, Trash2 } from "lucide-react";
 import { FONT_SECONDARY, PATRIA, TEXT, BORDER, SURFACE } from "@/lib/patriaTheme";
 import type { UnmappedTicker, UnmappedDetail, UnmappedHeader } from "@/app/api/companies/unmapped/route";
 
-const COL = "190px 150px minmax(150px,1fr) 34px";
+const COL = "190px 150px minmax(150px,1fr) 100px";
+
+// País y moneda que corresponden al sufijo de plaza del ticker Bloomberg. Sólo se usa
+// para pre-cargar el formulario de alta — el admin puede cambiarlo. "US" no está: los
+// ADR listados en Nueva York son de países distintos (BR, MX, CL, AR…) y adivinar ahí
+// mete el riesgo país equivocado, así que se deja en blanco a propósito.
+const PLAZA: Record<string, { country: string; moneda: string }> = {
+  AR: { country: "AR", moneda: "ARS" },
+  BZ: { country: "BR", moneda: "BRL" },
+  CB: { country: "CO", moneda: "COP" },
+  CI: { country: "CL", moneda: "CLP" },
+  MM: { country: "MX", moneda: "MXN" },
+  PE: { country: "PE", moneda: "PEN" },
+};
+
+/** "AMXL MM EQUITY" → { country: "MX", moneda: "MXN" }. Sufijo desconocido → vacíos. */
+function plazaDefaults(ticker: string): { country: string; moneda: string } {
+  const suf = ticker.split(" ")[1] ?? "";
+  return PLAZA[suf] ?? { country: "", moneda: "" };
+}
+
+const inputStyle: React.CSSProperties = {
+  fontSize: 11, fontFamily: FONT_SECONDARY, fontWeight: 600,
+  padding: "4px 9px", borderRadius: 5,
+  border: `1px solid ${BORDER.subtle}`, background: SURFACE.card,
+  color: PATRIA.darkBlue, outline: "none",
+};
 
 // ── Detalle de un ticker ──────────────────────────────────────────────────────
 
@@ -127,11 +153,24 @@ export default function UnmappedTickersAlert() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [err,      setErr]      = useState<string | null>(null);
+  // Re-match: ticker con el formulario abierto + destino tipeado.
+  const [reassign, setReassign] = useState<string | null>(null);
+  const [target,   setTarget]   = useState("");
+  const [saving,   setSaving]   = useState<string | null>(null);
+  // Alta de ficha en la maestra.
+  const [creating, setCreating] = useState<string | null>(null);
+  const [form,     setForm]     = useState({ nombre: "", countryRisk: "", moneda: "", industriaGics: "" });
+  const [gicsOptions,    setGicsOptions]    = useState<string[]>([]);
+  const [countryOptions, setCountryOptions] = useState<string[]>([]);
 
   function load() {
     fetch("/api/companies/unmapped")
       .then((r) => (r.ok ? r.json() : { tickers: [] }))
-      .then((d: { tickers?: UnmappedTicker[] }) => setTickers(d.tickers ?? []))
+      .then((d: { tickers?: UnmappedTicker[]; gicsOptions?: string[]; countryOptions?: string[] }) => {
+        setTickers(d.tickers ?? []);
+        setGicsOptions(d.gicsOptions ?? []);
+        setCountryOptions(d.countryOptions ?? []);
+      })
       .catch(() => setTickers([]));
   }
 
@@ -168,6 +207,60 @@ export default function UnmappedTickersAlert() {
       setErr(`${t.ticker}: ${(e as Error).message}`);
     } finally {
       setDeleting(null);
+    }
+  }
+
+  /** Mueve los datos del ticker huérfano al ticker de la maestra que elija el admin. */
+  async function doReassign(t: UnmappedTicker) {
+    const dest = target.trim().toUpperCase().replace(/\s+/g, " ");
+    if (!dest) return;
+
+    const ok = window.confirm(
+      `Vas a mover TODOS los datos de ${t.ticker} a ${dest}:\n\n` +
+      `  · ${t.modelRows} modelo(s) de analista (con sus financials y KPIs)\n` +
+      `  · ${t.bankRows} modelo(s) de banco (con sus financials y KPIs)\n` +
+      `  · ${t.consensusRows.toLocaleString("en-US")} filas de consensus\n\n` +
+      `${t.ticker} deja de existir y todo queda bajo ${dest}. ¿Continuar?`
+    );
+    if (!ok) return;
+
+    setSaving(t.ticker); setErr(null);
+    try {
+      const res = await fetch(
+        `/api/companies/unmapped?ticker=${encodeURIComponent(t.ticker)}&target=${encodeURIComponent(dest)}`,
+        { method: "PATCH" }
+      );
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "No se pudo re-matchear.");
+      setReassign(null); setTarget(""); setExpanded(null);
+      load();
+    } catch (e) {
+      setErr(`${t.ticker}: ${(e as Error).message}`);
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  /** Crea la ficha del ticker en la maestra: deja de ser huérfano sin mover ni borrar nada. */
+  async function doCreate(t: UnmappedTicker) {
+    setSaving(t.ticker); setErr(null);
+    try {
+      const res = await fetch(
+        `/api/companies/unmapped?ticker=${encodeURIComponent(t.ticker)}`,
+        {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify(form),
+        }
+      );
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "No se pudo crear la ficha.");
+      setCreating(null); setExpanded(null);
+      load();
+    } catch (e) {
+      setErr(`${t.ticker}: ${(e as Error).message}`);
+    } finally {
+      setSaving(null);
     }
   }
 
@@ -255,8 +348,19 @@ export default function UnmappedTickersAlert() {
                     {payloadLabel(t)}
                   </div>
 
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                    {t.suggestions.length === 0 ? (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
+                    {t.caseMatch ? (
+                      <span
+                        title={`La maestra lo tiene como "${t.caseMatch.ticker}" (${t.caseMatch.nombre}). Solo difiere en mayúsculas: hay que normalizar el ticker, no borrarlo.`}
+                        style={{
+                          fontSize: 10, fontFamily: FONT_SECONDARY, color: PATRIA.kingBlue,
+                          background: "rgba(32,68,220,0.06)", border: "1px solid rgba(32,68,220,0.20)",
+                          borderRadius: 4, padding: "1px 6px", whiteSpace: "nowrap",
+                        }}
+                      >
+                        {t.caseMatch.ticker} · solo difiere en casing
+                      </span>
+                    ) : t.suggestions.length === 0 ? (
                       <span style={{ fontSize: 10.5, color: TEXT.disabled }}>Sin candidato — falta en la maestra</span>
                     ) : t.suggestions.map((s) => (
                       <span
@@ -273,22 +377,261 @@ export default function UnmappedTickersAlert() {
                     ))}
                   </div>
 
+                  <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                   <button
-                    onClick={(e) => { e.stopPropagation(); remove(t); }}
-                    disabled={busy}
-                    title={`Borrar todos los datos de ${t.ticker}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const opening = creating !== t.ticker;
+                      setCreating(opening ? t.ticker : null);
+                      setReassign(null);
+                      setErr(null);
+                      if (opening) {
+                        const p = plazaDefaults(t.ticker);
+                        setForm({
+                          nombre: t.ticker.split(" ")[0],
+                          countryRisk: p.country,
+                          moneda: p.moneda,
+                          industriaGics: "",
+                        });
+                      }
+                    }}
+                    disabled={busy || saving === t.ticker || t.caseMatch !== null}
+                    title={t.caseMatch
+                      ? `No hace falta: la maestra ya tiene "${t.caseMatch.ticker}".`
+                      : `Crear la ficha de ${t.ticker} en empresas_industrias_v2`}
                     style={{
                       display: "inline-flex", alignItems: "center", justifyContent: "center",
                       width: 26, height: 26, borderRadius: 7,
-                      background: "rgba(248,72,94,0.06)", border: "1px solid rgba(248,72,94,0.22)",
-                      color: PATRIA.pink, cursor: busy ? "not-allowed" : "pointer",
+                      background: creating === t.ticker ? "rgba(21,128,61,0.16)" : "rgba(21,128,61,0.07)",
+                      border: `1px solid ${t.caseMatch ? BORDER.subtle : "rgba(21,128,61,0.28)"}`,
+                      color: t.caseMatch ? TEXT.disabled : "#15803D",
+                      cursor: busy || t.caseMatch ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    <Plus size={13} />
+                  </button>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const opening = reassign !== t.ticker;
+                      setReassign(opening ? t.ticker : null);
+                      setCreating(null);
+                      // Pre-cargamos el primer candidato: en el caso típico (typo de
+                      // la planilla) es el correcto y queda a un solo click.
+                      setTarget(opening ? (t.suggestions[0]?.ticker ?? "") : "");
+                      setErr(null);
+                    }}
+                    disabled={busy || saving === t.ticker || t.caseMatch !== null}
+                    title={t.caseMatch
+                      ? `No hace falta: la maestra ya tiene "${t.caseMatch.ticker}" y este ticker solo difiere en mayúsculas.`
+                      : `Re-matchear ${t.ticker} contra un ticker de la maestra`}
+                    style={{
+                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      width: 26, height: 26, borderRadius: 7,
+                      background: reassign === t.ticker ? "rgba(32,68,220,0.12)" : "rgba(32,68,220,0.06)",
+                      border: `1px solid ${t.caseMatch ? BORDER.subtle : "rgba(32,68,220,0.22)"}`,
+                      color: t.caseMatch ? TEXT.disabled : PATRIA.kingBlue,
+                      cursor: busy || t.caseMatch ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {saving === t.ticker
+                      ? <Loader2 size={12} style={{ animation: "spin 0.8s linear infinite" }} />
+                      : <Link2   size={12} />}
+                  </button>
+
+                  <button
+                    onClick={(e) => { e.stopPropagation(); remove(t); }}
+                    disabled={busy || t.caseMatch !== null}
+                    title={t.caseMatch
+                      ? `No se borra: la maestra ya tiene "${t.caseMatch.ticker}" y este ticker solo difiere en mayúsculas. Es un modelo válido mal escrito — hay que normalizarlo.`
+                      : `Borrar todos los datos de ${t.ticker}`}
+                    style={{
+                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      width: 26, height: 26, borderRadius: 7,
+                      background: t.caseMatch ? "transparent" : "rgba(248,72,94,0.06)",
+                      border: `1px solid ${t.caseMatch ? BORDER.subtle : "rgba(248,72,94,0.22)"}`,
+                      color: t.caseMatch ? TEXT.disabled : PATRIA.pink,
+                      cursor: busy || t.caseMatch ? "not-allowed" : "pointer",
                     }}
                   >
                     {busy
                       ? <Loader2 size={12} style={{ animation: "spin 0.8s linear infinite" }} />
                       : <Trash2  size={12} />}
                   </button>
+                  </div>
                 </div>
+
+                {/* Panel de alta: crear la ficha en la maestra. Para empresas reales que
+                    nunca se cargaron (cobertura de consensus sin ficha, típico AMXL). */}
+                {creating === t.ticker && (
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8,
+                      padding: "10px 16px", background: "rgba(21,128,61,0.05)",
+                      borderBottom: `1px solid ${BORDER.subtle}`,
+                    }}
+                  >
+                    <span style={{ fontSize: 10.5, color: TEXT.label }}>
+                      Crear ficha para <strong>{t.ticker}</strong>:
+                    </span>
+
+                    <input
+                      value={form.nombre}
+                      onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+                      placeholder="Nombre"
+                      spellCheck={false}
+                      style={{ ...inputStyle, minWidth: 150 }}
+                    />
+
+                    <input
+                      list="unmapped-countries"
+                      value={form.countryRisk}
+                      onChange={(e) => setForm({ ...form, countryRisk: e.target.value.toUpperCase() })}
+                      placeholder="País"
+                      maxLength={2}
+                      spellCheck={false}
+                      style={{ ...inputStyle, width: 62, textTransform: "uppercase" }}
+                    />
+                    <datalist id="unmapped-countries">
+                      {countryOptions.map((c) => <option key={c} value={c} />)}
+                    </datalist>
+
+                    <input
+                      value={form.moneda}
+                      onChange={(e) => setForm({ ...form, moneda: e.target.value.toUpperCase() })}
+                      placeholder="CCY"
+                      maxLength={3}
+                      spellCheck={false}
+                      style={{ ...inputStyle, width: 66, textTransform: "uppercase" }}
+                    />
+
+                    <input
+                      list="unmapped-gics"
+                      value={form.industriaGics}
+                      onChange={(e) => setForm({ ...form, industriaGics: e.target.value })}
+                      placeholder="Industria GICS"
+                      spellCheck={false}
+                      style={{ ...inputStyle, minWidth: 200 }}
+                    />
+                    <datalist id="unmapped-gics">
+                      {gicsOptions.map((g) => <option key={g} value={g} />)}
+                    </datalist>
+
+                    <button
+                      onClick={() => doCreate(t)}
+                      disabled={
+                        saving === t.ticker ||
+                        !form.nombre.trim() || !form.industriaGics.trim() ||
+                        form.countryRisk.length !== 2 || form.moneda.length !== 3
+                      }
+                      style={{
+                        fontSize: 10.5, fontWeight: 700, padding: "4px 12px", borderRadius: 5,
+                        background: "#15803D", border: "none", color: PATRIA.white,
+                        cursor: saving === t.ticker ? "not-allowed" : "pointer",
+                        opacity: (!form.nombre.trim() || !form.industriaGics.trim() ||
+                                  form.countryRisk.length !== 2 || form.moneda.length !== 3) ? 0.45 : 1,
+                      }}
+                    >
+                      {saving === t.ticker ? "Creando…" : "Crear ficha"}
+                    </button>
+
+                    <button
+                      onClick={() => setCreating(null)}
+                      style={{
+                        fontSize: 10.5, padding: "4px 10px", borderRadius: 5,
+                        background: "transparent", border: `1px solid ${BORDER.subtle}`,
+                        color: TEXT.label, cursor: "pointer",
+                      }}
+                    >
+                      Cancelar
+                    </button>
+
+                    <span style={{ fontSize: 10, color: TEXT.muted, flexBasis: "100%" }}>
+                      País y moneda vienen pre-cargados desde el sufijo de plaza del ticker.
+                      ISIN, nombre_chile e industria_chile quedan vacíos — se completan después
+                      desde el panel de homologación.
+                    </span>
+                  </div>
+                )}
+
+                {/* Panel de re-match: elegir a qué ticker de la maestra mover los datos. */}
+                {reassign === t.ticker && (
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8,
+                      padding: "10px 16px", background: "rgba(32,68,220,0.04)",
+                      borderBottom: `1px solid ${BORDER.subtle}`,
+                    }}
+                  >
+                    <span style={{ fontSize: 10.5, color: TEXT.label }}>
+                      Mover los datos de <strong>{t.ticker}</strong> a:
+                    </span>
+
+                    <input
+                      value={target}
+                      onChange={(e) => setTarget(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") doReassign(t); }}
+                      placeholder="TICKER BLOOMBERG"
+                      spellCheck={false}
+                      style={{
+                        fontSize: 11, fontFamily: FONT_SECONDARY, fontWeight: 700,
+                        padding: "4px 9px", borderRadius: 5, minWidth: 190,
+                        border: `1px solid ${BORDER.subtle}`, background: SURFACE.card,
+                        color: PATRIA.darkBlue, outline: "none", textTransform: "uppercase",
+                      }}
+                    />
+
+                    {t.suggestions.map((s) => (
+                      <button
+                        key={s.ticker}
+                        onClick={() => setTarget(s.ticker)}
+                        title={s.nombre}
+                        style={{
+                          fontSize: 10, fontFamily: FONT_SECONDARY, cursor: "pointer",
+                          color: target === s.ticker ? PATRIA.white : PATRIA.kingBlue,
+                          background: target === s.ticker ? PATRIA.kingBlue : "rgba(32,68,220,0.06)",
+                          border: "1px solid rgba(32,68,220,0.20)",
+                          borderRadius: 4, padding: "3px 8px", whiteSpace: "nowrap",
+                        }}
+                      >
+                        {s.ticker}
+                      </button>
+                    ))}
+
+                    <button
+                      onClick={() => doReassign(t)}
+                      disabled={!target.trim() || saving === t.ticker}
+                      style={{
+                        fontSize: 10.5, fontWeight: 700, padding: "4px 12px", borderRadius: 5,
+                        background: target.trim() ? PATRIA.kingBlue : "rgba(32,68,220,0.25)",
+                        border: "none", color: PATRIA.white,
+                        cursor: target.trim() && saving !== t.ticker ? "pointer" : "not-allowed",
+                      }}
+                    >
+                      {saving === t.ticker ? "Moviendo…" : "Re-matchear"}
+                    </button>
+
+                    <button
+                      onClick={() => { setReassign(null); setTarget(""); }}
+                      style={{
+                        fontSize: 10.5, padding: "4px 10px", borderRadius: 5,
+                        background: "transparent", border: `1px solid ${BORDER.subtle}`,
+                        color: TEXT.label, cursor: "pointer",
+                      }}
+                    >
+                      Cancelar
+                    </button>
+
+                    <span style={{ fontSize: 10, color: TEXT.muted, flexBasis: "100%" }}>
+                      El destino tiene que existir en empresas_industrias_v2. Financials y KPIs
+                      viajan con el header; si el destino ya tiene un snapshot de la misma fecha,
+                      la operación se rechaza sin tocar nada.
+                    </span>
+                  </div>
+                )}
 
                 {isOpen && <TickerDetail ticker={t.ticker} />}
               </div>
