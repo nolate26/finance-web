@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { Suspense, useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { RefreshCw, Download } from "lucide-react";
 import { downloadExcel } from "@/lib/exportExcel";
 import LatamTable, { type LatamCompany } from "@/components/latam/LatamTable";
@@ -8,15 +9,24 @@ import TopPicksForm from "@/components/top-picks/TopPicksForm";
 import FlatAttributionPanel from "@/components/attribution/FlatAttributionPanel";
 import SectorAttributionPanel from "@/components/attribution/SectorAttributionPanel";
 import MatrixAttributionPanel from "@/components/attribution/MatrixAttributionPanel";
-import EarningsDashboard from "@/components/earnings/EarningsDashboard";
-import ConsensusCheckTable from "@/components/latam/ConsensusCheckTable";
+import QuantAnalysisPanel from "@/components/quant/QuantAnalysisPanel";
 import BetaExposurePanel from "@/components/latam/BetaExposurePanel";
+import PlanningPanel from "@/components/planning/PlanningPanel";
 import { FONT_SECONDARY } from "@/lib/patriaTheme";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type ActiveTab = "stock-selection" | "top-picks" | "attribution" | "earnings" | "consensus-check" | "beta-exposure";
+type ActiveTab = "top-picks" | "beta-exposure" | "attribution" | "quant-analysis" | "stock-selection" | "planning";
 type FundFilter = "all" | "MLE" | "MSC" | "others";
+
+const TABS: { key: ActiveTab; label: string }[] = [
+  { key: "planning",        label: "Planning"          },
+  { key: "top-picks",       label: "Top Picks"         },
+  { key: "beta-exposure",   label: "Beta Exposure"     },
+  { key: "attribution",     label: "Perf. Attribution" },
+  { key: "quant-analysis",  label: "Quant Analysis"    },
+  { key: "stock-selection", label: "Stock Selection"   },
+];
 
 interface SortOption {
   value:  string;
@@ -115,8 +125,16 @@ function AttributionSection() {
   );
 }
 
-export default function LatAmPage() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>("consensus-check");
+function LatAmContent() {
+  const searchParams = useSearchParams();
+  // Arranca en la primera pestaña del array (Planning).
+  const [activeTab, setActiveTab] = useState<ActiveTab>(TABS[0].key);
+
+  // Honor ?tab=quant-analysis (e.g. coming from the company scorecard cards)
+  useEffect(() => {
+    const t = searchParams.get("tab");
+    if (t && TABS.some((x) => x.key === t)) setActiveTab(t as ActiveTab);
+  }, [searchParams]);
 
   // data
   const [allCompanies, setAllCompanies] = useState<LatamCompany[]>([]);
@@ -291,16 +309,7 @@ export default function LatAmPage() {
           width:      "fit-content",
         }}
       >
-        {(
-          [
-            { key: "consensus-check",  label: "Moneda Estimates"   },
-            { key: "earnings",         label: "Earnings Surprises" },
-            { key: "attribution",      label: "Perf. Attribution"  },
-            { key: "beta-exposure",    label: "Beta Exposure"      },
-            { key: "top-picks",        label: "Top Picks"          },
-            { key: "stock-selection",  label: "Stock Selection"    },
-          ] as { key: ActiveTab; label: string }[]
-        ).map(({ key, label }) => (
+        {TABS.map(({ key, label }) => (
           <button
             key={key}
             onClick={() => setActiveTab(key)}
@@ -509,19 +518,19 @@ export default function LatAmPage() {
         </div>
       )}
 
-      {/* ── Earnings Surprises ───────────────────────────────────────────────── */}
-      {activeTab === "earnings" && <EarningsDashboard />}
+      {/* ── Quant Analysis ───────────────────────────────────────────────────── */}
+      {activeTab === "quant-analysis" && <QuantAnalysisPanel />}
 
-      {/* ── Estimates vs Consensus ───────────────────────────────────────────── */}
-      {activeTab === "consensus-check" && (
-        <div>
-          <p style={{ fontSize: 12, color: "rgba(13,13,56,0.62)", marginBottom: 14, fontFamily: FONT_SECONDARY }}>
-            Moneda analyst estimates vs Bloomberg consensus — latest model snapshot per company.
-            Click a row to open the full model.
-          </p>
-          <ConsensusCheckTable />
-        </div>
-      )}
+      {/* ── Planning (calendario macro + grilla de analistas) ────────────────── */}
+      {activeTab === "planning" && <PlanningPanel />}
     </div>
+  );
+}
+
+export default function LatAmPage() {
+  return (
+    <Suspense>
+      <LatAmContent />
+    </Suspense>
   );
 }

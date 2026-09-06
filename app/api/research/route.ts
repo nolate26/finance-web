@@ -15,6 +15,7 @@ interface RawRow {
   html:           string;
   targetPrice:    number | null;
   recommendation: string | null;
+  dismissed:      boolean;
 }
 
 export async function GET(request: NextRequest) {
@@ -28,17 +29,24 @@ export async function GET(request: NextRequest) {
 
     // `company` está normalizado en la base y `ticker` viene de normalizeTicker(),
     // así que se comparan con igualdad directa y el índice (company, date) sirve.
+    //
+    // Las notas con dismiss (dismissed_at) son generales: el admin decidió que no
+    // cuelgan de ninguna compañía, así que se excluyen del listado por ticker. En el
+    // feed completo sí aparecen, marcadas con `dismissed` para que la UI las etiquete
+    // y el admin pueda revertirlo.
     const records = ticker
       ? await prisma.$queryRaw<RawRow[]>`
           SELECT id, company, date, category, title, subject, "from",
-                 html, target_price AS "targetPrice", recommendation
+                 html, target_price AS "targetPrice", recommendation,
+                 dismissed_at IS NOT NULL AS "dismissed"
           FROM email_research
-          WHERE company = ${ticker}
+          WHERE company = ${ticker} AND dismissed_at IS NULL
           ORDER BY date DESC, id DESC
         `
       : await prisma.$queryRaw<RawRow[]>`
           SELECT id, company, date, category, title, subject, "from",
-                 html, target_price AS "targetPrice", recommendation
+                 html, target_price AS "targetPrice", recommendation,
+                 dismissed_at IS NOT NULL AS "dismissed"
           FROM email_research
           ORDER BY date DESC, id DESC
         `;

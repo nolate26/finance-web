@@ -454,9 +454,9 @@ export default function ScorecardGrid({ deepDive, latestPrice: _latestPrice, onV
 
       {/* ── 3-Card Grid ───────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 w-full items-stretch">
-        <ValueCard   data={qData} onClick={() => router.push("/quant-analysis?view=model")} />
-        <QualityCard data={qData} onClick={() => router.push("/quant-analysis?view=model")} />
-        <PricingMomentumCard data={mData} onClick={() => router.push("/quant-analysis?view=momentum")} />
+        <ValueCard   data={qData} onClick={() => router.push("/latam?tab=quant-analysis&view=model")} />
+        <QualityCard data={qData} onClick={() => router.push("/latam?tab=quant-analysis&view=model")} />
+        <PricingMomentumCard data={mData} onClick={() => router.push("/latam?tab=quant-analysis&view=momentum")} />
       </div>
 
       {/* ── CTA ───────────────────────────────────────────────────────────────── */}

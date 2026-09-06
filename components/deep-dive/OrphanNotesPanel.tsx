@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { AlertTriangle, Check, ChevronDown, Loader2, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, Loader2, Search, Trash2, Unlink } from "lucide-react";
 import { FONT_SECONDARY, PATRIA, TEXT, BORDER, SURFACE } from "@/lib/patriaTheme";
 import type { OrphanNote } from "@/app/api/research/orphans/route";
 import type { ResearchTicker } from "@/app/api/research/tickers/route";
@@ -146,6 +146,26 @@ function OrphanRow({
     }
   }
 
+  // Dismiss: la nota no corresponde a ninguna compañía (un sector, un macro, un
+  // "LATAM") y se acepta como nota general. Sale de la bandeja pero no se borra:
+  // sigue en el feed /research y desde ahí se puede volver a vincular.
+  async function dismiss() {
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch(`/api/research/${note.id}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ dismissed: true }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "No se pudo dejar como general.");
+      onResolved();
+    } catch (e) {
+      setErr((e as Error).message);
+      setBusy(false);
+    }
+  }
+
   async function remove() {
     if (!window.confirm("¿Eliminar esta nota? Esta acción no se puede deshacer.")) return;
     setBusy(true); setErr(null);
@@ -165,7 +185,7 @@ function OrphanRow({
   return (
     <div style={{
       display: "grid",
-      gridTemplateColumns: "78px minmax(140px,1.4fr) 130px 190px 96px",
+      gridTemplateColumns: "78px minmax(140px,1.4fr) 130px 180px 200px",
       gap: "0 12px", alignItems: "center",
       padding: "9px 16px", borderBottom: `1px solid ${BORDER.subtle}`,
     }}>
@@ -234,6 +254,20 @@ function OrphanRow({
           Asignar
         </button>
         <button
+          onClick={dismiss}
+          disabled={busy}
+          title="Dejarla como nota general: no cuelga de ninguna compañía y sale de esta bandeja (reversible desde el feed)"
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 4,
+            padding: "5px 9px", borderRadius: 7,
+            background: SURFACE.card, border: `1px solid ${BORDER.strong}`,
+            color: TEXT.muted, fontSize: 11, fontWeight: 600,
+            cursor: busy ? "not-allowed" : "pointer", whiteSpace: "nowrap",
+          }}
+        >
+          <Unlink size={11} /> General
+        </button>
+        <button
           onClick={remove}
           disabled={busy}
           title="Eliminar la nota"
@@ -258,7 +292,16 @@ function OrphanRow({
  *
  * Una nota es huérfana cuando su `company` no existe en empresas_industrias_v2: como
  * el sidebar solo lista tickers de la maestra, esa nota no es visible desde ninguna
- * compañía. Acá se enumeran todas y se resuelven asignando el ticker correcto.
+ * compañía. Acá se enumeran todas y se resuelven de tres formas:
+ *
+ *   · Asignar   — el ticker correcto (PATCH company); la nota aparece en su compañía.
+ *   · General   — dismiss: la nota no corresponde a ninguna compañía y se acepta así.
+ *                 Sale de la bandeja, sigue en el feed /research con el chip
+ *                 "General" y desde el modal se puede volver a vincular.
+ *   · Eliminar  — se borra.
+ *
+ * El dismiss es por nota: si mañana llega otro correo con un ticker desconocido, la
+ * bandeja lo vuelve a mostrar.
  */
 export default function OrphanNotesPanel({ onResolved }: { onResolved?: () => void }) {
   const [notes,    setNotes]    = useState<OrphanNote[]>([]);
@@ -312,7 +355,7 @@ export default function OrphanNotesPanel({ onResolved }: { onResolved?: () => vo
           {notes.length} nota{notes.length !== 1 ? "s" : ""} sin ticker asignado
         </span>
         <span style={{ fontSize: 11, color: TEXT.muted, flex: 1 }}>
-          No son visibles en ninguna compañía hasta que las asignes
+          No son visibles en ninguna compañía hasta que las asignes — o déjalas como generales
         </span>
         <ChevronDown
           size={13}
@@ -324,7 +367,7 @@ export default function OrphanNotesPanel({ onResolved }: { onResolved?: () => vo
         <div style={{ background: SURFACE.card, borderTop: "1px solid rgba(255,107,6,0.22)" }}>
           <div style={{
             display: "grid",
-            gridTemplateColumns: "78px minmax(140px,1.4fr) 130px 190px 96px",
+            gridTemplateColumns: "78px minmax(140px,1.4fr) 130px 180px 200px",
             gap: "0 12px", padding: "7px 16px",
             background: SURFACE.subtle, borderBottom: `1px solid ${BORDER.subtle}`,
           }}>

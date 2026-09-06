@@ -18,7 +18,7 @@ export async function GET() {
   try {
     const users = await prisma.user.findMany({
       orderBy: [{ role: "asc" }, { email: "asc" }],
-      select:  { id: true, email: true, name: true, role: true },
+      select:  { id: true, email: true, name: true, role: true, initials: true },
     });
     return NextResponse.json({ users });
   } catch (err) {
@@ -33,6 +33,7 @@ interface CreateBody {
   name?:     string;
   password?: string;
   role?:     string;
+  initials?: string;   // sigla del calendario semanal ("DM", "AP")
 }
 
 export async function POST(request: NextRequest) {
@@ -61,16 +62,26 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "La contraseña debe tener al menos 6 caracteres" }, { status: 400 });
   }
 
+  const initials = body.initials?.trim().toUpperCase() || null;
+  if (initials && !/^[A-Z]{1,8}$/.test(initials)) {
+    return NextResponse.json({ error: "La sigla debe ser 1 a 8 letras" }, { status: 400 });
+  }
+
   try {
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
     const user = await prisma.user.create({
-      data:   { email, name, password: passwordHash, role },
-      select: { id: true, email: true, name: true, role: true },
+      data:   { email, name, password: passwordHash, role, initials },
+      select: { id: true, email: true, name: true, role: true, initials: true },
     });
     return NextResponse.json({ user }, { status: 201 });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-      return NextResponse.json({ error: "Ya existe un usuario con ese email" }, { status: 409 });
+      // target dice qué índice único chocó: email o initials.
+      const target = String((e.meta as { target?: string[] } | undefined)?.target ?? "");
+      const msg = target.includes("initials")
+        ? "Esa sigla ya la usa otro analista"
+        : "Ya existe un usuario con ese email";
+      return NextResponse.json({ error: msg }, { status: 409 });
     }
     console.error("[admin/users POST]", e);
     return NextResponse.json({ error: "No se pudo crear el usuario" }, { status: 500 });

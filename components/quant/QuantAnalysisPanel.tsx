@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import QuantModelTable from "@/components/quant/QuantModelTable";
 import MomentumTable from "@/components/quant/MomentumTable";
+import { FONT_SECONDARY } from "@/lib/patriaTheme";
 
 type View = "model" | "momentum";
 
@@ -12,7 +13,7 @@ const VIEWS: { key: View; label: string; sub: string; accent: string }[] = [
   { key: "momentum", label: "Price Momentum",     sub: "Pure price-momentum ranking",                  accent: "#001EAF" },
 ];
 
-function QuantAnalysisContent() {
+export default function QuantAnalysisPanel() {
   const searchParams = useSearchParams();
   const [view, setView] = useState<View>("model");
 
@@ -25,19 +26,13 @@ function QuantAnalysisContent() {
   const active = VIEWS.find(v => v.key === view) ?? VIEWS[0];
 
   return (
-    <div className="max-w-[1600px] mx-auto px-6 py-6">
+    <div>
       {/* Spin keyframe (used by the tables' loading spinners) */}
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
-      {/* Page header */}
-      <div style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0D0D38", letterSpacing: "-0.035em", lineHeight: 1.15, margin: 0 }}>
-          Quant Analysis
-        </h1>
-        <p style={{ fontSize: 12, color: "rgba(13,13,56,0.62)", marginTop: 5, fontWeight: 500, letterSpacing: "0.01em" }}>
-          {active.sub} · LatAm Equities
-        </p>
-      </div>
+      <p style={{ fontSize: 12, color: "rgba(13,13,56,0.62)", marginBottom: 14, fontFamily: FONT_SECONDARY }}>
+        {active.sub} · LatAm Equities
+      </p>
 
       {/* View switcher (segmented control) */}
       <div style={{ display: "inline-flex", background: "rgba(13,13,56,0.04)", border: "1px solid rgba(13,13,56,0.08)", borderRadius: 10, padding: 3, marginBottom: 24 }}>
@@ -65,13 +60,5 @@ function QuantAnalysisContent() {
       {view === "model"    && <QuantModelTable />}
       {view === "momentum" && <MomentumTable />}
     </div>
-  );
-}
-
-export default function QuantAnalysisPage() {
-  return (
-    <Suspense>
-      <QuantAnalysisContent />
-    </Suspense>
   );
 }

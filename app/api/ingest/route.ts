@@ -286,32 +286,6 @@ export async function POST(request: Request) {
         await prisma.analystRecommendation.createMany({ data: rows, skipDuplicates: true });
         break;
 
-      // 👇 AGREGA ESTO AQUÍ 👇
-      case 'EarningsSurprise':
-        // Mapeamos explícitamente la fecha para evitar errores de parseo de ISO strings
-        const earningsRows = rows.map((r: any) => ({
-          ...r,
-          reportDate: new Date(r.reportDate)
-        }));
-        await prisma.earningsSurprise.createMany({ 
-          data: earningsRows, 
-          skipDuplicates: true 
-        });
-        break;
-        // 👇 NUEVO CASO PARA TIPOS DE CAMBIO 👇
-      case 'QuarterlyFxRate':
-        const fxRows = rows.map((r: any) => ({
-          country: r.country,
-          quarter: r.quarter,
-          currency: r.currency,
-          avgRate: r.avgRate ?? r.avg_rate ?? null,
-        }));
-        await prisma.quarterlyFxRate.createMany({
-          data: fxRows,
-          skipDuplicates: true // Esto garantiza que se llene una sola vez por quarter/país
-        });
-        break;
-      // 👆 HASTA AQUÍ 👆
       // Mismo criterio que BankModel: snapshot completo → reemplazo total.
       case 'AnalystModel': {
         const { header, financials, kpis } = data;

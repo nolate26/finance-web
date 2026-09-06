@@ -24,6 +24,11 @@ export interface OrphanNote {
  * tickers de la maestra. Se resuelven asignando el ticker correcto
  * (PATCH /api/research/[id]).
  *
+ * Quedan fuera las que tienen `dismissed_at`: son las que el admin marcó como
+ * generales (no corresponden a ninguna compañía y no hay nada que asignar). La
+ * bandeja se mantiene así como una lista de pendientes reales, y cada nota nueva que
+ * llegue con un ticker desconocido sigue apareciendo acá.
+ *
  * El caso simétrico —tickers con modelos o consensus que faltan en la maestra— vive
  * en GET /api/companies/unmapped: ahí no hay nada que asignar, es una alerta.
  */
@@ -38,10 +43,11 @@ export async function GET() {
     }[]>`
       SELECT id, company, date, category, title, subject, "from"
       FROM email_research er
-      WHERE NOT EXISTS (
-        SELECT 1 FROM empresas_industrias_v2 ei
-        WHERE ei.ticker_bloomberg = er.company
-      )
+      WHERE er.dismissed_at IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM empresas_industrias_v2 ei
+          WHERE ei.ticker_bloomberg = er.company
+        )
       ORDER BY date DESC, id DESC
     `;
 

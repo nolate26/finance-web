@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { Loader2, Mail, X, ChevronDown, FileText, Pencil, Trash2, Save } from "lucide-react";
+import { Loader2, Mail, X, ChevronDown, FileText, Pencil, Trash2, Save, Unlink } from "lucide-react";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { FONT_SECONDARY } from "@/lib/patriaTheme";
 import { prepareResearchHtml } from "@/lib/researchHtml";
@@ -20,6 +20,8 @@ interface ResearchRecord {
   industry:       string;
   targetPrice:    number | null;
   recommendation: string | null;
+  dismissed:      boolean;   // nota general (sin compañía). Acá siempre false: el
+                             // endpoint por ticker ya las filtra.
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -158,6 +160,27 @@ function DetailModal({
     }
   }
 
+  // Desvincular (dismiss): la nota deja de colgar de esta compañía y pasa a ser
+  // general. No se borra ni se toca su `company`: desaparece de este panel, sigue en
+  // el feed /research con el chip "General" y desde ahí se puede volver a vincular.
+  async function dismiss() {
+    setSaving(true); setErr(null);
+    try {
+      const res = await fetch(`/api/research/${record.id}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ dismissed: true }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "No se pudo desvincular.");
+      onChanged();
+      onClose();
+    } catch (e) {
+      setErr((e as Error).message);
+      setSaving(false);
+    }
+  }
+
   async function remove() {
     if (!window.confirm("¿Eliminar esta nota de research? Esta acción no se puede deshacer.")) return;
     setSaving(true);
@@ -257,6 +280,19 @@ function DetailModal({
                   <Pencil size={13} /> Editar
                 </button>
                 <button
+                  onClick={dismiss}
+                  disabled={saving}
+                  title={`Desvincular de ${record.company}: queda como nota general, visible en el feed de Research`}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 5, height: 34, padding: "0 12px",
+                    borderRadius: 9, background: "#fff", border: `1px solid ${BORDER}`,
+                    color: "rgba(13,13,56,0.62)", fontSize: 12, fontWeight: 600,
+                    cursor: saving ? "not-allowed" : "pointer",
+                  }}
+                >
+                  <Unlink size={13} /> Desvincular
+                </button>
+                <button
                   onClick={remove}
                   disabled={saving}
                   title="Eliminar esta nota"
@@ -286,6 +322,14 @@ function DetailModal({
             </button>
           </div>
         </div>
+
+        {/* Error de una acción de cabecera (desvincular / eliminar): fuera del modo
+            edición el formulario no está montado y su mensaje no se vería. */}
+        {err && !editing && (
+          <div style={{ padding: "9px 28px", background: "rgba(248,72,94,0.06)", borderBottom: `1px solid ${BORDER}`, fontSize: 12, color: "#F8485E", flexShrink: 0 }}>
+            {err}
+          </div>
+        )}
 
         {/* ── Admin edit form ─────────────────────────────────────────────── */}
         {editing && (

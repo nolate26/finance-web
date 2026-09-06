@@ -9,6 +9,8 @@ export const runtime = "nodejs";
 
 // ── PATCH — editar / mover una nota de research (solo admin) ─────────────────────
 // "Mover" = cambiar `company` (reasigna la empresa) o `category` (reagrupa).
+// "Dismiss" = `dismissed: true`, la nota deja de colgar de una compañía y pasa a ser
+// general (ver el comentario de EmailResearch.dismissedAt en el schema).
 interface PatchBody {
   company?:        string;
   date?:           string;   // "YYYY-MM-DD"
@@ -18,6 +20,7 @@ interface PatchBody {
   html?:           string;   // cuerpo/contenido de la nota (HTML)
   targetPrice?:    number | string | null;
   recommendation?: string | null;
+  dismissed?:      boolean;  // true = nota general · false = vuelve a su company
 }
 
 function numOrNull(v: number | string | null | undefined): number | null | undefined {
@@ -57,6 +60,12 @@ export async function PATCH(
     }
     data.company = ticker;
   }
+  // Asignar una company es lo contrario de dejar la nota general: si el admin la
+  // mueve a un ticker sin decir nada del dismiss, la nota vuelve a estar vinculada.
+  // Un `dismissed` explícito en el mismo PATCH manda por sobre esto.
+  if (body.company !== undefined) data.dismissedAt = null;
+  if (body.dismissed !== undefined) data.dismissedAt = body.dismissed ? new Date() : null;
+
   if (body.category       !== undefined) data.category       = body.category.trim();
   if (body.title          !== undefined) data.title          = body.title?.trim() || null;
   if (body.subject        !== undefined) data.subject        = body.subject?.trim() || null;
@@ -86,10 +95,15 @@ export async function PATCH(
       select: {
         id: true, company: true, date: true, category: true, title: true,
         subject: true, from: true, targetPrice: true, recommendation: true,
+        dismissedAt: true,
       },
     });
     return NextResponse.json({
-      record: { ...record, date: record.date.toISOString().slice(0, 10) },
+      record: {
+        ...record,
+        date:      record.date.toISOString().slice(0, 10),
+        dismissed: record.dismissedAt !== null,
+      },
     });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {

@@ -17,6 +17,7 @@ export default withAuth({
 export const config = {
   matcher: [
     // All UI routes that require authentication
+    "/estimates/:path*",
     "/companies/:path*",
     "/chile/:path*",
     "/latam/:path*",
@@ -38,5 +39,6 @@ export const config = {
     "/api/research/:path*",
     "/api/analysis/:path*",
     "/api/presentations/:path*",
+    "/api/planning/:path*",
   ],
 };

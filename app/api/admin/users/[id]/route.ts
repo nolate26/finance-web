@@ -15,6 +15,7 @@ interface PatchBody {
   name?:     string;
   role?:     string;
   password?: string;   // si viene, resetea la contraseña
+  initials?: string;   // sigla del calendario semanal ("DM", "AP"); "" la borra
 }
 
 export async function PATCH(
@@ -57,6 +58,14 @@ export async function PATCH(
     data.password = await bcrypt.hash(body.password, BCRYPT_ROUNDS);
   }
 
+  if (body.initials !== undefined) {
+    const initials = body.initials.trim().toUpperCase();
+    if (initials && !/^[A-Z]{1,8}$/.test(initials)) {
+      return NextResponse.json({ error: "La sigla debe ser 1 a 8 letras" }, { status: 400 });
+    }
+    data.initials = initials || null;
+  }
+
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "Nada para actualizar" }, { status: 400 });
   }
@@ -65,12 +74,18 @@ export async function PATCH(
     const user = await prisma.user.update({
       where:  { id },
       data,
-      select: { id: true, email: true, name: true, role: true },
+      select: { id: true, email: true, name: true, role: true, initials: true },
     });
     return NextResponse.json({ user });
   } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {
-      return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+    if (e instanceof Prisma.PrismaClientKnownRequestError) {
+      if (e.code === "P2025") {
+        return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+      }
+      // users.initials es único: dos analistas con la misma sigla harían ambigua la grilla.
+      if (e.code === "P2002") {
+        return NextResponse.json({ error: "Esa sigla ya la usa otro analista" }, { status: 409 });
+      }
     }
     console.error("[admin/users/[id] PATCH]", e);
     return NextResponse.json({ error: "No se pudo actualizar el usuario" }, { status: 500 });
@@ -93,12 +108,39 @@ export async function DELETE(
     return NextResponse.json({ error: "No puedes eliminar tu propia cuenta" }, { status: 400 });
   }
 
+  // tasks.assignee_id y created_by_id son onDelete: Restrict — borrar a alguien con
+  // tareas vivas falla a nivel de FK. Se chequea acá para devolver un mensaje que se
+  // entienda (y el número exacto) en vez del P2003 crudo, que saldría como 500.
+  const [assigned, authored, comments] = await Promise.all([
+    prisma.task.count({ where: { assigneeId: id } }),
+    prisma.task.count({ where: { createdById: id, assigneeId: { not: id } } }),
+    prisma.taskComment.count({ where: { authorId: id } }),
+  ]);
+
+  if (assigned || authored || comments) {
+    const parts: string[] = [];
+    if (assigned) parts.push(`${assigned} tarea${assigned === 1 ? "" : "s"} asignada${assigned === 1 ? "" : "s"}`);
+    if (authored) parts.push(`${authored} creada${authored === 1 ? "" : "s"} para otros`);
+    if (comments) parts.push(`${comments} comentario${comments === 1 ? "" : "s"}`);
+    return NextResponse.json({
+      error: `No se puede eliminar: tiene ${parts.join(", ")}. Reasigna o borra ese trabajo primero.`,
+    }, { status: 409 });
+  }
+
   try {
     await prisma.user.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {
-      return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+    if (e instanceof Prisma.PrismaClientKnownRequestError) {
+      if (e.code === "P2025") {
+        return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+      }
+      if (e.code === "P2003") {
+        return NextResponse.json(
+          { error: "No se puede eliminar: el usuario todavía tiene trabajo asociado" },
+          { status: 409 },
+        );
+      }
     }
     console.error("[admin/users/[id] DELETE]", e);
     return NextResponse.json({ error: "No se pudo eliminar el usuario" }, { status: 500 });

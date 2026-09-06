@@ -22,10 +22,12 @@ const CARD: React.CSSProperties = {
 };
 
 interface AdminUser {
-  id:    string;
-  email: string;
-  name:  string | null;
-  role:  string;
+  id:       string;
+  email:    string;
+  name:     string | null;
+  role:     string;
+  /** Sigla del calendario semanal ("DM", "AP"). Única entre usuarios. */
+  initials: string | null;
 }
 
 const inputStyle: React.CSSProperties = {
@@ -66,6 +68,7 @@ export default function AdminPage() {
   const [nName,     setNName]     = useState("");
   const [nPassword, setNPassword] = useState("");
   const [nRole,     setNRole]     = useState("user");
+  const [nInitials, setNInitials] = useState("");
   const [creating,  setCreating]  = useState(false);
 
   // Redirect non-admins once the session is resolved.
@@ -101,17 +104,38 @@ export default function AdminPage() {
       const res = await fetch("/api/admin/users", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ email: nEmail, name: nName, password: nPassword, role: nRole }),
+        body:    JSON.stringify({ email: nEmail, name: nName, password: nPassword, role: nRole, initials: nInitials }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || "No se pudo crear.");
-      setNEmail(""); setNName(""); setNPassword(""); setNRole("user");
+      setNEmail(""); setNName(""); setNPassword(""); setNRole("user"); setNInitials("");
       flash(`Usuario ${d.user.email} creado.`);
       loadUsers();
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setCreating(false);
+    }
+  }
+
+  // Sigla del calendario semanal. Se guarda al salir del campo; el 409 del servidor
+  // (sigla ya usada) se muestra tal cual y se recarga para volver al valor real.
+  async function changeInitials(u: AdminUser, raw: string) {
+    const initials = raw.trim().toUpperCase();
+    if (initials === (u.initials ?? "")) return;
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ initials }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "No se pudo actualizar.");
+      flash(initials ? `Sigla de ${u.email} → ${initials}.` : `Sigla de ${u.email} borrada.`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      loadUsers();
     }
   }
 
@@ -216,7 +240,7 @@ export default function AdminPage() {
             <UserPlus size={15} style={{ color: BLUE }} />
             <h2 style={{ fontSize: 14, fontWeight: 700, color: TEXT1, margin: 0 }}>Crear usuario</h2>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1.2fr 1fr 0.7fr auto", gap: 10, alignItems: "end" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1.2fr 1fr 0.7fr 0.6fr auto", gap: 10, alignItems: "end" }}>
             <div>
               <label style={{ fontSize: 10, fontWeight: 700, color: TEXT2, letterSpacing: "0.05em", textTransform: "uppercase", display: "block", marginBottom: 5 }}>Email</label>
               <input value={nEmail} onChange={(e) => setNEmail(e.target.value)} placeholder="usuario@patria.com" style={inputStyle} />
@@ -235,6 +259,21 @@ export default function AdminPage() {
                 <option value="user">user</option>
                 <option value="admin">admin</option>
               </select>
+            </div>
+            <div>
+              <label
+                title="Sigla del analista en el calendario semanal de LatAm → Planning"
+                style={{ fontSize: 10, fontWeight: 700, color: TEXT2, letterSpacing: "0.05em", textTransform: "uppercase", display: "block", marginBottom: 5 }}
+              >
+                Sigla
+              </label>
+              <input
+                value={nInitials}
+                onChange={(e) => setNInitials(e.target.value.toUpperCase())}
+                placeholder="DM"
+                maxLength={8}
+                style={{ ...inputStyle, fontFamily: FONT_SECONDARY, fontWeight: 700, textAlign: "center" }}
+              />
             </div>
             <button
               onClick={createUser}
@@ -268,10 +307,10 @@ export default function AdminPage() {
           ) : users.length === 0 ? (
             <div style={{ padding: 40, textAlign: "center", color: TEXT3, fontSize: 13 }}>No hay usuarios.</div>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1.2fr 130px auto", gap: "0 14px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1.2fr 78px 130px auto", gap: "0 14px" }}>
               {/* Header row */}
               <div style={{ display: "contents" }}>
-                {["Email", "Nombre", "Rol", "Acciones"].map((h) => (
+                {["Email", "Nombre", "Sigla", "Rol", "Acciones"].map((h) => (
                   <div key={h} style={{ padding: "9px 20px", fontSize: 9, fontWeight: 700, letterSpacing: "0.09em", color: TEXT3, textTransform: "uppercase", borderBottom: `1px solid ${BORDER}`, textAlign: h === "Acciones" ? "right" : "left" }}>
                     {h}
                   </div>
@@ -288,6 +327,23 @@ export default function AdminPage() {
                     </div>
                     <div style={{ padding: "11px 20px", fontSize: 13, color: TEXT2, borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center" }}>
                       {u.name || <span style={{ color: TEXT3 }}>—</span>}
+                    </div>
+                    <div style={{ padding: "11px 0", borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center" }}>
+                      <input
+                        defaultValue={u.initials ?? ""}
+                        onBlur={(e) => changeInitials(u, e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                        placeholder="—"
+                        maxLength={8}
+                        title="Sigla en el calendario semanal"
+                        style={{
+                          width: 62, padding: "4px 6px", borderRadius: 6,
+                          border: `1px solid ${BORDER}`, background: "#fff",
+                          fontSize: 11, fontWeight: 700, color: TEXT1,
+                          textAlign: "center", outline: "none",
+                          fontFamily: FONT_SECONDARY, textTransform: "uppercase",
+                        }}
+                      />
                     </div>
                     <div style={{ padding: "11px 20px", borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", gap: 8 }}>
                       <select

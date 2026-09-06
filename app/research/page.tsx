@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
-import { Loader2, Search, X, ChevronDown, Mail, ExternalLink, Copy, Check, Send, Pencil, Trash2, Save } from "lucide-react";
+import { Loader2, Search, X, ChevronDown, Mail, ExternalLink, Copy, Check, Send, Pencil, Trash2, Save, Unlink, Link2 } from "lucide-react";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { FONT_SECONDARY } from "@/lib/patriaTheme";
 import { prepareResearchHtml } from "@/lib/researchHtml";
@@ -21,6 +21,7 @@ interface ResearchRecord {
   industry:       string;
   targetPrice:    number | null;
   recommendation: string | null;
+  dismissed:      boolean;   // nota general: no cuelga de ninguna compañía
 }
 
 interface Filters {
@@ -235,6 +236,27 @@ function DetailModal({
     }
   }
 
+  // Dismiss ⇄ volver a vincular. Con dismiss la nota queda como general: sale del
+  // panel de su compañía y de la bandeja de huérfanas, pero sigue acá en el feed.
+  // No se toca `company`, así que revertirlo la devuelve a donde estaba.
+  async function toggleDismiss() {
+    setSaving(true); setErr(null);
+    try {
+      const res = await fetch(`/api/research/${record.id}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ dismissed: !record.dismissed }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "No se pudo cambiar el vínculo.");
+      onChanged();
+      onClose();
+    } catch (e) {
+      setErr((e as Error).message);
+      setSaving(false);
+    }
+  }
+
   async function remove() {
     if (!window.confirm("¿Eliminar esta nota de research? Esta acción no se puede deshacer.")) return;
     setSaving(true);
@@ -298,14 +320,34 @@ function DetailModal({
               }}>
                 {formatDate(record.date)}
               </span>
-              <span style={{
-                fontSize: 11, fontWeight: 700, color: "#2044DC",
-                background: "rgba(32,68,220,0.07)",
-                border: "1px solid rgba(32,68,220,0.18)",
-                borderRadius: 6, padding: "2px 9px",
-              }}>
-                {record.company}
-              </span>
+              {record.dismissed ? (
+                <>
+                  <span style={{
+                    display: "inline-flex", alignItems: "center", gap: 4,
+                    fontSize: 10, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase",
+                    color: "rgba(13,13,56,0.62)", background: "rgba(13,13,56,0.05)",
+                    border: "1px solid rgba(13,13,56,0.14)",
+                    borderRadius: 6, padding: "3px 9px",
+                  }}>
+                    <Unlink size={10} /> General
+                  </span>
+                  <span
+                    title="Valor original del correo (la nota no está vinculada a esta compañía)"
+                    style={{ fontSize: 10.5, color: "rgba(13,13,56,0.45)", fontFamily: FONT_SECONDARY }}
+                  >
+                    {record.company}
+                  </span>
+                </>
+              ) : (
+                <span style={{
+                  fontSize: 11, fontWeight: 700, color: "#2044DC",
+                  background: "rgba(32,68,220,0.07)",
+                  border: "1px solid rgba(32,68,220,0.18)",
+                  borderRadius: 6, padding: "2px 9px",
+                }}>
+                  {record.company}
+                </span>
+              )}
               {tp && (
                 <span style={{
                   fontSize: 11, fontWeight: 700, color: "#0D0D38",
@@ -364,6 +406,25 @@ function DetailModal({
                   <Pencil size={13} /> Editar
                 </button>
                 <button
+                  onClick={toggleDismiss}
+                  disabled={saving}
+                  title={record.dismissed
+                    ? `Volver a vincularla a ${record.company}`
+                    : `Desvincular de ${record.company}: queda como nota general, sin compañía`}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 5, height: 34, padding: "0 12px",
+                    borderRadius: 9,
+                    background: record.dismissed ? "rgba(32,68,220,0.07)" : "#fff",
+                    border: record.dismissed ? "1px solid rgba(32,68,220,0.22)" : "1px solid rgba(13,13,56,0.10)",
+                    color: record.dismissed ? "#2044DC" : "rgba(13,13,56,0.62)",
+                    fontSize: 12, fontWeight: 600, cursor: saving ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {record.dismissed
+                    ? <><Link2 size={13} /> Vincular</>
+                    : <><Unlink size={13} /> Desvincular</>}
+                </button>
+                <button
                   onClick={remove}
                   disabled={saving}
                   title="Eliminar esta nota"
@@ -400,6 +461,14 @@ function DetailModal({
             </button>
           </div>
         </div>
+
+        {/* Error de una acción de cabecera (desvincular / eliminar): fuera del modo
+            edición el formulario no está montado y su mensaje no se vería. */}
+        {err && !editing && (
+          <div style={{ padding: "9px 28px", background: "rgba(248,72,94,0.06)", borderBottom: "1px solid rgba(13,13,56,0.07)", fontSize: 12, color: "#F8485E", flexShrink: 0 }}>
+            {err}
+          </div>
+        )}
 
         {/* ── Admin edit form ─────────────────────────────────────────── */}
         {editing && (
@@ -522,13 +591,23 @@ function NoteRow({ r, zebra, onClick }: { r: ResearchRecord; zebra: boolean; onC
         {formatDate(r.date)}
       </div>
 
-      {/* Company + industry */}
+      {/* Company + industry — las notas generales (dismiss) no cuelgan de ninguna
+          compañía: se muestra el chip y debajo, en gris, el valor original. */}
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: "#0D0D38", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {r.company}
+        <div style={{ fontSize: 12, fontWeight: 700, color: r.dismissed ? "rgba(13,13,56,0.45)" : "#0D0D38", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {r.dismissed ? (
+            <span style={{
+              display: "inline-flex", alignItems: "center", gap: 3,
+              fontSize: 10, fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase",
+              color: "rgba(13,13,56,0.62)", background: "rgba(13,13,56,0.05)",
+              border: "1px solid rgba(13,13,56,0.14)", borderRadius: 5, padding: "1px 6px",
+            }}>
+              <Unlink size={9} /> General
+            </span>
+          ) : r.company}
         </div>
         <div style={{ fontSize: 10, color: "rgba(13,13,56,0.62)", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {r.industry}
+          {r.dismissed ? r.company : r.industry}
         </div>
       </div>
 
