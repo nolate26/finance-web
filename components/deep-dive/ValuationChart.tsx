@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   ComposedChart,
   Line,
@@ -14,9 +14,21 @@ import {
 } from "recharts";
 import { computeBands } from "@/lib/stats";
 import type { ValuationPoint } from "@/app/api/companies/[ticker]/route";
+import type { ValuationHistoryPayload } from "@/app/api/companies/[ticker]/valuation-history/route";
+import type { UniverseItem } from "@/app/api/analysis/universe/route";
 import { PATRIA, FONT_SECONDARY, seriesColor } from "@/lib/patriaTheme";
+import ComparablePicker, { MAX_COMPARABLES, type Comparable } from "./ComparablePicker";
 
 type MetricKey  = "peFwd" | "evEbitdaFwd" | "pbv_vs_roe";
+
+// Una fila del gráfico de métrica simple: la fecha, el valor de la empresa base y
+// una columna por comparable, indexada por su ticker. La firma de índice deja meter
+// esas columnas dinámicas sin perder el tipo de `date` y `value`.
+interface SingleRow {
+  date:  string;
+  value: number;
+  [comparableTicker: string]: string | number | null;
+}
 type TimeRange  = "1yr" | "3yr" | "5yr" | "10yr";
 
 // Fondo claro → prioridad dark-blue, blue, king-blue (seriesColor lo resuelve).
@@ -30,6 +42,12 @@ const TIME_RANGES: TimeRange[] = ["1yr", "3yr", "5yr", "10yr"];
 // P/BV y ROE conviven en el mismo gráfico de doble eje: azul principal vs naranja.
 const PBV_COLOR = PATRIA.darkBlue;
 const ROE_COLOR = PATRIA.orange;
+
+// Colores de las comparables. La empresa base se pinta con el color de su métrica
+// (dark-blue o blue), así que las comparables salen del otro extremo del manual —
+// naranjo y rosado— para que las tres líneas se distingan de un vistazo. Turquesa
+// quedó fuera: sobre fondo blanco no contrasta lo suficiente.
+const COMPARABLE_COLORS = [PATRIA.orange, PATRIA.pink];
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 const fmtX          = (v: number) => v.toFixed(2) + "x";
@@ -60,12 +78,26 @@ const TT_DATE: React.CSSProperties = {
   borderBottom: "1px solid rgba(13,13,56,0.06)",
 };
 
-function SingleTooltip({ active, payload, label, color, fmt }: any) {
+// Con comparables el tooltip deja de ser un solo número: lista una fila por serie
+// presente en ese punto, cada una con su color y su nombre.
+function SingleTooltip({ active, payload, label, fmt }: any) {
   if (!active || !payload?.length) return null;
+  const rows = payload.filter((p: any) => p.value != null);
+  if (!rows.length) return null;
   return (
     <div style={TT_STYLE}>
-      <div style={TT_DATE}>{fmtTooltipDate(label)}</div>
-      <div style={{ color, fontWeight: 700, fontSize: 13 }}>{fmt(payload[0].value)}</div>
+      <div style={{ ...TT_DATE, marginBottom: rows.length > 1 ? 6 : 3 }}>{fmtTooltipDate(label)}</div>
+      {rows.map((p: any) => (
+        <div key={p.dataKey} style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
+          {rows.length > 1 && (
+            <span style={{ display: "inline-block", width: 10, height: 2, background: p.stroke, borderRadius: 1, flexShrink: 0 }} />
+          )}
+          {rows.length > 1 && (
+            <span style={{ color: "rgba(13,13,56,0.62)", fontSize: 11, flex: 1, whiteSpace: "nowrap" }}>{p.name}</span>
+          )}
+          <span style={{ color: p.stroke, fontWeight: 700, fontSize: rows.length > 1 ? 12 : 13 }}>{fmt(p.value)}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -170,25 +202,93 @@ function DiscountBadge({ current, med, timeRange }: { current: number | null; me
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export default function ValuationChart({ data }: { data: ValuationPoint[] }) {
+export default function ValuationChart({
+  data,
+  ticker,
+  companyName,
+}: {
+  data:         ValuationPoint[];
+  /** Empresa base. Sin esto no hay comparables: es lo que se excluye del buscador. */
+  ticker?:      string;
+  companyName?: string;
+}) {
   const [activeMetric, setActiveMetric] = useState<MetricKey>("peFwd");
   const [timeRange,    setTimeRange]    = useState<TimeRange>("10yr");
 
+  // Comparables superpuestas. La serie cruda se guarda aparte del chip para que
+  // cambiar de métrica o de período no obligue a volver a pedirla.
+  const [comparables, setComparables] = useState<Comparable[]>([]);
+  const [cmpSeries,   setCmpSeries]   = useState<Record<string, ValuationPoint[]>>({});
+
   const tab    = TABS.find((t) => t.key === activeMetric)!;
   const isDual = activeMetric === "pbv_vs_roe";
+
+  // El buscador sólo aparece en las métricas de una serie. En "P/BV vs ROE" el
+  // gráfico ya usa dos ejes y dos líneas para UNA empresa; sumarle comparables lo
+  // volvería ilegible.
+  const canCompare = !!ticker && !isDual;
+
+  function addComparable(item: UniverseItem) {
+    if (comparables.length >= MAX_COMPARABLES) return;
+    const color = COMPARABLE_COLORS[comparables.length % COMPARABLE_COLORS.length];
+    setComparables((prev) => [...prev, { ticker: item.ticker, name: item.name, color, loading: true }]);
+
+    fetch(`/api/companies/${encodeURIComponent(item.ticker)}/valuation-history`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("fetch failed"))))
+      .then((d: ValuationHistoryPayload) => {
+        setCmpSeries((prev) => ({ ...prev, [item.ticker]: d.points }));
+        setComparables((prev) => prev.map((c) => (c.ticker === item.ticker ? { ...c, loading: false } : c)));
+      })
+      .catch(() => {
+        setComparables((prev) => prev.map((c) => (c.ticker === item.ticker ? { ...c, loading: false } : c)));
+      });
+  }
+
+  function removeComparable(t: string) {
+    setComparables((prev) => prev.filter((c) => c.ticker !== t));
+    setCmpSeries((prev) => {
+      const next = { ...prev };
+      delete next[t];
+      return next;
+    });
+  }
+
+  // Al pasar a P/BV vs ROE las comparables se sueltan: volver a la métrica anterior
+  // con chips vivos pero sin líneas sería peor que empezar limpio.
+  useEffect(() => {
+    if (isDual && comparables.length) {
+      setComparables([]);
+      setCmpSeries({});
+    }
+  }, [isDual, comparables.length]);
 
   // ── Filter data by time range ─────────────────────────────────────────────
   const filteredData = useMemo(() => filterByRange(data, timeRange), [data, timeRange]);
 
   // ── Single-metric chart data + bands ──────────────────────────────────────
+  // Las bandas ±1σ y la mediana se calculan SÓLO sobre la empresa base: son su
+  // estadística propia, y dibujarlas para cada comparable saturaría el gráfico.
   const single = useMemo(() => {
     if (isDual) return { chartData: [], bands: { avg: NaN, median: NaN, upper: NaN, lower: NaN } };
     const field = activeMetric as "peFwd" | "evEbitdaFwd";
     const raw   = filteredData.map((r) => r[field]).filter((v): v is number => v != null && isFinite(v));
     const b     = computeBands(raw);
-    const cd    = filteredData.filter((r) => r[field] != null).map((r) => ({ date: r.date, value: r[field] as number }));
-    return { chartData: cd, bands: b };
-  }, [filteredData, activeMetric, isDual]);
+
+    // Las series se alinean por fecha. La base manda las filas: una comparable con
+    // más historia no extiende el eje, y con menos deja huecos que Recharts corta.
+    const rows = filteredData
+      .filter((r) => r[field] != null)
+      .map((r) => {
+        const row: SingleRow = { date: r.date, value: r[field] as number };
+        for (const c of comparables) {
+          const pt = cmpSeries[c.ticker]?.find((p) => p.date === r.date);
+          row[c.ticker] = pt ? (pt[field] ?? null) : null;
+        }
+        return row;
+      });
+
+    return { chartData: rows, bands: b };
+  }, [filteredData, activeMetric, isDual, comparables, cmpSeries]);
 
   // ── Dual-axis chart data + bands ──────────────────────────────────────────
   const dual = useMemo(() => {
@@ -245,7 +345,17 @@ export default function ValuationChart({ data }: { data: ValuationPoint[] }) {
           ))}
         </div>
 
-        {/* Time range selector */}
+        {/* Comparables + time range */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        {canCompare && (
+          <ComparablePicker
+            baseTicker={ticker!}
+            selected={comparables}
+            onAdd={addComparable}
+            onRemove={removeComparable}
+          />
+        )}
+
         <div
           style={{
             display: "flex",
@@ -276,17 +386,23 @@ export default function ValuationChart({ data }: { data: ValuationPoint[] }) {
             </button>
           ))}
         </div>
+        </div>
       </div>
 
       {/* ── Legend ────────────────────────────────────────────────────────── */}
       <div style={{ display: "flex", gap: 14, marginBottom: 10, flexWrap: "wrap", fontSize: 11, color: "rgba(13,13,56,0.45)", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
         {!isDual && hasBands && (
           <>
-            <LegendItem color={tab.color} label={tab.label} />
+            {/* Con comparables el nombre de la base deja de ser obvio: se rotula. */}
+            <LegendItem color={tab.color} label={comparables.length ? (companyName || ticker || tab.label) : tab.label} />
             <LegendItem color="rgba(13,13,56,0.45)" label={`Median ${fmtX(single.bands.median)}`} dashed />
             <LegendItem color={tab.color} label="±1 SD" swatch="band" />
           </>
         )}
+        {/* Las comparables sólo aportan su línea: sin mediana ni bandas propias. */}
+        {!isDual && comparables.map((c) => (
+          <LegendItem key={c.ticker} color={c.color} label={c.ticker} />
+        ))}
         {isDual && (
           <>
             <LegendItem color={PBV_COLOR} label="P/BV (left)" />
@@ -332,7 +448,7 @@ export default function ValuationChart({ data }: { data: ValuationPoint[] }) {
                   tick={{ fill: "rgba(13,13,56,0.45)", fontSize: 10, fontFamily: FONT_SECONDARY }}
                   axisLine={false} tickLine={false} tickFormatter={(v) => fmtX(v)} width={46}
                 />
-                <Tooltip content={<SingleTooltip color={tab.color} fmt={(v: number) => fmtX(v)} />} />
+                <Tooltip content={<SingleTooltip fmt={(v: number) => fmtX(v)} />} />
 
                 {/* ±1 SD band */}
                 {hasBands && (
@@ -363,12 +479,30 @@ export default function ValuationChart({ data }: { data: ValuationPoint[] }) {
                 <Line
                   type="monotone"
                   dataKey="value"
+                  name={companyName || ticker || tab.label}
                   stroke={tab.color}
                   strokeWidth={2.5}
                   dot={makeEndDot(tab.color, fmtX, single.chartData.length)}
                   activeDot={{ r: 4, fill: tab.color }}
                   isAnimationActive={false}
                 />
+
+                {/* Comparables: línea limpia, sin bandas ni mediana propias.
+                    connectNulls une los huecos donde la comparable no reportó ese día. */}
+                {comparables.map((c) => (
+                  <Line
+                    key={c.ticker}
+                    type="monotone"
+                    dataKey={c.ticker}
+                    name={c.ticker}
+                    stroke={c.color}
+                    strokeWidth={1.75}
+                    dot={false}
+                    activeDot={{ r: 3.5, fill: c.color }}
+                    connectNulls
+                    isAnimationActive={false}
+                  />
+                ))}
               </ComposedChart>
             ) : (
               <ComposedChart data={dual.chartData} margin={{ top: 6, right: 48, bottom: 0, left: 0 }}>

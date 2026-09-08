@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireAuth, getSessionUser } from "@/lib/auth";
+import { requireAuth, getSessionUser, canWriteSector } from "@/lib/auth";
 import { logAdminChanges, ENTITY } from "@/lib/adminLog";
 import { TASK_STATUSES, TASK_PRIORITIES, type TaskStatus, type TaskPriority } from "@/lib/planning";
 import { TASK_INCLUDE, toTaskDTO } from "@/lib/planningTasks";
@@ -10,22 +10,49 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 // Detalle, edición y borrado de una tarea.
-//   · admin   — cualquier tarea; además es el único que puede reasignarla.
-//   · usuario — sólo las suyas (assigneeId === self.id).
+//   · GET    — cualquier autenticado: la lectura es abierta a todo el equipo.
+//   · PATCH  — sólo si puedes escribir en el sector de la tarea (miembro, o admin).
+//   · DELETE — igual que PATCH.
 
-/** Devuelve la tarea si el usuario puede tocarla, o la NextResponse de error. */
-async function loadAuthorized(id: string) {
-  const self = await getSessionUser();
-  if (!self) return { error: NextResponse.json({ error: "No autenticado" }, { status: 401 }) };
+type TaskRow = Prisma.TaskGetPayload<{ include: typeof TASK_INCLUDE }>;
+type SessionUser = NonNullable<Awaited<ReturnType<typeof getSessionUser>>>;
 
+// Unión discriminada explícita: sin el `error: null` del caso feliz, TypeScript no
+// puede estrechar el tipo tras `if (ctx.error) return ctx.error` y `task` queda
+// posiblemente undefined en todo el handler.
+type Loaded    = { error: NextResponse; task: null } | { error: null; task: TaskRow };
+type Writable  = { error: NextResponse; task: null; self: null }
+               | { error: null; task: TaskRow; self: SessionUser };
+
+/** Carga la tarea. NO chequea permisos: leer es abierto a cualquier autenticado. */
+async function load(id: string): Promise<Loaded> {
   const task = await prisma.task.findUnique({ where: { id }, include: TASK_INCLUDE });
-  if (!task) return { error: NextResponse.json({ error: "La tarea no existe" }, { status: 404 }) };
-
-  const isAdmin = self.role === "admin";
-  if (!isAdmin && task.assigneeId !== self.id) {
-    return { error: NextResponse.json({ error: "Esta tarea no es tuya" }, { status: 403 }) };
+  if (!task) {
+    return { error: NextResponse.json({ error: "La tarea no existe" }, { status: 404 }), task: null };
   }
-  return { self, task, isAdmin };
+  return { error: null, task };
+}
+
+/** Como load(), pero además exige permiso de escritura sobre el sector de la tarea. */
+async function loadWritable(id: string): Promise<Writable> {
+  const self = await getSessionUser();
+  if (!self) {
+    return { error: NextResponse.json({ error: "No autenticado" }, { status: 401 }), task: null, self: null };
+  }
+
+  const loaded = await load(id);
+  if (loaded.error) return { error: loaded.error, task: null, self: null };
+
+  if (!(await canWriteSector(loaded.task.section.sectorId))) {
+    return {
+      error: NextResponse.json(
+        { error: "No eres miembro de este sector: solo puedes verlo." },
+        { status: 403 },
+      ),
+      task: null, self: null,
+    };
+  }
+  return { error: null, task: loaded.task, self };
 }
 
 // ── GET — detalle con feed de comentarios ─────────────────────────────────────
@@ -34,8 +61,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (deny) return deny;
   const { id } = await params;
 
-  const ctx = await loadAuthorized(id);
-  if (ctx.error) return ctx.error;
+  const loaded = await load(id);
+  if (loaded.error) return loaded.error;
 
   const comments = await prisma.taskComment.findMany({
     where:   { taskId: id },
@@ -44,7 +71,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   });
 
   return NextResponse.json({
-    task: toTaskDTO(ctx.task),
+    task: toTaskDTO(loaded.task),
+    // El cliente usa esto para decidir si pinta el modal en modo lectura.
+    canWrite: await canWriteSector(loaded.task.section.sectorId),
     comments: comments.map((c) => ({
       id:        c.id,
       body:      c.body,
@@ -55,15 +84,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   });
 }
 
-// ── PATCH — editar campos, mover de columna, reordenar ────────────────────────
+// ── PATCH — editar campos, mover de sección, completar ────────────────────────
 interface PatchBody {
   title?:        string;
   description?:  string | null;
   status?:       string;
   priority?:     string;
   dueDate?:      string | null;
-  assigneeId?:   string;
-  region?:       string | null;
+  sectionId?:    string;
+  assigneeId?:   string | null;
   company?:      string | null;
   weeklyPlanId?: string | null;
   sortOrder?:    number;
@@ -74,9 +103,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (deny) return deny;
   const { id } = await params;
 
-  const ctx = await loadAuthorized(id);
+  const ctx = await loadWritable(id);
   if (ctx.error) return ctx.error;
-  const { self, task, isAdmin } = ctx;
+  const { self, task } = ctx;
 
   let body: PatchBody;
   try {
@@ -129,18 +158,44 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
-  // Reasignar es privilegio de admin: un analista no puede sacarse trabajo de encima.
-  if (body.assigneeId !== undefined && body.assigneeId !== task.assigneeId) {
-    if (!isAdmin) {
-      return NextResponse.json({ error: "Sólo un admin puede reasignar tareas" }, { status: 403 });
+  // Mover de sección puede significar mover de SECTOR. En ese caso hace falta permiso
+  // en los dos extremos: en el de origen (ya validado por loadWritable) y en el destino,
+  // o si no un miembro podría empujar trabajo a un sector ajeno.
+  if (body.sectionId !== undefined && body.sectionId !== task.sectionId) {
+    const target = await prisma.sectorSection.findUnique({
+      where:  { id: body.sectionId },
+      select: { id: true, name: true, sectorId: true, sector: { select: { name: true } } },
+    });
+    if (!target) return NextResponse.json({ error: "La sub-sección destino no existe" }, { status: 404 });
+
+    if (target.sectorId !== task.section.sectorId && !(await canWriteSector(target.sectorId))) {
+      return NextResponse.json(
+        { error: `No eres miembro de "${target.sector.name}": no puedes mover tareas hacia allá.` },
+        { status: 403 },
+      );
     }
-    const exists = await prisma.user.count({ where: { id: body.assigneeId } });
-    if (!exists) return NextResponse.json({ error: "El analista no existe" }, { status: 400 });
-    log.push({ field: "assignee", oldValue: task.assignee.initials ?? task.assignee.email, newValue: body.assigneeId });
-    data.assignee = { connect: { id: body.assigneeId } };
+    log.push({ field: "section", oldValue: task.sectionId, newValue: `${target.sector.name} / ${target.name}` });
+    data.section = { connect: { id: target.id } };
   }
 
-  if (body.region  !== undefined) data.region  = body.region?.trim().toUpperCase() || null;
+  if (body.assigneeId !== undefined) {
+    const next = body.assigneeId?.trim() || null;
+    if (next) {
+      const exists = await prisma.user.count({ where: { id: next } });
+      if (!exists) return NextResponse.json({ error: "El analista no existe" }, { status: 400 });
+      data.assignee = { connect: { id: next } };
+    } else {
+      data.assignee = { disconnect: true };
+    }
+    if (next !== task.assigneeId) {
+      log.push({
+        field:    "assignee",
+        oldValue: task.assignee?.initials ?? task.assignee?.email ?? null,
+        newValue: next,
+      });
+    }
+  }
+
   if (body.company !== undefined) data.company = body.company?.trim() || null;
 
   if (body.weeklyPlanId !== undefined) {
@@ -163,8 +218,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     const updated = await prisma.task.update({ where: { id }, data, include: TASK_INCLUDE });
 
-    // Sólo se registran cambios de fondo. Reordenar dentro de una columna es ruido
-    // puro (un drag genera un PATCH) y llenaría la bitácora sin aportar nada.
+    // Sólo se registran cambios de fondo; el reordenamiento no aporta a la bitácora.
     if (log.length) {
       await logAdminChanges(
         log.map((l) => ({
@@ -174,7 +228,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           field:     l.field,
           oldValue:  l.oldValue,
           newValue:  l.newValue,
-          context:   updated.assignee.initials ?? null,
+          context:   updated.section.sectorId,
           action:    "update" as const,
         })),
         self.email ?? null,
@@ -197,7 +251,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if (deny) return deny;
   const { id } = await params;
 
-  const ctx = await loadAuthorized(id);
+  const ctx = await loadWritable(id);
   if (ctx.error) return ctx.error;
   const { self, task } = ctx;
 
@@ -210,8 +264,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
         entityKey: id,
         label:     task.title,
         field:     "task",
-        oldValue:  `${task.status} · ${task.assignee.initials ?? task.assignee.email ?? ""}`,
+        oldValue:  task.status,
         newValue:  null,
+        context:   task.section.sectorId,
         action:    "delete",
       }],
       self.email ?? null,

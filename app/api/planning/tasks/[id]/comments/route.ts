@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth, getSessionUser } from "@/lib/auth";
+import { requireAuth, getSessionUser, canWriteSector } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// Feed de comentarios de una tarea. Puede leer y escribir quien pueda ver la tarea:
-// su analista asignado, o cualquier admin. El autor sale SIEMPRE de la sesión, nunca
-// del body — si no, cualquiera podría firmar un comentario con el nombre de otro.
+// Feed de comentarios de una tarea.
+//
+//   · LEER      es abierto: cualquier autenticado ve el hilo de cualquier tarea, igual
+//               que ve la tarea misma.
+//   · COMENTAR  sigue la misma regla que editar — miembros del sector, o admin. Ver una
+//               tarea ajena no habilita a intervenir en su hilo.
+//   · BORRAR    un comentario: su autor, o un admin.
+//
+// El autor sale SIEMPRE de la sesión, nunca del body — si no, cualquiera podría firmar
+// un comentario con el nombre de otro.
 
 export interface CommentDTO {
   id:        string;
@@ -19,19 +26,17 @@ export interface CommentDTO {
 
 const MAX_BODY = 4000;
 
-async function canAccess(taskId: string) {
+/** Carga la tarea con su sector. No exige permiso de escritura: leer es abierto. */
+async function loadTask(taskId: string) {
   const self = await getSessionUser();
   if (!self) return { error: NextResponse.json({ error: "No autenticado" }, { status: 401 }) };
 
   const task = await prisma.task.findUnique({
     where:  { id: taskId },
-    select: { id: true, assigneeId: true, title: true },
+    select: { id: true, title: true, section: { select: { sectorId: true } } },
   });
   if (!task) return { error: NextResponse.json({ error: "La tarea no existe" }, { status: 404 }) };
 
-  if (self.role !== "admin" && task.assigneeId !== self.id) {
-    return { error: NextResponse.json({ error: "Esta tarea no es tuya" }, { status: 403 }) };
-  }
   return { self, task };
 }
 
@@ -41,7 +46,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (deny) return deny;
   const { id } = await params;
 
-  const ctx = await canAccess(id);
+  const ctx = await loadTask(id);
   if (ctx.error) return ctx.error;
 
   try {
@@ -72,9 +77,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (deny) return deny;
   const { id } = await params;
 
-  const ctx = await canAccess(id);
+  const ctx = await loadTask(id);
   if (ctx.error) return ctx.error;
-  const { self } = ctx;
+  const { self, task } = ctx;
+
+  if (!(await canWriteSector(task.section.sectorId))) {
+    return NextResponse.json(
+      { error: "No eres miembro de este sector: puedes leer el hilo, pero no comentar." },
+      { status: 403 },
+    );
+  }
 
   let body: { body?: string };
   try {
@@ -116,7 +128,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (deny) return deny;
   const { id } = await params;
 
-  const ctx = await canAccess(id);
+  const ctx = await loadTask(id);
   if (ctx.error) return ctx.error;
   const { self } = ctx;
 

@@ -52,8 +52,10 @@ export function categoryStyle(c: string | null | undefined): CategoryStyle {
 }
 
 // ── Regiones ──────────────────────────────────────────────────────────────────
-// El orden de las columnas de la grilla. Una región que aparezca en la DB pero no
-// acá se renderiza igual, al final y en orden alfabético.
+// SÓLO del calendario macro (weekly_plan.region): el orden de sus columnas. Las
+// tareas ya NO tienen región — las ubica su sub-sección dentro del sector.
+// Una región que aparezca en la DB pero no acá se renderiza igual, al final y en
+// orden alfabético.
 
 export const PLAN_REGIONS = ["CHILE", "LATAM"] as const;
 
@@ -96,6 +98,21 @@ export function displayDate(region: string, weekIso: string): string {
 export function regionDayName(region: string): string {
   return DAYS_EN[regionDayOffset(region) % 7];
 }
+
+// ── Sectores y sub-secciones ──────────────────────────────────────────────────
+
+/**
+ * Sub-secciones que la API siembra al crear un sector nuevo. Son sólo el punto de
+ * partida: el admin las renombra, reordena o agrega otras desde la UI, y esta lista
+ * no vuelve a consultarse para ese sector.
+ */
+export const DEFAULT_SECTIONS = ["Chile", "Latam & Brasil", "Other"] as const;
+
+/** Nombre reservado del sector transversal que va arriba de la grilla. */
+export const GENERAL_SECTOR_NAME = "Coordinación General";
+
+export const SECTOR_NAME_MAX  = 120;
+export const SECTION_NAME_MAX = 120;
 
 // ── Tareas ────────────────────────────────────────────────────────────────────
 

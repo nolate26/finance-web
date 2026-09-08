@@ -572,7 +572,14 @@ function CompaniesPageContent() {
                   <SectionLabel>Historical Valuation</SectionLabel>
                   {deepDive.valuationHistory.length > 0 ? (
                     <div style={{ height: 260 }}>
-                      <ValuationChart data={deepDive.valuationHistory} />
+                      {/* ticker + nombre habilitan el buscador de comparables del
+                          gráfico: es la empresa base que se excluye de la búsqueda
+                          y la que rotula la leyenda al superponer otras. */}
+                      <ValuationChart
+                        data={deepDive.valuationHistory}
+                        ticker={selectedItem?.ticker}
+                        companyName={selectedItem?.nombre}
+                      />
                     </div>
                   ) : (
                     <div style={{ height: 260, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(13,13,56,0.28)", fontSize: 12 }}>

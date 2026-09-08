@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireAuth, getSessionUser } from "@/lib/auth";
+import { requireAuth, getSessionUser, canWriteSector } from "@/lib/auth";
 import { logAdminChanges, ENTITY } from "@/lib/adminLog";
 import { TASK_STATUSES, TASK_PRIORITIES, type TaskStatus, type TaskPriority } from "@/lib/planning";
 import { TASK_INCLUDE, toTaskDTO, type TasksPayload } from "@/lib/planningTasks";
@@ -9,32 +9,28 @@ import { TASK_INCLUDE, toTaskDTO, type TasksPayload } from "@/lib/planningTasks"
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// Tareas del Analyst Grid: una caja por analista con su lista.
+// Tareas del panel de sectores.
 //
-// PERMISOS (los mismos en GET y POST):
-//   · admin   — ve y escribe el tablero de cualquiera; puede asignar a terceros.
-//   · usuario — ve y escribe SÓLO su propio tablero; al crear, se auto-asigna.
-// El chequeo vive acá y no en requireAdmin() porque no es "admin sí / user no",
-// sino "cada quien lo suyo, el admin todo".
+// PERMISOS — la regla del módulo, distinta a la del resto de la app:
+//   · LEER    es abierto. Cualquier usuario autenticado ve TODAS las tareas de TODOS
+//             los sectores, incluida la Coordinación General. No hay aislamiento.
+//   · ESCRIBIR depende de la membresía al sector (sector_members), no de a quién esté
+//             asignada la tarea. Un admin escribe en todo; un `user` sólo dentro de
+//             los sectores donde es miembro. El chequeo vive en canWriteSector().
 
-// ── GET — tareas del tablero ──────────────────────────────────────────────────
+// ── GET — todas las tareas ────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
   const deny = await requireAuth();
   if (deny) return deny;
-  const self = await getSessionUser();
-  if (!self) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
-  const isAdmin = self.role === "admin";
   const { searchParams } = new URL(req.url);
-  const assignee     = searchParams.get("assigneeId");
-  const region       = searchParams.get("region");
+  const sectorId     = searchParams.get("sectorId");
   const weeklyPlanId = searchParams.get("weeklyPlanId");
 
-  // Un no-admin queda encerrado en su propio id, ignore lo que pida por query.
-  const where: Prisma.TaskWhereInput = {
-    assigneeId: isAdmin ? (assignee && assignee !== "all" ? assignee : undefined) : self.id,
-  };
-  if (region)       where.region       = region;
+  // Los filtros son de conveniencia (el calendario salta a una semana concreta), NO
+  // de seguridad: sin ellos se devuelve el universo completo, que es lo que se quiere.
+  const where: Prisma.TaskWhereInput = {};
+  if (sectorId)     where.section      = { sectorId };
   if (weeklyPlanId) where.weeklyPlanId = weeklyPlanId;
 
   try {
@@ -44,10 +40,7 @@ export async function GET(req: NextRequest) {
       include: TASK_INCLUDE,
     });
 
-    return NextResponse.json({
-      tasks: rows.map(toTaskDTO),
-      canSeeAll: isAdmin,
-    } satisfies TasksPayload);
+    return NextResponse.json({ tasks: rows.map(toTaskDTO) } satisfies TasksPayload);
   } catch (e) {
     console.error("[planning/tasks GET]", e);
     return NextResponse.json({ error: "No se pudieron cargar las tareas" }, { status: 500 });
@@ -61,8 +54,8 @@ interface CreateBody {
   status?:       string;
   priority?:     string;
   dueDate?:      string | null;
-  assigneeId?:   string;
-  region?:       string | null;
+  sectionId?:    string;
+  assigneeId?:   string | null;
   company?:      string | null;
   weeklyPlanId?: string | null;
 }
@@ -73,8 +66,6 @@ export async function POST(req: NextRequest) {
   const self = await getSessionUser();
   if (!self) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
-  const isAdmin = self.role === "admin";
-
   let body: CreateBody;
   try {
     body = await req.json();
@@ -84,6 +75,21 @@ export async function POST(req: NextRequest) {
 
   const title = body.title?.trim();
   if (!title) return NextResponse.json({ error: "El título es obligatorio" }, { status: 400 });
+  if (!body.sectionId) return NextResponse.json({ error: "Falta la sub-sección" }, { status: 400 });
+
+  // La sección determina el sector, y el sector determina el permiso.
+  const section = await prisma.sectorSection.findUnique({
+    where:  { id: body.sectionId },
+    select: { id: true, sectorId: true, sector: { select: { name: true } } },
+  });
+  if (!section) return NextResponse.json({ error: "La sub-sección no existe" }, { status: 404 });
+
+  if (!(await canWriteSector(section.sectorId))) {
+    return NextResponse.json(
+      { error: `No eres miembro de "${section.sector.name}": solo puedes verlo.` },
+      { status: 403 },
+    );
+  }
 
   const status   = (body.status   ?? "todo").trim();
   const priority = (body.priority ?? "medium").trim();
@@ -94,10 +100,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `priority inválida (${TASK_PRIORITIES.join(" | ")})` }, { status: 400 });
   }
 
-  // Sólo el admin asigna a terceros; el analista siempre crea para sí mismo.
-  const assigneeId = isAdmin ? (body.assigneeId?.trim() || self.id) : self.id;
-
-  if (assigneeId !== self.id) {
+  // El asignado es una etiqueta opcional, no un permiso: cualquiera con escritura en
+  // el sector puede poner a cualquier miembro (o a nadie).
+  const assigneeId = body.assigneeId?.trim() || null;
+  if (assigneeId) {
     const exists = await prisma.user.count({ where: { id: assigneeId } });
     if (!exists) return NextResponse.json({ error: "El analista no existe" }, { status: 400 });
   }
@@ -108,9 +114,9 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // La tarjeta nueva entra arriba de su columna: sortOrder = (mínimo actual) - 1.
+    // La tarea nueva entra arriba de su sección: sortOrder = (mínimo actual) - 1.
     const top = await prisma.task.findFirst({
-      where:   { assigneeId, status },
+      where:   { sectionId: section.id },
       orderBy: { sortOrder: "asc" },
       select:  { sortOrder: true },
     });
@@ -122,9 +128,9 @@ export async function POST(req: NextRequest) {
         status,
         priority,
         dueDate,
+        sectionId:    section.id,
         assigneeId,
         createdById:  self.id,
-        region:       body.region?.trim().toUpperCase() || null,
         company:      body.company?.trim() || null,
         weeklyPlanId: body.weeklyPlanId || null,
         sortOrder:    (top?.sortOrder ?? 0) - 1,
@@ -140,7 +146,8 @@ export async function POST(req: NextRequest) {
         label:     title,
         field:     "task",
         oldValue:  null,
-        newValue:  `${status} · ${task.assignee.initials ?? task.assignee.email ?? assigneeId}`,
+        newValue:  `${status} · ${section.sector.name}`,
+        context:   section.sectorId,
         action:    "create",
       }],
       self.email ?? null,

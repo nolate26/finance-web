@@ -6,18 +6,18 @@ import { FONT_SECONDARY, TEXT, BORDER, PATRIA } from "@/lib/patriaTheme";
 import { cellDateLabel, regionLabel } from "@/lib/planning";
 import type { WeeklyCell } from "@/app/api/planning/weekly/route";
 import WeeklyCalendar from "./WeeklyCalendar";
-import AnalystGrid from "./AnalystGrid";
+import SectorGrid from "./SectorGrid";
 
 // Contenedor del módulo de planificación: la vista macro (calendario) y la micro
 // (grilla de analistas) comparten pantalla a través de este switch. El puente entre
 // ambas es el contador de tareas de una celda: al pincharlo se salta a la grilla ya
 // filtrada por esa semana.
 
-type View = "calendar" | "analysts";
+type View = "calendar" | "sectors";
 
 const VIEWS: { key: View; label: string; icon: typeof CalendarRange; sub: string }[] = [
   { key: "calendar", label: "Calendar",     icon: CalendarRange, sub: "Weekly research planning by region" },
-  { key: "analysts", label: "Analyst Grid", icon: LayoutGrid,    sub: "Task list per analyst" },
+  { key: "sectors",  label: "Sectors",  icon: LayoutGrid,    sub: "Tasks by sector and sub-section · everyone can see, members can edit" },
 ];
 
 export default function PlanningPanel() {
@@ -30,7 +30,7 @@ export default function PlanningPanel() {
 
   function openTasksFor(cell: WeeklyCell) {
     setPlanFilter(cell);
-    setView("analysts");
+    setView("sectors");
   }
 
   return (
@@ -68,7 +68,7 @@ export default function PlanningPanel() {
       </div>
 
       {/* Chip del filtro que viene del calendario */}
-      {view === "analysts" && planFilter && (
+      {view === "sectors" && planFilter && (
         <div style={{ marginBottom: 14 }}>
           <span style={{
             display: "inline-flex", alignItems: "center", gap: 7,
@@ -90,10 +90,10 @@ export default function PlanningPanel() {
       )}
 
       {view === "calendar" && <WeeklyCalendar onOpenTasks={openTasksFor} />}
-      {view === "analysts" && (
+      {view === "sectors" && (
         // La key fuerza un remount al cambiar el filtro: la grilla recarga desde cero
         // en vez de arrastrar el estado de la vista anterior.
-        <AnalystGrid key={planFilter?.id ?? "all"} weeklyPlanId={planFilter?.id} />
+        <SectorGrid key={planFilter?.id ?? "all"} weeklyPlanId={planFilter?.id} />
       )}
     </div>
   );

@@ -1,24 +1,28 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { X, Trash2, Loader2, Send, Check } from "lucide-react";
+import { X, Trash2, Loader2, Send, Check, Lock } from "lucide-react";
 import { FONT_SECONDARY, TEXT, BORDER, PATRIA } from "@/lib/patriaTheme";
-import { useIsAdmin } from "@/lib/useIsAdmin";
 import {
   TASK_STATUSES, STATUS_LABEL, TASK_PRIORITIES, PRIORITY_STYLE,
-  PLAN_REGIONS, regionLabel,
   type TaskPriority,
 } from "@/lib/planning";
-import type { TaskDTO } from "@/lib/planningTasks";
+import type { TaskDTO, SectorDTO } from "@/lib/planningTasks";
 import type { CommentDTO } from "@/app/api/planning/tasks/[id]/comments/route";
 import type { AnalystOption } from "@/app/api/planning/analysts/route";
 
-// Detalle de una tarjeta: campos editables arriba, feed de comentarios abajo.
-// El admin puede reasignar y borrar; el analista edita todo lo demás de lo suyo.
+// Detalle de una tarea: campos editables arriba, feed de comentarios abajo.
+//
+// El permiso NO es del usuario sino del SECTOR de la tarea: el servidor devuelve
+// `canWrite` en el GET y con eso el modal se pinta editable o en modo lectura. Un
+// analista mirando una tarea de otro sector la ve completa, con su hilo, pero no
+// puede tocar nada ni comentar.
 
 interface Props {
   taskId:   string;
   analysts: AnalystOption[];
+  /** Para el selector de sub-sección: permite mover la tarea de sección o de sector. */
+  sectors:  SectorDTO[];
   onClose:  () => void;
   onChanged: () => void;
 }
@@ -52,10 +56,9 @@ function relTime(iso: string): string {
   return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-export default function TaskDetailModal({ taskId, analysts, onClose, onChanged }: Props) {
-  const isAdmin = useIsAdmin();
-
+export default function TaskDetailModal({ taskId, analysts, sectors, onClose, onChanged }: Props) {
   const [task, setTask]         = useState<TaskDTO | null>(null);
+  const [canWrite, setCanWrite] = useState(false);
   const [comments, setComments] = useState<CommentDTO[]>([]);
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
@@ -72,6 +75,7 @@ export default function TaskDetailModal({ taskId, analysts, onClose, onChanged }
       const d = await res.json();
       if (!res.ok) throw new Error(d.error ?? "Could not load the task");
       setTask(d.task);
+      setCanWrite(d.canWrite === true);
       setComments(d.comments ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Load error");
@@ -86,8 +90,9 @@ export default function TaskDetailModal({ taskId, analysts, onClose, onChanged }
     feedEnd.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [comments.length]);
 
-  // Guarda un campo y refresca el tablero de fondo, sin cerrar el modal.
+  // Guarda un campo y refresca la grilla de fondo, sin cerrar el modal.
   async function patch(body: Record<string, unknown>) {
+    if (!canWrite) return;   // la API igual lo rechaza; esto evita el 403 innecesario
     setSaving(true);
     setError(null);
     try {
@@ -176,6 +181,7 @@ export default function TaskDetailModal({ taskId, analysts, onClose, onChanged }
             }}>
               <input
                 defaultValue={task.title}
+                readOnly={!canWrite}
                 onBlur={(e) => {
                   const v = e.target.value.trim();
                   if (v && v !== task.title) patch({ title: v });
@@ -207,10 +213,13 @@ export default function TaskDetailModal({ taskId, analysts, onClose, onChanged }
                       return (
                         <button
                           key={s}
-                          onClick={() => !on && patch({ status: s })}
+                          onClick={() => canWrite && !on && patch({ status: s })}
+                          disabled={!canWrite}
                           style={{
                             flex: 1, padding: "5px 8px", borderRadius: 7, fontSize: 11,
-                            fontWeight: on ? 800 : 600, cursor: on ? "default" : "pointer",
+                            fontWeight: on ? 800 : 600,
+                            cursor: !canWrite ? "default" : on ? "default" : "pointer",
+                            opacity: canWrite || on ? 1 : 0.6,
                             background: on ? PATRIA.blue : "#F5F7FD",
                             color:      on ? "#FFFFFF" : TEXT.label,
                             border: `1px solid ${on ? PATRIA.blue : BORDER.base}`,
@@ -233,10 +242,13 @@ export default function TaskDetailModal({ taskId, analysts, onClose, onChanged }
                       return (
                         <button
                           key={p}
-                          onClick={() => !on && patch({ priority: p })}
+                          onClick={() => canWrite && !on && patch({ priority: p })}
+                          disabled={!canWrite}
                           style={{
                             flex: 1, padding: "5px 8px", borderRadius: 7, fontSize: 11,
-                            fontWeight: on ? 800 : 600, cursor: on ? "default" : "pointer",
+                            fontWeight: on ? 800 : 600,
+                            cursor: !canWrite ? "default" : on ? "default" : "pointer",
+                            opacity: canWrite || on ? 1 : 0.6,
                             background: on ? st.bg : "#F5F7FD",
                             color:      on ? st.text : TEXT.label,
                             border: `1px solid ${on ? st.border : BORDER.base}`,
@@ -258,42 +270,48 @@ export default function TaskDetailModal({ taskId, analysts, onClose, onChanged }
                   <input
                     type="date"
                     defaultValue={task.dueDate ?? ""}
+                    disabled={!canWrite}
                     onChange={(e) => patch({ dueDate: e.target.value || null })}
-                    style={inputStyle}
+                    style={{ ...inputStyle, opacity: canWrite ? 1 : 0.7 }}
                   />
                 </div>
 
                 <div style={{ flex: "1 1 170px" }}>
-                  <label style={labelStyle}>Analyst</label>
-                  {isAdmin ? (
-                    <select
-                      value={task.assignee.id}
-                      onChange={(e) => patch({ assigneeId: e.target.value })}
-                      style={{ ...inputStyle, cursor: "pointer" }}
-                    >
-                      {analysts.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.initials ? `${a.initials} · ` : ""}{a.name || a.email}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <div style={{ ...inputStyle, background: "#FFFFFF", color: TEXT.label }}>
-                      {task.assignee.name || task.assignee.email}
-                    </div>
-                  )}
+                  <label style={labelStyle}>Assigned to</label>
+                  <select
+                    value={task.assignee?.id ?? ""}
+                    disabled={!canWrite}
+                    onChange={(e) => patch({ assigneeId: e.target.value || null })}
+                    style={{ ...inputStyle, cursor: canWrite ? "pointer" : "default", opacity: canWrite ? 1 : 0.7 }}
+                  >
+                    {/* El asignado es una etiqueta, no un permiso: puede quedar vacío. */}
+                    <option value="">Unassigned</option>
+                    {analysts.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.initials ? `${a.initials} · ` : ""}{a.name || a.email}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
-                <div style={{ flex: "1 1 130px" }}>
-                  <label style={labelStyle}>Region</label>
+                <div style={{ flex: "1 1 200px" }}>
+                  <label style={labelStyle}>Sector / sub-section</label>
                   <select
-                    value={task.region ?? ""}
-                    onChange={(e) => patch({ region: e.target.value || null })}
-                    style={{ ...inputStyle, cursor: "pointer" }}
+                    value={task.sectionId}
+                    disabled={!canWrite}
+                    onChange={(e) => patch({ sectionId: e.target.value })}
+                    style={{ ...inputStyle, cursor: canWrite ? "pointer" : "default", opacity: canWrite ? 1 : 0.7 }}
                   >
-                    <option value="">—</option>
-                    {PLAN_REGIONS.map((r) => (
-                      <option key={r} value={r}>{regionLabel(r)}</option>
+                    {sectors.map((sec) => (
+                      <optgroup key={sec.id} label={sec.name}>
+                        {sec.sections.map((sub) => (
+                          // Mover a un sector donde no eres miembro lo rechaza la API con
+                          // un 403; se deshabilitan acá para no ofrecer lo imposible.
+                          <option key={sub.id} value={sub.id} disabled={!sec.canWrite}>
+                            {sub.name}{sec.canWrite ? "" : "  (read only)"}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 </div>
@@ -304,13 +322,14 @@ export default function TaskDetailModal({ taskId, analysts, onClose, onChanged }
                 <label style={labelStyle}>Description</label>
                 <textarea
                   defaultValue={task.description ?? ""}
+                  readOnly={!canWrite}
                   onBlur={(e) => {
                     const v = e.target.value;
                     if (v !== (task.description ?? "")) patch({ description: v });
                   }}
                   rows={3}
-                  placeholder="Task details…"
-                  style={{ ...inputStyle, resize: "vertical", lineHeight: 1.55 }}
+                  placeholder={canWrite ? "Task details…" : "No description"}
+                  style={{ ...inputStyle, resize: "vertical", lineHeight: 1.55, opacity: canWrite ? 1 : 0.75 }}
                 />
               </div>
 
@@ -358,7 +377,16 @@ export default function TaskDetailModal({ taskId, analysts, onClose, onChanged }
                   <div ref={feedEnd} />
                 </div>
 
-                {/* Nuevo comentario */}
+                {/* Nuevo comentario — comentar sigue la misma regla que editar */}
+                {!canWrite ? (
+                  <p style={{
+                    fontSize: 11, color: TEXT.muted, fontStyle: "italic",
+                    background: "#F5F7FD", border: `1px solid ${BORDER.subtle}`,
+                    borderRadius: 8, padding: "8px 11px", margin: 0,
+                  }}>
+                    You are not a member of this sector: you can read the thread, but not post.
+                  </p>
+                ) : (
                 <div style={{ display: "flex", gap: 7, alignItems: "flex-end" }}>
                   <textarea
                     value={draft}
@@ -388,6 +416,7 @@ export default function TaskDetailModal({ taskId, analysts, onClose, onChanged }
                       : <Send size={14} />}
                   </button>
                 </div>
+                )}
               </div>
 
               {error && (
@@ -406,18 +435,27 @@ export default function TaskDetailModal({ taskId, analysts, onClose, onChanged }
               display: "flex", alignItems: "center", justifyContent: "space-between",
               padding: "10px 18px", borderTop: `1px solid ${BORDER.subtle}`, background: "#F5F7FD",
             }}>
-              <button
-                onClick={removeTask}
-                disabled={saving}
-                style={{
+              {canWrite ? (
+                <button
+                  onClick={removeTask}
+                  disabled={saving}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 5,
+                    fontSize: 12, fontWeight: 600, color: PATRIA.pink,
+                    background: "transparent", border: "none",
+                    cursor: saving ? "default" : "pointer", padding: "5px 2px",
+                  }}
+                >
+                  <Trash2 size={13} /> Delete task
+                </button>
+              ) : (
+                <span style={{
                   display: "inline-flex", alignItems: "center", gap: 5,
-                  fontSize: 12, fontWeight: 600, color: PATRIA.pink,
-                  background: "transparent", border: "none",
-                  cursor: saving ? "default" : "pointer", padding: "5px 2px",
-                }}
-              >
-                <Trash2 size={13} /> Delete task
-              </button>
+                  fontSize: 11, color: TEXT.muted, fontWeight: 600,
+                }}>
+                  <Lock size={11} /> Read only
+                </span>
+              )}
 
               <span style={{
                 display: "inline-flex", alignItems: "center", gap: 5,
@@ -425,7 +463,9 @@ export default function TaskDetailModal({ taskId, analysts, onClose, onChanged }
               }}>
                 {saving
                   ? <><Loader2 size={11} style={{ animation: "spin 0.8s linear infinite" }} /> saving…</>
-                  : <><Check size={11} /> changes save instantly</>}
+                  : canWrite
+                    ? <><Check size={11} /> changes save instantly</>
+                    : null}
               </span>
             </div>
           </>

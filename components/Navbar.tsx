@@ -8,20 +8,34 @@ import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import {
   BarChart3, TrendingUp, Building2, Globe2,
-  FileText, Activity, BookOpen, Sigma, Newspaper,
-  ShieldCheck, LogOut, ChevronDown,
+  FileText, BookOpen, Sigma, Newspaper,
+  ShieldCheck, LogOut, ChevronDown, CalendarRange,
 } from "lucide-react";
 
-const tabs = [
-  { href: "/estimates",      label: "Moneda Estimates", icon: Sigma      },
-  { href: "/economia",       label: "Market",           icon: TrendingUp },
-  { href: "/fondos",         label: "Funds",            icon: BarChart3  },
-  { href: "/chile",          label: "Chile",            icon: Building2  },
-  { href: "/latam",          label: "LatAm",            icon: Globe2     },
-  { href: "/quant",          label: "Analysis",         icon: Activity   },
-  { href: "/companies",      label: "Company Profiles", icon: BookOpen   },
-  { href: "/research",       label: "Research Notes",   icon: Newspaper  },
-  { href: "/presentations",  label: "Presentations",    icon: FileText   },
+type Tab = { href: string; label: string; icon: typeof Sigma };
+
+// La navegación son TRES píldoras independientes, no una sola corrida de botones.
+// El agrupamiento es semántico, no alfabético:
+//   1. Lo que produce el equipo: estimaciones, fondos, reuniones, presentaciones.
+//   2. Los datos que consulta: mercado, países, empresas, análisis.
+//   3. La coordinación interna, sola y al extremo derecho.
+// Las rutas (href) no cambiaron nunca: sólo las etiquetas visibles.
+const NAV_GROUPS: Tab[][] = [
+  [
+    { href: "/estimates",     label: "Analyst Estimates",     icon: Sigma      },
+    { href: "/fondos",        label: "Moneda Funds",          icon: BarChart3  },
+    { href: "/research",      label: "Company Meetings",      icon: Newspaper  },
+    { href: "/presentations", label: "Research PPT Database", icon: FileText   },
+  ],
+  [
+    { href: "/economia",      label: "Market Data",           icon: TrendingUp },
+    { href: "/chile",         label: "Chile",                 icon: Building2  },
+    { href: "/latam",         label: "LatAm / Brazil",        icon: Globe2     },
+    { href: "/companies",     label: "Company Info",          icon: BookOpen   },
+  ],
+  [
+    { href: "/planning",      label: "Team Planning",         icon: CalendarRange },
+  ],
 ];
 
 const FONT = "var(--font-sans, 'Figtree', sans-serif)";
@@ -140,13 +154,90 @@ function UserMenu() {
   );
 }
 
+// Una píldora = un grupo del navbar. El estilo (fondo claro, borde, radio) es el
+// mismo que tenía el contenedor único; lo que cambia es que ahora hay tres.
+function NavGroup({
+  tabs, pathname, onNavigate,
+}: {
+  tabs:       Tab[];
+  pathname:   string;
+  onNavigate: (href: string) => void;
+}) {
+  return (
+    <div
+      className="flex items-center flex-shrink-0"
+      style={{
+        gap:          2,
+        padding:      "3px",
+        borderRadius: 11,
+        background:   "rgba(13,13,56,0.045)",
+        border:       "1px solid rgba(13,13,56,0.08)",
+      }}
+    >
+      {tabs.map(({ href, label, icon: Icon }) => {
+        const active = pathname === href || pathname.startsWith(href + "/");
+        return (
+          <button
+            key={href}
+            type="button"
+            onClick={() => onNavigate(href)}
+            className="flex items-center gap-1.5 rounded-lg transition-all duration-150"
+            style={{
+              // Más ajustado que antes: con diez pestañas y etiquetas largas, el
+              // padding original desbordaba el navbar en pantallas de 1440.
+              padding:    "6px 10px",
+              fontSize:   11.5,
+              color:      active ? "#0D0D38"  : "rgba(13,13,56,0.62)",
+              background: active ? "#FFFFFF"  : "transparent",
+              border:     active
+                ? "1px solid rgba(13,13,56,0.11)"
+                : "1px solid transparent",
+              boxShadow:  active
+                ? "0 1px 3px rgba(13,13,56,0.10), 0 1px 2px rgba(13,13,56,0.06)"
+                : "none",
+              fontWeight: active ? 700 : 500,
+              cursor:     "pointer",
+              outline:    "none",
+              fontFamily: FONT,
+              letterSpacing: active ? "-0.01em" : "0",
+              whiteSpace: "nowrap",
+            }}
+            onMouseEnter={(e) => {
+              if (!active) {
+                const el = e.currentTarget as HTMLButtonElement;
+                el.style.color      = "#0D0D38";
+                el.style.background = "rgba(32,68,220,0.06)";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!active) {
+                const el = e.currentTarget as HTMLButtonElement;
+                el.style.color      = "rgba(13,13,56,0.62)";
+                el.style.background = "transparent";
+              }
+            }}
+          >
+            {/* Diez pestañas con etiquetas largas no caben bajo ~1800px. El icono es
+                decoración —el agrupamiento ya lo cargan las tres píldoras—, así que
+                es lo primero que se suelta para ganar ancho. */}
+            <Icon size={12} strokeWidth={active ? 2.5 : 2} className="hidden min-[1800px]:block" />
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function Navbar() {
   const pathname = usePathname();
   const router   = useRouter();
 
+  const [g1, g2, g3] = NAV_GROUPS;
+
   return (
     <nav
-      className="fixed top-0 left-0 right-0 z-50 h-16 flex items-center justify-between px-6"
+      className="nav-root fixed top-0 left-0 right-0 z-50 h-16 flex items-center justify-between px-5 gap-4"
       style={{
         background:          "rgba(255,255,255,0.98)",
         borderBottom:        "1px solid rgba(13,13,56,0.09)",
@@ -155,6 +246,9 @@ export default function Navbar() {
         boxShadow:           "0 1px 0 rgba(13,13,56,0.05), 0 4px 20px rgba(13,13,56,0.04)",
       }}
     >
+      {/* scrollbarWidth cubre Firefox; WebKit necesita el pseudo-elemento. */}
+      <style>{`.nav-root ::-webkit-scrollbar { height: 0; width: 0; }`}</style>
+
       {/* LEFT — logo */}
       <div className="flex items-center flex-shrink-0">
         <Image
@@ -167,69 +261,28 @@ export default function Navbar() {
         />
       </div>
 
-      {/* CENTER — navigation tabs */}
+      {/* CENTER — bloques 1 y 2, dos islas separadas.
+          El contenedor es flex-1 con min-w-0 para poder encogerse antes que el logo
+          o el menú de usuario; si aun así no cabe, scrollea horizontal en vez de
+          romper la barra. */}
       <div
-        className="flex items-center"
-        style={{
-          gap:          2,
-          padding:      "3px",
-          borderRadius: 11,
-          background:   "rgba(13,13,56,0.045)",
-          border:       "1px solid rgba(13,13,56,0.08)",
-        }}
+        className="flex items-center justify-center flex-1 min-w-0"
+        style={{ gap: 22, overflowX: "auto", scrollbarWidth: "none" }}
       >
-        {tabs.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(href + "/");
-          return (
-            <button
-              key={href}
-              type="button"
-              onClick={() => router.push(href)}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs transition-all duration-150"
-              style={{
-                color:      active ? "#0D0D38"  : "rgba(13,13,56,0.62)",
-                background: active ? "#FFFFFF"  : "transparent",
-                border:     active
-                  ? "1px solid rgba(13,13,56,0.11)"
-                  : "1px solid transparent",
-                boxShadow:  active
-                  ? "0 1px 3px rgba(13,13,56,0.10), 0 1px 2px rgba(13,13,56,0.06)"
-                  : "none",
-                fontWeight: active ? 700 : 500,
-                cursor:     "pointer",
-                outline:    "none",
-                fontFamily: FONT,
-                letterSpacing: active ? "-0.01em" : "0",
-                whiteSpace: "nowrap",
-              }}
-              onMouseEnter={(e) => {
-                if (!active) {
-                  const el = e.currentTarget as HTMLButtonElement;
-                  el.style.color      = "#0D0D38";
-                  el.style.background = "rgba(32,68,220,0.06)";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!active) {
-                  const el = e.currentTarget as HTMLButtonElement;
-                  el.style.color      = "rgba(13,13,56,0.62)";
-                  el.style.background = "transparent";
-                }
-              }}
-            >
-              <Icon size={12} strokeWidth={active ? 2.5 : 2} />
-              {label}
-            </button>
-          );
-        })}
+        <NavGroup tabs={g1} pathname={pathname} onNavigate={router.push} />
+        <NavGroup tabs={g2} pathname={pathname} onNavigate={router.push} />
       </div>
 
-      {/* RIGHT — date + BETA badge */}
+      {/* RIGHT — bloque 3 (Team Planning) + metadatos de sesión */}
       <div className="flex items-center gap-3 flex-shrink-0">
+        <NavGroup tabs={g3} pathname={pathname} onNavigate={router.push} />
+
         {/* Thin divider */}
         <div style={{ width: 1, height: 20, background: "rgba(13,13,56,0.09)" }} />
 
+        {/* La fecha es contexto, no navegación: también se suelta cuando falta ancho. */}
         <span
+          className="hidden min-[1800px]:inline"
           style={{
             fontFamily:    MONO,
             fontSize:      10,

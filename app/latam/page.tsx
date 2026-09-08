@@ -11,16 +11,15 @@ import SectorAttributionPanel from "@/components/attribution/SectorAttributionPa
 import MatrixAttributionPanel from "@/components/attribution/MatrixAttributionPanel";
 import QuantAnalysisPanel from "@/components/quant/QuantAnalysisPanel";
 import BetaExposurePanel from "@/components/latam/BetaExposurePanel";
-import PlanningPanel from "@/components/planning/PlanningPanel";
 import { FONT_SECONDARY } from "@/lib/patriaTheme";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type ActiveTab = "top-picks" | "beta-exposure" | "attribution" | "quant-analysis" | "stock-selection" | "planning";
+type ActiveTab = "top-picks" | "beta-exposure" | "attribution" | "quant-analysis" | "stock-selection";
 type FundFilter = "all" | "MLE" | "MSC" | "others";
 
+// Planning salió de acá: es ruta de primer nivel (/planning, "Team Planning" en el navbar).
 const TABS: { key: ActiveTab; label: string }[] = [
-  { key: "planning",        label: "Planning"          },
   { key: "top-picks",       label: "Top Picks"         },
   { key: "beta-exposure",   label: "Beta Exposure"     },
   { key: "attribution",     label: "Perf. Attribution" },
@@ -127,7 +126,7 @@ function AttributionSection() {
 
 function LatAmContent() {
   const searchParams = useSearchParams();
-  // Arranca en la primera pestaña del array (Planning).
+  // Arranca en la primera pestaña del array (Top Picks).
   const [activeTab, setActiveTab] = useState<ActiveTab>(TABS[0].key);
 
   // Honor ?tab=quant-analysis (e.g. coming from the company scorecard cards)
@@ -520,9 +519,6 @@ function LatAmContent() {
 
       {/* ── Quant Analysis ───────────────────────────────────────────────────── */}
       {activeTab === "quant-analysis" && <QuantAnalysisPanel />}
-
-      {/* ── Planning (calendario macro + grilla de analistas) ────────────────── */}
-      {activeTab === "planning" && <PlanningPanel />}
     </div>
   );
 }

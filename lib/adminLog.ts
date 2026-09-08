@@ -11,6 +11,8 @@ export const ENTITY = {
   indexMembership: "index_membership",
   proyeccionOverride: "proyecciones_override",
   weeklyPlan: "weekly_plan",
+  sector: "sectors",
+  sectorSection: "sector_sections",
   task: "tasks",
 } as const;
 

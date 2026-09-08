@@ -57,6 +57,7 @@ model User {
   sessions      Session[]
 
   weeklyPlans   WeeklyPlanAnalyst[]
+  sectors       SectorMember[]
   tasksAssigned Task[]        @relation("TaskAssignee")
   tasksCreated  Task[]        @relation("TaskCreator")
   taskComments  TaskComment[]
@@ -1117,8 +1118,69 @@ model WeeklyPlanAnalyst {
   @@map("weekly_plan_analysts")
 }
 
-// Una tarea. La caja de un analista son sus filas: primero las que no están en done
-// (por due_date y prioridad), después las completadas.
+// Sector: el eje de la vista micro. Reemplazó a la agrupación por analista — la
+// pantalla es una grilla de sectores, no de personas.
+//
+// La membresía (sector_members) es lo ÚNICO que decide quién puede ESCRIBIR dentro
+// de un sector. LEER es abierto: cualquier usuario autenticado ve todos los sectores,
+// todas las sub-secciones y todas las tareas del equipo. Crear/renombrar/borrar
+// sectores y su membresía es exclusivo de admin.
+model Sector {
+  id          String   @id @default(cuid())
+  name        String   @unique @db.VarChar(120)
+  description String?  @db.VarChar(300)
+  // true = "Coordinación General", el espacio transversal que va arriba de la grilla.
+  // Singleton por convención: la API impide crear un segundo y bloquea su borrado.
+  // No tiene regla de permisos especial — escribe quien sea miembro, como en cualquier
+  // otro sector, así que abrirlo al equipo entero es agregar a todos como miembros.
+  isGeneral   Boolean  @default(false) @map("is_general")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  updatedBy   String?  @map("updated_by") @db.VarChar(200)
+
+  members  SectorMember[]
+  sections SectorSection[]
+
+  @@index([sortOrder])
+  @@map("sectors")
+}
+
+// Puente N:M sector ↔ analistas. Ser miembro = poder escribir en ese sector; no serlo
+// = verlo en modo lectura. Sacar a alguien de un sector NO toca sus tareas: el trabajo
+// pertenece al sector, no a la persona.
+model SectorMember {
+  sectorId String   @map("sector_id")
+  userId   String   @map("user_id")
+  addedAt  DateTime @default(now()) @map("added_at")
+
+  sector Sector @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId],   references: [id], onDelete: Cascade)
+
+  @@id([sectorId, userId])
+  @@index([userId])
+  @@map("sector_members")
+}
+
+// Sub-secciones editables dentro de un sector. Al crear un sector la API siembra tres
+// en la misma transacción — "Chile", "Latam & Brasil", "Other" — y de ahí en adelante
+// el admin las renombra, reordena o agrega otras.
+model SectorSection {
+  id        String   @id @default(cuid())
+  sectorId  String   @map("sector_id")
+  name      String   @db.VarChar(120)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  sector Sector @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+  tasks  Task[]
+
+  @@unique([sectorId, name])
+  @@index([sectorId, sortOrder])
+  @@map("sector_sections")
+}
+
+// Una tarea. Vive SIEMPRE dentro de una sub-sección, y por lo tanto dentro de un sector.
 model Task {
   id           String    @id @default(cuid())
   title        String    @db.VarChar(300)
@@ -1127,29 +1189,40 @@ model Task {
   priority     String    @default("medium") @db.VarChar(10) // low | medium | high
   dueDate      DateTime? @map("due_date") @db.Date
 
-  assigneeId   String    @map("assignee_id")   // users.id — de quién es el tablero
-  createdById  String    @map("created_by_id") // users.id — el admin, o el analista si es auto-gestión
+  // Ubicación de la tarea. NO se guarda el sector: la sección ya sabe a cuál pertenece,
+  // y duplicarlo permitiría que una fila dijera sector A con una sección del sector B —
+  // una inconsistencia que la FK no podría impedir. La cadena
+  // task → section → sector → members es la única fuente de verdad, también para permisos.
+  sectionId    String    @map("section_id")
 
-  region       String?   @db.VarChar(40)  // CHILE | LATAM — sólo para filtrar
+  // Etiqueta de "quién lo está viendo", NO un permiso: quién puede escribir lo decide
+  // la membresía al sector. Opcional porque una tarea de equipo puede no tener dueño.
+  assigneeId   String?   @map("assignee_id")
+  createdById  String    @map("created_by_id") // users.id — quién la creó
+
   company      String?   @db.VarChar(200) // empresas_industrias_v2.nombre_latam, si la tarea es de una empresa
   weeklyPlanId String?   @map("weekly_plan_id") // cuelga la tarea de una celda del calendario macro
 
-  // Posición dentro de su columna. Es Float a propósito: al soltar una tarjeta entre
-  // otras dos se guarda el promedio de sus vecinas, así el drag & drop es UN update
-  // y no una reescritura de toda la columna.
+  // Desempate de orden dentro de la sección. Ver el comentario SQL: es Float por el
+  // drag & drop del Kanban original, que ya no existe.
   sortOrder    Float     @default(0) @map("sort_order")
   completedAt  DateTime? @map("completed_at") // se setea al pasar a done, se limpia al salir
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
-  // Restrict en ambas: borrar un usuario con tareas vivas falla a propósito, para que
-  // el admin las reasigne antes en vez de perder el tablero en silencio.
-  assignee   User        @relation("TaskAssignee", fields: [assigneeId],  references: [id], onDelete: Restrict)
-  createdBy  User        @relation("TaskCreator",  fields: [createdById], references: [id], onDelete: Restrict)
-  weeklyPlan WeeklyPlan? @relation(fields: [weeklyPlanId], references: [id], onDelete: SetNull)
+  // section: Restrict — no se borra una sub-sección con tareas dentro, hay que vaciarla.
+  // assignee: SetNull — borrar un usuario ya no destruye trabajo, la tarea queda sin
+  //   asignar dentro de su sector. Esto sólo es seguro porque el sector, y no la
+  //   persona, es lo que sostiene la tarea.
+  // createdBy: Restrict — la autoría sí se conserva.
+  section    SectorSection @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  assignee   User?         @relation("TaskAssignee", fields: [assigneeId],  references: [id], onDelete: SetNull)
+  createdBy  User          @relation("TaskCreator",  fields: [createdById], references: [id], onDelete: Restrict)
+  weeklyPlan WeeklyPlan?   @relation(fields: [weeklyPlanId], references: [id], onDelete: SetNull)
   comments   TaskComment[]
 
-  @@index([assigneeId, status, sortOrder])
+  @@index([sectionId, status, sortOrder])
+  @@index([assigneeId])
   @@index([status, dueDate])
   @@index([weeklyPlanId])
   @@map("tasks")

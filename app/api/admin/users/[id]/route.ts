@@ -108,22 +108,23 @@ export async function DELETE(
     return NextResponse.json({ error: "No puedes eliminar tu propia cuenta" }, { status: 400 });
   }
 
-  // tasks.assignee_id y created_by_id son onDelete: Restrict — borrar a alguien con
-  // tareas vivas falla a nivel de FK. Se chequea acá para devolver un mensaje que se
-  // entienda (y el número exacto) en vez del P2003 crudo, que saldría como 500.
-  const [assigned, authored, comments] = await Promise.all([
-    prisma.task.count({ where: { assigneeId: id } }),
-    prisma.task.count({ where: { createdById: id, assigneeId: { not: id } } }),
+  // Desde que las tareas cuelgan de un SECTOR y no de una persona, tener trabajo
+  // asignado ya no bloquea: tasks.assignee_id es SetNull, así que la tarea sobrevive
+  // en su sector y sólo queda sin asignar. Lo que sí sigue en Restrict es la AUTORÍA
+  // —tasks.created_by_id y task_comments.author_id— para no dejar huérfano el registro
+  // de quién escribió qué. Se cuenta acá para devolver un 409 que se entienda en vez
+  // del P2003 crudo, que saldría como 500.
+  const [authored, comments] = await Promise.all([
+    prisma.task.count({ where: { createdById: id } }),
     prisma.taskComment.count({ where: { authorId: id } }),
   ]);
 
-  if (assigned || authored || comments) {
+  if (authored || comments) {
     const parts: string[] = [];
-    if (assigned) parts.push(`${assigned} tarea${assigned === 1 ? "" : "s"} asignada${assigned === 1 ? "" : "s"}`);
-    if (authored) parts.push(`${authored} creada${authored === 1 ? "" : "s"} para otros`);
+    if (authored) parts.push(`${authored} tarea${authored === 1 ? "" : "s"} creada${authored === 1 ? "" : "s"} por él/ella`);
     if (comments) parts.push(`${comments} comentario${comments === 1 ? "" : "s"}`);
     return NextResponse.json({
-      error: `No se puede eliminar: tiene ${parts.join(", ")}. Reasigna o borra ese trabajo primero.`,
+      error: `No se puede eliminar: tiene ${parts.join(" y ")}. Bórralos primero si de verdad quieres quitar el registro.`,
     }, { status: 409 });
   }
 

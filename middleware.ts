@@ -18,6 +18,7 @@ export const config = {
   matcher: [
     // All UI routes that require authentication
     "/estimates/:path*",
+    "/planning/:path*",
     "/companies/:path*",
     "/chile/:path*",
     "/latam/:path*",
@@ -25,7 +26,6 @@ export const config = {
     "/fondos/:path*",
     "/presentations/:path*",
     "/projections/:path*",
-    "/quant/:path*",
     "/macro/:path*",
     "/admin/:path*",
 

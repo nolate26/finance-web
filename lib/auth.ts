@@ -120,6 +120,38 @@ export async function requireAdmin(): Promise<NextResponse | null> {
 }
 
 /**
+ * ¿Puede este usuario ESCRIBIR dentro de un sector del módulo de planificación?
+ *
+ * Regla única del módulo: leer es abierto (cualquier autenticado ve todos los sectores
+ * y todas las tareas), escribir depende de la membresía. Un admin escribe en todos;
+ * un `user` sólo en los sectores donde es miembro, y el resto los ve en modo lectura.
+ * "Coordinación General" no es un caso especial: se rige por su propia membresía.
+ *
+ * Devuelve false si no hay sesión.
+ */
+export async function canWriteSector(sectorId: string): Promise<boolean> {
+  const user = await getSessionUser();
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  const member = await prisma.sectorMember.count({
+    where: { sectorId, userId: user.id },
+  });
+  return member > 0;
+}
+
+/** Ids de los sectores donde el usuario puede escribir. Un admin recibe `null` = todos. */
+export async function writableSectorIds(): Promise<string[] | null> {
+  const user = await getSessionUser();
+  if (!user) return [];
+  if (user.role === "admin") return null;
+  const rows = await prisma.sectorMember.findMany({
+    where:  { userId: user.id },
+    select: { sectorId: true },
+  });
+  return rows.map((r) => r.sectorId);
+}
+
+/**
  * Guard para API routes mutantes abiertas a CUALQUIER usuario autenticado (user o admin).
  * Mismo uso que requireAdmin(): devuelve una NextResponse 401 si no hay sesión, o null si
  * puede continuar. Lo usa la edición de proyecciones, donde el permiso no es de admin pero

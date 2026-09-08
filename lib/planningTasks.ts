@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 
-// Forma compartida de una tarea entre las rutas del Analyst Grid.
+// Formas compartidas del módulo de planificación (sectores, sub-secciones, tareas).
 //
 // Vive en lib/ y no en el route handler porque Next.js sólo deja exportar los verbos
 // HTTP y su config desde un app/api/**/route.ts: un `export const` ahí rompe el build.
@@ -21,22 +21,45 @@ export interface TaskDTO {
   status:       string;
   priority:     string;
   dueDate:      string | null;   // ISO date, sin hora
-  region:       string | null;
+  sectionId:    string;
+  sectorId:     string;          // derivado de la sección; el DTO lo aplana para el cliente
   company:      string | null;
   weeklyPlanId: string | null;
   sortOrder:    number;
   completedAt:  string | null;
   createdAt:    string;
   updatedAt:    string;
-  assignee:     TaskUser;
+  assignee:     TaskUser | null;  // opcional: es una etiqueta, no un permiso
   createdBy:    TaskUser;
   commentCount: number;
 }
 
+export interface SectionDTO {
+  id:        string;
+  name:      string;
+  sortOrder: number;
+}
+
+export interface SectorDTO {
+  id:          string;
+  name:        string;
+  description: string | null;
+  isGeneral:   boolean;
+  sortOrder:   number;
+  members:     TaskUser[];
+  sections:    SectionDTO[];
+  /** true si la sesión actual puede escribir acá. Lo calcula el servidor, no el cliente. */
+  canWrite:    boolean;
+}
+
+export interface SectorsPayload {
+  sectors: SectorDTO[];
+  isAdmin: boolean;
+}
+
 export interface TasksPayload {
-  tasks:     TaskDTO[];
-  /** true si la sesión es admin: el filtro por analista sólo aplica en ese caso. */
-  canSeeAll: boolean;
+  /** TODAS las tareas visibles: la lectura es abierta a cualquier autenticado. */
+  tasks: TaskDTO[];
 }
 
 const USER_SELECT = { id: true, name: true, email: true, initials: true } as const;
@@ -44,6 +67,9 @@ const USER_SELECT = { id: true, name: true, email: true, initials: true } as con
 export const TASK_INCLUDE = {
   assignee:  { select: USER_SELECT },
   createdBy: { select: USER_SELECT },
+  // Se trae el sectorId de la sección para poder aplanarlo en el DTO y, sobre todo,
+  // para resolver permisos sin una segunda consulta.
+  section:   { select: { id: true, sectorId: true } },
   _count:    { select: { comments: true } },
 } as const;
 
@@ -57,7 +83,8 @@ export function toTaskDTO(t: TaskRow): TaskDTO {
     status:       t.status,
     priority:     t.priority,
     dueDate:      t.dueDate ? t.dueDate.toISOString().slice(0, 10) : null,
-    region:       t.region,
+    sectionId:    t.sectionId,
+    sectorId:     t.section.sectorId,
     company:      t.company,
     weeklyPlanId: t.weeklyPlanId,
     sortOrder:    t.sortOrder,
@@ -69,3 +96,8 @@ export function toTaskDTO(t: TaskRow): TaskDTO {
     commentCount: t._count.comments,
   };
 }
+
+export const SECTOR_INCLUDE = {
+  members:  { include: { user: { select: USER_SELECT } } },
+  sections: { orderBy: { sortOrder: "asc" } },
+} as const;
