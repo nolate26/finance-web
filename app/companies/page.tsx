@@ -199,7 +199,9 @@ function CompaniesPageContent() {
   const [deepDive, setDeepDive] = useState<DeepDivePayload | null>(null);
   const [diveLoading, setDiveLoading] = useState(false);
   const [diveError, setDiveError] = useState<string | null>(null);
-  const [analysisTab, setAnalysisTab] = useState<"scorecard" | "model" | "consensus" | "reports" | "research">("scorecard");
+  // Consensus Estimates es la pestaña de entrada: es donde vive el gráfico de
+  // valuación histórica y lo primero que se mira al abrir una empresa.
+  const [analysisTab, setAnalysisTab] = useState<"scorecard" | "model" | "consensus" | "reports" | "research">("consensus");
   const [tickerNotFound, setTickerNotFound] = useState<string | null>(null);
   // Uploaded docs keyed by ticker → array of {url, label}
   const [companyDocs, setCompanyDocs] = useState<Record<string, { url: string; label: string }[]>>({});
@@ -242,7 +244,7 @@ function CompaniesPageContent() {
     setDiveLoading(true);
     setDiveError(null);
     setDeepDive(null);
-    setAnalysisTab("scorecard");
+    setAnalysisTab("consensus");
 
     fetch(`/api/companies/${item.ticker}`)
       .then((r) => {

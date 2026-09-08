@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { RefreshCw, LayoutGrid, X, Check, Plus, Save, Search, Pencil, RotateCcw, Lock } from "lucide-react";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import SsV1AdminPanel from "./SsV1AdminPanel";
+import StockSelectionFreshness from "./StockSelectionFreshness";
 import { OVERRIDE_FIELDS, PROJECTION_FIELDS, FIELD_AFFECTS } from "@/lib/ssOverrideFields";
 import { normName, orderIdx, sectionIdx, FIXED_KEY } from "@/lib/chileCompanyOrder";
 import type { SsV1Company, SsV1Payload, SsV1Series, IndexLevel } from "@/app/api/chile/stock-selection-v1/route";
@@ -706,6 +707,10 @@ export default function StockSelectionV1() {
 
   return (
     <div>
+      {/* Alerta de frescura propia de esta vista: sus fuentes (snapshot diario de
+          Bloomberg + Excel de proyecciones) no son las del resto de la plataforma. */}
+      <StockSelectionFreshness />
+
       {/* Panel de administración — homologación de tickers + bitácora de cambios.
           Va arriba de todo porque lo que se toca acá (qué ticker se consulta) decide
           qué muestra la tabla de abajo. */}

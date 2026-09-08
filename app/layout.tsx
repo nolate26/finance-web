@@ -3,6 +3,7 @@ import { JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import Navbar       from "@/components/Navbar";
 import AuthProvider from "@/components/AuthProvider";
+import SystemFreshnessModal from "@/components/SystemFreshnessModal";
 
 // Aptos (títulos) y Arial (todo lo demás) son fuentes de sistema: se declaran en
 // globals.css como --font-primary / --font-secondary, no vía next/font.
@@ -34,6 +35,9 @@ export default function RootLayout({
         <AuthProvider>
           <Navbar />
           <main className="pt-16">{children}</main>
+          {/* Va en el layout raíz a propósito: así NO se vuelve a montar en cada
+              navegación del router, sólo en una carga completa de página. */}
+          <SystemFreshnessModal />
         </AuthProvider>
       </body>
     </html>
