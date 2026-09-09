@@ -4,19 +4,23 @@ import { requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
+// industry_group ya NO es el eje de agrupación —eso pasó a los sectores (PickSector)—
+// pero la columna sigue viva como etiqueta GICS descriptiva, y estas rutas la mantienen
+// consultable y renombrable en bloque.
+
 // GET — distinct industry_group values for a region
 export async function GET(request: NextRequest) {
   const region = request.nextUrl.searchParams.get("region");
   if (!region) return NextResponse.json({ groups: [] });
 
   try {
-    const rows = await prisma.top_picks.findMany({
-      where:    { region },
-      select:   { industry_group: true },
-      distinct: ["industry_group"],
-      orderBy:  { industry_group: "asc" },
+    const rows = await prisma.topPick.findMany({
+      where:    { region, industryGroup: { not: null } },
+      select:   { industryGroup: true },
+      distinct: ["industryGroup"],
+      orderBy:  { industryGroup: "asc" },
     });
-    return NextResponse.json({ groups: rows.map((r) => r.industry_group) });
+    return NextResponse.json({ groups: rows.map((r) => r.industryGroup).filter(Boolean) });
   } catch (err) {
     console.error("Groups fetch error:", err);
     return NextResponse.json({ error: "Failed to fetch groups" }, { status: 500 });
@@ -41,9 +45,9 @@ export async function PUT(request: NextRequest) {
   }
 
   try {
-    const result = await prisma.top_picks.updateMany({
-      where: { region, industry_group: oldGroup },
-      data:  { industry_group: newGroup.trim() },
+    const result = await prisma.topPick.updateMany({
+      where: { region, industryGroup: oldGroup },
+      data:  { industryGroup: newGroup.trim() },
     });
     return NextResponse.json({ updated: result.count });
   } catch (err) {

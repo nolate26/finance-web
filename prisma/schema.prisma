@@ -58,6 +58,8 @@ model User {
 
   weeklyPlans   WeeklyPlanAnalyst[]
   sectors       SectorMember[]
+  pickSectors   PickSectorMember[]
+  topPicks      TopPick[]     @relation("TopPickAuthor")
   tasksAssigned Task[]        @relation("TaskAssignee")
   tasksCreated  Task[]        @relation("TaskCreator")
   taskComments  TaskComment[]
@@ -110,23 +112,101 @@ model PerformanceAttribution {
   @@id([reportDate, fund, security])
   @@map("performance_attribution")
 }
-model top_picks {
-  id                 String   @id @default(cuid())
-  region             String   // Guardará "LATAM" o "CHILE"
-  period_date        DateTime // Guardará el mes (ej: 2026-04-01)
-  
-  // Guardamos el nombre como escalar (sin relación FK al maestro)
-  nombre_latam       String
+// ==========================================
+// SECCIÓN: TOP PICKS
+// ==========================================
+// Vive bajo Analyst Estimates (pestañas "Top Picks Chile" y "Top Picks LatAm/Brazil").
+//
+// Se agrupa por SECTOR con su propia lista, separada de la de Team Planning: son ejes
+// que se parecen hoy pero evolucionan por separado, y acoplarlos haría que sacar a
+// alguien de un sector de tareas le apagara los picks sin que nadie lo pidiera.
 
-  // Los datos del reporte
-  industry_group     String
-  comment            String   @db.Text
-  target_price       Float?   // Opcional
-  
-  created_at         DateTime @default(now())
+model PickSector {
+  id          String   @id @default(cuid())
+  // Los sectores son POR REGIÓN: Chile y LatAm mantienen listas independientes.
+  // Sin esto el nombre era único global y las dos regiones competían por él —
+  // "Banks" de Chile obligaba a llamar "Bank" al de LatAm—, y borrar un sector en
+  // una región se lo llevaba de la otra.
+  region      String   @db.VarChar(20)            // "CHILE" | "LATAM"
+  name        String   @db.VarChar(120)           // "Retail", "Financials", …
+  description String?  @db.VarChar(300)
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+  updatedBy   String?  @map("updated_by") @db.VarChar(200)
 
-  // Esto evita que alguien ingrese la misma empresa dos veces en el mismo reporte
-  @@unique([region, period_date, nombre_latam])
+  members PickSectorMember[]
+  picks   TopPick[]
+
+  // Único DENTRO de su región: Chile y LatAm pueden tener cada uno su "Banks".
+  @@unique([region, name])
+  @@index([region, sortOrder])
+  @@map("pick_sectors")
+}
+
+// Puente N:M sector ↔ analistas. Decide DOS cosas:
+//   · quién puede agregar picks en ese sector, y
+//   · qué picks se ven activos: uno cuyo autor ya no figura acá queda LEGACY.
+// El estado legacy no se guarda en ninguna columna, se deriva de esta tabla. Así el
+// día que sacas a un analista sus picks se ponen grises solos, sin update masivo ni
+// un flag que alguien olvide cambiar.
+model PickSectorMember {
+  sectorId String   @map("sector_id")
+  userId   String   @map("user_id")
+  addedAt  DateTime @default(now()) @map("added_at")
+
+  sector PickSector @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+  user   User       @relation(fields: [userId],   references: [id], onDelete: Cascade)
+
+  @@id([sectorId, userId])
+  @@index([userId])
+  @@map("pick_sector_members")
+}
+
+model TopPick {
+  id            String   @id @default(cuid())
+  region        String   @db.VarChar(20)   // "CHILE" | "LATAM"
+  periodDate    DateTime @map("period_date") @db.Date  // el mes del reporte
+
+  nombreLatam   String   @map("nombre_latam") @db.VarChar(200)
+  comment       String   @db.Text
+  targetPrice   Float?   @map("target_price")
+
+  // Agrupación estructural. NULLABLE por la migración: los 101 picks heredados no
+  // traen sector y se muestran en un bucket "Unassigned" hasta que el admin los
+  // reparta. Un pick sin sector nunca es legacy — sencillamente está sin clasificar.
+  sectorId      String?  @map("sector_id")
+
+  // AUTORÍA EN DOS PIEZAS, y ésta es la clave de la retención histórica:
+  //   authorId   — FK viva. Sólo sirve para preguntar "¿sigue siendo miembro?".
+  //   authorName — copia CONGELADA del nombre, escrita al crear el pick. Es lo que
+  //                sobrevive si el usuario se borra, y lo único que existe para
+  //                quienes ya se fueron (Harry Klenner tiene 6 picks y no está en
+  //                users, así que una FK sola habría perdido su nombre para siempre).
+  // Nullable porque los picks heredados no tienen autor identificable.
+  authorId      String?  @map("author_id")
+  authorName    String?  @map("author_name") @db.VarChar(120)
+
+  // GICS. Antes cargaba dos roles a la vez —industria real en 74 filas y NOMBRE DE
+  // ANALISTA en 27—; ese segundo uso pasó a authorName/sectorId y acá queda sólo la
+  // industria, ya como dato descriptivo y no estructural.
+  industryGroup String?  @map("industry_group") @db.VarChar(200)
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")
+
+  // Las DOS en SetNull, al revés que en tasks: acá el objetivo es el opuesto. Borrar
+  // un usuario o un sector NO debe bloquearse ni llevarse el pick; el historial lo
+  // sostiene authorName, que no depende de que la FK siga en pie.
+  sector PickSector? @relation(fields: [sectorId], references: [id], onDelete: SetNull)
+  author User?       @relation("TopPickAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  // Una empresa no se puede recomendar dos veces en el mismo reporte, ni siquiera
+  // desde sectores distintos.
+  @@unique([region, periodDate, nombreLatam])
+  @@index([sectorId, periodDate])
+  @@index([region, periodDate])
+  @@map("top_picks")
 }
 
 

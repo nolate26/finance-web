@@ -143,14 +143,6 @@ export default function FreshnessModal({ scope, title, subtitle, storageKey, blo
   const worst = data?.items.reduce<FreshnessItem["status"]>(
     (acc, i) => (RANK[i.status] > RANK[acc] ? i.status : acc), "fresh") ?? "unknown";
 
-  // Filas agrupadas por sección del navbar, en el orden en que llegan del servidor.
-  const sections: { name: string; rows: FreshnessItem[] }[] = [];
-  for (const it of data?.items ?? []) {
-    const last = sections[sections.length - 1];
-    if (last && last.name === it.section) last.rows.push(it);
-    else sections.push({ name: it.section, rows: [it] });
-  }
-
   return (
     <div
       onClick={close}
@@ -214,54 +206,47 @@ export default function FreshnessModal({ scope, title, subtitle, storageKey, blo
               <span style={{ fontSize: 12, color: TEXT.label }}>Checking…</span>
             </div>
           ) : (
-            sections.map((sec) => (
-              <div key={sec.name} style={{ marginBottom: 6 }}>
-                {/* Encabezado de sección = el nombre tal como está en el navbar */}
-                <div style={{
-                  fontSize: 9.5, fontWeight: 800, letterSpacing: "0.08em",
-                  textTransform: "uppercase", color: TEXT.muted,
-                  padding: "6px 12px 3px",
-                }}>
-                  {sec.name}
-                </div>
+            data.items.map((it) => {
+              const st = STATUS_STYLE[it.status];
+              return (
+                <div
+                  key={it.key}
+                  style={{ display: "flex", alignItems: "center", gap: 11, padding: "12px 14px", borderRadius: 9 }}
+                >
+                  <span
+                    title={st.label}
+                    style={{
+                      width: 9, height: 9, borderRadius: "50%", flexShrink: 0,
+                      background: st.dot, boxShadow: `0 0 0 3px ${st.dot}22`,
+                    }}
+                  />
 
-                {sec.rows.map((it) => {
-                  const st = STATUS_STYLE[it.status];
-                  return (
-                    <div key={it.key} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderRadius: 9 }}>
-                      <span
-                        title={st.label}
-                        style={{
-                          width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
-                          background: st.dot, boxShadow: `0 0 0 3px ${st.dot}22`,
-                        }}
-                      />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12.5, fontWeight: 600, color: PATRIA.darkBlue }}>
-                          {it.label}
-                        </div>
-                        {/* La tabla de origen a la vista: si un número parece raro,
-                            se sabe de inmediato dónde mirar. */}
-                        <div style={{ fontSize: 9.5, color: TEXT.disabled, fontFamily: FONT_SECONDARY, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {it.source}
-                        </div>
-                      </div>
-                      <div style={{ textAlign: "right", flexShrink: 0 }}>
-                        <div style={{
-                          fontSize: 12, fontWeight: 800, color: st.text,
-                          fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
-                        }}>
-                          {fmtDate(it.date)}
-                        </div>
-                        <div style={{ fontSize: 9.5, color: TEXT.muted, fontFamily: FONT_SECONDARY, marginTop: 1 }}>
-                          {fmtAge(it.ageDays)}
-                        </div>
-                      </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: PATRIA.darkBlue }}>
+                      {it.label}
                     </div>
-                  );
-                })}
-              </div>
-            ))
+                    {/* Sólo si aporta: quién actualiza el dato. Nunca el nombre de la tabla. */}
+                    {it.note && (
+                      <div style={{ fontSize: 10.5, color: TEXT.muted, marginTop: 2 }}>
+                        {it.note}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div style={{
+                      fontSize: 13, fontWeight: 800, color: st.text,
+                      fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
+                    }}>
+                      {fmtDate(it.date)}
+                    </div>
+                    <div style={{ fontSize: 10, color: TEXT.muted, fontFamily: FONT_SECONDARY, marginTop: 1 }}>
+                      {fmtAge(it.ageDays)}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
 

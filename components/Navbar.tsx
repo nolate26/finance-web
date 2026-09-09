@@ -3,6 +3,7 @@
 import { FONT_SECONDARY } from "@/lib/patriaTheme";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useState, useRef, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
@@ -37,6 +38,9 @@ const NAV_GROUPS: Tab[][] = [
     { href: "/planning",      label: "Team Planning",         icon: CalendarRange },
   ],
 ];
+
+// Vista por defecto de la app: es a donde vuelve el logo, que hace de botón "home".
+const HOME_HREF = NAV_GROUPS[0][0].href;   // /estimates
 
 const FONT = "var(--font-sans, 'Figtree', sans-serif)";
 const MONO = FONT_SECONDARY;   // Regla 4 — Arial, no monoespaciada
@@ -249,8 +253,15 @@ export default function Navbar() {
       {/* scrollbarWidth cubre Firefox; WebKit necesita el pseudo-elemento. */}
       <style>{`.nav-root ::-webkit-scrollbar { height: 0; width: 0; }`}</style>
 
-      {/* LEFT — logo */}
-      <div className="flex items-center flex-shrink-0">
+      {/* LEFT — logo: es el botón de "home" y siempre lleva a la vista por defecto. */}
+      <Link
+        href={HOME_HREF}
+        aria-label="Inicio — Analyst Estimates"
+        className="flex items-center flex-shrink-0"
+        style={{ borderRadius: 8, outline: "none", transition: "opacity 0.12s" }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = "0.7"; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
+      >
         <Image
           src="/img/moneda_patria.png"
           alt="Moneda Patria"
@@ -259,7 +270,7 @@ export default function Navbar() {
           style={{ objectFit: "contain", height: 32, width: "auto" }}
           priority
         />
-      </div>
+      </Link>
 
       {/* CENTER — bloques 1 y 2, dos islas separadas.
           El contenedor es flex-1 con min-w-0 para poder encogerse antes que el logo

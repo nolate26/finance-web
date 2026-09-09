@@ -36,9 +36,9 @@ interface CommoditiesData {
 type View = "valuations" | "macro" | "commodities";
 
 const VIEWS: { key: View; label: string }[] = [
-  { key: "valuations", label: "Valuations" },
-  { key: "macro", label: "Macro" },
-  { key: "commodities", label: "Commodities" },
+  { key: "valuations", label: "Market Performance / Multiples" },
+  { key: "macro", label: "Macro Forecasts" },
+  { key: "commodities", label: "Commodity Forecasts" },
 ];
 
 
@@ -119,7 +119,7 @@ export default function EconomiaPage() {
             Market Overview
           </h1>
           <p style={{ fontSize: 12, marginTop: 5, color: "rgba(255,255,255,0.72)", fontFamily: FONT_SECONDARY, fontWeight: 500, letterSpacing: "0.01em" }}>
-            Global valuations · Macro projections · Commodity prices
+            Market performance & multiples · Macro forecasts · Commodity forecasts
           </p>
         </div>
         <div className="flex items-center gap-2">

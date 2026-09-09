@@ -1,12 +1,21 @@
 "use client";
 
-import { useState } from "react";
-import TopPicksForm from "@/components/top-picks/TopPicksForm";
+import { Fragment, useState } from "react";
+import TabSpacer from "@/components/TabSpacer";
 import ActiveDecisions from "@/components/chile/ActiveDecisions";
 import StockSelectionV1 from "@/components/chile/StockSelectionV1";
 import ProjectionsPage from "@/app/projections/page";
 
-type ActiveTab = "stock-selection" | "projections" | "top-picks" | "active-decisions";
+// Top Picks salió de acá: vive en Analyst Estimates como "Top Picks Chile".
+type ActiveTab = "stock-selection" | "projections" | "active-decisions";
+
+// `spacerBefore` abre un separador antes de la pestaña: agrupa Stock Selection y
+// Projections a la izquierda y despega Multiples Range del bloque principal.
+const TABS: { key: ActiveTab; label: string; spacerBefore?: boolean }[] = [
+  { key: "stock-selection",  label: "Stock Selection" },
+  { key: "projections",      label: "Projections"     },
+  { key: "active-decisions", label: "Multiples Range", spacerBefore: true },
+];
 
 export default function ChilePage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("stock-selection");
@@ -35,15 +44,12 @@ export default function ChilePage() {
           width: "fit-content",
         }}
       >
-        {(["stock-selection", "projections", "top-picks", "active-decisions"] as ActiveTab[]).map((tab) => {
+        {TABS.map(({ key: tab, label, spacerBefore }) => {
           const active = activeTab === tab;
-          const label = tab === "stock-selection" ? "Stock Selection"
-                      : tab === "projections"     ? "Projections"
-                      : tab === "top-picks"       ? "Top Picks"
-                      :                             "Active Decisions";
           return (
+            <Fragment key={tab}>
+              {spacerBefore && <TabSpacer />}
             <button
-              key={tab}
               onClick={() => setActiveTab(tab)}
               className="px-5 py-1.5 rounded-lg text-sm transition-all"
               style={{
@@ -57,6 +63,7 @@ export default function ChilePage() {
             >
               {label}
             </button>
+            </Fragment>
           );
         })}
       </div>
@@ -66,9 +73,6 @@ export default function ChilePage() {
 
       {/* ── Projections ─────────────────────────────────────────────────────── */}
       {activeTab === "projections" && <ProjectionsPage />}
-
-      {/* ── Top Picks ───────────────────────────────────────────────────────── */}
-      {activeTab === "top-picks" && <TopPicksForm defaultRegion="CHILE" />}
 
       {/* ── Active Decisions ────────────────────────────────────────────────── */}
       {activeTab === "active-decisions" && <ActiveDecisions />}

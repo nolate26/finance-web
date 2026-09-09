@@ -1,19 +1,24 @@
 "use client";
 
-import { useState } from "react";
-import { Sigma, Award } from "lucide-react";
+import { Fragment, useState } from "react";
+import { Sigma, Award, Star } from "lucide-react";
 import ConsensusCheckTable from "@/components/latam/ConsensusCheckTable";
 import AnalystTrackRecord from "@/components/quant/AnalystTrackRecord";
+import TopPicksPanel from "@/components/top-picks/TopPicksPanel";
+import TabSpacer from "@/components/TabSpacer";
 import { FONT_SECONDARY, TEXT, BORDER, PATRIA } from "@/lib/patriaTheme";
 
-// Analyst Estimates. Absorbió el track record del difunto módulo "Analysis": las dos
-// vistas miran lo mismo desde ángulos distintos —qué proyecta el analista hoy, y qué
-// tan bien le fue con lo que proyectó antes—, así que tenerlas en pestañas separadas
-// del navbar obligaba a saltar entre secciones para una sola pregunta.
+// Analyst Estimates concentra todo el output del analista:
+//   · Estimates y Analyst Track Record — qué proyecta hoy, y qué tan bien le fue antes
+//     (el track record llegó del difunto módulo "Analysis").
+//   · Top Picks Chile y LatAm/Brazil — migrados desde esos dos módulos, que sólo los
+//     alojaban por región aunque el trabajo es el mismo.
 
-type View = "estimates" | "track-record";
+type View = "estimates" | "track-record" | "top-picks-chile" | "top-picks-latam";
 
-const VIEWS: { key: View; label: string; icon: typeof Sigma; sub: string }[] = [
+// Top Picks migró desde Chile y LatAm: las tres cosas son output del analista, así que
+// viven juntas. `spacerBefore` las separa visualmente del bloque de estimaciones.
+const VIEWS: { key: View; label: string; icon: typeof Sigma; sub: string; spacerBefore?: boolean }[] = [
   {
     key:   "estimates",
     label: "Estimates",
@@ -25,6 +30,19 @@ const VIEWS: { key: View; label: string; icon: typeof Sigma; sub: string }[] = [
     label: "Analyst Track Record",
     icon:  Award,
     sub:   "Hit rate and performance of past analyst recommendations",
+  },
+  {
+    key:   "top-picks-chile",
+    label: "Top Picks Chile",
+    icon:  Star,
+    sub:   "Selected names for the Chilean portfolio",
+    spacerBefore: true,
+  },
+  {
+    key:   "top-picks-latam",
+    label: "Top Picks LatAm/Brazil",
+    icon:  Star,
+    sub:   "Selected names for the LatAm / Brazil portfolio",
   },
 ];
 
@@ -52,11 +70,12 @@ export default function EstimatesPage() {
         display: "inline-flex", background: "rgba(13,13,56,0.04)",
         border: `1px solid ${BORDER.base}`, borderRadius: 10, padding: 3, marginBottom: 18,
       }}>
-        {VIEWS.map(({ key, label, icon: Icon }) => {
+        {VIEWS.map(({ key, label, icon: Icon, spacerBefore }) => {
           const on = view === key;
           return (
+            <Fragment key={key}>
+            {spacerBefore && <TabSpacer />}
             <button
-              key={key}
               onClick={() => setView(key)}
               style={{
                 display: "inline-flex", alignItems: "center", gap: 6,
@@ -71,6 +90,7 @@ export default function EstimatesPage() {
               <Icon size={13} />
               {label}
             </button>
+            </Fragment>
           );
         })}
       </div>
@@ -85,6 +105,10 @@ export default function EstimatesPage() {
       )}
 
       {view === "track-record" && <AnalystTrackRecord />}
+
+      {/* Top Picks — misma vista, distinta región por defecto. */}
+      {view === "top-picks-chile" && <TopPicksPanel defaultRegion="CHILE" />}
+      {view === "top-picks-latam" && <TopPicksPanel defaultRegion="LATAM" />}
     </div>
   );
 }

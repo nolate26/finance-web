@@ -817,7 +817,46 @@ const composerInput: React.CSSProperties = {
   boxSizing: "border-box", width: "100%",
 };
 
-function SubjectComposer({ universe }: { universe: ResearchTicker[] }) {
+// Disparador discreto del compositor: vive en la cabecera de la página y es lo
+// único que se ve mientras el generador está plegado.
+function SubjectComposerToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title={`Generar asunto para ${SUBJECT_EMAIL}`}
+      style={{
+        display: "flex", alignItems: "center", gap: 6,
+        padding: "4px 10px", borderRadius: 8,
+        background: open ? "rgba(32,68,220,0.07)" : "transparent",
+        border: `1px solid ${open ? "rgba(32,68,220,0.22)" : "transparent"}`,
+        color: open ? "#2044DC" : "rgba(13,13,56,0.45)",
+        fontSize: 11, fontWeight: 600, cursor: "pointer",
+        outline: "none", transition: "all 0.12s",
+      }}
+      onMouseEnter={(e) => {
+        if (open) return;
+        const el = e.currentTarget as HTMLElement;
+        el.style.color       = "#2044DC";
+        el.style.background  = "rgba(32,68,220,0.05)";
+        el.style.borderColor = "rgba(32,68,220,0.16)";
+      }}
+      onMouseLeave={(e) => {
+        if (open) return;
+        const el = e.currentTarget as HTMLElement;
+        el.style.color       = "rgba(13,13,56,0.45)";
+        el.style.background  = "transparent";
+        el.style.borderColor = "transparent";
+      }}
+    >
+      <Mail size={13} />
+      Compose subject
+      <ChevronDown size={11} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+    </button>
+  );
+}
+
+function SubjectComposer({ universe, onClose }: { universe: ResearchTicker[]; onClose: () => void }) {
   const [type,    setType]    = useState<(typeof TYPE_OPTIONS)[number]>("Update");
   const [tickers, setTickers] = useState<string[]>([]);
   const [title,   setTitle]   = useState("");
@@ -856,16 +895,33 @@ function SubjectComposer({ universe }: { universe: ResearchTicker[] }) {
       padding: "14px 16px",
       marginBottom: 16,
       boxShadow: "0 1px 4px rgba(13,13,56,0.05)",
+      animation: "composerIn 0.16s ease-out",
     }}>
-      {/* Header */}
+      <style>{`@keyframes composerIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }`}</style>
+
+      {/* Header — el título ya lo carga el disparador de la cabecera, así que aquí
+          sólo queda el destinatario y el cierre. */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <Send size={14} style={{ color: "#2044DC" }} />
-        <span style={{ fontSize: 13, fontWeight: 800, color: "#0D0D38", letterSpacing: "-0.01em" }}>
-          Compose email subject
+        <Send size={13} style={{ color: "#2044DC", flexShrink: 0 }} />
+        <span style={{ fontSize: 11, color: "rgba(13,13,56,0.62)" }}>
+          Genera el asunto para enviar a{" "}
+          <span style={{ fontFamily: FONT_SECONDARY, fontWeight: 700, color: "#0D0D38" }}>{SUBJECT_EMAIL}</span>
         </span>
-        <span style={{ fontSize: 11, color: "rgba(13,13,56,0.45)" }}>
-          — genera el asunto para enviar a {SUBJECT_EMAIL}
-        </span>
+        <button
+          type="button"
+          onClick={onClose}
+          title="Cerrar"
+          style={{
+            marginLeft: "auto", display: "flex", alignItems: "center", justifyContent: "center",
+            width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+            background: "transparent", border: "1px solid transparent",
+            color: "rgba(13,13,56,0.45)", cursor: "pointer", outline: "none",
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(13,13,56,0.05)"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+        >
+          <X size={13} />
+        </button>
       </div>
 
       {/* Inputs */}
@@ -977,6 +1033,8 @@ export default function ResearchPage() {
   const [loading,  setLoading]  = useState(true);
   const [selected, setSelected] = useState<ResearchRecord | null>(null);
   const [tickers,  setTickers]  = useState<ResearchTicker[]>([]);
+  // El generador de asuntos arranca plegado: la cabecera queda limpia.
+  const [composerOpen, setComposerOpen] = useState(false);
   const isAdmin = useIsAdmin();
   // Categorías expandidas (por defecto se muestran las más recientes; al hacer clic se ven todas).
   const [expanded, setExpanded] = useState<Set<Group>>(new Set());
@@ -1075,20 +1133,23 @@ export default function ResearchPage() {
             Sell-side research · Coverage updates · Ingested by email
           </p>
         </div>
-        {!loading && (
-          <span style={{
-            fontSize: 12, fontWeight: 700, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
-            color: "#2044DC", background: "rgba(32,68,220,0.07)",
-            border: "1px solid rgba(32,68,220,0.18)",
-            borderRadius: 8, padding: "4px 12px",
-          }}>
-            {visible.length} / {records.length} notes
-          </span>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <SubjectComposerToggle open={composerOpen} onToggle={() => setComposerOpen((v) => !v)} />
+          {!loading && (
+            <span style={{
+              fontSize: 12, fontWeight: 700, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
+              color: "#2044DC", background: "rgba(32,68,220,0.07)",
+              border: "1px solid rgba(32,68,220,0.18)",
+              borderRadius: 8, padding: "4px 12px",
+            }}>
+              {visible.length} / {records.length} notes
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* ── Subject composer ────────────────────────────────────────────── */}
-      <SubjectComposer universe={tickers} />
+      {/* ── Subject composer — plegado por defecto ──────────────────────── */}
+      {composerOpen && <SubjectComposer universe={tickers} onClose={() => setComposerOpen(false)} />}
 
       {/* ── Filter bar ──────────────────────────────────────────────────── */}
       <div style={{

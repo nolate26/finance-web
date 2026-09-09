@@ -13,6 +13,8 @@ export const ENTITY = {
   weeklyPlan: "weekly_plan",
   sector: "sectors",
   sectorSection: "sector_sections",
+  pickSector: "pick_sectors",
+  topPick: "top_picks",
   task: "tasks",
 } as const;
 

@@ -11,15 +11,15 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const rows = await prisma.top_picks.findMany({
+    const rows = await prisma.topPick.findMany({
       where:    { region },
-      select:   { period_date: true },
-      distinct: ["period_date"],
-      orderBy:  { period_date: "desc" },
+      select:   { periodDate: true },
+      distinct: ["periodDate"],
+      orderBy:  { periodDate: "desc" },
     });
 
     // Return as "YYYY-MM" strings so the frontend can use them directly
-    const periods = rows.map((r) => r.period_date.toISOString().slice(0, 7));
+    const periods = rows.map((r) => r.periodDate.toISOString().slice(0, 7));
 
     return NextResponse.json({ periods });
   } catch (err) {

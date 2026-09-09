@@ -12,7 +12,7 @@ export default function SystemFreshnessModal() {
     <FreshnessModal
       scope="global"
       title="System Freshness"
-      subtitle="Last update by section of the platform"
+      subtitle="Last update of the platform's data"
       storageKey="patria:freshness-seen"
       blocking
     />

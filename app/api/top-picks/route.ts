@@ -1,123 +1,178 @@
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/auth";
+import { requireAuth, getSessionUser } from "@/lib/auth";
+import { logAdminChanges, ENTITY } from "@/lib/adminLog";
+import {
+  computeIsLegacy, memberKey, resolveAuthorId,
+  type TopPickDTO, type TopPicksPayload,
+} from "@/lib/topPicks";
+
+export const dynamic = "force-dynamic";
+
+// Top Picks de un período.
+//
+// PERMISOS: leer es abierto a cualquier autenticado — el equipo entero ve las
+// recomendaciones de todos. Escribir depende de la membresía al SECTOR del pick:
+// admin en todo, un `user` sólo en los sectores donde figura.
+//
+// El POST de acá crea UN pick (el modal de búsqueda agrega de a uno). Editar y borrar
+// viven en /api/top-picks/[id].
+
+/** Membresías de todos los sectores en un Set, para resolver isLegacy sin N consultas. */
+async function loadMembers(): Promise<Set<string>> {
+  const rows = await prisma.pickSectorMember.findMany({ select: { sectorId: true, userId: true } });
+  return new Set(rows.map((r) => memberKey(r.sectorId, r.userId)));
+}
 
 export async function GET(request: NextRequest) {
-  const region      = request.nextUrl.searchParams.get("region");
-  const period_date = request.nextUrl.searchParams.get("period_date");
+  const deny = await requireAuth();
+  if (deny) return deny;
 
-  if (!region || !period_date) {
-    return NextResponse.json({ picks: [] });
-  }
+  const region     = request.nextUrl.searchParams.get("region");
+  const periodParam = request.nextUrl.searchParams.get("period_date");
 
-  const periodDate = new Date(period_date);
-  if (isNaN(periodDate.getTime())) {
-    return NextResponse.json({ picks: [] });
-  }
+  if (!region || !periodParam) return NextResponse.json({ picks: [] } satisfies TopPicksPayload);
+
+  const periodDate = new Date(periodParam);
+  if (isNaN(periodDate.getTime())) return NextResponse.json({ picks: [] } satisfies TopPicksPayload);
 
   try {
-    const picks = await prisma.top_picks.findMany({
-      where:   { region, period_date: periodDate },
-      orderBy: { created_at: "asc" },
-      select:  {
-        id:             true,
-        nombre_latam:   true,
-        industry_group: true,
-        comment:        true,
-        target_price:   true,
-        created_at:     true,
-      },
+    const [rows, members, users] = await Promise.all([
+      prisma.topPick.findMany({
+        where:   { region, periodDate },
+        orderBy: { createdAt: "asc" },
+        include: {
+          sector: { select: { id: true, name: true } },
+          author: { select: { id: true, initials: true, name: true } },
+        },
+      }),
+      loadMembers(),
+      prisma.user.findMany({ select: { id: true, name: true, initials: true } }),
+    ]);
+
+    // Índice por nombre para reparar enlaces faltantes al vuelo (ver resolveAuthorId).
+    const byName = new Map(users.filter((u) => u.name).map((u) => [u.name!.trim().toLowerCase(), u]));
+
+    const picks: TopPickDTO[] = rows.map((p) => {
+      const resolvedId = resolveAuthorId(p.authorId, p.authorName, new Map([...byName].map(([k, u]) => [k, u.id])));
+      const resolved   = p.author ?? (p.authorName ? byName.get(p.authorName.trim().toLowerCase()) ?? null : null);
+      return {
+      id:            p.id,
+      region:        p.region,
+      periodDate:    p.periodDate.toISOString().slice(0, 10),
+      nombreLatam:   p.nombreLatam,
+      comment:       p.comment,
+      targetPrice:   p.targetPrice,
+      sectorId:      p.sectorId,
+      sectorName:    p.sector?.name ?? null,
+      authorId:      resolvedId,
+      // El nombre congelado manda sobre el del usuario vivo: si alguien se cambió el
+      // nombre en su perfil, el pick sigue diciendo quién lo escribió en su momento.
+      authorName:    p.authorName ?? p.author?.name ?? null,
+      authorInitials: resolved?.initials ?? null,
+      industryGroup: p.industryGroup,
+      // Se usa el id RESUELTO, no el guardado: si el analista se dio de alta después
+      // de que sus picks se cargaran, igual se reconoce como miembro y no sale gris.
+      isLegacy:      computeIsLegacy(p.sectorId, resolvedId, p.authorName, members),
+      };
     });
-    return NextResponse.json({ picks });
+
+    return NextResponse.json({ picks } satisfies TopPicksPayload);
   } catch (err) {
-    console.error("Top picks fetch error:", err);
+    console.error("[top-picks GET]", err);
     return NextResponse.json({ error: "Failed to fetch picks" }, { status: 500 });
   }
 }
 
-export const dynamic = "force-dynamic";
-
-interface PickPayload {
-  nombreLatam:   string;
-  industryGroup: string;
-  comment:       string;
+// ── POST — agregar UN pick ────────────────────────────────────────────────────
+interface CreateBody {
+  region?:       string;
+  period_date?:  string;
+  nombreLatam?:  string;
+  sectorId?:     string | null;
+  comment?:      string;
   targetPrice?:  number | null;
-}
-
-interface PostBody {
-  region:      "LATAM" | "CHILE";
-  period_date: string; // ISO date string "YYYY-MM-DD"
-  picks:       PickPayload[];
+  industryGroup?: string | null;
 }
 
 export async function POST(request: NextRequest) {
-  const deny = await requireAdmin();
+  const deny = await requireAuth();
   if (deny) return deny;
+  const self = await getSessionUser();
+  if (!self) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
-  let body: PostBody;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  let body: CreateBody;
+  try { body = await request.json(); }
+  catch { return NextResponse.json({ error: "JSON inválido" }, { status: 400 }); }
+
+  const region      = body.region?.trim().toUpperCase();
+  const nombreLatam = body.nombreLatam?.trim();
+  if (!region || !body.period_date || !nombreLatam) {
+    return NextResponse.json({ error: "Faltan region, period_date o empresa" }, { status: 400 });
   }
 
-  const { region, period_date, picks } = body;
-
-  if (!region || !period_date || !Array.isArray(picks) || picks.length === 0) {
-    return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
-  }
-
-  const periodDate = new Date(period_date);
+  const periodDate = new Date(body.period_date);
   if (isNaN(periodDate.getTime())) {
-    return NextResponse.json({ error: "Invalid period_date" }, { status: 400 });
+    return NextResponse.json({ error: "period_date inválida" }, { status: 400 });
   }
 
-  try {
-    const [, inserted] = await prisma.$transaction([
-      prisma.top_picks.deleteMany({ where: { region, period_date: periodDate } }),
-      prisma.top_picks.createMany({
-        data: picks.map((pick) => ({
-          region,
-          period_date:    periodDate,
-          nombre_latam:   pick.nombreLatam,
-          industry_group: pick.industryGroup,
-          comment:        pick.comment,
-          target_price:   pick.targetPrice ?? null,
-        })),
-      }),
-    ]);
+  // El sector decide el permiso. Sin sector sólo escribe un admin: un pick sin
+  // clasificar no pertenece a nadie, así que nadie hereda permiso sobre él.
+  const sectorId = body.sectorId || null;
+  const isAdmin  = self.role === "admin";
 
-    return NextResponse.json({ saved: inserted.count });
-  } catch (err) {
-    console.error("Top picks save error:", err);
-    return NextResponse.json({ error: "Failed to save picks" }, { status: 500 });
-  }
-}
-
-// ── DELETE — borra el reporte completo de un período (solo admin) ────────────────
-export async function DELETE(request: NextRequest) {
-  const deny = await requireAdmin();
-  if (deny) return deny;
-
-  const region      = request.nextUrl.searchParams.get("region");
-  const period_date = request.nextUrl.searchParams.get("period_date");
-
-  if (!region || !period_date) {
-    return NextResponse.json({ error: "Missing region or period_date" }, { status: 400 });
-  }
-
-  const periodDate = new Date(period_date);
-  if (isNaN(periodDate.getTime())) {
-    return NextResponse.json({ error: "Invalid period_date" }, { status: 400 });
-  }
-
-  try {
-    const { count } = await prisma.top_picks.deleteMany({
-      where: { region, period_date: periodDate },
+  if (sectorId) {
+    const sector = await prisma.pickSector.findUnique({
+      where: { id: sectorId },
+      select: { id: true, name: true, members: { select: { userId: true } } },
     });
-    return NextResponse.json({ deleted: count });
+    if (!sector) return NextResponse.json({ error: "El sector no existe" }, { status: 404 });
+    if (!isAdmin && !sector.members.some((m) => m.userId === self.id)) {
+      return NextResponse.json(
+        { error: `No eres miembro de "${sector.name}": solo puedes verlo.` },
+        { status: 403 },
+      );
+    }
+  } else if (!isAdmin) {
+    return NextResponse.json({ error: "Elige un sector para agregar el pick" }, { status: 400 });
+  }
+
+  try {
+    const pick = await prisma.topPick.create({
+      data: {
+        region,
+        periodDate,
+        nombreLatam,
+        comment:       body.comment?.trim() ?? "",
+        targetPrice:   body.targetPrice ?? null,
+        sectorId,
+        authorId:      self.id,
+        // Copia congelada: es lo que sobrevive si el usuario se borra más adelante.
+        authorName:    self.name || self.email || null,
+        industryGroup: body.industryGroup?.trim() || null,
+      },
+      include: { sector: { select: { name: true } }, author: { select: { initials: true } } },
+    });
+
+    await logAdminChanges(
+      [{
+        entity: ENTITY.topPick, entityKey: pick.id, label: nombreLatam,
+        field: "pick", oldValue: null,
+        newValue: `${region} · ${pick.sector?.name ?? "Unassigned"}`,
+        context: pick.periodDate.toISOString().slice(0, 10), action: "create",
+      }],
+      self.email ?? null,
+    );
+
+    return NextResponse.json({ id: pick.id }, { status: 201 });
   } catch (err) {
-    console.error("Top picks delete error:", err);
-    return NextResponse.json({ error: "Failed to delete picks" }, { status: 500 });
+    if (typeof err === "object" && err && "code" in err && err.code === "P2002") {
+      return NextResponse.json(
+        { error: `${nombreLatam} ya está en los Top Picks de este período.` },
+        { status: 409 },
+      );
+    }
+    console.error("[top-picks POST]", err);
+    return NextResponse.json({ error: "No se pudo agregar el pick" }, { status: 500 });
   }
 }

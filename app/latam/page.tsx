@@ -1,30 +1,33 @@
 "use client";
 
-import { Suspense, useEffect, useState, useCallback } from "react";
+import { Fragment, Suspense, useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { RefreshCw, Download } from "lucide-react";
 import { downloadExcel } from "@/lib/exportExcel";
 import LatamTable, { type LatamCompany } from "@/components/latam/LatamTable";
-import TopPicksForm from "@/components/top-picks/TopPicksForm";
 import FlatAttributionPanel from "@/components/attribution/FlatAttributionPanel";
 import SectorAttributionPanel from "@/components/attribution/SectorAttributionPanel";
 import MatrixAttributionPanel from "@/components/attribution/MatrixAttributionPanel";
 import QuantAnalysisPanel from "@/components/quant/QuantAnalysisPanel";
 import BetaExposurePanel from "@/components/latam/BetaExposurePanel";
+import TabSpacer from "@/components/TabSpacer";
 import { FONT_SECONDARY } from "@/lib/patriaTheme";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type ActiveTab = "top-picks" | "beta-exposure" | "attribution" | "quant-analysis" | "stock-selection";
+// Top Picks salió de acá: vive en Analyst Estimates como "Top Picks LatAm/Brazil".
+type ActiveTab = "beta-exposure" | "attribution" | "quant-analysis" | "stock-selection";
 type FundFilter = "all" | "MLE" | "MSC" | "others";
 
 // Planning salió de acá: es ruta de primer nivel (/planning, "Team Planning" en el navbar).
-const TABS: { key: ActiveTab; label: string }[] = [
-  { key: "top-picks",       label: "Top Picks"         },
+//
+// `spacerBefore` agrupa el bloque analítico a la izquierda —beta, atribución y quant—
+// y despega Stock Selection, que es una herramienta de otra naturaleza.
+const TABS: { key: ActiveTab; label: string; spacerBefore?: boolean }[] = [
   { key: "beta-exposure",   label: "Beta Exposure"     },
   { key: "attribution",     label: "Perf. Attribution" },
   { key: "quant-analysis",  label: "Quant Analysis"    },
-  { key: "stock-selection", label: "Stock Selection"   },
+  { key: "stock-selection", label: "Stock Selection", spacerBefore: true },
 ];
 
 interface SortOption {
@@ -126,7 +129,7 @@ function AttributionSection() {
 
 function LatAmContent() {
   const searchParams = useSearchParams();
-  // Arranca en la primera pestaña del array (Top Picks).
+  // Arranca en la primera pestaña del array (Beta Exposure).
   const [activeTab, setActiveTab] = useState<ActiveTab>(TABS[0].key);
 
   // Honor ?tab=quant-analysis (e.g. coming from the company scorecard cards)
@@ -308,9 +311,10 @@ function LatAmContent() {
           width:      "fit-content",
         }}
       >
-        {TABS.map(({ key, label }) => (
+        {TABS.map(({ key, label, spacerBefore }) => (
+          <Fragment key={key}>
+          {spacerBefore && <TabSpacer />}
           <button
-            key={key}
             onClick={() => setActiveTab(key)}
             className="px-5 py-1.5 rounded-lg text-sm transition-all"
             style={{
@@ -324,6 +328,7 @@ function LatAmContent() {
           >
             {label}
           </button>
+          </Fragment>
         ))}
       </div>
 
@@ -500,9 +505,6 @@ function LatAmContent() {
           />
         </>
       )}
-
-      {/* ── Top Picks ────────────────────────────────────────────────────────── */}
-      {activeTab === "top-picks" && <TopPicksForm defaultRegion="LATAM" />}
 
       {/* ── Performance Attribution ──────────────────────────────────────────── */}
       {activeTab === "attribution" && <AttributionSection />}

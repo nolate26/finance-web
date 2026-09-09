@@ -7,9 +7,10 @@ export const runtime = "nodejs";
 
 // Semáforo de frescura de los datos.
 //
-// Las filas se organizan por SECCIÓN DEL NAVBAR, no por tabla: al analista le sirve
-// saber "lo que veo en Analyst Estimates es de tal fecha", no el nombre de la tabla.
-// La tabla igual viaja en `source` para poder auditar de dónde salió el número.
+// Deliberadamente CORTO: tres líneas en el modal global. Una versión anterior agrupaba
+// por sección del navbar y mostraba la tabla de origen debajo de cada fila; era exacta
+// pero ilegible para quien sólo quiere saber si los números están al día. El nombre de
+// la tabla vive ahora sólo acá, en los comentarios de cada consulta.
 //
 // Hay dos ámbitos:
 //   · global          — el modal que se abre al entrar a la plataforma.
@@ -18,11 +19,9 @@ export const runtime = "nodejs";
 
 export interface FreshnessItem {
   key:     string;
-  /** Sección del navbar a la que pertenece la fila. */
-  section: string;
   label:   string;
-  /** Tabla(s) consultadas — visible en el modal para que el dato sea auditable. */
-  source:  string;
+  /** Línea secundaria opcional: quién actualiza el dato. No es el nombre de la tabla. */
+  note:    string | null;
   date:    string | null;   // ISO YYYY-MM-DD
   ageDays: number | null;
   status:  "fresh" | "warn" | "stale" | "unknown";
@@ -61,57 +60,45 @@ function statusOf(threshold: string, age: number | null): FreshnessItem["status"
 }
 
 function item(
-  key: string, section: string, label: string, source: string,
+  key: string, label: string, note: string | null,
   date: Date | null, threshold: string,
 ): FreshnessItem {
   const ageDays = daysSince(date);
-  return { key, section, label, source, date: iso(date), ageDays, status: statusOf(threshold, ageDays) };
+  return { key, label, note, date: iso(date), ageDays, status: statusOf(threshold, ageDays) };
 }
 
 // ── Ámbito global: lo que se ve al entrar a la plataforma ─────────────────────
 async function buildGlobal(): Promise<FreshnessItem[]> {
-  const [marketPrices, marketBatch, multiples, consensus, funds] = await Promise.all([
-    // El precio que muestran TANTO Analyst Estimates (badge "Prices as of") COMO la
-    // ficha de Company Info sale de la misma tabla: price_range_52w. Aparece bajo las
-    // dos secciones a propósito — el analista pregunta por sección, no por tabla.
+  const [prices, multiples, consensus, funds] = await Promise.all([
+    // PRICES — price_range_52w. Es el precio que muestran tanto Analyst Estimates
+    // (badge "Prices as of") como la ficha de Company Info, y viaja en el mismo lote
+    // que las tablas de Market Data (las seis marcan idéntica fecha en la base), así
+    // que una sola línea fecha correctamente todo el mercado.
     prisma.priceRange52w.aggregate({ _max: { date: true } }),
 
-    // Market Data: PeHistorico, PeSummarySnapshot, EquityCompsSnapshot, MacroHistorico
-    // y CommodityHistorico se cargan en el MISMO lote (las cinco marcan idéntica fecha
-    // en la base), así que basta una para fechar la sección entera.
-    prisma.equityCompsSnapshot.aggregate({ _max: { snapshotDate: true } }),
-
-    // Company Info · múltiplos históricos (semanal, viernes).
+    // BBG DATA — múltiplos históricos (semanal, viernes)…
     prisma.valuationHistory.aggregate({ _max: { date: true } }),
-    // Company Info · estimaciones de consenso. Va aparte: hoy las dos tablas difieren
-    // en semanas y se reporta la MÁS ATRASADA, que es la que limita el análisis.
+    // …y estimaciones de consenso. Van por separado porque se cargan por separado y
+    // hoy difieren en semanas: se reporta la MÁS ATRASADA, que es la que manda.
     prisma.consensusEstimate.aggregate({ _max: { date: true } }),
 
-    // Moneda Funds · pesos de cartera.
+    // MONEDA FUNDS — pesos de cartera, que carga Business Intelligence.
     prisma.fundPortfolioWeight.aggregate({ _max: { reportDate: true } }),
   ]);
 
-  const priceDate = marketPrices._max.date ?? null;
   const mDate = multiples._max.date ?? null;
   const cDate = consensus._max.date ?? null;
-  const consensusDate = mDate && cDate ? (mDate < cDate ? mDate : cDate) : (mDate ?? cDate);
+  const bbgDate = mDate && cDate ? (mDate < cDate ? mDate : cDate) : (mDate ?? cDate);
 
   return [
-    item("estimates-price", "Analyst Estimates", "Last price used",
-         "price_range_52w", priceDate, "marketBatch"),
+    item("prices", "Prices", null,
+         prices._max.date ?? null, "marketBatch"),
 
-    item("market-data", "Market Data", "Indices, comps & commodities",
-         "EquityCompsSnapshot · PeHistorico · MacroHistorico",
-         marketBatch._max.snapshotDate ?? null, "marketBatch"),
+    item("bbg", "BBG data", null,
+         bbgDate, "consensus"),
 
-    item("funds", "Moneda Funds", "Portfolio weights",
-         "fund_portfolio_weights", funds._max.reportDate ?? null, "funds"),
-
-    item("company-consensus", "Company Info", "Bloomberg consensus & multiples",
-         "valuation_history · consensus_estimates", consensusDate, "consensus"),
-
-    item("company-price", "Company Info", "Last price used",
-         "price_range_52w", priceDate, "marketBatch"),
+    item("funds", "Moneda Funds", "Updated by Business Intelligence",
+         funds._max.reportDate ?? null, "funds"),
   ];
 }
 
@@ -126,11 +113,13 @@ async function buildStockSelection(): Promise<FreshnessItem[]> {
   ]);
 
   return [
-    item("ss-prices", "Stock Selection", "Market prices & returns",
-         "ticker_return_snapshot", prices._max.asOf ?? null, "ssPrices"),
+    // ticker_return_snapshot — snapshot diario de Bloomberg.
+    item("ss-prices", "Prices", null,
+         prices._max.asOf ?? null, "ssPrices"),
 
-    item("ss-estimates", "Stock Selection", "Moneda analyst estimates",
-         "proyecciones_financieras", estimates._max.generated_at ?? null, "ssEstimates"),
+    // proyecciones_financieras — el Excel del analista.
+    item("ss-estimates", "Moneda analyst estimates", null,
+         estimates._max.generated_at ?? null, "ssEstimates"),
   ];
 }
 

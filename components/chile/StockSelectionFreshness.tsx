@@ -14,7 +14,7 @@ export default function StockSelectionFreshness() {
     <FreshnessModal
       scope="stock-selection"
       title="Stock Selection — data freshness"
-      subtitle="Sources feeding this view only"
+      subtitle="Last update of the data feeding this view"
       storageKey="patria:freshness-seen:ss"
     />
   );

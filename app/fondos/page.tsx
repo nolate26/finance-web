@@ -261,8 +261,8 @@ export default function FondosPage() {
         }}
       >
         {([
-          { key: "returns",     label: "Returns"                },
-          { key: "cartera",     label: "Cartera"                },
+          { key: "returns",     label: "Fund Returns"           },
+          { key: "cartera",     label: "Portfolio"              },
           { key: "attribution", label: "Performance Attribution" },
         ] as const).map(({ key, label }) => (
           <button
