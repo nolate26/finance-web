@@ -1034,12 +1034,71 @@ model StockSelectionV1 {
   quarter      Int      // 1..4
   periodLabel  String   @map("period_label") @db.VarChar(10) // "1Q 2026"
   value        Float?
- 
+  // Procedencia: nombre de la compañía de la que se COPIÓ esta fila (clonación de
+  // historial al renombrar una empresa). null = fila real del cargador.
+  //
+  // Existe para poder DESHACER: el ingest usa createMany/skipDuplicates, así que una fila
+  // clonada tapa para siempre al dato real cuando el cargador empiece a mandarlo. Con esta
+  // marca se borran exactamente las clonadas, sin tocar nada cargado.
+  clonedFrom   String?  @map("cloned_from") @db.VarChar(120)
+
   // @@index([company]) eliminado: es prefijo de la PK. Los otros dos no lo son.
   @@id([company, metric, series, fiscalYear, quarter])
   @@index([metric])
   @@index([fiscalYear, quarter])
   @@map("stock_selection_v1")
+}
+
+// Orden y secciones de las tablas de Chile (Stock Selection y Proyecciones), editable
+// desde Administración → Orden y secciones.
+//
+// Reemplaza a FIXED_SECTIONS de lib/chileCompanyOrder.ts, que queda como SEMILLA: si esta
+// tabla está vacía, las vistas siguen usando la lista del código, así que el cambio no
+// altera nada hasta la primera vez que se guarda desde el panel.
+//
+// `seccionPos` va denormalizado en cada fila a propósito: el editor manda la estructura
+// entera y la API reescribe la tabla completa en una transacción. Son ~100 filas, y así no
+// hay estados intermedios inconsistentes ni una segunda tabla que mantener sincronizada.
+model StockSelectionOrden {
+  company    String   @id @db.VarChar(120)          // norm(company) — llave de cruce
+  label      String   @db.VarChar(120)              // nombre legible, como se muestra
+  seccion    String   @db.VarChar(60)               // "Commodities", "Holding", ...
+  seccionPos Int      @map("seccion_pos")           // orden de la sección en la tabla
+  pos        Int                                    // orden dentro de la sección
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  updatedBy  String?  @map("updated_by") @db.VarChar(200)
+
+  @@index([seccionPos, pos])
+  @@map("stock_selection_orden")
+}
+
+// Posiciones mensuales de los fondos propios (Pionero, MCF, MRV, Orange, FIMs…).
+// Una fila por fondo × empresa × mes, cargada desde el Excel de carteras por
+// POST /api/chile/carteras/upload. Cada carga REEMPLAZA la foto de su mes entera.
+//
+// Alimenta las filas consolidadas por fondo de Stock Selection: el ponderador del
+// sumaproducto es `shares / SsV1Series.shares` — los dos lados en MILLONES de acciones,
+// igual que stock_selection_v1.shares. El Excel viene ya en millones; el parser NO
+// reescala.
+//
+// El cruce con la vista es SÓLO por ticker: `tickerBBG` normalizado (sin " Equity")
+// contra el ticker de cada SERIE de Stock Selection, no contra el de la compañía. Por eso
+// el archivo tiene que traer las series por separado (ANDINAA CI / ANDINAB CI) y NO la
+// fila madre que las suma: esa duplicaría la posición.
+model Carteras {
+  asOf       DateTime @map("as_of") @db.Date      // mes de la foto (primer día del mes)
+  fondo      String   @db.VarChar(40)             // encabezado de la columna en el Excel
+  tickerBBG  String   @map("ticker_bbg") @db.VarChar(40) // normalizado, sin " EQUITY"
+  company    String?  @db.VarChar(120)            // nombre del Excel — informativo, no es llave
+  shares     Float                                // acciones en MILLONES
+  source     String?  @db.VarChar(200)            // nombre del archivo cargado
+  ingestedAt DateTime @default(now()) @map("ingested_at")
+  ingestedBy String?  @map("ingested_by") @db.VarChar(200)
+
+  // @@index([asOf]) eliminado: es prefijo de la PK.
+  @@id([asOf, fondo, tickerBBG])
+  @@index([tickerBBG])
+  @@map("carteras")
 }
 
 // Capa de overrides manuales (admin) sobre los inputs del modelo de Stock Selection.
@@ -1323,4 +1382,22 @@ model TaskComment {
 
   @@index([taskId, createdAt])
   @@map("task_comments")
+}
+// Filas de Stock Selection ocultadas a mano por un admin.
+//
+// El universo de la vista sale de stock_selection_v1 (lo que carga el script de Bloomberg)
+// y no se puede podar desde ahí sin borrar los fundamentales. Esta tabla es una capa de
+// visibilidad aparte: marcar una compañía acá la saca de la vista sin tocar un solo dato,
+// y desmarcarla la devuelve. Reversible y auditada en admin_change_log.
+//
+// La llave es el nombre NORMALIZADO (minúsculas, espacios colapsados) de
+// stock_selection_v1.company — la misma forma con la que la vista arma sus filas.
+model StockSelectionHidden {
+  company  String   @id @db.VarChar(120) // norm(stock_selection_v1.company)
+  label    String?  @db.VarChar(120)     // el nombre tal cual venía, para leerlo a ojo
+  reason   String?  @db.VarChar(300)     // por qué se ocultó
+  hiddenBy String?  @map("hidden_by") @db.VarChar(200)
+  hiddenAt DateTime @default(now()) @map("hidden_at")
+
+  @@map("stock_selection_hidden")
 }

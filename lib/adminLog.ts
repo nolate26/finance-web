@@ -9,6 +9,7 @@ export const ENTITY = {
   empresas: "empresas_industrias_v2",
   ssOverride: "stock_selection_override",
   indexMembership: "index_membership",
+  ssHidden: "stock_selection_hidden",
   proyeccionOverride: "proyecciones_override",
   weeklyPlan: "weekly_plan",
   sector: "sectors",

@@ -9,7 +9,7 @@ import type {
 import type { CellState, OverridesPayload } from "@/app/api/projections/overrides/route";
 import { PATRIA, FONT_SECONDARY, TEXT, BORDER, SURFACE } from "@/lib/patriaTheme";
 import { YEAR_METRICS, ROW_YEAR, type YearMetric } from "@/lib/proyeccionOverrideFields";
-import { orderIdx, sectionIdx, FIXED_KEY } from "@/lib/chileCompanyOrder";
+import { buildOrder, FIXED_KEY, type OrdenPayload, type OrdenIndex } from "@/lib/chileCompanyOrder";
 
 export type { ProjectionRowAPI as ProjectionRow };
 
@@ -344,9 +344,9 @@ type SortKey =
 interface SortState { key: SortKey; dir: "asc" | "desc" }
 
 // Defined inside the component to capture globalBaseYear
-function makeGetVal(globalBaseYear: number) {
+function makeGetVal(globalBaseYear: number, ord: OrdenIndex) {
   return function getVal(row: ProjectionRowAPI, key: SortKey): number | string | null {
-    if (key === FIXED_KEY) return orderIdx(row.empresa);
+    if (key === FIXED_KEY) return ord.orderIdx(row.empresa);
     if (key === "empresa") return row.empresa;
     if (key === "sector")  return row.sector;
     if (key === "analyst") return row.analyst ?? "";
@@ -373,7 +373,18 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
   const { status } = useSession();
   const canEdit = status === "authenticated";
 
-  const getVal = makeGetVal(globalBaseYear);
+  // Orden y secciones: la misma fuente que Stock Selection (Administración → Orden y
+  // secciones). Hasta que responda se usa la semilla del código, que es el orden de siempre.
+  const [orden, setOrden] = useState<OrdenPayload | null>(null);
+  useEffect(() => {
+    fetch("/api/chile/orden")
+      .then((r) => r.json())
+      .then((d: OrdenPayload & { error?: string }) => { if (!d.error) setOrden(d); })
+      .catch(() => {/* se usa la semilla */});
+  }, []);
+  const ord = useMemo(() => buildOrder(orden), [orden]);
+
+  const getVal = makeGetVal(globalBaseYear, ord);
 
   // Column headers are strictly anchored to the global (most-recent) base year
   const yearLabels = COL_INDICES.map((i) => `${globalBaseYear + i}E`);
@@ -406,7 +417,7 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
   // las que no forman parte del universo de Stock Selection) quedan al final en el orden
   // alfabético con el que llegan de la API. Idéntico a lo que hace /chile.
   const sorted = fixedMode
-    ? [...rows].sort((a, b) => orderIdx(a.empresa) - orderIdx(b.empresa))
+    ? [...rows].sort((a, b) => ord.orderIdx(a.empresa) - ord.orderIdx(b.empresa))
     : [...rows].sort((a, b) => {
         const av = getVal(a, sort.key);
         const bv = getVal(b, sort.key);
@@ -654,7 +665,7 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
               const isStale  = row.sourceBaseYear < globalBaseYear;
               // Borde entre secciones del orden fijo, igual que en Stock Selection.
               const sectionStart =
-                fixedMode && i > 0 && sectionIdx(row.empresa) !== sectionIdx(sorted[i - 1].empresa);
+                fixedMode && i > 0 && ord.sectionIdx(row.empresa) !== ord.sectionIdx(sorted[i - 1].empresa);
               const nEdits   = row.edits
                 ? [row.edits.ingresos, row.edits.ebitda, row.edits.ebit, row.edits.utilidad]
                     .reduce((s, b) => s + (b ? [b.y0, b.y1, b.y2].filter(Boolean).length : 0), 0)

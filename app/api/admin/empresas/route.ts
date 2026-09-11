@@ -167,3 +167,107 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "No se pudo guardar el cambio" }, { status: 500 });
   }
 }
+
+// ── POST — crear una fila de homologación (solo admin) ──────────────────────────
+// Es lo que arregla las compañías que tienen fundamentales en stock_selection_v1 pero
+// no existen en empresas_industrias_v2: hoy la vista las descarta EN SILENCIO
+// (`resolveName` devuelve null y el loop hace `continue`). Sin fila acá no hay forma de
+// que aparezcan, por muy cargados que estén sus datos.
+interface PostBody {
+  nombreLatam?: string; nombreChile?: string; isin?: string; moneda?: string;
+  countryRisk?: string; industriaChile?: string; industriaGics?: string;
+  tickerBloomberg?: string; yahooFinanceTicker?: string | null;
+}
+
+export async function POST(request: NextRequest) {
+  const deny = await requireAdmin();
+  if (deny) return deny;
+  const user = await getSessionUser();
+
+  let body: PostBody;
+  try { body = await request.json(); } catch { return NextResponse.json({ error: "JSON inválido" }, { status: 400 }); }
+
+  const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  const nombreLatam = str(body.nombreLatam);
+  const tickerBloomberg = str(body.tickerBloomberg);
+  if (!nombreLatam) return NextResponse.json({ error: "Falta el nombre (nombre_latam)" }, { status: 400 });
+  if (!tickerBloomberg) return NextResponse.json({ error: "Falta el ticker Bloomberg" }, { status: 400 });
+  if (!EDITABLE_FIELDS.tickerBloomberg.re.test(tickerBloomberg)) {
+    return NextResponse.json({ error: `Ticker Bloomberg: caracteres no válidos en “${tickerBloomberg}”` }, { status: 400 });
+  }
+  const yahoo = str(body.yahooFinanceTicker);
+  if (yahoo && !EDITABLE_FIELDS.yahooFinanceTicker.re.test(yahoo)) {
+    return NextResponse.json({ error: `Ticker Yahoo: caracteres no válidos en “${yahoo}”` }, { status: 400 });
+  }
+
+  try {
+    // Los NOT NULL del modelo se rellenan con el default de la vista (Chile/CLP) cuando
+    // el formulario los deja vacíos: son descriptivos y no participan del cruce.
+    const created = await prisma.empresasIndustriasV2.create({
+      data: {
+        nombreLatam,
+        // nombre_chile es la otra llave de homologación: si va vacío se copia el latam,
+        // así el nombre de stock_selection_v1 machea por al menos una de las dos.
+        nombreChile: str(body.nombreChile) || nombreLatam,
+        isin: str(body.isin),
+        moneda: str(body.moneda) || "CLP",
+        countryRisk: str(body.countryRisk) || "Chile",
+        industriaChile: str(body.industriaChile),
+        industriaGics: str(body.industriaGics),
+        tickerBloomberg,
+        yahooFinanceTicker: yahoo || null,
+      },
+      select: {
+        id: true, nombreLatam: true, nombreChile: true, isin: true, moneda: true,
+        industriaChile: true, industriaGics: true, tickerBloomberg: true, yahooFinanceTicker: true,
+      },
+    });
+
+    await logAdminChanges(
+      [{ entity: ENTITY.empresas, entityKey: String(created.id), label: created.nombreLatam,
+         field: "fila", oldValue: null, newValue: `${created.nombreLatam} · ${created.tickerBloomberg}`, action: "create" }],
+      user?.email ?? null,
+    );
+
+    return NextResponse.json({
+      ok: true,
+      row: { ...created, codePatch: codePatchFor(created.yahooFinanceTicker), inStockSelection: true },
+    }, { status: 201 });
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      return NextResponse.json({ error: "Ese ticker Bloomberg ya está tomado por otra empresa" }, { status: 409 });
+    }
+    console.error("[admin/empresas POST]", e);
+    return NextResponse.json({ error: "No se pudo crear la fila" }, { status: 500 });
+  }
+}
+
+// ── DELETE — borrar una fila de homologación (solo admin) ───────────────────────
+// Destructivo y sin deshacer automático: la bitácora guarda los valores para poder
+// recrearla a mano. Para sacar una compañía de la VISTA no hace falta esto — usá
+// /api/admin/ss-rows, que la oculta sin perder la homologación.
+export async function DELETE(request: NextRequest) {
+  const deny = await requireAdmin();
+  if (deny) return deny;
+  const user = await getSessionUser();
+
+  const id = parseInt(request.nextUrl.searchParams.get("id") ?? "", 10);
+  if (!Number.isInteger(id)) return NextResponse.json({ error: "Falta el id de la fila" }, { status: 400 });
+
+  try {
+    const row = await prisma.empresasIndustriasV2.findUnique({ where: { id } });
+    if (!row) return NextResponse.json({ error: "La fila ya no existe" }, { status: 404 });
+
+    await prisma.empresasIndustriasV2.delete({ where: { id } });
+    await logAdminChanges(
+      [{ entity: ENTITY.empresas, entityKey: String(id), label: row.nombreLatam, field: "fila",
+         oldValue: `${row.nombreLatam} | ${row.nombreChile} | ${row.tickerBloomberg} | ${row.yahooFinanceTicker ?? ""} | ${row.isin}`,
+         newValue: null, action: "delete" }],
+      user?.email ?? null,
+    );
+    return NextResponse.json({ ok: true, deleted: id });
+  } catch (e) {
+    console.error("[admin/empresas DELETE]", e);
+    return NextResponse.json({ error: "No se pudo borrar la fila" }, { status: 500 });
+  }
+}

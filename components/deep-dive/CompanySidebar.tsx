@@ -7,23 +7,36 @@ import { FONT_SECONDARY } from "@/lib/patriaTheme";
 
 interface Props {
   companies: CompanyListItem[];
+  /**
+   * Resto de `empresas_industrias_v2`: empresas sin datos de deep dive. NO se
+   * listan por defecto — sólo aparecen cuando hay algo escrito en el buscador,
+   * para que por la lupa se pueda llegar a cualquier empresa de la maestra.
+   */
+  universe?: CompanyListItem[];
   selectedTicker: string | null;
   onSelect: (item: CompanyListItem) => void;
   loading?: boolean;
 }
 
-export default function CompanySidebar({ companies, selectedTicker, onSelect, loading }: Props) {
+const matches = (c: CompanyListItem, q: string) =>
+  (c.ticker?.toLowerCase() ?? "").includes(q) ||
+  (c.nombre?.toLowerCase() ?? "").includes(q);
+
+export default function CompanySidebar({ companies, universe = [], selectedTicker, onSelect, loading }: Props) {
   const [query, setQuery] = useState("");
 
+  // Sin búsqueda: sólo la cobertura (índices + bmk + modelos + consensus). Con
+  // búsqueda: primero las cubiertas, después el resto de la maestra.
   const filtered = useMemo(() => {
-    const q = query.toLowerCase();
+    const q = query.trim().toLowerCase();
     if (!q) return companies;
-    return companies.filter(
-      (c) =>
-        (c.ticker?.toLowerCase() ?? "").includes(q) ||
-        (c.nombre?.toLowerCase() ?? "").includes(q)
-    );
-  }, [companies, query]);
+    return [
+      ...companies.filter((c) => matches(c, q)),
+      ...universe.filter((c) => matches(c, q)),
+    ];
+  }, [companies, universe, query]);
+
+  const extraCount = filtered.filter((c) => c.hasData === false).length;
 
   return (
     <div
@@ -86,6 +99,9 @@ export default function CompanySidebar({ companies, selectedTicker, onSelect, lo
         ) : (
           filtered.map((c) => {
             const active = c.ticker === selectedTicker;
+            // Empresa que sólo existe en la maestra: se puede abrir, pero el deep
+            // dive va a venir vacío — se avisa acá y no después del click.
+            const noData = c.hasData === false;
             return (
               <button
                 key={c.ticker}
@@ -116,7 +132,7 @@ export default function CompanySidebar({ companies, selectedTicker, onSelect, lo
                     fontSize: 12,
                     fontWeight: 700,
                     fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
-                    color: active ? "#2044DC" : "#0D0D38",
+                    color: active ? "#2044DC" : noData ? "rgba(13,13,56,0.62)" : "#0D0D38",
                     letterSpacing: "0.02em",
                   }}
                 >
@@ -124,17 +140,37 @@ export default function CompanySidebar({ companies, selectedTicker, onSelect, lo
                 </span>
                 <span
                   style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
                     fontSize: 10,
                     color: "rgba(13,13,56,0.45)",
                     marginTop: 1,
                     overflow: "hidden",
-                    textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
                     maxWidth: "100%",
                   }}
                 >
-                  {c.ticker}
-                  
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{c.ticker}</span>
+                  {noData && (
+                    <span
+                      style={{
+                        flexShrink: 0,
+                        fontSize: 8,
+                        fontWeight: 700,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        color: "#FF6B06",
+                        background: "rgba(255,107,6,0.10)",
+                        border: "1px solid rgba(255,107,6,0.25)",
+                        borderRadius: 4,
+                        padding: "0 4px",
+                        lineHeight: "13px",
+                      }}
+                    >
+                      No data
+                    </span>
+                  )}
                 </span>
               </button>
             );
@@ -152,7 +188,12 @@ export default function CompanySidebar({ companies, selectedTicker, onSelect, lo
           fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
         }}
       >
-        {filtered.length} / {companies.length} companies
+        {/* El denominador es siempre la cobertura; los hits extra de la maestra
+            se cuentan aparte para no inflar el ratio. */}
+        {filtered.length - extraCount} / {companies.length} companies
+        {extraCount > 0 && (
+          <span style={{ color: "#FF6B06" }}> · +{extraCount} no data</span>
+        )}
       </div>
     </div>
   );

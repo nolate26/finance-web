@@ -1,14 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { RefreshCw, LayoutGrid, X, Check, Plus, Save, Search, Pencil, RotateCcw, Lock } from "lucide-react";
+import { RefreshCw, LayoutGrid, X, Check, Plus, Save, Search, Pencil, RotateCcw, Lock, FileSpreadsheet, Printer } from "lucide-react";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import SsV1AdminPanel from "./SsV1AdminPanel";
+import SsV1PrintView, { type PrintColGroup } from "./SsV1PrintView";
 import StockSelectionFreshness from "./StockSelectionFreshness";
+import { downloadExcel, type SheetDef } from "@/lib/exportExcel";
 import { OVERRIDE_FIELDS, PROJECTION_FIELDS, FIELD_AFFECTS } from "@/lib/ssOverrideFields";
-import { normName, orderIdx, sectionIdx, FIXED_KEY } from "@/lib/chileCompanyOrder";
+import { normName, buildOrder, FIXED_KEY, type OrdenPayload } from "@/lib/chileCompanyOrder";
 import type { SsV1Company, SsV1Payload, SsV1Series, IndexLevel } from "@/app/api/chile/stock-selection-v1/route";
 import type { IndexMembershipPayload } from "@/app/api/chile/index-membership/route";
+import type { CarterasPayload } from "@/app/api/chile/carteras/route";
+import { normBBG } from "@/lib/bbg";
 import { PATRIA, FONT_SECONDARY, TEXT } from "@/lib/patriaTheme";
 
 // Amarillo para celdas editadas por admin (override) y sus dependientes.
@@ -63,6 +67,13 @@ const HEAD2_BAND_SOLID = "#E9ECFC";  // = HEAD2_BAND sobre blanco
 const EDIT_ROW_SOLID   = "#FFF0E6";  // = rgba(255,107,6,0.10) sobre blanco
 const IDX_TINT_SOLID   = "#F2FDFD";  // = IDX_TINT sobre blanco
 const IDX_ZEBRA_SOLID  = "#E5FCFB";  // = IDX_ZEBRA sobre blanco
+// Fondos propios: van en la misma tabla que los índices, debajo, pero con tinte azul para
+// que se lean como un bloque distinto — un índice es una referencia de mercado y un fondo
+// es una posición nuestra, y no conviene que se confundan de un vistazo.
+const FUND_TINT        = "rgba(0,30,175,0.055)";
+const FUND_ZEBRA       = "rgba(0,30,175,0.10)";
+const FUND_TINT_SOLID  = "#F1F3FB";
+const FUND_ZEBRA_SOLID = "#E6E9F7";
 const SOLID_TINT: Record<string, string> = { "rgba(69,113,255,0.075)": RET_TINT_SOLID };
 /** Tinte opaco equivalente, para fondos de celdas sticky. */
 const solidTint = (c: string | undefined): string | undefined => (c ? SOLID_TINT[c] ?? c : undefined);
@@ -179,7 +190,9 @@ function computeV(mcap: number | null, a: Alloc): Record<string, number | null> 
 }
 
 // ── Display rows ────────────────────────────────────────────────────────────────
-interface DisplayRow {
+// Exportados para SsV1PrintView / el exportador a Excel, que reusan las mismas filas y
+// definiciones de columna: lo que se imprime es exactamente lo que se ve.
+export interface DisplayRow {
   company: string; tickerBBG: string | null; ssCurrency: "CLP" | "USD"; industria: string | null;
   divLabel: string | null;
   payout: number | null;    // pool_div (payout) de proyecciones_financieras, decimal 0..1
@@ -199,7 +212,38 @@ interface DisplayRow {
 const RET_FIELDS = ["retMonth", "retYtd", "retYear", "ret3y", "ret5y"] as const;
 interface AggUnit { alloc: Alloc; mcap: number | null; dividendos: number | null }
 interface UnitEntry { key: string; u: AggUnit }
-interface CompanyGroup { cons: DisplayRow; series: DisplayRow[]; units: UnitEntry[] }
+export interface CompanyGroup { cons: DisplayRow; series: DisplayRow[]; units: UnitEntry[] }
+
+// Ticker Bloomberg → unidad agregable, para cruzar las carteras (que vienen con ticker y
+// nada más). El denominador del ponderador viaja acá mismo: las acciones de ESA unidad.
+interface TickerUnitRef { unitKey: string; shares: number | null; company: string; series: string }
+
+/**
+ * Índice ticker → unidad a partir de lo que la vista ya tiene resuelto.
+ *
+ * Una compañía de doble serie se direcciona por el ticker de CADA SERIE, nunca por el de
+ * la compañía: el ticker de compañía de una dual es el de una de sus series (la
+ * homologación manda andina → andina-b), así que registrarlo pisaría a esa serie y la
+ * posición se cargaría contra la unidad equivocada. Verificado contra la base: con esta
+ * regla los 10 tickers de serie resuelven bien y no hay una sola colisión.
+ */
+function buildUnitByTicker(companies: SsV1Company[]): Map<string, TickerUnitRef> {
+  const m = new Map<string, TickerUnitRef>();
+  for (const c of companies) {
+    const base = normName(c.company);
+    if (!base) continue;
+    if (c.dual) {
+      for (const s of c.series) {
+        const k = normBBG(s.bbg);
+        if (k) m.set(k, { unitKey: `${base}-${s.label.toLowerCase()}`, shares: s.shares, company: c.company, series: s.label });
+      }
+    } else {
+      const k = normBBG(c.series[0]?.bbg ?? c.tickerBBG);
+      if (k) m.set(k, { unitKey: base, shares: c.sharesTotal, company: c.company, series: "TOTAL" });
+    }
+  }
+  return m;
+}
 
 const dividendosOf = (a: Alloc): number | null =>
   a.payout != null && a.util26Usd != null ? Math.max(a.payout * a.util26Usd, 0) : null;
@@ -325,7 +369,7 @@ const toUnitKey = (imCompany: string): string => {
   return k;
 };
 
-interface IndexAggRow { index: string; count: number; v: Record<string, number | null> }
+export interface IndexAggRow { index: string; count: number; v: Record<string, number | null> }
 
 function computeIndexAggregates(
   membership: IndexMembershipPayload | null,
@@ -367,13 +411,115 @@ function computeIndexAggregates(
   });
 }
 
+// ── Agregación por FONDO (sumaproducto por participación) ───────────────────────
+// Un fondo es un índice cuyo peso, en vez de 1, es la fracción de la compañía que posee:
+//
+//     w = acciones en cartera / acciones de la unidad          (ambas en MILLONES)
+//
+// Se pondera la SERIE, no la compañía: la unidad de una serie ya viene prorrateada por
+// shares_serie/sharesTotal, así que al multiplicarla por held/shares_serie el prorrateo se
+// cancela y queda alloc_compañía × held/sharesTotal. El M.Cap sale precio_serie × held, que
+// es el valor de mercado de la posición. Por eso el Excel trae A y B por separado.
+//
+// Diferencia con los índices: las métricas que dependen del EBITDA excluyen a las
+// compañías que no lo reportan, con un flag 0/1 POR HORIZONTE (LTM / 26E / 27E) — una
+// compañía puede tener EBITDA LTM y no tener proyección 27E. El flag se aplica a los DOS
+// lados del múltiplo: si el M.Cap del numerador incluyera compañías cuyo EBITDA no está en
+// el denominador, el FV/EBITDA saldría inflado. Sobre la suma de EBITDA el flag es
+// indiferente (un null aporta 0 igual), así que sólo hace falta acumular M.Cap y DN aparte.
+interface EbAcc { mcap: number | null; dn: number | null }
+const emptyEb = (): EbAcc => ({ mcap: null, dn: null });
+const addEb = (t: EbAcc, u: AggUnit, w: number, on: boolean): void => {
+  if (!on) return;
+  if (u.mcap != null) t.mcap = (t.mcap ?? 0) + u.mcap * w;
+  if (u.alloc.dn != null) t.dn = (t.dn ?? 0) + u.alloc.dn * w;
+};
+const fvEb = (e: EbAcc): number | null => (e.mcap != null && e.dn != null ? e.mcap + e.dn : null);
+
+export interface FundAggRow {
+  fondo: string;
+  count: number;    // posiciones que entraron al sumaproducto
+  missing: number;  // posiciones del snapshot cuyo ticker ya no resuelve a una unidad
+  v: Record<string, number | null>;
+}
+
+function computeFundAggregates(
+  carteras: CarterasPayload | null,
+  unitMap: Map<string, AggUnit>,
+  unitByTicker: Map<string, TickerUnitRef>,
+): FundAggRow[] {
+  if (!carteras?.fondos.length) return [];
+  interface Acc {
+    alloc: Alloc; mcap: number | null; div: number; count: number; missing: number;
+    ltm: EbAcc; y26: EbAcc; y27: EbAcc;
+  }
+  const acc = new Map<string, Acc>();
+  const get = (fondo: string): Acc => {
+    let a = acc.get(fondo);
+    if (!a) { a = { alloc: emptyAlloc(), mcap: null, div: 0, count: 0, missing: 0, ltm: emptyEb(), y26: emptyEb(), y27: emptyEb() }; acc.set(fondo, a); }
+    return a;
+  };
+
+  for (const key of Object.keys(carteras.holdings)) {
+    let parsed: [string, string];
+    try { parsed = JSON.parse(key) as [string, string]; } catch { continue; }
+    const [fondo, ticker] = parsed;
+    const held = carteras.holdings[key];
+    if (!(held > 0)) continue;
+
+    const a = get(fondo);
+    const ref = unitByTicker.get(ticker);
+    const unit = ref ? unitMap.get(ref.unitKey) : undefined;
+    // El ticker se cargó contra una unidad que hoy no existe (cambió la homologación o la
+    // compañía se ocultó). Se cuenta aparte en vez de desaparecer sin dejar rastro.
+    if (!ref || !unit || ref.shares == null || !(ref.shares > 0)) { a.missing++; continue; }
+
+    const w = held / ref.shares;
+    addAlloc(a.alloc, unit.alloc, w);
+    if (unit.mcap != null) a.mcap = (a.mcap ?? 0) + unit.mcap * w;
+    if (unit.dividendos != null) a.div += unit.dividendos * w;
+    addEb(a.ltm, unit, w, unit.alloc.ebitdaLtmUsd != null);
+    addEb(a.y26, unit, w, unit.alloc.ebitda26Usd  != null);
+    addEb(a.y27, unit, w, unit.alloc.ebitda27Usd  != null);
+    a.count++;
+  }
+
+  return carteras.fondos.map((fondo) => {
+    const a = acc.get(fondo);
+    if (!a) return { fondo, count: 0, missing: 0, v: {} };
+    const v = computeV(a.mcap, a.alloc);
+    // payout no agrega: el yield sale de la suma de dividendos estimados sobre el M.Cap.
+    v.divYield = a.mcap != null && a.mcap > 0 ? a.div / a.mcap : null;
+    // FV/EBITDA con el subconjunto que sí reporta EBITDA en cada horizonte.
+    v.fvEbitdaLtm = mult(fvEb(a.ltm), a.alloc.ebitdaLtmUsd);
+    v.fvEbitda26  = mult(fvEb(a.y26), a.alloc.ebitda26Usd);
+    v.fvEbitda27  = mult(fvEb(a.y27), a.alloc.ebitda27Usd);
+    // Un fondo no tiene precio unitario, y su retorno no es el promedio ponderado de los
+    // retornos de sus posiciones (ignora flujos y rebalanceo). Misma decisión que en índices.
+    v.price = null;
+    for (const f of RET_FIELDS) v[f] = null;
+    return { fondo, count: a.count, missing: a.missing, v };
+  });
+}
+
 // Grupos de columnas de la tabla de índices: las mismas que la de empresas salvo
 // Recomendación (no agrega). "Precio" queda "—" (un índice no tiene precio único); los
 // retornos van ponderados por M.Cap. Se reusan las definiciones de columnas de buildGroups.
 const IDX_GROUP_IDS = ["price", "ret", "size", "ebitdaRep", "utilRep", "ebitdaUsd", "fvEbitda", "utilUsd", "pu", "otros", "div", "roicG"];
+// Columnas de un grupo en la tabla agregada: TODAS (sin respetar el colapso), salvo Pol Div
+// (dentro de "div", no agrega) y el bloque de EBITDA, que va como crecimiento.
+const idxCols = (g: Group): ColDef[] =>
+  g.id === "div"       ? g.cols.filter((c) => c.id !== "polDiv")
+  : g.id === "ebitdaUsd" ? IDX_EBITDA_VAR_COLS
+  : g.cols;
+// Una fila agregada (índice o fondo) con la forma de DisplayRow, para reusar los renders.
+const aggRow = (name: string, v: Record<string, number | null>): DisplayRow => ({
+  company: name, tickerBBG: null, ssCurrency: "USD", industria: null, divLabel: null,
+  payout: null, rec: null, recDate: null, tp: null, label: "", kind: "single", seriesBBG: null, v,
+});
 
 // ── Column model ─────────────────────────────────────────────────────────────────
-interface ColDef {
+export interface ColDef {
   id: string; label: string;
   render: (r: DisplayRow) => { text: string; color?: string; weight?: number };
   sortVal?: (r: DisplayRow) => number | string | null;
@@ -381,7 +527,7 @@ interface ColDef {
 }
 // tint/headBg: override del bandeado por defecto. Se usa para que el bloque de Retornos
 // (Bloomberg, a una fecha distinta) no se lea como parte del de Precio (Yahoo, en vivo).
-interface Group { id: string; title: string; hint?: string; cols: ColDef[]; collapsible?: boolean; primary?: string; tint?: string; headBg?: string }
+export interface Group { id: string; title: string; hint?: string; cols: ColDef[]; collapsible?: boolean; primary?: string; tint?: string; headBg?: string }
 const num = (id: string) => (r: DisplayRow) => r.v[id];
 // Retornos y variaciones: único lugar donde se usa color (verde/rojo). Vive acá arriba
 // (y no dentro de buildGroups) porque la tabla de índices arma columnas propias con él.
@@ -475,6 +621,10 @@ export default function StockSelectionV1() {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(["fvEbitda", "pu"])); // grupos colapsables abiertos (los múltiplos clave parten desplegados)
   const [showIndexEditor, setShowIndexEditor] = useState(false); // editor de membresía de índices (solo admin)
   const [membership, setMembership] = useState<IndexMembershipPayload | null>(null); // matriz índice↔empresa (para el sumaproducto)
+  const [carteras, setCarteras] = useState<CarterasPayload | null>(null); // posiciones de los fondos propios
+  // Orden y secciones (Administración → Orden y secciones). Hasta que llegue se usa la
+  // semilla del código, que es el orden de siempre: la tabla nunca aparece desordenada.
+  const [orden, setOrden] = useState<OrdenPayload | null>(null);
   const [editMode, setEditMode] = useState(false); // modo edición de valores (solo admin)
   const [editCompany, setEditCompany] = useState<SsV1Company | null>(null); // compañía con panel de edición abierto
   const isAdmin = useIsAdmin();
@@ -487,6 +637,24 @@ export default function StockSelectionV1() {
       .catch(() => {/* la tabla de índices simplemente no se muestra */});
   }, []);
   useEffect(() => { loadMembership(); }, [loadMembership]);
+
+  // Carteras: se recarga al confirmar una carga desde el panel de admin.
+  const loadCarteras = useCallback(() => {
+    fetch("/api/chile/carteras")
+      .then((r) => r.json())
+      .then((d: CarterasPayload & { error?: string }) => { if (!d.error) setCarteras(d); })
+      .catch(() => {/* sin carteras cargadas la tabla simplemente no muestra fondos */});
+  }, []);
+  useEffect(() => { loadCarteras(); }, [loadCarteras]);
+
+  const loadOrden = useCallback(() => {
+    fetch("/api/chile/orden")
+      .then((r) => r.json())
+      .then((d: OrdenPayload & { error?: string }) => { if (!d.error) setOrden(d); })
+      .catch(() => {/* se usa la semilla del código */});
+  }, []);
+  useEffect(() => { loadOrden(); }, [loadOrden]);
+  const ord = useMemo(() => buildOrder(orden), [orden]);
   // Alto real de la 1ª fila del encabezado → es el `top` de la 2ª, para que ambas
   // queden fijas al hacer scroll (se mide porque depende de la fuente del navegador).
   const headRowRef = useRef<HTMLTableRowElement | null>(null);
@@ -549,6 +717,13 @@ export default function StockSelectionV1() {
     return m;
   }, [allComputed]);
   const indexAggregates = useMemo(() => computeIndexAggregates(membership, unitMap, data?.indexLevels), [membership, unitMap, data]);
+  // Fondos: mismo unitMap que los índices, así que recalculan solos al cambiar el TC, el
+  // trimestre o al traer precios. No hay un segundo fetch por cada cambio de la vista.
+  const unitByTicker = useMemo(() => buildUnitByTicker(data?.companies ?? []), [data]);
+  const fundAggregates = useMemo(
+    () => computeFundAggregates(carteras, unitMap, unitByTicker),
+    [carteras, unitMap, unitByTicker],
+  );
   const companyByName = useMemo(() => {
     const m = new Map<string, SsV1Company>();
     for (const c of data?.companies ?? []) m.set(normName(c.company), c);
@@ -563,7 +738,7 @@ export default function StockSelectionV1() {
     }
     if (sector !== "all") list = list.filter((g) => g.cons.industria === sector);
     if (sortKey === FIXED_KEY) {
-      list.sort((a, b) => orderIdx(a.cons.company) - orderIdx(b.cons.company)); // sort estable → no listadas quedan alfabéticas
+      list.sort((a, b) => ord.orderIdx(a.cons.company) - ord.orderIdx(b.cons.company)); // sort estable → no listadas quedan alfabéticas
     } else {
       const col = colById.get(sortKey);
       const sv = col?.sortVal ?? ((r: DisplayRow) => r.v[sortKey] ?? null);
@@ -579,9 +754,99 @@ export default function StockSelectionV1() {
       });
     }
     return list;
-  }, [allComputed, search, sector, sortKey, sortDir, colById]);
+  }, [allComputed, search, sector, sortKey, sortDir, colById, ord]);
 
   const totalRows = useMemo(() => groups.reduce((n, g) => n + 1 + g.series.length, 0), [groups]);
+
+  // ── Impresión: reparto en dos planas ──────────────────────────────────────────
+  // La plana 2 lleva además los índices y los fondos, así que a la 1 le tocan más
+  // compañías: se busca el corte que deja las dos planas con filas parecidas y, con el
+  // orden por sector activo, se ajusta al borde de sección más cercano para no partir un
+  // bloque en dos hojas.
+  const printSplit = useMemo(() => {
+    const rowsOf = (g: CompanyGroup) => 1 + g.series.length;
+    // Sobrecarga de la plana 2: pie de fuentes (≈2 filas) + bloque agregado con título y
+    // doble encabezado (≈3 filas) si hay índices o fondos. Mismas cuentas que SsV1PrintView.
+    const nAgg = indexAggregates.length + fundAggregates.length;
+    const aggRows = 2 + (nAgg ? nAgg + 3 : 0);
+    const target = (totalRows + aggRows) / 2;
+    let cum = 0, cut = groups.length;
+    for (let i = 0; i < groups.length; i++) { cum += rowsOf(groups[i]); if (cum >= target) { cut = i + 1; break; } }
+    if (fixedMode && groups.length > 4) {
+      // Borde de sección más cercano al corte (mirando hasta 8 grupos a cada lado).
+      let best = cut, bestDist = Infinity;
+      for (let i = Math.max(1, cut - 8); i <= Math.min(groups.length - 1, cut + 8); i++) {
+        if (ord.sectionIdx(groups[i].cons.company) === ord.sectionIdx(groups[i - 1].cons.company)) continue;
+        const d = Math.abs(i - cut);
+        if (d < bestDist) { bestDist = d; best = i; }
+      }
+      cut = best;
+    }
+    return { page1: groups.slice(0, cut), page2: groups.slice(cut) };
+  }, [groups, totalRows, indexAggregates, fundAggregates, fixedMode, ord]);
+
+  const printCols = useMemo<PrintColGroup[]>(
+    () => groupDefs.map((g) => ({ id: g.id, title: g.title, cols: visibleCols(g, expandedGroups), tint: g.tint })),
+    [groupDefs, expandedGroups],
+  );
+  const printAggCols = useMemo<PrintColGroup[]>(
+    () => groupDefs.filter((g) => IDX_GROUP_IDS.includes(g.id)).map((g) => ({ id: g.id, title: IDX_GROUP_TITLE[g.id] ?? g.title, cols: idxCols(g) })),
+    [groupDefs],
+  );
+  // "1Q 2026" → "1Q26", el formato corto que se usa en los reportes.
+  const periodoCorto = data?.selFy ? `${data.selQ}Q${String(data.selFy).slice(2)}` : "—";
+
+  // ── Excel ───────────────────────────────────────────────────────────────────
+  // Exporta VALORES, no textos: los % como decimales (0,05 = 5%), los múltiplos como número,
+  // los montos en USD mn. "NM" y los vacíos van como texto/celda vacía. Van TODAS las
+  // columnas (sin respetar el colapso): en Excel sobra espacio y ocultar es trivial.
+  const exportExcel = () => {
+    const cellOf = (col: ColDef, r: DisplayRow): string | number | null => {
+      const raw = col.sortVal ? col.sortVal(r) : r.v[col.id] ?? null;
+      if (raw == null) return null;
+      if (typeof raw === "number") return isFinite(raw) ? raw : "NM";
+      return raw;
+    };
+    const colLabel = (g: Group, c: ColDef) => (g.cols.length === 1 && g.cols[0].label === g.title ? g.title : `${g.title} · ${c.label}`);
+
+    const headers = ["Sección", "Empresa", "Fila", "Ticker", "Moneda", ...groupDefs.flatMap((g) => g.cols.map((c) => colLabel(g, c)))];
+    const rows: (string | number | null)[][] = [];
+    for (const g of groups) {
+      for (const r of [g.cons, ...g.series]) {
+        rows.push([
+          ord.sectionName(g.cons.company) ?? "",
+          r.company,
+          r.kind === "series" ? `Serie ${r.label}` : r.kind === "consolidated" ? "Consolidada" : "",
+          r.kind === "series" ? r.seriesBBG ?? "" : r.tickerBBG ?? "",
+          r.ssCurrency,
+          ...groupDefs.flatMap((gd) => gd.cols.map((c) => cellOf(c, r))),
+        ]);
+      }
+    }
+
+    const aggDefs = groupDefs.filter((g) => IDX_GROUP_IDS.includes(g.id));
+    const aggHeaders = ["Tipo", "Nombre", "Miembros", ...aggDefs.flatMap((g) => idxCols(g).map((c) => colLabel({ ...g, title: IDX_GROUP_TITLE[g.id] ?? g.title }, c)))];
+    const aggRows: (string | number | null)[][] = [
+      ...indexAggregates.map((a) => ["Índice", a.index, a.count, ...aggDefs.flatMap((g) => idxCols(g).map((c) => cellOf(c, aggRow(a.index, a.v))))]),
+      ...fundAggregates.map((f) => ["Fondo", f.fondo, f.count, ...aggDefs.flatMap((g) => idxCols(g).map((c) => cellOf(c, aggRow(f.fondo, f.v))))]),
+    ];
+
+    const info: SheetDef = { name: "Info", headers: ["Campo", "Valor"], rows: [
+      ["Fecha del cierre de la cartera", carteras?.asOf ?? "—"],
+      ["Precios (total return último)", data?.returnsAsOf ?? "—"],
+      ["Resultados", periodoCorto],
+      ["Precios Yahoo traídos", data?.withPrices ? "sí" : "no — Precio, M.Cap y múltiplos vacíos"],
+      ["TC USD/CLP", tc],
+      ["Unidades", "USD millones · % en decimales (0,05 = 5%)"],
+      ["Generado", new Date().toISOString().slice(0, 16).replace("T", " ")],
+    ] };
+    const sheets: SheetDef[] = [
+      { name: "Stock Selection", headers, rows },
+      { name: "Índices y fondos", headers: aggHeaders, rows: aggRows },
+      info,
+    ];
+    void downloadExcel(sheets, `stock-selection-${periodoCorto}-${new Date().toISOString().slice(0, 10)}`);
+  };
 
   const applyTc = () => {
     const v = parseFloat(tcInput.replace(",", "."));
@@ -615,7 +880,7 @@ export default function StockSelectionV1() {
       { k: "Moneda", f: "USD → USD · CLP → ÷ TC", v: "todos los montos quedan en USD millones; el TC USD/CLP es editable arriba. Monedas no soportadas (p. ej. GBp) → “—”." },
       { k: "Períodos", v: `n = ${pN} (último trimestre cargado) · n-4 = ${pN4} (mismo trimestre, año previo) · LTM = suma de los últimos 4 trimestres (${ltmLbl}).` },
       { k: "Series A/B", v: "cada serie usa su propio precio y nº de acciones; las filas A/B prorratean los fundamentales por su % de acciones; la consolidada usa el fundamental completo contra el M.Cap total (Σ de las series)." },
-      { k: "Orden", v: "por defecto, orden fijo por sector (los bordes separan secciones; las dobles van A → B → consolidada). Clic en una columna para reordenar; “Orden por sector” vuelve al fijo. Compañías fuera del listado → al final." },
+      { k: "Orden", v: "por defecto, el orden por sector que se define en Administración → Orden y secciones (los bordes separan secciones; las dobles van consolidada → A → B). Clic en una columna para reordenar; “Orden por sector” vuelve al fijo. Compañías fuera del listado → al final." },
     ] },
     { title: "Precio (Yahoo, en vivo)", items: [
       { k: "Precio", v: "regularMarketPrice de Yahoo, en la moneda de cotización y con el ticker propio de cada serie. Se valida contra el último cierre: si difiere más de 15% se usa el cierre, porque en papeles sin volumen Yahoo devuelve ahí un precio indicativo irreal (AFP Capital informaba 310 contra un cierre de 247,5 tras 14 ruedas sin operar)." },
@@ -680,6 +945,14 @@ export default function StockSelectionV1() {
       { k: "Date", v: "fecha de esa recomendación." },
       { k: "TP", v: "precio objetivo, en la moneda de cotización (sin convertir por TC)." },
     ] },
+    { title: "Fondos — sumaproducto por participación", wide: true, items: [
+      { k: "Ponderador", f: "acciones en cartera / acciones de la unidad", v: "las dos en millones. Es la fracción de la compañía que el fondo posee. Las posiciones salen de `carteras`, que se carga mes a mes desde el Excel en Administración → Carteras." },
+      { k: "Series A/B", v: "se pondera la SERIE, no la compañía: la unidad de una serie ya viene prorrateada por su % de acciones, así que al multiplicarla por (acciones en cartera / acciones de la serie) el prorrateo se cancela y el M.Cap queda precio de la serie × acciones en cartera, que es el valor de mercado de la posición. Por eso el Excel trae ANDINAA CI y ANDINAB CI por separado, y NO la fila madre que las suma: duplicaría la posición." },
+      { k: "Cruce", v: "exclusivamente por ticker Bloomberg contra el ticker de cada serie. Un ticker que no cruza se avisa en el preview de la carga, antes de escribir; si igual queda alguno cargado que después deje de resolver, la fila del fondo lo muestra como “−N” al lado del nombre." },
+      { k: "M.Cap y fundamentales", f: "Σ (valor de la unidad × ponderador)", v: "mismo motor que los índices: se suman los primitivos aditivos y los múltiplos salen de esas sumas, no del promedio de los múltiplos de cada posición." },
+      { k: "FV/EBITDA", v: "excluye a las compañías que no reportan EBITDA en ESE horizonte, con un flag 0/1 independiente para LTM, 2026E y 2027E. El flag se aplica también al M.Cap y a la deuda neta del numerador: si el FV incluyera compañías cuyo EBITDA no está en el denominador, el múltiplo saldría inflado." },
+      { k: "Precio y retornos", v: "en blanco. Un fondo no tiene precio unitario, y ponderar los retornos de las posiciones no da el retorno del fondo (ignora flujos y rebalanceo), así que no se aproxima." },
+    ] },
     { title: "Cobertura del universo y datos de mercado", wide: true, items: [
       { k: "Qué empresas aparecen", v: "una compañía sólo se muestra si su nombre en stock_selection_v1 homologa a un ticker Yahoo vivo (vía empresas_industrias_v2, con fallback por ISIN en company_isins). Si el nombre no homologa o el ticker está deslistado, la fila se descarta sin aviso. De las 98 compañías de la tabla, 6 no resolvían; ver detalle abajo." },
       { k: "Tickers corregidos (jul-2026)", v: "empresas_industrias_v2 / company_isins traían símbolos Yahoo deslistados que dejaban la fila sin precio. Corregidos y verificados contra el precio de referencia: Bicecorp → BICE.SN · Cencosud Shopping → CENCOMALLS.SN · Concha y Toro → CONCHATORO.SN · Itaú Chile → ITAUCL.SN · MultiX → MULTI-X.SN · La Polar → ABC.SN · Oro Blanco → ORO-BLANCO.SN · Clínica Las Condes → LAS-CONDES.SN · Viña Santa Rita → SANTA-RITA.SN · Potasios A/B → POTASIOS-A/B.SN · Cementos (Bío Bío) → CEM.SN." },
@@ -714,7 +987,14 @@ export default function StockSelectionV1() {
       {/* Panel de administración — homologación de tickers + bitácora de cambios.
           Va arriba de todo porque lo que se toca acá (qué ticker se consulta) decide
           qué muestra la tabla de abajo. */}
-      {isAdmin && <SsV1AdminPanel onSourceChanged={() => load(priced, selPeriod)} />}
+      {isAdmin && (
+        <SsV1AdminPanel
+          onSourceChanged={() => { load(priced, selPeriod); loadCarteras(); loadOrden(); }}
+          // Trimestre activo: el alta de empresas guarda sus datos iniciales contra éste,
+          // que es el mismo período al que aplica cualquier otra edición manual.
+          periodo={data?.selFy ? { fy: data.selFy, q: data.selQ, label: data.periodN ?? `${data.selQ}Q ${data.selFy}` } : null}
+        />
+      )}
 
       {/* Header / controls */}
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
@@ -743,6 +1023,18 @@ export default function StockSelectionV1() {
             <RefreshCw size={13} style={pricesLoading ? { animation: "spin 0.8s linear infinite" } : undefined} />
             {pricesLoading ? "Trayendo…" : priced ? "Actualizar precios" : "Traer precios (Yahoo)"}
           </button>
+          {/* Exportar: Excel con valores crudos, y la hoja imprimible (legal apaisado, dos
+              planas) vía el diálogo del navegador, donde "Guardar como PDF" es el PDF. */}
+          <button onClick={exportExcel} disabled={pricesLoading}
+            title={priced ? "Descargar la tabla completa en Excel, con los precios recién traídos" : "Descargar en Excel. Sin precios traídos, Precio / M.Cap / múltiplos van vacíos."}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", color: NAVY, background: "#fff", border: `1px solid ${BORDER}` }}>
+            <FileSpreadsheet size={13} /> Excel
+          </button>
+          <button onClick={() => window.print()} disabled={pricesLoading}
+            title="Hoja imprimible: legal apaisado, dos planas. En el diálogo elegí “Guardar como PDF”."
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", color: NAVY, background: "#fff", border: `1px solid ${BORDER}` }}>
+            <Printer size={13} /> PDF
+          </button>
           {isAdmin && (
             <button onClick={() => setShowIndexEditor(true)} title="Editar la pertenencia de cada empresa a los índices (admin)"
               style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", color: NAVY, background: "#fff", border: `1px solid ${NAVY}` }}>
@@ -765,6 +1057,20 @@ export default function StockSelectionV1() {
       )}
 
       {isAdmin && showIndexEditor && <IndexMembershipEditor onClose={() => setShowIndexEditor(false)} onSaved={loadMembership} />}
+
+      {/* Hoja imprimible: invisible en pantalla, es lo único que sale en @media print. */}
+      <SsV1PrintView
+        meta={{ cartera: carteras?.asOf ?? null, precios: data.returnsAsOf, periodo: periodoCorto, tc }}
+        cols={printCols}
+        page1={printSplit.page1}
+        page2={printSplit.page2}
+        sectionIdx={ord.sectionIdx}
+        fixedMode={fixedMode}
+        aggCols={printAggCols}
+        indices={indexAggregates}
+        fondos={fundAggregates}
+        aggRow={aggRow}
+      />
 
       {/* Filtros */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
@@ -843,8 +1149,8 @@ export default function StockSelectionV1() {
           </thead>
           <tbody>
             {groups.map((g, gi) => {
-              const rows = [...g.series, g.cons]; // series A/B primero, consolidada/single al final
-              const sectionStart = fixedMode && gi > 0 && sectionIdx(g.cons.company) !== sectionIdx(groups[gi - 1].cons.company);
+              const rows = [g.cons, ...g.series]; // la compañía primero; las series A/B colgando debajo
+              const sectionStart = fixedMode && gi > 0 && ord.sectionIdx(g.cons.company) !== ord.sectionIdx(groups[gi - 1].cons.company);
               return rows.map((r, ri) => {
                 const isSeries = r.kind === "series";
                 const topBorder = sectionStart && ri === 0;
@@ -891,33 +1197,39 @@ export default function StockSelectionV1() {
         </table>
       </div>
 
-      {/* Sumaproducto por índice — tabla aparte, tono teal */}
-      {membership && indexAggregates.length > 0 && (() => {
+      {/* Sumaproducto por índice y por fondo — tabla aparte, tono teal */}
+      {(indexAggregates.length > 0 || fundAggregates.length > 0) && (() => {
         const idxGroupDefs = groupDefs.filter((g) => IDX_GROUP_IDS.includes(g.id));
-        // Mismo formato que compañías, TODAS las columnas (sin respetar el colapso), salvo
-        // Pol Div (dentro de "div") y el grupo Recomendación (Rec/Date/TP, ya excluido).
-        const idxCols = (g: Group): ColDef[] =>
-          g.id === "div"       ? g.cols.filter((c) => c.id !== "polDiv")
-          : g.id === "ebitdaUsd" ? IDX_EBITDA_VAR_COLS
-          : g.cols;
-        const idxRow = (agg: (typeof indexAggregates)[number]): DisplayRow => ({
-          company: agg.index, tickerBBG: null, ssCurrency: "USD", industria: null, divLabel: null,
-          payout: null, rec: null, recDate: null, tp: null, label: "", kind: "single", seriesBBG: null, v: agg.v,
-        });
+        // Celdas de una fila agregada. Índices y fondos comparten markup: lo único que
+        // cambia es el tinte y lo que va en la columna pegada de la izquierda.
+        const aggCells = (r: DisplayRow, band: string | undefined) =>
+          idxGroupDefs.map((g, gi) =>
+            idxCols(g).map((col, i) => {
+              const out = col.render(r);
+              return (
+                <td key={col.id} style={{ padding: "5px 7px", textAlign: col.align ?? "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 10.5, color: out.color ?? TEXT1, fontWeight: out.weight ?? 400, borderBottom: `1px solid ${IDX_HEAD}18`, borderLeft: i === 0 ? `1px solid ${IDX_HEAD}18` : "none", background: gi % 2 === 1 ? band : undefined, whiteSpace: "nowrap" }}>
+                  {out.text}
+                </td>
+              );
+            }),
+          );
+        const nCols = idxGroupDefs.reduce((n, g) => n + idxCols(g).length, 0);
         return (
           <div style={{ marginTop: 22 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
               <div style={{ width: 3, height: 18, background: IDX_HEAD, borderRadius: 2 }} />
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: IDX_HEAD, letterSpacing: "-0.01em", margin: 0 }}>Índices — sumaproducto de sus miembros</h3>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: IDX_HEAD, letterSpacing: "-0.01em", margin: 0 }}>
+                {fundAggregates.length > 0 ? "Índices y fondos — sumaproducto" : "Índices — sumaproducto de sus miembros"}
+              </h3>
               <span style={{ fontSize: 10.5, color: TEXT3 }}>
-                Cada índice = Σ (M.Cap y fundamentales × peso); los múltiplos salen de esas sumas. Precio = nivel real del índice (solo IPSA/IGPA). Los retornos van en blanco: el snapshot de Bloomberg es por ticker de acción, y ponderar los de los miembros no da el retorno del índice. {priced ? "" : "Traé precios para llenar."}
+                Cada índice = Σ (M.Cap y fundamentales × peso); los múltiplos salen de esas sumas. Precio = nivel real del índice (solo IPSA/IGPA). Los retornos van en blanco: el snapshot de Bloomberg es por ticker de acción, y ponderar los de los miembros no da el retorno del índice. {fundAggregates.length > 0 && "En los fondos el peso es la participación —acciones en cartera / acciones de la compañía— y el FV/EBITDA excluye a las que no reportan EBITDA en ese horizonte. "}{priced ? "" : "Traé precios para llenar."}
               </span>
             </div>
             <div style={{ overflow: "auto", maxHeight: "72vh", border: `1px solid ${IDX_HEAD}33`, borderRadius: 8, background: IDX_TINT }}>
               <table style={{ borderCollapse: "separate", borderSpacing: 0, fontSize: 11, width: "100%" }}>
                 <thead>
                   <tr ref={idxHeadRef}>
-                    <th style={{ position: "sticky", left: 0, top: 0, zIndex: Z.corner, textAlign: "left", padding: "5px 10px", background: IDX_HEAD, color: IDX_HEAD_TEXT, fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }} rowSpan={2}>Índice</th>
+                    <th style={{ position: "sticky", left: 0, top: 0, zIndex: Z.corner, textAlign: "left", padding: "5px 10px", background: IDX_HEAD, color: IDX_HEAD_TEXT, fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }} rowSpan={2}>{fundAggregates.length > 0 ? "Índice / Fondo" : "Índice"}</th>
                     {idxGroupDefs.map((g, gi) => (
                       <th key={g.id} colSpan={idxCols(g).length}
                         style={{ position: "sticky", top: 0, zIndex: Z.head, padding: "5px 7px", textAlign: "center", fontSize: 9, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: IDX_HEAD_TEXT, background: gi % 2 === 1 ? IDX_HEAD_BAND : IDX_HEAD, borderLeft: "1px solid rgba(255,255,255,0.12)", whiteSpace: "nowrap" }}>
@@ -937,7 +1249,6 @@ export default function StockSelectionV1() {
                 </thead>
                 <tbody>
                   {indexAggregates.map((agg, ri) => {
-                    const r = idxRow(agg);
                     const bg = ri % 2 === 0 ? IDX_TINT : IDX_ZEBRA;
                     const bgSolid = ri % 2 === 0 ? IDX_TINT_SOLID : IDX_ZEBRA_SOLID;
                     return (
@@ -946,16 +1257,47 @@ export default function StockSelectionV1() {
                           <span style={{ fontSize: 11, fontWeight: 700, color: IDX_HEAD }}>{agg.index}</span>
                           <span style={{ fontSize: 9, color: TEXT3, marginLeft: 6, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>{agg.count}</span>
                         </td>
-                        {idxGroupDefs.map((g, gi) =>
-                          idxCols(g).map((col, i) => {
-                            const out = col.render(r);
-                            return (
-                              <td key={col.id} style={{ padding: "5px 7px", textAlign: col.align ?? "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 10.5, color: out.color ?? TEXT1, fontWeight: out.weight ?? 400, borderBottom: `1px solid ${IDX_HEAD}18`, borderLeft: i === 0 ? `1px solid ${IDX_HEAD}18` : "none", background: gi % 2 === 1 ? "rgba(0,30,175,0.04)" : undefined, whiteSpace: "nowrap" }}>
-                                {out.text}
-                              </td>
-                            );
-                          }),
+                        {aggCells(aggRow(agg.index, agg.v), "rgba(0,30,175,0.04)")}
+                      </tr>
+                    );
+                  })}
+
+                  {/* ── Fondos propios ─────────────────────────────────────────
+                      Van al final, justo después de los índices de mercado. Mismo
+                      sumaproducto, pero el peso es la participación (acciones en cartera /
+                      acciones de la compañía) en vez de 1. */}
+                  {fundAggregates.length > 0 && (
+                    <tr>
+                      <td colSpan={1 + nCols} style={{ position: "sticky", left: 0, background: FUND_ZEBRA_SOLID, padding: "4px 10px", borderTop: `2px solid ${PATRIA.blue}`, borderBottom: `1px solid ${IDX_HEAD}18`, whiteSpace: "nowrap" }}>
+                        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: PATRIA.blue }}>
+                          Fondos — sumaproducto por participación
+                        </span>
+                        {carteras?.asOf && (
+                          <span style={{ fontSize: 9, color: TEXT3, marginLeft: 8, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
+                            cartera al {fmtDate(carteras.asOf)}
+                          </span>
                         )}
+                      </td>
+                    </tr>
+                  )}
+                  {fundAggregates.map((agg, ri) => {
+                    const bg = ri % 2 === 0 ? FUND_TINT : FUND_ZEBRA;
+                    const bgSolid = ri % 2 === 0 ? FUND_TINT_SOLID : FUND_ZEBRA_SOLID;
+                    return (
+                      <tr key={`fondo-${agg.fondo}`} style={{ background: bg }}>
+                        <td style={{ position: "sticky", left: 0, zIndex: Z.leftCol, background: bgSolid, padding: "5px 10px", borderRight: `1px solid ${IDX_HEAD}22`, borderBottom: `1px solid ${IDX_HEAD}18`, whiteSpace: "nowrap" }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: PATRIA.blue }}>{agg.fondo}</span>
+                          <span style={{ fontSize: 9, color: TEXT3, marginLeft: 6, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>{agg.count}</span>
+                          {/* Posiciones cargadas cuyo ticker ya no resuelve: se avisa acá
+                              en vez de que la fila salga corta sin explicación. */}
+                          {agg.missing > 0 && (
+                            <span title={`${agg.missing} posición(es) de la cartera no cruzan con ninguna fila de la tabla`}
+                              style={{ fontSize: 8.5, fontWeight: 700, color: PATRIA.orange, background: "rgba(255,107,6,0.12)", border: `1px solid ${PATRIA.orange}55`, borderRadius: 3, padding: "0 4px", marginLeft: 6 }}>
+                              −{agg.missing}
+                            </span>
+                          )}
+                        </td>
+                        {aggCells(aggRow(agg.fondo, agg.v), "rgba(0,30,175,0.05)")}
                       </tr>
                     );
                   })}

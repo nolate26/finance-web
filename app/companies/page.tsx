@@ -193,6 +193,9 @@ function CompaniesPageContent() {
   const searchParams = useSearchParams();
   const isAdmin = useIsAdmin();
   const [companies, setCompanies] = useState<CompanyListItem[]>([]);
+  // Resto de empresas_industrias_v2 (sin datos de deep dive): no se lista, sólo
+  // alimenta el buscador del sidebar.
+  const [universe, setUniverse] = useState<CompanyListItem[]>([]);
   const [listLoading, setListLoading] = useState(true);
 
   const [selectedItem, setSelectedItem] = useState<CompanyListItem | null>(null);
@@ -212,14 +215,18 @@ function CompaniesPageContent() {
     const tabParam    = searchParams.get("tab");
     fetch("/api/companies/list")
       .then((r) => r.json())
-      .then((d: { companies?: CompanyListItem[] }) => {
-        const list = d.companies ?? [];
+      .then((d: { companies?: CompanyListItem[]; universe?: CompanyListItem[] }) => {
+        const list  = d.companies ?? [];
+        const extra = d.universe ?? [];
         setCompanies(list);
+        setUniverse(extra);
         if (list.length > 0) {
           // companies/list entrega tickers en MAYÚSCULAS (empresas_industrias_v2) → comparar
           // sin distinguir mayúsculas para que cualquier origen (URL, ConsensusCheckTable…) case.
+          // El deep link también resuelve contra `universe`: si el ticker existe en la
+          // maestra se abre (vacío) en vez de caer en el banner de "not found".
           const found = tickerParam
-            ? list.find((c) => c.ticker.toUpperCase() === tickerParam.toUpperCase())
+            ? [...list, ...extra].find((c) => c.ticker.toUpperCase() === tickerParam.toUpperCase())
             : null;
           if (tickerParam && !found) {
             setTickerNotFound(tickerParam);
@@ -284,6 +291,7 @@ function CompaniesPageContent() {
         <div style={{ width: 220, flexShrink: 0, overflow: "hidden" }}>
           <CompanySidebar
             companies={companies}
+            universe={universe}
             selectedTicker={selectedItem?.ticker ?? null}
             onSelect={handleSelect}
             loading={listLoading}

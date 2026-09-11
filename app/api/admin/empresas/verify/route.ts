@@ -79,7 +79,11 @@ export async function GET(request: NextRequest) {
 
   res.ok = res.price != null || res.hasChart;
   if (!res.ok) res.error = "Yahoo no devuelve datos para este símbolo (deslistado o inexistente).";
-  else if (!res.hasChart) res.error = "Responde precio pero no trae serie histórica: la fila quedaría sin retornos.";
+  // Sin serie histórica la vista igual muestra precio: fetchPrice cae a quote(). Y los
+  // retornos no dependen de Yahoo desde que salen del snapshot de Bloomberg. Pasa en los
+  // listados recién renombrados (PAMPA.SN), donde Yahoo manda meta.currency null y el
+  // chart no valida: el símbolo sirve igual.
+  else if (!res.hasChart) res.error = "Responde precio pero no trae serie histórica. Sirve igual: el precio se toma de la cotización y los retornos vienen de Bloomberg.";
 
   return NextResponse.json(res);
 }

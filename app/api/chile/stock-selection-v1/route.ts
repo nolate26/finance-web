@@ -10,10 +10,15 @@ import {
 // necesita mostrar qué filas está reescribiendo (y Next no deja exportarlo desde acá).
 import { fixYahooTicker } from "@/lib/yahooTickerFixes";
 import { normBBG } from "@/lib/bbg";
+import { norm, cleanBBG, NAME_OVERRIDES, SERIES_NAMES } from "@/lib/ssHomologacion";
 
 export const dynamic = "force-dynamic";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
+// `validation.logErrors: false` — Yahoo devuelve `meta.currency: null` en listados nuevos
+// (PAMPA.SN, recién renombrada), y el esquema de la librería exige string: tira y escupe
+// media pantalla de log en CADA pedido de precio. El error se sigue lanzando y lo atrapa
+// fetchPrice, que cae a quote(); lo único que se apaga es el ruido en la consola.
+const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"], validation: { logErrors: false } });
 
 // ── Public types ──────────────────────────────────────────────────────────────
 // El frontend aplica conv() con el TC manual. La API devuelve fundamentales en su
@@ -50,6 +55,13 @@ export interface SsV1Company {
   industria:   string | null;
   gics:        string | null;
   dual:        boolean;       // true → tiene series A/B
+  /**
+   * true = compañía SEMBRADA a mano: existe sólo por su homologación + los valores
+   * cargados en stock_selection_override, sin ninguna fila todavía en stock_selection_v1.
+   * Es como se prepara una empresa nueva antes de su primera carga. Se apaga sola cuando
+   * el cargador empieza a traerla (o borrando sus overrides).
+   */
+  seeded?:     boolean;
 
   ssCurrency:   "CLP" | "USD";
   projCurrency: "CLP" | "USD" | null;
@@ -137,22 +149,9 @@ const PROJ_Y0 = 2026;
 const PROJ_Y1 = PROJ_Y0 + 1;
 
 // ── Homologación / overrides ───────────────────────────────────────────────────
-const norm = (s: string | null | undefined) => (s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
-const cleanBBG = (t: string | null | undefined) => (t ? t.replace(/\s+EQUITY$/i, "").trim() : null);
-
-const NAME_OVERRIDES: Record<string, string> = {
-  aguas: "aguas-a", andina: "andina-b", "las condes": "clinica las condes", potasios: "potasios-b",
-};
-
-// Compañías de doble serie (A/B): nombre_chile de cada serie en empresas_industrias_v2.
-// El ticker Yahoo y BBG por serie se sacan de esa tabla (no se hardcodean).
-const SERIES_NAMES: Record<string, { A: string; B: string }> = {
-  aguas:     { A: "aguas-a",    B: "aguas-b" },
-  andina:    { A: "andina-a",   B: "andina-b" },
-  embonor:   { A: "embonor-a",  B: "embonor-b" },
-  potasios:  { A: "potasios-a", B: "potasios-b" },
-  soquimich: { A: "sqm-a",      B: "sqm-b" },
-};
+// norm / cleanBBG / NAME_OVERRIDES / SERIES_NAMES viven en lib/ssHomologacion.ts porque
+// el panel de admin resuelve los nombres con las mismas reglas: si se duplicaran, el
+// panel podría reportar "se ve" una compañía que la vista está descartando.
 
 // ── Precio (Yahoo) ──────────────────────────────────────────────────────────────
 // SÓLO el último precio. Los retornos ya NO se calculan acá: se cargan a
@@ -169,7 +168,7 @@ interface YChartQuote { date: Date; close: number | null }
 interface YChart { meta?: { currency?: string; regularMarketPrice?: number }; quotes: YChartQuote[] }
 interface PriceData { price: number | null; currency: string | null }
 
-async function fetchPrice(ticker: string): Promise<PriceData | null> {
+async function priceFromChart(ticker: string): Promise<PriceData | null> {
   try {
     const period2 = new Date();
     // 90 días: suficiente para tener un cierre real incluso en los papeles que pasan
@@ -196,6 +195,28 @@ async function fetchPrice(ticker: string): Promise<PriceData | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Precio de una acción: chart primero, quote de respaldo.
+ *
+ * El respaldo NO es defensivo de más — es la única vía para los listados recién renombrados.
+ * Con PAMPA.SN (ex Oro Blanco) Yahoo manda `meta.currency: null`, el esquema de la librería
+ * lo rechaza y `chart()` LANZA; antes eso se tragaba en el catch y la fila quedaba sin
+ * precio pese a que el símbolo existe y cotiza. `quote()` sobre el mismo símbolo devuelve
+ * 10,6 sin chistar. Al revés también pasa: ORO-BLANCO.SN todavía da chart pero ya no da
+ * quote. Los dos símbolos son el mismo papel en distintas etapas de la migración, así que
+ * hace falta probar las dos vías.
+ */
+async function fetchPrice(ticker: string): Promise<PriceData | null> {
+  const porChart = await priceFromChart(ticker);
+  if (porChart?.price != null) return porChart;
+  try {
+    const q = await yf.quote(ticker);
+    const p = q?.regularMarketPrice;
+    if (p != null && isFinite(p) && p > 0) return { price: p, currency: q?.currency ?? null };
+  } catch { /* sin quote tampoco: la fila queda sin precio */ }
+  return null;
 }
 // Nivel de índice: sólo los que Yahoo sirve por quote (chart viene vacío para éstos, así
 // que no hay retornos históricos, sólo el nivel actual). Sub-índices IGPA y "Mon" no existen.
@@ -232,8 +253,8 @@ async function fetchPricesChunked(tickers: string[]): Promise<Map<string, PriceD
 }
 
 // ── Route ─────────────────────────────────────────────────────────────────────
-interface EmpRow { tickerBloomberg: string | null; isin: string | null; industriaChile: string | null; industriaGics: string | null; nombreLatam: string; yahooFinanceTicker: string | null; }
-interface ResolvedName { tickerBBG: string | null; yahoo: string | null; industria: string | null; gics: string | null; }
+interface EmpRow { tickerBloomberg: string | null; isin: string | null; industriaChile: string | null; industriaGics: string | null; nombreLatam: string; yahooFinanceTicker: string | null; moneda: string | null; }
+interface ResolvedName { tickerBBG: string | null; yahoo: string | null; industria: string | null; gics: string | null; moneda: string | null; }
 
 export async function GET(request: NextRequest) {
   const withPrices = request.nextUrl.searchParams.get("withPrices") === "true";
@@ -248,7 +269,7 @@ export async function GET(request: NextRequest) {
       }),
       prisma.proyecciones_financieras.findMany(),
       prisma.empresasIndustriasV2.findMany({
-        select: { nombreLatam: true, nombreChile: true, isin: true, tickerBloomberg: true, industriaChile: true, industriaGics: true, yahooFinanceTicker: true },
+        select: { nombreLatam: true, nombreChile: true, isin: true, tickerBloomberg: true, industriaChile: true, industriaGics: true, yahooFinanceTicker: true, moneda: true },
       }),
       // company_isins: company_name → isin (llave de las recos) + fallback de Yahoo.
       prisma.companyIsin.findMany({ select: { companyName: true, isin: true, yahooFinanceTicker: true } }),
@@ -271,7 +292,7 @@ export async function GET(request: NextRequest) {
     };
     for (const e of empresas) {
       if (!norm(e.nombreLatam)) continue;
-      const row: EmpRow = { tickerBloomberg: e.tickerBloomberg, isin: e.isin, industriaChile: e.industriaChile, industriaGics: e.industriaGics, nombreLatam: e.nombreLatam, yahooFinanceTicker: e.yahooFinanceTicker };
+      const row: EmpRow = { tickerBloomberg: e.tickerBloomberg, isin: e.isin, industriaChile: e.industriaChile, industriaGics: e.industriaGics, nombreLatam: e.nombreLatam, yahooFinanceTicker: e.yahooFinanceTicker, moneda: e.moneda };
       addName(e.nombreLatam, row); addName(e.nombreChile, row);
     }
     // Ticker Yahoo: 1) empresas_industrias_v2.yahoo_finance_ticker (fuente curada),
@@ -287,7 +308,7 @@ export async function GET(request: NextRequest) {
       const scored = rows.map((r) => { const y = yahooOf(r); return { r, y, score: y ? (/\.SN$/i.test(y) ? 2 : 1) : 0 }; });
       scored.sort((a, b) => b.score - a.score);
       const best = scored[0];
-      return { tickerBBG: cleanBBG(best.r.tickerBloomberg), yahoo: best.y, industria: best.r.industriaChile || null, gics: best.r.industriaGics || null };
+      return { tickerBBG: cleanBBG(best.r.tickerBloomberg), yahoo: best.y, industria: best.r.industriaChile || null, gics: best.r.industriaGics || null, moneda: best.r.moneda || null };
     };
 
     // ── Recomendaciones: ARH.company → company_isins.company_name → isin → bbg ──
@@ -328,6 +349,16 @@ export async function GET(request: NextRequest) {
     } catch (e) {
       console.warn("[stock-selection-v1] retornos no disponibles (¿falta db push o el ingest?):", String(e).slice(0, 120));
     }
+    // Compañias ocultadas a mano: se leen aparte y de forma resiliente, igual que los
+    // overrides. Si falta la tabla, no se oculta nada y la vista funciona como antes.
+    let hiddenCompanies = new Set<string>();
+    try {
+      const hid = await prisma.stockSelectionHidden.findMany({ select: { company: true } });
+      hiddenCompanies = new Set(hid.map((h) => h.company));
+    } catch (e) {
+      console.warn("[stock-selection-v1] visibilidad no disponible (falta db push?):", String(e).slice(0, 120));
+    }
+
     const retByBbg = new Map<string, RetRow>();
     for (const r of retRows) { const k = normBBG(r.tickerBBG); if (k) retByBbg.set(k, r); }
     let returnsMatched = 0;
@@ -388,11 +419,16 @@ export async function GET(request: NextRequest) {
     // viejo sobre un campo de proyección: esos campos salieron de la lista editable, así
     // que las filas que hayan quedado en la base se ignoran acá sin migrar nada.
     const overridesByCompany = new Map<string, Map<string, number>>();
+    // Nombre tal como lo escribió el admin. Es lo que rotula a una compañía SEMBRADA a mano
+    // (ver más abajo): como no tiene filas en stock_selection_v1, no hay otro lugar de donde
+    // sacar el nombre para mostrar.
+    const overrideLabels = new Map<string, string>();
     for (const o of overrideRows) {
       if (o.value == null || !OVERRIDE_FIELD_KEYS.has(o.field)) continue;
       const k = norm(o.company);
       let m = overridesByCompany.get(k); if (!m) { m = new Map(); overridesByCompany.set(k, m); }
       m.set(o.field, o.value);
+      if (!overrideLabels.has(k)) overrideLabels.set(k, o.company);
     }
 
     // ── Proyecciones: esta vista sólo CONSUME ─────────────────────────────────
@@ -536,16 +572,48 @@ export async function GET(request: NextRequest) {
       getOverride(proyIndex, key, "pool_div", ROW_YEAR)?.value ?? pick?.pool_div ?? null;
 
     // ── Construir universo ────────────────────────────────────────────────────
-    const companies: SsV1Company[] = [];
+    // El universo es stock_selection_v1 MÁS las compañías sembradas a mano: las que un
+    // admin dio de alta desde la web (homologación + valores en stock_selection_override)
+    // y que el cargador todavía no trae. Sin esto no habría forma de preparar una empresa
+    // nueva antes de su primera carga: la vista recorría sólo stock_selection_v1, así que
+    // una compañía sin filas ahí era invisible por muchos overrides que tuviera.
+    //
+    // Se apagan solas: borrando sus overrides desaparecen, y cuando el cargador empieza a
+    // mandarlas entran por la vía normal (los overrides siguen ganando sobre el dato
+    // cargado hasta que se limpien, que es la semántica de siempre de esa capa).
+    const universo: string[] = [];
     const seen = new Set<string>();
     for (const r of ssRows) {
       const k = norm(r.company);
       if (seen.has(k)) continue;
       seen.add(k);
-      const resolved = resolveName(r.company);
-      if (!resolved) continue;
+      universo.push(r.company);
+    }
+    const sembradas = new Set<string>();
+    for (const [k, label] of overrideLabels) {
+      if (seen.has(k)) continue;
+      seen.add(k); sembradas.add(k);
+      universo.push(label);
+    }
 
-      const f = funds.get(k)!;
+    const companies: SsV1Company[] = [];
+    // Moneda de cotización según la maestra, para cuando Yahoo no la manda. Pasa en los
+    // listados recién renombrados (PAMPA.SN llega con currency null): sin este respaldo el
+    // precio se muestra pero el M.Cap sale vacío, porque conv() sólo entiende CLP y USD.
+    const monedaListado = new Map<string, string>();
+    for (const companyName of universo) {
+      const k = norm(companyName);
+      // Ocultada a mano por un admin (stock_selection_hidden). No se borra nada: la fila
+      // vuelve apenas se desmarca en el panel de Administracion.
+      if (hiddenCompanies.has(k)) continue;
+      const resolved = resolveName(companyName);
+      if (!resolved) continue;
+      if (resolved.moneda) monedaListado.set(k, resolved.moneda.trim().toUpperCase());
+
+      // Sembrada: sin fundamentales cargados. La moneda sale de la maestra (la compañía
+      // todavía no tiene filas en stock_selection_v1 de donde leerla) y todo lo demás
+      // queda en null hasta que lo llene el override o el cargador.
+      const f = funds.get(k) ?? { currency: resolved.moneda === "USD" ? "USD" as const : "CLP" as const, metrics: new Map(), sharesSeries: new Map() };
       const pick = projByName.get(k);
       const sharesTotal = latestOf(f.metrics.get("shares"));
 
@@ -573,7 +641,8 @@ export async function GET(request: NextRequest) {
       const coRec = recOf(resolved.tickerBBG);
 
       const co: SsV1Company = {
-        company: r.company, tickerBBG: resolved.tickerBBG, industria: resolved.industria, gics: resolved.gics, dual,
+        company: companyName, tickerBBG: resolved.tickerBBG, industria: resolved.industria, gics: resolved.gics, dual,
+        seeded: sembradas.has(k) || undefined,
         ssCurrency: f.currency, projCurrency: monedaEff(k, pick),
         series, sharesTotal,
         rec: coRec?.rec ?? null, recDate: coRec?.recDate ?? null, tp: coRec?.tp ?? null,
@@ -604,11 +673,17 @@ export async function GET(request: NextRequest) {
       const [priceMap, levels] = await Promise.all([fetchPricesChunked(tickers), fetchIndexLevels()]);
       indexLevels = levels;
       // Sólo precio y moneda: los retornos ya quedaron puestos desde el snapshot.
-      for (const c of companies)
+      for (const c of companies) {
+        const fallbackCcy = monedaListado.get(norm(c.company)) ?? null;
         for (const s of c.series) {
           const pd = s.yahooTicker ? priceMap.get(s.yahooTicker) ?? null : null;
-          s.price = pd?.price ?? null; s.currency = pd?.currency ?? null;
+          s.price = pd?.price ?? null;
+          // Si Yahoo no manda la moneda, la de empresas_industrias_v2. Sin esto un precio
+          // válido no se convierte a USD y el M.Cap (y con él todos los múltiplos) sale
+          // vacío, que es un modo de falla peor: la fila parece cargada y no lo está.
+          s.currency = pd?.currency ?? (pd?.price != null ? fallbackCcy : null);
         }
+      }
     }
 
     const payload: SsV1Payload = {

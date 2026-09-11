@@ -56,3 +56,56 @@ export const sectionIdx = (name: string): number => FIXED_SECTION.get(normName(n
 
 /** Clave centinela del "orden fijo" en el estado de sort de las tablas. */
 export const FIXED_KEY = "__order__";
+
+// ── Orden editable desde el panel ───────────────────────────────────────────────
+// La lista de arriba dejó de ser la única fuente: ahora es la SEMILLA. El orden vigente
+// vive en stock_selection_orden y se sirve por GET /api/chile/orden; las vistas lo piden y
+// arman sus comparadores con buildOrder(). Si la tabla está vacía, el endpoint devuelve
+// esta misma lista, así que sin tocar nada las tablas se ordenan igual que siempre.
+
+export interface OrdenSeccion { nombre: string; empresas: string[] }
+export interface OrdenPayload {
+  secciones: OrdenSeccion[];
+  /** "db" = guardado desde el panel · "codigo" = todavía la semilla de este archivo. */
+  fuente: "db" | "codigo";
+}
+
+export interface OrdenIndex {
+  /** Posición global; las no listadas al final (sort estable → quedan alfabéticas). */
+  orderIdx: (name: string) => number;
+  /** Índice de sección, para el separador entre bloques. */
+  sectionIdx: (name: string) => number;
+  /** Nombre de la sección de una empresa, o null si no está asignada. */
+  sectionName: (name: string) => string | null;
+  secciones: OrdenSeccion[];
+}
+
+/** La semilla del código, con la forma del payload (secciones sin nombre propio todavía). */
+export const SEED_ORDEN: OrdenPayload = {
+  fuente: "codigo",
+  secciones: FIXED_SECTIONS.map((empresas, i) => ({ nombre: `Sección ${i + 1}`, empresas })),
+};
+
+/** Comparadores a partir de un orden concreto. `null` → la semilla del código. */
+export function buildOrder(p: OrdenPayload | null | undefined): OrdenIndex {
+  const secciones = p?.secciones?.length ? p.secciones : SEED_ORDEN.secciones;
+  const pos = new Map<string, number>();
+  const sec = new Map<string, number>();
+  const secName = new Map<string, string>();
+  secciones.forEach((s, si) =>
+    s.empresas.forEach((nm) => {
+      const k = normName(nm);
+      if (!k || pos.has(k)) return;  // un nombre repetido se queda con su primera posición
+      pos.set(k, pos.size);
+      sec.set(k, si);
+      secName.set(k, s.nombre);
+    }),
+  );
+  const others = secciones.length;
+  return {
+    orderIdx:    (name) => pos.get(normName(name)) ?? 1e6,
+    sectionIdx:  (name) => sec.get(normName(name)) ?? others,
+    sectionName: (name) => secName.get(normName(name)) ?? null,
+    secciones,
+  };
+}
