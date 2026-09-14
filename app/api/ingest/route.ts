@@ -27,6 +27,14 @@ function dedupeBy<T>(rows: T[], key: (r: T) => string): T[] {
   return [...map.values()];
 }
 
+// Ticker canónico (UPPER + espacios colapsados) en las tablas del deep-dive. Bloomberg
+// manda "ENAEX CI Equity" y las rutas de lectura comparan por igualdad contra el ticker
+// normalizado (ver lib/issuer.ts): sin esto la carga del 2026-09-11 quedó en otra
+// capitalización y el deep-dive siguió leyendo el precio de agosto.
+function withCanonicalTicker(rows: Record<string, any>[]): any[] {
+  return rows.map((r) => (r.ticker == null ? r : { ...r, ticker: normalizeTicker(String(r.ticker)) }));
+}
+
 export async function POST(request: Request) {
   // Declaramos la variable afuera para que sobreviva si ocurre un error
   let tableName = 'Desconocida';
@@ -268,22 +276,22 @@ export async function POST(request: Request) {
 
       // --- NUEVAS TABLAS: COMPANY DEEP DIVE ---
       case 'ValuationHistory':
-        await prisma.valuationHistory.createMany({ data: rows, skipDuplicates: true });
+        await prisma.valuationHistory.createMany({ data: withCanonicalTicker(rows), skipDuplicates: true });
         break;
       case 'ConsensusEstimate':
-        await prisma.consensusEstimate.createMany({ data: rows, skipDuplicates: true });
+        await prisma.consensusEstimate.createMany({ data: withCanonicalTicker(rows), skipDuplicates: true });
         break;
       case 'PriceVsEarnings':
-        await prisma.priceVsEarnings.createMany({ data: rows, skipDuplicates: true });
+        await prisma.priceVsEarnings.createMany({ data: withCanonicalTicker(rows), skipDuplicates: true });
         break;
       case 'ShortInterest':
-        await prisma.shortInterest.createMany({ data: rows, skipDuplicates: true });
+        await prisma.shortInterest.createMany({ data: withCanonicalTicker(rows), skipDuplicates: true });
         break;
       case 'PriceRange52w':
-        await prisma.priceRange52w.createMany({ data: rows, skipDuplicates: true });
+        await prisma.priceRange52w.createMany({ data: withCanonicalTicker(rows), skipDuplicates: true });
         break;
       case 'AnalystRecommendation':
-        await prisma.analystRecommendation.createMany({ data: rows, skipDuplicates: true });
+        await prisma.analystRecommendation.createMany({ data: withCanonicalTicker(rows), skipDuplicates: true });
         break;
 
       // Mismo criterio que BankModel: snapshot completo → reemplazo total.

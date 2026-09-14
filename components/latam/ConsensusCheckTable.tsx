@@ -245,7 +245,7 @@ const selStyle = (active: boolean): React.CSSProperties => ({
 // Cada columna es ordenable. Var% ordena por valor CON SIGNO (sin abs → negativos y
 // positivos no se mezclan).
 type SortKey =
-  | "ticker" | "updateDate" | "recc" | "upside" | "upsideModel"
+  | "ticker" | "updateDate" | "recc" | "upside" | "upsideModel" | "currency" | "unit"
   | "monEbitda1" | "monEbitda2" | "monNi1" | "monNi2"
   | "conEbitda1" | "conEbitda2" | "conNi1" | "conNi2"
   | "varEbitda1" | "varEbitda2" | "varNi1" | "varNi2"
@@ -288,6 +288,8 @@ function sortValue(row: ConsensusCheckRow, key: SortKey): number | string | null
     case "recc":        return recRank(row.recc);
     case "upside":      return row.upside;
     case "upsideModel": return row.upsideModel;
+    case "currency":    return row.currency;
+    case "unit":        return row.unit;
     case "monEbitda1": return row.moneda.ebitda1FY;
     case "monEbitda2": return row.moneda.ebitda2FY;
     case "monNi1":     return row.moneda.ni1FY;
@@ -387,7 +389,7 @@ export default function ConsensusCheckTable() {
   function handleSort(key: string) {
     const k = key as SortKey;
     if (sortBy === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else { setSortBy(k); setSortDir(k === "ticker" ? "asc" : "desc"); }
+    else { setSortBy(k); setSortDir(k === "ticker" || k === "currency" || k === "unit" ? "asc" : "desc"); }
   }
 
   function toggleConsensus() {
@@ -485,7 +487,7 @@ export default function ConsensusCheckTable() {
         <button
           onClick={() => {
             const headers = [
-              "Ticker", "Update Date", "Analyst", "Rec", "Upside @Model", "Upside Live",
+              "Ticker", "Update Date", "Analyst", "Rec", "Upside @Model", "Upside Live", "CCY", "Unit",
               `Moneda EBITDA ${y1}`, `Moneda EBITDA ${y2}`, `Moneda NI ${y1}`, `Moneda NI ${y2}`,
               `BBG EBITDA ${y1}`,    `BBG EBITDA ${y2}`,    `BBG NI ${y1}`,    `BBG NI ${y2}`,
               `Var EBITDA ${y1}`,    `Var EBITDA ${y2}`,    `Var NI ${y1}`,    `Var NI ${y2}`,
@@ -495,6 +497,7 @@ export default function ConsensusCheckTable() {
               shortTicker(r.ticker), r.updateDate, r.analyst ?? "", r.recc ?? "",
               r.upsideModel != null ? +(r.upsideModel * 100).toFixed(2) : null,
               r.upside      != null ? +(r.upside      * 100).toFixed(2) : null,
+              r.currency ?? "", r.unit ?? "",
               r.moneda.ebitda1FY, r.moneda.ebitda2FY, r.moneda.ni1FY, r.moneda.ni2FY,
               r.consensus.ebitda1FY != null ? +(r.consensus.ebitda1FY / 1000).toFixed(1) : null,
               r.consensus.ebitda2FY != null ? +(r.consensus.ebitda2FY / 1000).toFixed(1) : null,
@@ -541,7 +544,7 @@ export default function ConsensusCheckTable() {
 
       {/* ── Table ── */}
       <div style={{ overflowX: "auto", borderRadius: 10, border: `1px solid ${C.BDR}`, boxShadow: "0 1px 6px rgba(13,13,56,0.07)" }}>
-        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: showConsensus ? 1180 : 960, tableLayout: "auto" }}>
+        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: showConsensus ? 1280 : 1060, tableLayout: "auto" }}>
           <thead>
             {/* ── Row 1: section headers ── */}
             <tr>
@@ -553,6 +556,9 @@ export default function ConsensusCheckTable() {
               <Th level={0} rowSpan={3} sortKey="recc" {...thProps}>Rec</Th>
               <Th level={0} rowSpan={3} sortKey="upsideModel" {...thProps}>Upside @Model</Th>
               <Th level={0} rowSpan={3} sortKey="upside" {...thProps}>Upside Live</Th>
+              {/* Moneda y unidad del modelo (header del analista), como en "Reported CCY" del deep-dive */}
+              <Th level={0} rowSpan={3} sortKey="currency" {...thProps}>CCY</Th>
+              <Th level={0} rowSpan={3} sortKey="unit" {...thProps}>Unit</Th>
 
               {sections.map((s) => (
                 <th
@@ -745,6 +751,22 @@ export default function ConsensusCheckTable() {
                     {upside.text}
                   </td>
 
+                  {/* CCY / Unit del modelo */}
+                  {[row.currency, row.unit].map((v, i) => (
+                    <td key={i} style={{
+                      padding:     "6px 10px",
+                      fontSize:    11,
+                      fontWeight:  v ? 600 : 400,
+                      textAlign:   "center",
+                      color:       v ? "#0D0D38" : C.NIL_TXT,
+                      fontFamily:  FONT_SECONDARY,
+                      borderRight: `1px solid ${C.BDR}`,
+                      whiteSpace:  "nowrap",
+                    }}>
+                      {v?.trim() || "—"}
+                    </td>
+                  ))}
+
                   {/* Moneda: EBITDA, NI */}
                   <NumCell v={row.moneda.ebitda1FY} />
                   <NumCell v={row.moneda.ebitda2FY} />
@@ -778,7 +800,7 @@ export default function ConsensusCheckTable() {
 
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={6 + dataCols.length} style={{ textAlign: "center", padding: 32, color: "rgba(13,13,56,0.45)", fontSize: 13 }}>
+                <td colSpan={8 + dataCols.length} style={{ textAlign: "center", padding: 32, color: "rgba(13,13,56,0.45)", fontSize: 13 }}>
                   No model data available.
                 </td>
               </tr>

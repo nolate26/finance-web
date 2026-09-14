@@ -15,7 +15,10 @@ export interface ConsensusCheckRow {
   thesis:      string | null;
   country:    string | null;   // empresas_industrias_v2.country_risk (AR, BR, CL, …)
   industry:   string | null;   // empresas_industrias_v2.industria_gics
-  unit:        string | null;  // ModelHeader.unit ("mn" | "000 mn"); null para bancos
+  // Moneda y unidad declaradas por el analista en el header del modelo (empresa o banco),
+  // las mismas que muestra el deep-dive en "Reported CCY : USD · mn".
+  currency:    string | null;  // ModelHeader/BankHeader.currency ("USD", "CLP mm", …)
+  unit:        string | null;  // ModelHeader/BankHeader.unit ("mn" | "000 mn")
   moneda: {
     rev1FY:    number | null;
     rev2FY:    number | null;
@@ -105,12 +108,12 @@ export async function GET() {
       prisma.modelHeader.findMany({
         distinct: ["ticker"],
         orderBy:  { updateDate: "desc" },
-        select:   { ticker: true, updateDate: true, analyst: true, recc: true, tp: true, thesis: true, unit: true },
+        select:   { ticker: true, updateDate: true, analyst: true, recc: true, tp: true, thesis: true, currency: true, unit: true },
       }),
       prisma.bankHeader.findMany({
         distinct: ["ticker"],
         orderBy:  { updateDate: "desc" },
-        select:   { ticker: true, updateDate: true, analyst: true, recc: true, tp: true, thesis: true },
+        select:   { ticker: true, updateDate: true, analyst: true, recc: true, tp: true, thesis: true, currency: true, unit: true },
       }),
     ]);
 
@@ -355,7 +358,8 @@ export async function GET() {
         upsideModel,
         thesis:     h.thesis ?? null,
         ...eiFor(h.ticker),
-        unit:       h.unit ?? null,
+        currency:   h.currency ?? null,
+        unit:       h.unit     ?? null,
         moneda,
         consensus: scaledConsensus(moneda, rawConsensus),
         multiples: { evEbitda1FY: m1.evEbitda, evEbitda2FY: m2.evEbitda, pe1FY: m1.pe, pe2FY: m2.pe },
@@ -408,7 +412,8 @@ export async function GET() {
         upsideModel,
         thesis:     h.thesis ?? null,
         ...eiFor(h.ticker),
-        unit:       null,   // los bancos no tienen columna unit
+        currency:   h.currency ?? null,
+        unit:       h.unit     ?? null,
         moneda,
         consensus: scaledConsensus(moneda, rawConsensus),
         multiples: { evEbitda1FY: m1.evEbitda, evEbitda2FY: m2.evEbitda, pe1FY: m1.pe, pe2FY: m2.pe },
