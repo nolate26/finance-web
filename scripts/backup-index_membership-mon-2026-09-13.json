@@ -1,0 +1,602 @@
+[
+  {
+    "index_name": "Mon 500",
+    "company": "Aguas",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Almendral",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Andina",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Banvida",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Besalco",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Blumar",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Camanchaca",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "CAP",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "CCU",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Cintac",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Colbun",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "ConchaToro",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Cristales",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "ECL",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "EISA",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Embonor",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Enaex",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Entel",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Forus",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Gasco",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "IAM",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "ILC",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Indisa",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Ingevec",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Invercap",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Itaucl",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Lipigas",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Masisa",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Minera",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Nortegran",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Oro Blanco",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Parauco",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Paz",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Ripley",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Salfacorp",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Salmocam",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "SK",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "SMSAAM",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "SMU",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Socovesa",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Sonda",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Soquicom",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Watts",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 500",
+    "company": "Zofri",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 501",
+    "company": "Antarchile",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 501",
+    "company": "BCI",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 501",
+    "company": "Bsantander",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 501",
+    "company": "Cencoshopp",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 501",
+    "company": "Cencosud",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 501",
+    "company": "Chile",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 501",
+    "company": "Cmpc",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 501",
+    "company": "Copec",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 501",
+    "company": "EnelAM",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 501",
+    "company": "EnelChile",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 501",
+    "company": "Falabella",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 501",
+    "company": "LTM",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 501",
+    "company": "Mallplaza",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 501",
+    "company": "Quinenco",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 501",
+    "company": "Soquimich",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon 501",
+    "company": "Vapores",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Aguas",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Almendral",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Andina",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Antarchile",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Banvida",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "BCI",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Besalco",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Blumar",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Bsantander",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Camanchaca",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "CAP",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "CCU",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Cencoshopp",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Cencosud",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Chile",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Cintac",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Cmpc",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Colbun",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "ConchaToro",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Copec",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Cristales",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "ECL",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "EISA",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Embonor",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Enaex",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "EnelAM",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "EnelChile",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Entel",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Falabella",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Forus",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Gasco",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "IAM",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "ILC",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Indisa",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Ingevec",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Invercap",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Itaucl",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Lipigas",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "LTM",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Mallplaza",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Masisa",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Minera",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Nortegran",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Oro Blanco",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Parauco",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Paz",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Quinenco",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Ripley",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Salfacorp",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Salmocam",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "SK",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "SMSAAM",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "SMU",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Socovesa",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Sonda",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Soquicom",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Soquimich",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Vapores",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Watts",
+    "weight": 1
+  },
+  {
+    "index_name": "Mon Gen",
+    "company": "Zofri",
+    "weight": 1
+  }
+]

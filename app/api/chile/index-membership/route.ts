@@ -9,7 +9,9 @@ export const runtime = "nodejs";
 // pertenece" = no hay fila. Por eso editar = crear/borrar filas, no togglear un weight.
 
 // Orden de columnas preferido (los no listados van al final, alfabeticos).
-const INDEX_ORDER = ["IPSA", "IGPA", "IGPA LC", "IGPA MC", "IGPA MCSC", "IGPA SC", "FTSE", "Mon Gen", "Mon 500", "Mon 501"];
+// "Mon Gen" / "Mon 500" / "Mon 501" salieron (2026-09-13): ya no son benchmarks de la vista.
+// Sus filas se borraron de index_membership; hay respaldo en scripts/backup-index_membership-mon-*.json.
+const INDEX_ORDER = ["IPSA", "IGPA", "IGPA LC", "IGPA MC", "IGPA MCSC", "IGPA SC", "FTSE"];
 const orderIdx = (name: string): number => {
   const i = INDEX_ORDER.indexOf(name);
   return i === -1 ? INDEX_ORDER.length : i;

@@ -9,6 +9,7 @@ import type {
 } from "@/app/api/companies/[ticker]/bank-model/route";
 import { consensusScaleFactor } from "@/lib/consensusScale";
 import { ccySuffix } from "@/lib/ccySuffix";
+import { bankEffMarketCap, bankPe } from "@/lib/modelMultiples";
 import ModelEstimateChart, { buildEstimateRows, type EstimateMetric, type EstimateRow } from "@/components/deep-dive/ModelEstimateChart";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { PATRIA, FONT_PRIMARY, FONT_SECONDARY, TEXT, BORDER } from "@/lib/patriaTheme";
@@ -94,25 +95,10 @@ function enrich(financials: BankFinancialRow[], livePrice: number | null): YearD
     const priceIsLive = isEst && livePrice !== null;
     const effPrice    = priceIsLive ? livePrice : f.sharePrice;
 
-    // A diferencia del modelo de analista, bank_financials NO tiene fxEop, así que no hay un
-    // factor explícito que lleve precio×acciones a la escala de los financials. Por eso la vía
-    // principal es re-marcar el market_cap del propio modelo por la razón de precios: hereda la
-    // escala de esa columna y no hay que asumir en qué unidad quedan precio×acciones.
-    //  • Precio vivo + market_cap + sharePrice del modelo → market_cap × (vivo / modelo).
-    //  • Precio vivo sin market_cap → precio×acciones crudo (asume misma escala).
-    //  • Resto de años → la columna market_cap tal cual, y si falta se reconstruye.
-    let effMarketCap: number | null;
-    if (priceIsLive && livePrice !== null && f.marketCap !== null && f.sharePrice !== null && f.sharePrice !== 0) {
-      effMarketCap = f.marketCap * (livePrice / f.sharePrice);
-    } else if (priceIsLive && livePrice !== null && f.shares !== null) {
-      effMarketCap = livePrice * f.shares;
-    } else if (f.marketCap !== null) {
-      effMarketCap = f.marketCap;
-    } else if (f.sharePrice !== null && f.shares !== null) {
-      effMarketCap = f.sharePrice * f.shares;
-    } else {
-      effMarketCap = null;
-    }
+    // bank_financials no tiene fxEop: en proyectados se re-marca el market_cap del modelo por
+    // la razón de precios (vivo / modelo). Las reglas viven en lib/modelMultiples, compartidas
+    // con la tabla Estimates para que el P/E coincida en ambas vistas.
+    const effMarketCap = bankEffMarketCap(f, priceIsLive ? livePrice : null);
 
     return { ...f, isEst, effPrice, effMarketCap, priceIsLive };
   });
@@ -159,7 +145,7 @@ function divBuyback(by: Map<number, YearData>, y: number): number | null {
   return (dv ?? 0) + (bb ?? 0);
 }
 function peRatio(by: Map<number, YearData>, y: number): number | null {
-  return divz(effMcap(by, y), fld(by, y, "controllingNetIncome"));
+  return bankPe(effMcap(by, y), fld(by, y, "controllingNetIncome"));
 }
 function peg1(y: number, by: Map<number, YearData>): number | null {
   const pe = peRatio(by, y);
@@ -268,7 +254,7 @@ const SECTIONS: Section[] = [
     rows: [
       { key: "price",   label: "Share Price ($) - LCCY", kind: "raw",     fmt: "money", fn: (y, by) => by.get(y)?.effPrice ?? null },
       { key: "mktcap",  label: "Market Cap ($) - LCCY",  kind: "raw",     fmt: "money", fn: (y, by) => effMcap(by, y) },
-      { key: "pe",      label: "P/E",                    kind: "derived", fmt: "mult", fn: (y, by) => divz(effMcap(by, y), fld(by, y, "controllingNetIncome")) },
+      { key: "pe",      label: "P/E",                    kind: "derived", fmt: "mult", fn: (y, by) => peRatio(by, y) },
       { key: "ptbv",    label: "P/TBV",                  kind: "derived", fmt: "mult", fn: (y, by) => divz(effMcap(by, y), fld(by, y, "tangibleEquity")) },
       { key: "roe",     label: "ROE (NI / Equity)",      kind: "derived", fmt: "pct", fn: (y, by) => divz(fld(by, y, "controllingNetIncome"), fld(by, y - 1, "controllingEquity")) },
       { key: "roe_t",   label: "ROE* (NI / Tang. Equity)", kind: "derived", fmt: "pct", fn: (y, by) => divz(fld(by, y, "controllingNetIncome"), fld(by, y - 1, "tangibleEquity")) },

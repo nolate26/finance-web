@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { bankEffMarketCap, bankPe, companyEffMarketCap, companyEvEbitda, companyPe } from "@/lib/modelMultiples";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,15 @@ export interface ConsensusCheckRow {
     ebitda2FY: number | null;
     ni1FY:     number | null;
     ni2FY:     number | null;
+  };
+  // Múltiplos del modelo (misma fórmula que ModelExplorer / BankModelExplorer, vía
+  // lib/modelMultiples): market cap al precio vivo (px_last) sobre EBITDA / NI proyectados.
+  // Bancos no tienen EBITDA → evEbitda siempre null.
+  multiples: {
+    evEbitda1FY: number | null;
+    evEbitda2FY: number | null;
+    pe1FY:       number | null;
+    pe2FY:       number | null;
   };
 }
 
@@ -136,9 +146,16 @@ export async function GET() {
                 ticker: h.ticker, updateDate: h.updateDate, year: { in: [year1FY, year2FY] },
               })),
             },
-            select: { ticker: true, year: true, fxConsensus: true, revenue: true, ebitda: true, netIncome: true, sharePrice: true },
+            select: {
+              ticker: true, year: true, fxConsensus: true, revenue: true, ebitda: true, netIncome: true, sharePrice: true,
+              // Insumos de los múltiplos (market cap efectivo + EV = mcap + net debt).
+              sharesOut: true, fxEop: true, marketCap: true, netDebt: true,
+            },
           })
-        : Promise.resolve([] as { ticker: string; year: number; fxConsensus: number | null; revenue: number | null; ebitda: number | null; netIncome: number | null; sharePrice: number | null }[]),
+        : Promise.resolve([] as {
+            ticker: string; year: number; fxConsensus: number | null; revenue: number | null; ebitda: number | null; netIncome: number | null; sharePrice: number | null;
+            sharesOut: number | null; fxEop: number | null; marketCap: number | null; netDebt: number | null;
+          }[]),
       latestBankHeaders.length
         ? prisma.bankFinancials.findMany({
             where: {
@@ -146,9 +163,9 @@ export async function GET() {
                 ticker: b.ticker, updateDate: b.updateDate, year: { in: [year1FY, year2FY] },
               })),
             },
-            select: { ticker: true, year: true, revenue: true, controllingNetIncome: true, sharePrice: true },
+            select: { ticker: true, year: true, revenue: true, controllingNetIncome: true, sharePrice: true, shares: true, marketCap: true },
           })
-        : Promise.resolve([] as { ticker: string; year: number; revenue: number | null; controllingNetIncome: number | null; sharePrice: number | null }[]),
+        : Promise.resolve([] as { ticker: string; year: number; revenue: number | null; controllingNetIncome: number | null; sharePrice: number | null; shares: number | null; marketCap: number | null }[]),
       // Consensus para los 2 FY; el ticker se matchea case-insensitive en JS (abajo) porque
       // consensus_estimates trae casing distinto a model_headers / empresas_industrias_v2.
       prisma.consensusEstimate.findMany({
@@ -232,7 +249,11 @@ export async function GET() {
 
     // financials: (ticker, year) → company model values (already in consensus/1000 scale).
     // fxConsensus convierte la moneda del modelo a la del consenso (no-op si es null).
-    const finMap = new Map<string, { revenue: number | null; ebitda: number | null; netIncome: number | null; sharePrice: number | null; fxConsensus: number | null }>();
+    type CompanyFin = {
+      revenue: number | null; ebitda: number | null; netIncome: number | null; sharePrice: number | null; fxConsensus: number | null;
+      sharesOut: number | null; fxEop: number | null; marketCap: number | null; netDebt: number | null;
+    };
+    const finMap = new Map<string, CompanyFin>();
     for (const f of financials) {
       finMap.set(`${f.ticker}::${f.year}`, {
         revenue:     f.revenue     ?? null,
@@ -240,18 +261,42 @@ export async function GET() {
         netIncome:   f.netIncome   ?? null,
         sharePrice:  f.sharePrice  ?? null,
         fxConsensus: f.fxConsensus ?? null,
+        sharesOut:   f.sharesOut   ?? null,
+        fxEop:       f.fxEop       ?? null,
+        marketCap:   f.marketCap   ?? null,
+        netDebt:     f.netDebt     ?? null,
       });
     }
 
     // bankFinancials: (ticker, year) → raw bank model values (divided by 1000 below)
-    const bankFinMap = new Map<string, { revenue: number | null; netIncome: number | null; sharePrice: number | null }>();
+    type BankFin = { revenue: number | null; netIncome: number | null; sharePrice: number | null; shares: number | null; marketCap: number | null };
+    const bankFinMap = new Map<string, BankFin>();
     for (const f of bankFinancials) {
       bankFinMap.set(`${f.ticker}::${f.year}`, {
         revenue:    f.revenue              ?? null,
         netIncome:  f.controllingNetIncome ?? null,
         sharePrice: f.sharePrice           ?? null,
+        shares:     f.shares               ?? null,
+        marketCap:  f.marketCap            ?? null,
       });
     }
+
+    // Múltiplos por año: year1FY/year2FY son siempre proyectados (≥ año actual), así que —
+    // igual que enrich() en los explorers — con precio vivo el market cap se re-marca a px_last;
+    // sin precio se cae al market_cap del modelo. Financials en la escala cruda del modelo
+    // (sin fxConsensus ni ÷1000): los múltiplos son adimensionales.
+    const companyMultiples = (fin: CompanyFin | undefined, livePrice: number | null) => {
+      if (!fin) return { evEbitda: null, pe: null };
+      const mcap = companyEffMarketCap(fin, livePrice);
+      return {
+        evEbitda: companyEvEbitda(mcap, fin.netDebt, fin.ebitda),
+        pe:       companyPe(mcap, fin.netIncome),
+      };
+    };
+    const bankMultiples = (fin: BankFin | undefined, livePrice: number | null) => {
+      if (!fin) return { evEbitda: null, pe: null };
+      return { evEbitda: null, pe: bankPe(bankEffMarketCap(fin, livePrice), fin.netIncome) };
+    };
 
     // consensus: (TICKER, METRIC, period) → value (deduplicated, first = latest).
     // Claves normalizadas a UPPER → match case-insensitive contra los tickers de los headers.
@@ -297,6 +342,8 @@ export async function GET() {
         ni1FY:     getCon("NET_INCOME", String(year1FY)),
         ni2FY:     getCon("NET_INCOME", String(year2FY)),
       };
+      const m1 = companyMultiples(fin1, price);
+      const m2 = companyMultiples(fin2, price);
 
       return {
         ticker:     h.ticker,
@@ -311,6 +358,7 @@ export async function GET() {
         unit:       h.unit ?? null,
         moneda,
         consensus: scaledConsensus(moneda, rawConsensus),
+        multiples: { evEbitda1FY: m1.evEbitda, evEbitda2FY: m2.evEbitda, pe1FY: m1.pe, pe2FY: m2.pe },
       };
     });
 
@@ -347,6 +395,8 @@ export async function GET() {
         ni1FY:     getCon("NET_INCOME", String(year1FY)),
         ni2FY:     getCon("NET_INCOME", String(year2FY)),
       };
+      const m1 = bankMultiples(fin1, price);
+      const m2 = bankMultiples(fin2, price);
 
       return {
         ticker:     h.ticker,
@@ -361,6 +411,7 @@ export async function GET() {
         unit:       null,   // los bancos no tienen columna unit
         moneda,
         consensus: scaledConsensus(moneda, rawConsensus),
+        multiples: { evEbitda1FY: m1.evEbitda, evEbitda2FY: m2.evEbitda, pe1FY: m1.pe, pe2FY: m2.pe },
       };
     });
 

@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { PATRIA, FONT_PRIMARY, FONT_SECONDARY } from "@/lib/patriaTheme";
-import type { ColDef, Group, CompanyGroup, DisplayRow, IndexAggRow, FundAggRow } from "./StockSelectionV1";
+import { affectedCols } from "@/lib/ssOverrideFields";
+import { GROUP_RULE, SECTION_RULE, EDIT_BG, EDIT_BORDER } from "./ssTokens";
+import type { ColDef, CompanyGroup, DisplayRow, IndexAggRow, FundAggRow } from "./StockSelectionV1";
 
 // ── Hoja imprimible de Stock Selection ──────────────────────────────────────────
 // Legal apaisado, dos planas: la primera con una parte de las compañías, la segunda con
@@ -38,8 +40,11 @@ export interface PrintProps {
 }
 
 const INK = PATRIA.darkBlue;
-const RULE = "rgba(13,13,56,0.28)";
-const RULE_SOFT = "rgba(13,13,56,0.12)";
+const RULE_SOFT = "rgba(13,13,56,0.12)";    // entre filas
+const BAND = "rgba(13,13,56,0.035)";        // banda alterna por grupo, como en pantalla
+// Tintes de grupo aplanados sobre blanco (en papel no hay transparencias que valga la pena
+// arriesgar): el bloque de Retornos lleva el suyo también en pantalla.
+const TINT_SOLID: Record<string, string> = { "rgba(69,113,255,0.075)": "#F1F4FF" };
 
 /** "2026-09-01" → "01-09-2026". */
 const fmtDMY = (iso: string | null): string => {
@@ -87,16 +92,24 @@ export default function SsV1PrintView(p: PrintProps) {
     </thead>
   );
 
-  const cells = (r: DisplayRow, g: PrintColGroup[]) =>
-    g.map((grp) => grp.cols.map((c, i) => {
+  // Misma lógica de pintado que la tabla: sólo la celda directa del campo editado, y en
+  // las series sólo la de su clase. Los colores de variación (azul/rosa) vienen en
+  // `out.color`; los fondos (banda de grupo, tinte de Retornos, naranja de edición) se
+  // resuelven acá porque en papel no hay hover ni sticky que los reemplace.
+  const cells = (r: DisplayRow, g: PrintColGroup[], withEdits = true) => {
+    const aff = withEdits && r.overrides?.length ? affectedCols(r.overrides, r.kind === "series" ? r.label : null) : null;
+    return g.map((grp, gi) => grp.cols.map((c, i) => {
       const out = c.render(r);
+      const edited = aff?.has(c.id) ?? false;
+      const bg = edited ? EDIT_BG : grp.tint ? TINT_SOLID[grp.tint] ?? grp.tint : gi % 2 === 1 ? BAND : undefined;
       return (
-        <td key={c.id} className={`pr-td${i === 0 ? " pr-first" : ""}`}
-          style={{ textAlign: c.align ?? "right", color: out.color ?? INK, fontWeight: out.weight && out.weight >= 700 ? 700 : 400 }}>
+        <td key={c.id} className={`pr-td${i === 0 ? " pr-first" : ""}${edited ? " pr-edit" : ""}`}
+          style={{ textAlign: c.align ?? "right", color: out.color ?? INK, fontWeight: edited || (out.weight && out.weight >= 700) ? 700 : 400, background: bg }}>
           {out.text}
         </td>
       );
     }));
+  };
 
   const companyRows = (groups: CompanyGroup[]) =>
     groups.map((g, gi) => {
@@ -141,21 +154,28 @@ export default function SsV1PrintView(p: PrintProps) {
           .pr-th-group { background: ${INK}; color: #fff; text-align: center; border-left: 0.5pt solid rgba(255,255,255,0.25); }
           .pr-th-left { background: ${INK}; color: #fff; text-align: left; vertical-align: bottom; min-width: 88pt; }
           .pr-th-col { color: ${INK}; background: #EEF1FA; border-bottom: 1pt solid ${INK}; }
-          .pr-th-col.pr-first { border-left: 0.5pt solid ${RULE}; }
+          .pr-th-col.pr-first { border-left: 0.8pt solid ${GROUP_RULE}; }
           .pr-td { font-size: 5.9pt; font-family: ${FONT_SECONDARY}; font-variant-numeric: tabular-nums; padding: 0.7pt 2.2pt; white-space: nowrap; border-bottom: 0.35pt solid ${RULE_SOFT}; line-height: 1.15; }
-          .pr-td.pr-first { border-left: 0.5pt solid ${RULE_SOFT}; }
+          /* Divisoria entre grupos de columnas: misma alfa que en pantalla (GROUP_RULE),
+             algo más gruesa porque a 6pt una hairline de 0.5pt desaparece al imprimir. */
+          .pr-td.pr-first { border-left: 0.8pt solid ${GROUP_RULE}; }
           .pr-td-left { font-family: ${FONT_PRIMARY}; text-align: left; }
           .pr-name { font-size: 6.2pt; font-weight: 700; }
           .pr-tk { font-family: ${FONT_SECONDARY}; font-weight: 400; font-size: 5pt; color: rgba(13,13,56,0.55); margin-left: 3pt; }
           .pr-badge { font-size: 4.6pt; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: ${PATRIA.kingBlue}; margin-left: 3pt; }
           .pr-serie { font-size: 5.5pt; color: rgba(13,13,56,0.7); padding-left: 7pt; }
-          .pr-series .pr-td { font-size: 5.5pt; color: rgba(13,13,56,0.72); background: #F7F8FC; }
-          .pr-section .pr-td { border-top: 1.3pt solid ${RULE}; }
+          /* Los tintes de fila van en el <tr> para que la banda de grupo y el naranja de
+             edición (inline en el <td>) se compongan encima, igual que en pantalla. */
+          .pr-series { background: #F5F7FD; }
+          .pr-series .pr-td { font-size: 5.5pt; color: rgba(13,13,56,0.72); }
+          /* Separador entre secciones del orden: misma alfa que SECTION_RULE en pantalla. */
+          .pr-section .pr-td { border-top: 1.5pt solid ${SECTION_RULE}; }
+          .pr-edit { box-shadow: inset 0 0 0 0.6pt ${EDIT_BORDER}; }
           .pr-agg-title { font-size: 7.5pt; font-weight: 700; margin: 5pt 0 2.5pt; display: flex; align-items: center; gap: 5pt; }
           .pr-agg-title::before { content: ""; width: 2.5pt; height: 8.5pt; background: ${INK}; border-radius: 1pt; }
-          .pr-agg .pr-td { background: rgba(70,232,224,0.09); }
-          .pr-agg .pr-fondo .pr-td { background: rgba(0,30,175,0.06); }
-          .pr-agg .pr-fondo-first .pr-td { border-top: 1.3pt solid ${PATRIA.blue}; }
+          .pr-agg tr { background: #EDFCFB; }
+          .pr-agg tr.pr-fondo { background: #F0F2FB; }
+          .pr-agg .pr-fondo-first .pr-td { border-top: 1.5pt solid ${PATRIA.blue}; }
           .pr-agg-name { font-size: 6.2pt; font-weight: 700; }
           .pr-agg-n { font-family: ${FONT_SECONDARY}; font-size: 5pt; color: rgba(13,13,56,0.55); margin-left: 3pt; }
           .pr-foot { margin-top: 3pt; font-size: 5.4pt; color: rgba(13,13,56,0.55); font-family: ${FONT_SECONDARY}; }

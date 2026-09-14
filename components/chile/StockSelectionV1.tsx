@@ -5,9 +5,10 @@ import { RefreshCw, LayoutGrid, X, Check, Plus, Save, Search, Pencil, RotateCcw,
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import SsV1AdminPanel from "./SsV1AdminPanel";
 import SsV1PrintView, { type PrintColGroup } from "./SsV1PrintView";
+import { EDIT_BG, EDIT_BORDER, GROUP_RULE, SECTION_RULE } from "./ssTokens";
 import StockSelectionFreshness from "./StockSelectionFreshness";
 import { downloadExcel, type SheetDef } from "@/lib/exportExcel";
-import { OVERRIDE_FIELDS, PROJECTION_FIELDS, FIELD_AFFECTS } from "@/lib/ssOverrideFields";
+import { OVERRIDE_FIELDS, PROJECTION_FIELDS, affectedCols } from "@/lib/ssOverrideFields";
 import { normName, buildOrder, FIXED_KEY, type OrdenPayload } from "@/lib/chileCompanyOrder";
 import type { SsV1Company, SsV1Payload, SsV1Series, IndexLevel } from "@/app/api/chile/stock-selection-v1/route";
 import type { IndexMembershipPayload } from "@/app/api/chile/index-membership/route";
@@ -15,15 +16,10 @@ import type { CarterasPayload } from "@/app/api/chile/carteras/route";
 import { normBBG } from "@/lib/bbg";
 import { PATRIA, FONT_SECONDARY, TEXT } from "@/lib/patriaTheme";
 
-// Amarillo para celdas editadas por admin (override) y sus dependientes.
-const EDIT_BG = "rgba(255,107,6,0.30)";
-const EDIT_BORDER = "#FF6B06";
-// Columnas afectadas (a pintar) dada la lista de campos overrideados de una compañía.
-const affectedCols = (overrides: string[] | undefined): Set<string> => {
-  const s = new Set<string>();
-  for (const f of overrides ?? []) for (const c of FIELD_AFFECTS[f] ?? []) s.add(c);
-  return s;
-};
+// Naranja para la celda editada a mano (override): EDIT_BG / EDIT_BORDER en ./ssTokens.
+// Sólo la celda directa del campo, no sus derivadas — la regla vive en lib/ssOverrideFields
+// (affectedCols) y la comparte la hoja imprimible, así que el PDF pinta lo mismo que la
+// pantalla.
 
 // ── Design tokens ────────────────────────────────────────────────────────────────
 // Paleta sobria (grises pizarra). El único color con significado es verde/rojo en
@@ -33,7 +29,11 @@ const TEXT1 = PATRIA.darkBlue;   // Regla 4
 const TEXT2 = TEXT.label;
 const TEXT3 = TEXT.muted;
 const BORDER = "rgba(13,13,56,0.09)";
-const SECTION_BORDER = "2px solid rgba(13,13,56,0.22)"; // separador entre secciones del orden fijo
+// Divisorias estructurales (GROUP_RULE / SECTION_RULE en ./ssTokens): se ven igual en
+// pantalla y en el PDF. Entre grupos de columnas, una vertical a 0.22 — la de 0.09 que
+// separa filas se pierde en cuanto la tabla se llena de números. Entre secciones del
+// orden, una horizontal más gruesa.
+const SECTION_BORDER = `2px solid ${SECTION_RULE}`; // separador entre secciones del orden fijo
 // ── Chrome de la tabla — Manual de Identidad PATRIA ─────────────────────────────
 const NAVY = PATRIA.darkBlue;   // Regla 1 — fila 1 del encabezado
 const NAVY_BAND = PATRIA.kingBlue; // Regla 2 — banda alterna por grupo
@@ -80,7 +80,12 @@ const solidTint = (c: string | undefined): string | undefined => (c ? SOLID_TINT
 
 // Escala única de z-index de las tablas pegadas. El bug de solapamiento venía de que la
 // fila 1 y la fila 2 del encabezado empataban en 30 y de fondos translúcidos.
-const Z = { corner: 60, head: 50, leftCol: 30, body: 1 } as const;
+// Todo por debajo de 50: la barra de navegación es `fixed z-50` y el encabezado de la
+// tabla, que ahora se pega al viewport justo debajo de ella, no debe taparla nunca.
+const Z = { corner: 40, head: 30, leftCol: 20, body: 1 } as const;
+// Alto de la barra de navegación (Navbar: `fixed h-16`, main: `pt-16`). Es el `top` al que
+// se pega el encabezado de la tabla principal cuando scrollea la página.
+const NAV_H = 64;
 const RET_HEAD = PATRIA.darkSkyBlue;       // encabezado del grupo
 
 // ── Formatters ──────────────────────────────────────────────────────────────────
@@ -667,6 +672,22 @@ export default function StockSelectionV1() {
     setHeadRowH(el.getBoundingClientRect().height);
     return () => ro.disconnect();
   }, []);
+  // La tabla principal ya no tiene scroll propio: se extiende hacia abajo y scrollea la
+  // página. El encabezado y la columna Empresa se pegan al VIEWPORT. Para `left` hay que
+  // medir dónde arranca la tabla (el contenedor de la página está centrado con mx-auto y
+  // ese borde cambia con el ancho de la ventana): si se pegara a left:0 la columna saltaría
+  // hasta el margen de la página al scrollear en horizontal.
+  const tableWrapRef = useRef<HTMLDivElement | null>(null);
+  const [stickyLeftPx, setStickyLeftPx] = useState(0);
+  useLayoutEffect(() => {
+    const el = tableWrapRef.current;
+    if (!el) return;
+    const measure = () => setStickyLeftPx(Math.max(0, Math.round(el.getBoundingClientRect().left + window.scrollX)));
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [loading]); // el contenedor recién existe cuando terminó de cargar
+
   // Igual que headRowH, pero para la tabla de índices (su encabezado tiene otro alto).
   const idxHeadRef = useRef<HTMLTableRowElement | null>(null);
   const [idxHeadTop, setIdxHeadTop] = useState(24);
@@ -962,7 +983,8 @@ export default function StockSelectionV1() {
   ];
 
   const renderCells = (r: DisplayRow, topBorder = false) => {
-    const aff = r.overrides?.length ? affectedCols(r.overrides) : null;
+    // Sólo la celda directa del campo editado, y en las series sólo la de su clase.
+    const aff = r.overrides?.length ? affectedCols(r.overrides, r.kind === "series" ? r.label : null) : null;
     return groupDefs.map((g, gIdx) =>
       visibleCols(g, expandedGroups).map((col, i) => {
         const out = col.render(r);
@@ -970,7 +992,7 @@ export default function StockSelectionV1() {
         return (
           <td key={col.id}
             title={g.id === "ret" && r.retAsOf ? `Retorno al ${fmtDate(r.retAsOf)} · Bloomberg` : undefined}
-            style={{ padding: r.kind === "series" ? "3px 7px" : "5px 7px", textAlign: col.align ?? "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: r.kind === "series" ? 10 : 10.5, color: out.color ?? TEXT1, fontWeight: edited ? 700 : out.weight ?? 400, borderBottom: `1px solid ${BORDER}`, borderTop: topBorder ? SECTION_BORDER : undefined, borderLeft: i === 0 ? `1px solid ${BORDER}` : "none", background: edited ? EDIT_BG : g.tint ?? (gIdx % 2 === 1 ? BAND : undefined), boxShadow: edited ? `inset 0 0 0 1px ${EDIT_BORDER}55` : undefined, whiteSpace: "nowrap" }}>
+            style={{ padding: r.kind === "series" ? "3px 7px" : "5px 7px", textAlign: col.align ?? "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: r.kind === "series" ? 10 : 10.5, color: out.color ?? TEXT1, fontWeight: edited ? 700 : out.weight ?? 400, borderBottom: `1px solid ${BORDER}`, borderTop: topBorder ? SECTION_BORDER : undefined, borderLeft: i === 0 ? `1px solid ${GROUP_RULE}` : "none", background: edited ? EDIT_BG : g.tint ?? (gIdx % 2 === 1 ? BAND : undefined), boxShadow: edited ? `inset 0 0 0 1px ${EDIT_BORDER}55` : undefined, whiteSpace: "nowrap" }}>
             {out.text}
           </td>
         );
@@ -1113,20 +1135,27 @@ export default function StockSelectionV1() {
         Montos en USD mn (÷ TC si es CLP) · Retornos = total return con dividendos brutos; <strong style={{ color: TEXT2 }}>L3Y y L5Y anualizados</strong> · <strong style={{ color: TEXT2 }}>NM</strong> = no significativo · Los grupos con <span style={{ color: TEXT2, fontWeight: 700 }}>▸</span> muestran 1 columna — clic en el encabezado para desplegar el resto.
       </div>
 
-      {/* Tabla — el contenedor tiene alto acotado y scroll propio: así el encabezado
-          (2 filas) queda fijo arriba y la columna Empresa fija a la izquierda. */}
-      <div style={{ overflow: "auto", maxHeight: "calc(100vh - 160px)", minHeight: 480, border: "1px solid rgba(13,13,56,0.18)", borderRadius: 8, background: "#fff" }}>
+      {/* Tabla — SIN alto acotado ni scroll propio: se extiende hacia abajo todo lo que
+          necesite y scrollea la página. El encabezado (2 filas) se pega al viewport justo
+          debajo de la barra de navegación, y la columna Empresa al borde izquierdo de la
+          tabla. Antes el contenedor estaba limitado a calc(100vh − 160px) con scroll
+          interno, y con ~120 filas se veía como una ventanita corta dentro de la página.
+          El costo: `overflow` tiene que ser visible (un scroll container captura el sticky
+          y el encabezado se iría con la página), así que en una ventana angosta con todos
+          los grupos abiertos la tabla puede sobresalir a la derecha y scrollear la página
+          en horizontal — la columna Empresa queda fija igual. */}
+      <div ref={tableWrapRef} style={{ overflow: "visible", border: "1px solid rgba(13,13,56,0.18)", borderRadius: 8, background: "#fff" }}>
         <table style={{ borderCollapse: "separate", borderSpacing: 0, fontSize: 11, width: "100%" }}>
           <thead>
             <tr ref={headRowRef}>
-              <th style={{ ...stickyTh, top: 0, zIndex: Z.corner }} rowSpan={2}>Empresa</th>
+              <th style={{ ...stickyTh, left: stickyLeftPx, top: NAV_H, zIndex: Z.corner }} rowSpan={2}>Empresa</th>
               {groupDefs.map((g, gIdx) => {
                 const open = !g.collapsible || expandedGroups.has(g.id);
                 return (
                   <th key={g.id} colSpan={visibleCols(g, expandedGroups).length}
                     onClick={() => g.collapsible && toggleGroup(g.id)}
                     title={[g.hint, g.collapsible ? (open ? "Clic para contraer" : "Clic para desplegar") : null].filter(Boolean).join(" · ") || undefined}
-                    style={{ position: "sticky", top: 0, zIndex: Z.head, padding: "5px 7px", textAlign: "center", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: NAVY_TEXT, borderLeft: "1px solid rgba(255,255,255,0.14)", whiteSpace: "nowrap", background: g.headBg ?? (gIdx % 2 === 1 ? NAVY_BAND : NAVY), cursor: g.collapsible ? "pointer" : "default", userSelect: "none" }}>
+                    style={{ position: "sticky", top: NAV_H, zIndex: Z.head, padding: "5px 7px", textAlign: "center", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: NAVY_TEXT, borderLeft: "1px solid rgba(255,255,255,0.14)", whiteSpace: "nowrap", background: g.headBg ?? (gIdx % 2 === 1 ? NAVY_BAND : NAVY), cursor: g.collapsible ? "pointer" : "default", userSelect: "none" }}>
                     {g.collapsible && <span style={{ fontSize: 8, marginRight: 3, opacity: 0.7 }}>{open ? "▾" : "▸"}</span>}
                     {g.title}
                   </th>
@@ -1139,7 +1168,7 @@ export default function StockSelectionV1() {
                   const active = sortKey === col.id;
                   return (
                     <th key={col.id} onClick={() => col.sortVal && sortBy(col.id)}
-                      style={{ position: "sticky", top: headRowH, zIndex: Z.head, padding: "5px 7px", textAlign: col.align ?? "right", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: active ? "#fff" : HEAD2_TEXT, borderBottom: `2px solid ${g.headBg ?? NAVY}`, borderLeft: i === 0 ? "1px solid rgba(13,13,56,0.22)" : "none", whiteSpace: "nowrap", cursor: col.sortVal ? "pointer" : "default", userSelect: "none", background: active ? NAVY_BAND : solidTint(g.tint) ?? (gIdx % 2 === 1 ? HEAD2_BAND_SOLID : HEAD2_BG) }}>
+                      style={{ position: "sticky", top: NAV_H + headRowH, zIndex: Z.head, padding: "5px 7px", textAlign: col.align ?? "right", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: active ? "#fff" : HEAD2_TEXT, borderBottom: `2px solid ${g.headBg ?? NAVY}`, borderLeft: i === 0 ? `1px solid ${GROUP_RULE}` : "none", whiteSpace: "nowrap", cursor: col.sortVal ? "pointer" : "default", userSelect: "none", background: active ? NAVY_BAND : solidTint(g.tint) ?? (gIdx % 2 === 1 ? HEAD2_BAND_SOLID : HEAD2_BG) }}>
                       {col.label}{col.sortVal && <span style={{ fontSize: 8, opacity: active ? 1 : 0.45, marginLeft: 3 }}>{active ? (sortDir === "asc" ? "▲" : "▼") : "↕"}</span>}
                     </th>
                   );
@@ -1159,7 +1188,7 @@ export default function StockSelectionV1() {
                   <tr key={`${r.company}-${r.label || "cons"}`} style={{ background: bg }}>
                     <td onClick={editMode && !isSeries ? () => { const c = companyByName.get(normName(r.company)); if (c) setEditCompany(c); } : undefined}
                       title={editMode && !isSeries ? "Editar valores de esta compañía" : undefined}
-                      style={{ ...stickyTd, borderTop: topBorder ? SECTION_BORDER : undefined, background: editMode && !isSeries ? EDIT_ROW_SOLID : bg, paddingLeft: isSeries ? 18 : 8, cursor: editMode && !isSeries ? "pointer" : undefined }}>
+                      style={{ ...stickyTd, left: stickyLeftPx, borderTop: topBorder ? SECTION_BORDER : undefined, background: editMode && !isSeries ? EDIT_ROW_SOLID : bg, paddingLeft: isSeries ? 18 : 8, cursor: editMode && !isSeries ? "pointer" : undefined }}>
                       {isSeries ? (
                         <>
                           <div style={{ fontSize: 10, fontWeight: 600, color: TEXT2, whiteSpace: "nowrap" }}>
@@ -1700,7 +1729,9 @@ function SsV1OverrideEditor({ company, fy, q, onClose, onSaved }: { company: SsV
 const AMBER_INK = "#FF6B06"; // acento ámbar para "cambios sin guardar"
 const miniBtn: React.CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 6, border: `1px solid ${BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" };
 const stickyTh: React.CSSProperties = { position: "sticky", left: 0, padding: "4px 8px", textAlign: "left", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: NAVY_TEXT, background: NAVY, borderBottom: `2px solid ${NAVY}`, borderRight: "1px solid rgba(13,13,56,0.20)", whiteSpace: "nowrap" };
-const stickyTd: React.CSSProperties = { position: "sticky", left: 0, zIndex: 30, padding: "4px 8px", borderBottom: `1px solid ${BORDER}`, borderRight: "1px solid rgba(13,13,56,0.20)", verticalAlign: "middle" };
+// zIndex = Z.leftCol: por debajo del encabezado (Z.head), para que al scrollear las celdas
+// de la columna pasen POR DEBAJO de las dos filas pegadas y no las tapen.
+const stickyTd: React.CSSProperties = { position: "sticky", left: 0, zIndex: Z.leftCol, padding: "4px 8px", borderBottom: `1px solid ${BORDER}`, borderRight: "1px solid rgba(13,13,56,0.20)", verticalAlign: "middle" };
 const retryBtn: React.CSSProperties = { marginTop: 10, padding: "6px 16px", borderRadius: 6, background: SURFACE, border: `1px solid ${BORDER}`, color: TEXT1, cursor: "pointer", fontSize: 13 };
 // USD se marca algo más fuerte que CLP (es la excepción en un listado mayormente CLP).
 const ccyBadge = (ccy: "CLP" | "USD"): React.CSSProperties => ({ marginLeft: 5, fontSize: 9, fontWeight: 700, color: ccy === "USD" ? TEXT1 : TEXT3, background: ccy === "USD" ? "rgba(13,13,56,0.09)" : "rgba(13,13,56,0.05)", borderRadius: 3, padding: "1px 4px" });

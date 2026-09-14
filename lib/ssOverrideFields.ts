@@ -63,29 +63,54 @@ export const PROJECTION_FIELDS: { key: string; label: string }[] = [
 ];
 export const PROJECTION_FIELD_KEYS = new Set(PROJECTION_FIELDS.map((f) => f.key));
 
-// field → columnas (claves del value bag) que quedan afectadas y se pintan de amarillo.
-// Incluye la columna propia del campo (si se muestra) y todas las derivadas.
-const SHARES_AFFECTS = ["mcap", "fv", "fvEbitdaLtm", "fvEbitda26", "fvEbitda27", "puLtm", "pu26", "pu27", "pbv", "fvs", "fvic", "divYield"];
+// field → columna (clave del value bag) que se pinta de naranja cuando el campo tiene
+// un valor editado a mano.
+//
+// Se pinta SÓLO la celda directa del campo, nunca los múltiplos ni las derivadas: antes
+// editar las acciones teñía M.Cap, FV, tres FV/EBITDA, tres P/U, P/BV, FV/S, FV/IC y el
+// yield — media fila naranja por un solo número, y el ojo ya no distinguía QUÉ se tocó.
+//
+// Regla: se pinta el nivel, no el ratio. Acciones no tiene columna propia, así que su
+// celda directa es M.Cap (precio × acciones, el producto inmediato). Los campos sin ninguna
+// celda de nivel en la tabla (deuda n-4, patrimonio, minoritarios, ventas, EBIT) no pintan
+// nada: quedan a la vista en el badge "N ed." del nombre y en el panel de edición.
 export const FIELD_AFFECTS: Record<string, string[]> = {
-  sharesTotal: SHARES_AFFECTS,
-  sharesA: SHARES_AFFECTS,
-  sharesB: SHARES_AFFECTS,
-  debtN: ["dn", "fv", "fvEbitdaLtm", "fvEbitda26", "fvEbitda27", "fvs", "fvic"],
-  debtN4: ["roic"],
-  equityN: ["pbv", "roe26", "fvic"],
-  equityN4: ["roeLtm", "roic"],
-  minorityN: ["fvic"],
-  minorityN4: ["roic"],
-  ebitdaN: ["ebitdaN", "ebitdaVar"],
-  ebitdaN4: ["ebitdaN4", "ebitdaVar"],
-  ebitdaLtm: ["ebitdaLtmUsd", "fvEbitdaLtm"],
-  ebitda2026E: ["ebitda26Usd", "fvEbitda26"],
-  ebitda2027E: ["ebitda27Usd", "fvEbitda27"],
-  utilidadN: ["utilidadN", "utilVar"],
-  utilidadN4: ["utilidadN4", "utilVar"],
-  utilidadLtm: ["utilLtmUsd", "puLtm", "roeLtm"],
-  utilidad2026E: ["util26Usd", "pu26", "roe26", "divYield"],
-  utilidad2027E: ["util27Usd", "pu27"],
-  revenueLtm: ["fvs"],
-  ebitLtm: ["roic"],
+  sharesTotal: ["mcap"],
+  sharesA: ["mcap"],
+  sharesB: ["mcap"],
+  debtN: ["dn"],
+  debtN4: [],
+  equityN: [],
+  equityN4: [],
+  minorityN: [],
+  minorityN4: [],
+  ebitdaN: ["ebitdaN"],
+  ebitdaN4: ["ebitdaN4"],
+  ebitdaLtm: ["ebitdaLtmUsd"],
+  ebitda2026E: ["ebitda26Usd"],
+  ebitda2027E: ["ebitda27Usd"],
+  utilidadN: ["utilidadN"],
+  utilidadN4: ["utilidadN4"],
+  utilidadLtm: ["utilLtmUsd"],
+  utilidad2026E: ["util26Usd"],
+  utilidad2027E: ["util27Usd"],
+  revenueLtm: [],
+  ebitLtm: [],
 };
+
+/**
+ * Columnas a pintar en UNA fila, dada la lista de campos editados de su compañía.
+ *
+ * Es por fila y no por compañía porque en una doble serie las acciones se editan por
+ * clase: sharesA cambia el M.Cap de la fila A y de la consolidada, pero el de la fila B
+ * no se movió y no debe teñirse. `seriesLabel` = "A" | "B" en las filas de serie, null en
+ * la consolidada o simple.
+ */
+export function affectedCols(overrides: string[] | undefined, seriesLabel: string | null): Set<string> {
+  const s = new Set<string>();
+  for (const f of overrides ?? []) {
+    if (seriesLabel && ((f === "sharesA" && seriesLabel !== "A") || (f === "sharesB" && seriesLabel !== "B"))) continue;
+    for (const c of FIELD_AFFECTS[f] ?? []) s.add(c);
+  }
+  return s;
+}

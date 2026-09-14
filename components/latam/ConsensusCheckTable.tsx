@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Download, CalendarDays } from "lucide-react";
+import { Download, CalendarDays, Eye, EyeOff } from "lucide-react";
 import type { ConsensusCheckPayload, ConsensusCheckRow } from "@/app/api/latam/consensus-check/route";
 import { downloadExcel } from "@/lib/exportExcel";
 import { FONT_SECONDARY } from "@/lib/patriaTheme";
@@ -37,6 +37,12 @@ function fmtConNum(v: number | null): string {
 function fmtPct(v: number | null): string {
   if (v == null) return "—";
   return (v >= 0 ? "+" : "") + v.toFixed(1) + "%";
+}
+
+// Múltiplos: 0.0x, misma nomenclatura que los explorers del deep-dive.
+function fmtMult(v: number | null): string {
+  if (v == null) return "—";
+  return v.toFixed(1) + "x";
 }
 
 function fmtUpside(v: number | null): { text: string; color: string } {
@@ -125,6 +131,23 @@ function ConNumCell({ v }: { v: number | null }) {
       whiteSpace:  "nowrap",
     }}>
       {fmtConNum(v)}
+    </td>
+  );
+}
+
+// Múltiplos del modelo (EV/EBITDA, P/E): mismo cuerpo que NumCell, formato 0.0x.
+function MultCell({ v }: { v: number | null }) {
+  return (
+    <td style={{
+      textAlign:   "right",
+      padding:     "5px 10px",
+      fontSize:    12,
+      fontFamily:  FONT_SECONDARY,
+      color:       v == null ? C.NIL_TXT : "#0D0D38",
+      borderRight: `1px solid ${C.BDR}`,
+      whiteSpace:  "nowrap",
+    }}>
+      {fmtMult(v)}
     </td>
   );
 }
@@ -225,13 +248,27 @@ type SortKey =
   | "ticker" | "updateDate" | "recc" | "upside" | "upsideModel"
   | "monEbitda1" | "monEbitda2" | "monNi1" | "monNi2"
   | "conEbitda1" | "conEbitda2" | "conNi1" | "conNi2"
-  | "varEbitda1" | "varEbitda2" | "varNi1" | "varNi2";
+  | "varEbitda1" | "varEbitda2" | "varNi1" | "varNi2"
+  | "mulEvEbitda1" | "mulEvEbitda2" | "mulPe1" | "mulPe2";
 
-// 12 columnas de datos en orden de display → su SortKey.
-const COL_SORT: SortKey[] = [
-  "monEbitda1", "monEbitda2", "monNi1", "monNi2",   // Moneda (0-3)
-  "conEbitda1", "conEbitda2", "conNi1", "conNi2",   // Consensus (4-7)
-  "varEbitda1", "varEbitda2", "varNi1", "varNi2",   // Var % (8-11)
+// ── Column groups ──────────────────────────────────────────────────────────────
+// 4 grupos × colSpan 4: dos métricas × (y1, y2) cada uno. Los tres primeros comparan
+// EBITDA/NI; el cuarto son los múltiplos del modelo (EV/EBITDA, P/E) al precio vivo.
+// "consensus" arranca oculto (toggle en la toolbar): la comparación ya está resumida en
+// "Var % vs Consensus", y sin ese bloque la tabla entra sin scroll horizontal.
+type ColGroupKey = "moneda" | "consensus" | "var" | "mult";
+interface ColGroup {
+  key:     ColGroupKey;
+  label:   string;
+  bg:      string;
+  metrics: [string, string];
+  cols:    [SortKey, SortKey, SortKey, SortKey];   // orden de display → SortKey
+}
+const COL_GROUPS: ColGroup[] = [
+  { key: "moneda",    label: "Moneda",             bg: C.HDR_BG,  metrics: ["EBITDA", "NI"],     cols: ["monEbitda1",   "monEbitda2",   "monNi1", "monNi2"] },
+  { key: "consensus", label: "Consensus",          bg: "#2044DC", metrics: ["EBITDA", "NI"],     cols: ["conEbitda1",   "conEbitda2",   "conNi1", "conNi2"] },
+  { key: "var",       label: "Var % vs Consensus", bg: "#001EAF", metrics: ["EBITDA", "NI"],     cols: ["varEbitda1",   "varEbitda2",   "varNi1", "varNi2"] },
+  { key: "mult",      label: "Moneda Multiples",   bg: "#0D0D38", metrics: ["EV/EBITDA", "P/E"], cols: ["mulEvEbitda1", "mulEvEbitda2", "mulPe1", "mulPe2"] },
 ];
 
 // Recomendación → rank (compra alto, venta bajo) para un orden con sentido.
@@ -263,6 +300,10 @@ function sortValue(row: ConsensusCheckRow, key: SortKey): number | string | null
     case "varEbitda2": return varPct(row.moneda.ebitda2FY, row.consensus.ebitda2FY);
     case "varNi1":     return varPct(row.moneda.ni1FY,     row.consensus.ni1FY);
     case "varNi2":     return varPct(row.moneda.ni2FY,     row.consensus.ni2FY);
+    case "mulEvEbitda1": return row.multiples.evEbitda1FY;
+    case "mulEvEbitda2": return row.multiples.evEbitda2FY;
+    case "mulPe1":       return row.multiples.pe1FY;
+    case "mulPe2":       return row.multiples.pe2FY;
   }
 }
 
@@ -293,6 +334,7 @@ export default function ConsensusCheckTable() {
   const [industryFilter, setIndustryFilter] = useState("");
   const [validTickers,  setValidTickers]  = useState<Set<string>>(new Set());
   const [notFoundMsg,   setNotFoundMsg]   = useState<string | null>(null);
+  const [showConsensus, setShowConsensus] = useState(false);   // bloque Consensus oculto por defecto
 
   useEffect(() => {
     Promise.all([
@@ -348,6 +390,14 @@ export default function ConsensusCheckTable() {
     else { setSortBy(k); setSortDir(k === "ticker" ? "asc" : "desc"); }
   }
 
+  function toggleConsensus() {
+    const next = !showConsensus;
+    // Si se oculta la columna por la que está ordenado, volvemos al orden por defecto:
+    // un orden por una columna invisible no se puede leer ni deshacer desde el header.
+    if (!next && COL_GROUPS[1].cols.includes(sortBy)) { setSortBy("updateDate"); setSortDir("desc"); }
+    setShowConsensus(next);
+  }
+
   function handleTickerClick(ticker: string) {
     if (!validTickers.has(ticker.toUpperCase())) {
       setNotFoundMsg(ticker);
@@ -361,12 +411,9 @@ export default function ConsensusCheckTable() {
 
   const thProps = { sortBy, sortDir, onSort: handleSort };
 
-  // 3 sections × colSpan 4 (EBITDA + NI only)
-  const sections: { label: string; bg: string }[] = [
-    { label: "Moneda",    bg: C.HDR_BG  },
-    { label: "Consensus", bg: "#2044DC" },
-    { label: "Var %",     bg: "#001EAF" },
-  ];
+  // Grupos visibles y sus columnas de datos en orden de display (header fila 3 + colSpan).
+  const sections = COL_GROUPS.filter((g) => showConsensus || g.key !== "consensus");
+  const dataCols = sections.flatMap((g) => g.cols);
 
   return (
     <>
@@ -410,6 +457,23 @@ export default function ConsensusCheckTable() {
             {analysts.map((a) => <option key={a} value={a}>{a}</option>)}
           </select>
 
+          {/* Consensus block toggle — oculto por defecto */}
+          <button
+            onClick={toggleConsensus}
+            title={showConsensus ? "Hide the Bloomberg consensus columns" : "Show the Bloomberg consensus columns"}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 5,
+              padding: "6px 12px", borderRadius: 7, fontSize: 12, fontFamily: FONT_SECONDARY, fontWeight: 600,
+              border: showConsensus ? "1px solid rgba(32,68,220,0.30)" : "1px solid rgba(13,13,56,0.12)",
+              background: showConsensus ? "rgba(32,68,220,0.07)" : "#F5F7FD",
+              color: showConsensus ? "#001EAF" : "rgba(13,13,56,0.62)",
+              cursor: "pointer", outline: "none", whiteSpace: "nowrap", transition: "all 0.12s",
+            }}
+          >
+            {showConsensus ? <EyeOff size={12} /> : <Eye size={12} />}
+            {showConsensus ? "Hide Consensus" : "Show Consensus"}
+          </button>
+
           {(analystFilter || countryFilter || industryFilter) && (
             <span style={{ fontSize: 11, color: "rgba(13,13,56,0.62)", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
               {filtered.length} of {rows.length}
@@ -425,6 +489,7 @@ export default function ConsensusCheckTable() {
               `Moneda EBITDA ${y1}`, `Moneda EBITDA ${y2}`, `Moneda NI ${y1}`, `Moneda NI ${y2}`,
               `BBG EBITDA ${y1}`,    `BBG EBITDA ${y2}`,    `BBG NI ${y1}`,    `BBG NI ${y2}`,
               `Var EBITDA ${y1}`,    `Var EBITDA ${y2}`,    `Var NI ${y1}`,    `Var NI ${y2}`,
+              `EV/EBITDA ${y1}`,     `EV/EBITDA ${y2}`,     `P/E ${y1}`,       `P/E ${y2}`,
             ];
             const rows = filtered.map((r) => [
               shortTicker(r.ticker), r.updateDate, r.analyst ?? "", r.recc ?? "",
@@ -439,6 +504,10 @@ export default function ConsensusCheckTable() {
               varPct(r.moneda.ebitda2FY, r.consensus.ebitda2FY) != null ? +varPct(r.moneda.ebitda2FY, r.consensus.ebitda2FY)!.toFixed(1) : null,
               varPct(r.moneda.ni1FY,     r.consensus.ni1FY)     != null ? +varPct(r.moneda.ni1FY,     r.consensus.ni1FY)!.toFixed(1)     : null,
               varPct(r.moneda.ni2FY,     r.consensus.ni2FY)     != null ? +varPct(r.moneda.ni2FY,     r.consensus.ni2FY)!.toFixed(1)     : null,
+              r.multiples.evEbitda1FY != null ? +r.multiples.evEbitda1FY.toFixed(1) : null,
+              r.multiples.evEbitda2FY != null ? +r.multiples.evEbitda2FY.toFixed(1) : null,
+              r.multiples.pe1FY       != null ? +r.multiples.pe1FY.toFixed(1)       : null,
+              r.multiples.pe2FY       != null ? +r.multiples.pe2FY.toFixed(1)       : null,
             ]);
             downloadExcel([{ name: "Estimates vs Consensus", headers, rows }], "latam_estimates_consensus");
           }}
@@ -472,7 +541,7 @@ export default function ConsensusCheckTable() {
 
       {/* ── Table ── */}
       <div style={{ overflowX: "auto", borderRadius: 10, border: `1px solid ${C.BDR}`, boxShadow: "0 1px 6px rgba(13,13,56,0.07)" }}>
-        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 900, tableLayout: "auto" }}>
+        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: showConsensus ? 1180 : 960, tableLayout: "auto" }}>
           <thead>
             {/* ── Row 1: section headers ── */}
             <tr>
@@ -507,12 +576,12 @@ export default function ConsensusCheckTable() {
               ))}
             </tr>
 
-            {/* ── Row 2: EBITDA / NI per section ── */}
+            {/* ── Row 2: métricas por sección (EBITDA / NI · EV/EBITDA / P/E) ── */}
             <tr>
-              {(["moneda", "consensus", "var"] as const).map((k) =>
-                (["EBITDA", "NI"] as const).map((m) => (
+              {sections.map((s) =>
+                s.metrics.map((m) => (
                   <th
-                    key={`${k}_${m}`}
+                    key={`${s.label}_${m}`}
                     colSpan={2}
                     style={{
                       background:    C.SUB_BG,
@@ -536,12 +605,11 @@ export default function ConsensusCheckTable() {
 
             {/* ── Row 3: year labels — TODAS las columnas son ordenables ── */}
             <tr>
-              {Array.from({ length: 12 }).map((_, i) => {
-                const colKey   = COL_SORT[i];
+              {dataCols.map((colKey, i) => {
                 const isSorted = sortBy === colKey;
                 return (
                   <th
-                    key={i}
+                    key={colKey}
                     onClick={() => handleSort(colKey)}
                     style={{
                       background:   "#F5F7FD",
@@ -683,24 +751,34 @@ export default function ConsensusCheckTable() {
                   <NumCell v={row.moneda.ni1FY}     />
                   <NumCell v={row.moneda.ni2FY}     />
 
-                  {/* Consensus: EBITDA, NI */}
-                  <ConNumCell v={row.consensus.ebitda1FY} />
-                  <ConNumCell v={row.consensus.ebitda2FY} />
-                  <ConNumCell v={row.consensus.ni1FY}     />
-                  <ConNumCell v={row.consensus.ni2FY}     />
+                  {/* Consensus: EBITDA, NI — oculto por defecto (toggle en la toolbar) */}
+                  {showConsensus && (
+                    <>
+                      <ConNumCell v={row.consensus.ebitda1FY} />
+                      <ConNumCell v={row.consensus.ebitda2FY} />
+                      <ConNumCell v={row.consensus.ni1FY}     />
+                      <ConNumCell v={row.consensus.ni2FY}     />
+                    </>
+                  )}
 
-                  {/* Var % */}
+                  {/* Var % vs Consensus */}
                   <VarCell moneda={row.moneda.ebitda1FY} consensus={row.consensus.ebitda1FY} />
                   <VarCell moneda={row.moneda.ebitda2FY} consensus={row.consensus.ebitda2FY} />
                   <VarCell moneda={row.moneda.ni1FY}     consensus={row.consensus.ni1FY}     />
                   <VarCell moneda={row.moneda.ni2FY}     consensus={row.consensus.ni2FY}     />
+
+                  {/* Moneda Multiples: EV/EBITDA, P/E (mismo cálculo que el deep-dive) */}
+                  <MultCell v={row.multiples.evEbitda1FY} />
+                  <MultCell v={row.multiples.evEbitda2FY} />
+                  <MultCell v={row.multiples.pe1FY}       />
+                  <MultCell v={row.multiples.pe2FY}       />
                 </tr>
               );
             })}
 
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={18} style={{ textAlign: "center", padding: 32, color: "rgba(13,13,56,0.45)", fontSize: 13 }}>
+                <td colSpan={6 + dataCols.length} style={{ textAlign: "center", padding: 32, color: "rgba(13,13,56,0.45)", fontSize: 13 }}>
                   No model data available.
                 </td>
               </tr>

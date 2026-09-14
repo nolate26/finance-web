@@ -9,6 +9,7 @@ import type {
 } from "@/app/api/companies/[ticker]/model/route";
 import { consensusScaleFactor } from "@/lib/consensusScale";
 import { ccySuffix } from "@/lib/ccySuffix";
+import { companyEffMarketCap, companyEv, companyEvEbitda, companyPe } from "@/lib/modelMultiples";
 import ModelEstimateChart, { buildEstimateRows, buildRecommendationRows, type EstimateMetric, type EstimateRow } from "@/components/deep-dive/ModelEstimateChart";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { PATRIA, FONT_PRIMARY, FONT_SECONDARY, TEXT, BORDER } from "@/lib/patriaTheme";
@@ -96,24 +97,10 @@ function enrich(financials: ModelFinancialRow[], livePrice: number | null): Year
     const priceIsLive = isEst && livePrice !== null;
     const effPrice     = priceIsLive ? livePrice : f.sharePrice;
 
-    // Market cap en la escala de los financials (revenue/EBITDA/NI). Reglas:
-    //  • Precio vivo (proyectado): se arma desde precio×acciones CRUDO y el fxEop del analista lo
-    //    lleva a la escala de los financials (ej. CLP: fxEop=0.001, porque precio×acciones queda en
-    //    CLP mn y los financials están en CLP bn).
-    //  • Resto de años: la columna market_cap del modelo YA viene en esa escala → se usa tal cual.
-    //    Aplicarle fxEop encima la escalaría DOS veces (ese era el bug del histórico: los yields
-    //    salían ~1000× altos y el market cap real no cuadraba con el proyectado).
-    //  • Sin market_cap: se reconstruye desde precio×acciones × fxEop.
-    let effMarketCap: number | null;
-    if (priceIsLive && livePrice !== null && f.sharesOut !== null) {
-      effMarketCap = livePrice * f.sharesOut * (f.fxEop ?? 1);
-    } else if (f.marketCap !== null) {
-      effMarketCap = f.marketCap;
-    } else if (f.sharePrice !== null && f.sharesOut !== null) {
-      effMarketCap = f.sharePrice * f.sharesOut * (f.fxEop ?? 1);
-    } else {
-      effMarketCap = null;
-    }
+    // Market cap en la escala de los financials: reglas (precio vivo × acciones × fxEop en
+    // proyectados, market_cap del modelo en el resto) viven en lib/modelMultiples, compartidas
+    // con la tabla Estimates para que los múltiplos coincidan en ambas vistas.
+    const effMarketCap = companyEffMarketCap(f, priceIsLive ? livePrice : null);
 
     return { ...f, isEst, effPrice, effMarketCap, priceIsLive };
   });
@@ -274,17 +261,11 @@ const SECTIONS: Section[] = [
       { key: "mktcap",   label: "Market Cap ($) - LCCY",       kind: "input",   fmt: "abs",
         fn: d => d.effMarketCap },
       { key: "ev",       label: "EV",                           kind: "derived", fmt: "abs",
-        fn: d => {
-          if (d.effMarketCap === null || d.netDebt === null || d.minorities === null) return null;
-          return d.effMarketCap + d.netDebt + d.minorities;
-        } },
+        fn: d => companyEv(d.effMarketCap, d.netDebt) },
       { key: "ev_eb",    label: "EV/EBITDA",                    kind: "derived", fmt: "mult",
-        fn: d => {
-          if (d.effMarketCap === null || d.netDebt === null || d.minorities === null) return null;
-          return sdiv(d.effMarketCap + d.netDebt + d.minorities, d.ebitda);
-        } },
+        fn: d => companyEvEbitda(d.effMarketCap, d.netDebt, d.ebitda) },
       { key: "pe",       label: "P/E",                          kind: "derived", fmt: "mult",
-        fn: d => sdiv(d.effMarketCap, d.netIncome) },
+        fn: d => companyPe(d.effMarketCap, d.netIncome) },
       { key: "pbv",      label: "P/BV",                         kind: "derived", fmt: "mult",
         fn: d => sdiv(d.effMarketCap, d.controllingEq) },
       { key: "roe",      label: "ROE (NI / Equity)",            kind: "derived", fmt: "pct_plain",

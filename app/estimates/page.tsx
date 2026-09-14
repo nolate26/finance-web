@@ -23,7 +23,7 @@ const VIEWS: { key: View; label: string; icon: typeof Sigma; sub: string; spacer
     key:   "estimates",
     label: "Estimates",
     icon:  Sigma,
-    sub:   "Moneda analyst estimates vs Bloomberg consensus · latest model snapshot per company",
+    sub:   "Moneda analyst estimates vs Bloomberg consensus · model multiples at live price · latest model snapshot per company",
   },
   {
     key:   "track-record",
