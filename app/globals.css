@@ -50,6 +50,12 @@
        la propiedad no hace nada, así que sale más barato declararla global que
        perseguir los ~35 `overflowX: "auto"` inline que hay repartidos. */
     -webkit-overflow-scrolling: touch;
+    /* `manipulation` = pan + pinch, SIN doble toque. En iOS dos toques rápidos
+       sobre cualquier cosa (una pestaña, la hamburguesa, una fila) son "zoom
+       acá", y el zoom queda pegado hasta que uno lo deshace con los dedos.
+       Navegando rápido se dispara solo. El pinch sigue funcionando: ése sí
+       es intencional y lo permite el viewport (maximumScale: 5). */
+    touch-action: manipulation;
   }
 
   /* iOS infla el cuerpo del texto al rotar a horizontal si no se fija. Con tablas
@@ -489,7 +495,8 @@
      ahí son celdas editables y el zoom es el menor de los males. */
   input:not([type="checkbox"]):not([type="radio"]):not(table input):not(.keep-dense),
   textarea:not(table textarea):not(.keep-dense),
-  select:not(table select):not(.keep-dense) {
+  select:not(table select):not(.keep-dense),
+  [contenteditable="true"] {
     /* `!important` obligatorio: casi todos los inputs de la app llevan
        `fontSize: 13` inline y sin esto la regla pierde. El síntoma cuando
        falta es brutal: el zoom se dispara en el LOGIN (el primer input que
