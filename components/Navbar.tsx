@@ -455,6 +455,20 @@ export default function Navbar() {
   const router   = useRouter();
   const [drawer, setDrawer] = useState(false);
 
+  // La fecha se calcula SÓLO en el cliente, después de hidratar. Calcularla en
+  // el render la formatea dos veces —en el servidor (UTC, ICU de Node) y en el
+  // navegador (hora de Chile, ICU de Safari)— y cualquier diferencia ("SEP" vs
+  // "SEPT", o directamente otro día pasadas las 20h) es un hydration mismatch
+  // (#418) para toda la página. Vacío en el servidor = mismo texto en ambos.
+  const [today, setToday] = useState("");
+  useEffect(() => {
+    setToday(
+      new Date()
+        .toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+        .toUpperCase(),
+    );
+  }, []);
+
   const [g1, g2, g3] = NAV_GROUPS;
   const current = activeTabOf(pathname);
 
@@ -557,13 +571,7 @@ export default function Navbar() {
             letterSpacing: "0.05em",
           }}
         >
-          {new Date()
-            .toLocaleDateString("en-GB", {
-              day:   "2-digit",
-              month: "short",
-              year:  "numeric",
-            })
-            .toUpperCase()}
+          {today}
         </span>
 
         <span
