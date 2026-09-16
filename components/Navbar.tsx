@@ -238,7 +238,10 @@ function MobileDrawer({
         style={{
           position: "relative",
           width: "min(320px, 86vw)",
-          height: "100%",
+          // `100dvh` explícito y no `100%`: en Safari móvil el alto del padre
+          // fixed no siempre resuelve el porcentaje a tiempo y la lista de
+          // destinos (flex: 1) colapsaba, dejando visible sólo el pie.
+          height: "100dvh",
           background: "#fff",
           borderLeft: "1px solid rgba(13,13,56,0.10)",
           boxShadow: "-8px 0 34px rgba(13,13,56,0.18)",

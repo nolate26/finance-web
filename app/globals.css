@@ -490,7 +490,12 @@
   input:not([type="checkbox"]):not([type="radio"]):not(table input):not(.keep-dense),
   textarea:not(table textarea):not(.keep-dense),
   select:not(table select):not(.keep-dense) {
-    font-size: 16px;
+    /* `!important` obligatorio: casi todos los inputs de la app llevan
+       `fontSize: 13` inline y sin esto la regla pierde. El síntoma cuando
+       falta es brutal: el zoom se dispara en el LOGIN (el primer input que
+       se toca) y queda pegado para toda la sesión — la app entera se ve
+       "con mucho zoom" y el cajón del navbar aparece recortado. */
+    font-size: 16px !important;
   }
 }
 
