@@ -65,6 +65,84 @@ export interface TopPicksPayload {
 }
 
 /**
+ * Un período de la grilla. `declared` distingue los que alguien abrió a propósito
+ * (fila en top_pick_periods) de los que existen sólo porque tienen picks: un período
+ * declarado se muestra aunque esté vacío — si no, abrir el siguiente quarter no se
+ * vería hasta cargarle el primer pick.
+ */
+export interface TopPickPeriodDTO {
+  period:     string;          // "YYYY-MM"
+  reportDate: string | null;   // "YYYY-MM-DD" — día en que se cerró la selección
+  declared:   boolean;
+}
+
+export interface TopPickPeriodsPayload {
+  periods: TopPickPeriodDTO[];
+}
+
+// ── Períodos ──────────────────────────────────────────────────────────────────
+// Chile trabaja por trimestre y LatAm por mes; toda la aritmética de períodos vive
+// acá porque la usan por igual la grilla y la validación del servidor.
+
+/** Meses válidos de inicio de trimestre. */
+const QUARTER_MONTHS = [1, 4, 7, 10];
+
+/** "2026-07" → "Q3 2026" en Chile, "July 2026" en LatAm. */
+export function periodLabel(ym: string, isChile: boolean): string {
+  const [year, month] = ym.split("-").map(Number);
+  if (isChile) return `Q${Math.ceil(month / 3)} ${year}`;
+  return new Date(year, month - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
+
+/** El período del calendario de hoy. */
+export function currentPeriod(isChile: boolean): string {
+  const d = new Date();
+  const m = isChile ? Math.floor(d.getMonth() / 3) * 3 : d.getMonth();
+  return `${d.getFullYear()}-${String(m + 1).padStart(2, "0")}`;
+}
+
+/** El período siguiente: +1 trimestre en Chile, +1 mes en LatAm. */
+export function nextPeriod(ym: string, isChile: boolean): string {
+  const [year, month] = ym.split("-").map(Number);
+  const idx = month - 1 + (isChile ? 3 : 1);
+  return `${year + Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, "0")}`;
+}
+
+/** ¿Tiene "YYYY-MM" la forma de un período? */
+export function isPeriodShape(ym: string): boolean {
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(ym);
+}
+
+/**
+ * ¿Se puede ABRIR este período? En Chile, sólo los meses que abren trimestre.
+ *
+ * Ojo: es una regla para períodos NUEVOS, no una descripción de los que ya hay. Los
+ * quarters históricos de Chile están guardados con el mes del informe (2025-12 es
+ * Q4 2025, 2026-03 es Q1 2026), así que exigirles esto los dejaría sin poder editar.
+ * Sobre los existentes sólo se valida la forma.
+ */
+export function canOpenPeriod(ym: string, isChile: boolean): boolean {
+  if (!isPeriodShape(ym)) return false;
+  return !isChile || QUARTER_MONTHS.includes(Number(ym.slice(5, 7)));
+}
+
+/**
+ * Lleva un período de Chile al primer mes de su trimestre; en LatAm no cambia nada.
+ * Es lo que permite calcular el siguiente a partir de uno histórico: el que sigue a
+ * 2025-12 (Q4 2025) es Q1 2026, y sumarle tres meses a diciembre daría marzo — la
+ * etiqueta sería correcta pero el mes no sería uno que se pueda abrir.
+ */
+export function normalizePeriod(ym: string, isChile: boolean): string {
+  if (!isChile || !isPeriodShape(ym)) return ym;
+  const [year, month] = ym.split("-").map(Number);
+  const first = Math.floor((month - 1) / 3) * 3 + 1;
+  return `${year}-${String(first).padStart(2, "0")}`;
+}
+
+/** "YYYY-MM" → "YYYY-MM-01", que es como viajan las fechas de período en la API. */
+export const periodToIso = (ym: string) => `${ym}-01`;
+
+/**
  * Resuelve el usuario de un pick tolerando que el enlace no exista.
  *
  * authorId sólo se escribe al CREAR el pick. Si el analista se dio de alta en la

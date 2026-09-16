@@ -383,7 +383,7 @@ export default function LatamTable({
         border:       `1px solid ${BORDER}`,
         boxShadow:    "0 2px 12px rgba(13,13,56,0.07)",
         background:   BG_BODY_ODD,
-        maxHeight:    "calc(100vh - 320px)",
+        maxHeight:    "calc(100dvh - 320px)",
       }}
     >
       <table

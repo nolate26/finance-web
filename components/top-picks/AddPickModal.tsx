@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSession } from "next-auth/react";
 import { X, Search, Loader2, Check } from "lucide-react";
 import { FONT_SECONDARY, TEXT, BORDER, PATRIA } from "@/lib/patriaTheme";
 import type { PickSectorDTO } from "@/lib/topPicks";
+import type { AnalystOption } from "@/app/api/planning/analysts/route";
 
 // Modal para agregar un pick. Reemplaza al flujo anterior —"Add Company" creaba una
 // fila vacía y había que llenar cuatro campos en línea antes de poder guardar—; acá se
@@ -21,11 +23,16 @@ interface Props {
   sectors:    PickSectorDTO[];      // sólo los que la sesión puede escribir
   /** Empresas ya en el período: se marcan como agregadas y no se pueden repetir. */
   taken:      Set<string>;
+  /** Sólo admin: puede dejar el pick a nombre de otro analista. */
+  isAdmin:    boolean;
+  /** Lista de analistas para el selector de autoría. Vacía si no es admin. */
+  analysts:   AnalystOption[];
   onClose:    () => void;
   onAdded:    () => void;
 }
 
-export default function AddPickModal({ region, periodIso, sectors, taken, onClose, onAdded }: Props) {
+export default function AddPickModal({ region, periodIso, sectors, taken, isAdmin, analysts, onClose, onAdded }: Props) {
+  const selfId = useSession().data?.user?.id ?? "";
   const [query, setQuery]       = useState("");
   const [results, setResults]   = useState<SearchResult[]>([]);
   const [searching, setSearch]  = useState(false);
@@ -35,9 +42,20 @@ export default function AddPickModal({ region, periodIso, sectors, taken, onClos
   const [target, setTarget]     = useState("");
   const [saving, setSaving]     = useState(false);
   const [error, setError]       = useState<string | null>(null);
+  // A nombre de quién queda el pick. Arranca en la sesión: lo normal sigue siendo que
+  // cada uno cargue lo suyo. El admin lo cambia cuando carga por el equipo.
+  // null = todavía sin inicializar, y NO es lo mismo que "" (sin analista): con "" de
+  // centinela, elegir "sin analista" se revertiría solo a la sesión.
+  const [authorId, setAuthorId] = useState<string | null>(null);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isChile = region === "CHILE";
+
+  // El id de sesión llega un tick después del primer render (useSession); recién ahí
+  // se puede preseleccionar "yo" en la lista.
+  useEffect(() => {
+    if (selfId && authorId === null) setAuthorId(selfId);
+  }, [selfId, authorId]);
 
   // Búsqueda con debounce: se dispara desde 2 caracteres para no pedir el universo
   // entero en cada tecla.
@@ -80,6 +98,9 @@ export default function AddPickModal({ region, periodIso, sectors, taken, onClos
           comment,
           targetPrice:  target.trim() ? Number(target) : null,
           industryGroup: isChile ? picked.industriaChile : picked.industriaGics,
+          // Sólo se manda si el admin eligió a otro: sin el campo, el servidor firma
+          // con la sesión, que es el comportamiento de siempre para un analista.
+          ...(isAdmin && authorId !== null && authorId !== selfId ? { authorId: authorId || null } : {}),
         }),
       });
       const d = await res.json();
@@ -98,6 +119,7 @@ export default function AddPickModal({ region, periodIso, sectors, taken, onClos
       role="dialog"
       aria-modal="true"
       aria-label="Add top pick"
+      className="modal-overlay"
       style={{
         position: "fixed", inset: 0, zIndex: 150,
         background: "rgba(13,13,56,0.45)", backdropFilter: "blur(3px)",
@@ -106,9 +128,10 @@ export default function AddPickModal({ region, periodIso, sectors, taken, onClos
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        className="modal-card"
         style={{
           background: "#FFFFFF", borderRadius: 14, width: "min(520px, 100%)",
-          maxHeight: "88vh", display: "flex", flexDirection: "column",
+          maxHeight: "88dvh", display: "flex", flexDirection: "column",
           boxShadow: "0 24px 70px rgba(13,13,56,0.30)", border: `1px solid ${BORDER.base}`,
           overflow: "hidden",
         }}
@@ -229,6 +252,34 @@ export default function AddPickModal({ region, periodIso, sectors, taken, onClos
               </select>
             )}
           </div>
+
+          {/* ── Analista ─────────────────────────────────────────────────────── */}
+          {/* Sólo admin. Un analista carga siempre a su nombre; el admin, que carga
+              por el equipo, elige de quién es el pick para no quedar él de autor —
+              la autoría es lo que decide qué picks salen activos y cuáles en gris. */}
+          {isAdmin && analysts.length > 0 && (
+            <div>
+              <label style={labelStyle}>Analista</label>
+              <select
+                value={authorId ?? ""}
+                onChange={(e) => setAuthorId(e.target.value)}
+                style={{ ...inputStyle, cursor: "pointer" }}
+              >
+                {analysts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {(a.name ?? a.email ?? "—") + (a.id === selfId ? " (yo)" : "")}
+                    {a.initials ? ` · ${a.initials}` : ""}
+                  </option>
+                ))}
+                <option value="">— sin analista —</option>
+              </select>
+              {authorId !== selfId && (
+                <p style={{ fontSize: 10.5, color: TEXT.muted, margin: "5px 0 0" }}>
+                  El pick queda firmado por {analysts.find((a) => a.id === authorId)?.name ?? "nadie"}, no por ti.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* ── Comentario y TP ──────────────────────────────────────────────── */}
           <div>

@@ -330,7 +330,7 @@ export default function MomentumTable() {
         </div>
 
         {/* ── Table ─────────────────────────────────────────────────────────── */}
-        <div style={{ overflowX: "auto", maxHeight: "calc(100vh - 360px)" }}>
+        <div style={{ overflowX: "auto", maxHeight: "calc(100dvh - 360px)" }}>
           {loading ? (
             <div style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: "48px 0", gap: 10, color: TEXT2, fontSize: 13 }}>
               <div style={{ width: 18, height: 18, borderRadius: "50%", border: `2px solid rgba(0,30,175,0.15)`, borderTopColor: TEAL, animation: "spin 0.8s linear infinite" }} />

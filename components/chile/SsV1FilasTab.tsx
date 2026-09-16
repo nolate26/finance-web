@@ -385,8 +385,8 @@ function CrearHomologacion({ row, periodo, fuentes, onClose, onSaved }: {
   const grupos = [...new Set(OVERRIDE_FIELDS.filter((o) => o.scope !== "dual").map((o) => o.group))];
 
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(13,13,56,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, width: "min(560px, 96vw)", maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 12px 48px rgba(13,13,56,0.35)", overflow: "hidden" }}>
+    <div onClick={onClose} className="modal-overlay" style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(13,13,56,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div onClick={(e) => e.stopPropagation()} className="modal-card" style={{ background: "#fff", borderRadius: 12, width: "min(560px, 96vw)", maxHeight: "92dvh", display: "flex", flexDirection: "column", boxShadow: "0 12px 48px rgba(13,13,56,0.35)", overflow: "hidden" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "13px 16px", background: NAVY, color: "#fff" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
             <Plus size={15} />

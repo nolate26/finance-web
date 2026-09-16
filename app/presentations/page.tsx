@@ -173,7 +173,7 @@ export default function PresentationsPage() {
   // ── Loading ───────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[80vh]">
+      <div className="flex items-center justify-center h-[80dvh]">
         <div className="flex flex-col items-center gap-4">
           <div className="w-10 h-10 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(32,68,220,0.15)", borderTopColor: "#2044DC" }} />
           <p className="text-sm font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.62)" }}>Loading presentations…</p>
@@ -193,7 +193,7 @@ export default function PresentationsPage() {
         />
       )}
 
-      <div className="max-w-[1200px] mx-auto px-6 py-6">
+      <div className="max-w-[1200px] mx-auto page-shell">
 
         {/* ── Header ──────────────────────────────────────────────────── */}
         <div className="flex items-start justify-between mb-6">
@@ -217,7 +217,7 @@ export default function PresentationsPage() {
         </div>
 
         {/* ── Level 1: Category tabs ──────────────────────────────────── */}
-        <div className="flex items-center mb-4" style={{ gap: 2, padding: "3px", borderRadius: 10, background: "rgba(13,13,56,0.04)", border: "1px solid rgba(13,13,56,0.08)", width: "fit-content" }}>
+        <div className="tab-rail flex items-center mb-4" style={{ gap: 2, padding: "3px", borderRadius: 10, background: "rgba(13,13,56,0.04)", border: "1px solid rgba(13,13,56,0.08)", width: "fit-content" }}>
           {MAIN_TABS.map(({ key, label }) => {
             const active = mainCategory === key;
             return (

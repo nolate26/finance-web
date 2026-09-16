@@ -115,7 +115,9 @@ export default function CarteraTable({ cartera, benchmark, fundName }: Props) {
           {cartera.length} posiciones
         </span>
       </div>
-      <div className="overflow-y-auto flex-1 min-h-0 max-h-[500px] md:max-h-none">
+      {/* La tabla es `whitespace-nowrap`: sin `overflow-x-auto` las columnas de
+          la derecha (peso, retorno) quedaban cortadas y sin forma de llegar. */}
+      <div className="overflow-y-auto overflow-x-auto scroll-x flex-1 min-h-0 max-h-[500px] md:max-h-none">
         <table className="w-full text-xs whitespace-nowrap">
           <thead className="sticky top-0 z-10" style={{ background: "#F5F7FD" }}>
             <tr>

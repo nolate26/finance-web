@@ -84,6 +84,7 @@ function AttributionSection() {
     <div>
       {/* Sub-tab bar */}
       <div
+        className="tab-rail"
         style={{
           display: "flex", gap: 2, marginBottom: 16,
           padding: "3px", borderRadius: 10,
@@ -223,7 +224,7 @@ function LatAmContent() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[80vh]">
+      <div className="flex items-center justify-center h-[80dvh]">
         <div className="flex flex-col items-center gap-4">
           <div
             className="w-10 h-10 rounded-full border-2 animate-spin"
@@ -241,7 +242,7 @@ function LatAmContent() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-[80vh]">
+      <div className="flex items-center justify-center h-[80dvh]">
         <div
           style={{
             background:   "rgba(248,72,94,0.06)",
@@ -276,7 +277,7 @@ function LatAmContent() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-[1800px] mx-auto px-6 py-6">
+    <div className="max-w-[1800px] mx-auto page-shell">
 
       {/* ── Page header ─────────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
@@ -303,7 +304,7 @@ function LatAmContent() {
 
       {/* ── Sub-navigation tabs ──────────────────────────────────────────────── */}
       <div
-        className="flex items-center mb-5"
+        className="tab-rail flex items-center mb-5"
         style={{
           gap: 2, padding: "3px", borderRadius: 10,
           background: "rgba(13,13,56,0.04)",

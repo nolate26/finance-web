@@ -285,7 +285,7 @@ export default function ActiveDecisions() {
             <option value="all">Todas las industrias (GICS)</option>
             {gicsOptions.map((g) => <option key={g} value={g}>{g}</option>)}
           </select>
-          <div style={{ display: "inline-flex", background: "rgba(13,13,56,0.04)", border: `1px solid ${BORDER}`, borderRadius: 9, padding: 3 }}>
+          <div className="tab-rail" style={{ display: "inline-flex", background: "rgba(13,13,56,0.04)", border: `1px solid ${BORDER}`, borderRadius: 9, padding: 3 }}>
             {([["pe", "P/E"], ["ev", "EV/EBITDA"]] as [Metric, string][]).map(([k, label]) => {
               const active = metric === k;
               return <button key={k} onClick={() => setMetric(k)}

@@ -1,12 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Download, Loader2, Settings2, Table2, List, Trash2, Info } from "lucide-react";
+import { Plus, Download, Loader2, Settings2, Table2, List, Trash2, Info, CalendarPlus, CalendarDays } from "lucide-react";
 import { downloadExcel } from "@/lib/exportExcel";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { FONT_SECONDARY, TEXT, BORDER, PATRIA } from "@/lib/patriaTheme";
-import type { PickSectorDTO, PickSectorsPayload, TopPickDTO, TopPicksPayload } from "@/lib/topPicks";
+import { currentPeriod, periodLabel, periodToIso } from "@/lib/topPicks";
+import type {
+  PickSectorDTO, PickSectorsPayload, TopPickDTO, TopPicksPayload, TopPickPeriodsPayload,
+} from "@/lib/topPicks";
+import type { AnalystOption } from "@/app/api/planning/analysts/route";
 import AddPickModal from "./AddPickModal";
+import NewPeriodModal from "./NewPeriodModal";
 import PickSectorAdmin from "./PickSectorAdmin";
 
 // Top Picks, agrupados por SECTOR.
@@ -31,16 +36,24 @@ const UNASSIGNED = "__unassigned__";
 const UNASSIGNED_LABEL = "Unassigned";
 
 // ── Fechas ────────────────────────────────────────────────────────────────────
-function periodLabel(ym: string, isChile: boolean): string {
-  const [year, month] = ym.split("-").map(Number);
-  if (isChile) return `Q${Math.ceil(month / 3)} ${year}`;
-  return new Date(year, month - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+// periodLabel / currentPeriod viven en lib/topPicks: los comparte la validación del
+// servidor al abrir un período nuevo.
+
+/**
+ * "2026-09-12" → "12 Sep 2026". Se parte la cadena a mano en vez de pasarla por
+ * new Date(iso): eso la lee como UTC y al formatearla en un huso al oeste devuelve
+ * el día anterior — la fecha del informe se vería corrida un día en Chile.
+ */
+function formatReportDate(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-function currentPeriod(isChile: boolean): string {
-  const d = new Date();
-  const m = isChile ? Math.floor(d.getMonth() / 3) * 3 : d.getMonth();
-  return `${d.getFullYear()}-${String(m + 1).padStart(2, "0")}`;
+/** Lo que sabemos de un período más allá de sus picks. */
+interface PeriodMeta {
+  reportDate: string | null;
+  /** Abierto a propósito: se muestra aunque no tenga un solo pick. */
+  declared:   boolean;
 }
 
 export default function TopPicksPanel({ defaultRegion, region: regionProp }: Props) {
@@ -50,14 +63,27 @@ export default function TopPicksPanel({ defaultRegion, region: regionProp }: Pro
 
   const [view, setView]         = useState<View>("summary");   // Summary Table por defecto
   const [periods, setPeriods]   = useState<string[]>([]);
+  const [meta, setMeta]         = useState<Record<string, PeriodMeta>>({});
   const [byPeriod, setByPeriod] = useState<Record<string, TopPickDTO[]>>({});
   const [sectors, setSectors]   = useState<PickSectorDTO[]>([]);
+  const [analysts, setAnalysts] = useState<AnalystOption[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
   const [addOpen, setAddOpen]   = useState(false);
+  const [periodOpen, setPeriodOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [detailPeriod, setDetailPeriod] = useState<string>(() => currentPeriod(isChile));
   const [busyId, setBusyId]     = useState<string | null>(null);
+
+  // La lista de analistas sólo la usa el admin (elegir de quién es un pick), así que
+  // no se pide para todos.
+  useEffect(() => {
+    if (!isAdmin) { setAnalysts([]); return; }
+    fetch("/api/planning/analysts")
+      .then((r) => (r.ok ? r.json() : { analysts: [] }))
+      .then((d: { analysts?: AnalystOption[] }) => setAnalysts(d.analysts ?? []))
+      .catch(() => {});
+  }, [isAdmin]);
 
   // ── Carga ───────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -67,18 +93,22 @@ export default function TopPicksPanel({ defaultRegion, region: regionProp }: Pro
         fetch(`/api/top-picks/periods?region=${region}`),
         fetch(`/api/pick-sectors?region=${region}`),
       ]);
-      const pJson: { periods?: string[] } = pRes.ok ? await pRes.json() : { periods: [] };
+      const pJson: TopPickPeriodsPayload = pRes.ok ? await pRes.json() : { periods: [] };
       const sJson: PickSectorsPayload & { error?: string } = await sRes.json();
       if (!sRes.ok) throw new Error(sJson.error ?? "No se pudieron cargar los sectores");
 
       // El período actual siempre está disponible aunque todavía no tenga picks:
       // si no, no habría dónde agregar el primero del mes.
-      const list = [...new Set([currentPeriod(isChile), ...(pJson.periods ?? [])])].sort().reverse();
+      const list = [...new Set([currentPeriod(isChile), ...pJson.periods.map((p) => p.period)])].sort().reverse();
+      const metaByPeriod = Object.fromEntries(
+        pJson.periods.map((p) => [p.period, { reportDate: p.reportDate, declared: p.declared }]),
+      ) as Record<string, PeriodMeta>;
       setPeriods(list);
+      setMeta(metaByPeriod);
       setSectors(sJson.sectors);
 
       const entries = await Promise.all(list.map(async (ym) => {
-        const r = await fetch(`/api/top-picks?region=${region}&period_date=${ym}-01`);
+        const r = await fetch(`/api/top-picks?region=${region}&period_date=${periodToIso(ym)}`);
         const d: TopPicksPayload = r.ok ? await r.json() : { picks: [] };
         return [ym, d.picks] as const;
       }));
@@ -89,8 +119,12 @@ export default function TopPicksPanel({ defaultRegion, region: regionProp }: Pro
       // El período actual siempre se inyecta en la lista para poder empezar a cargar
       // el mes en curso, pero si todavía está vacío abrirlo ahí muestra una pantalla
       // en blanco teniendo datos una columna más allá.
+      //
+      // Un período ABIERTO a propósito sí retiene el foco aunque esté vacío: recién
+      // creado no tiene picks, y saltar de vuelta al anterior anularía el click que
+      // lo acaba de abrir.
       setDetailPeriod((prev) => {
-        if (prev && (data[prev] ?? []).length > 0) return prev;
+        if (prev && ((data[prev] ?? []).length > 0 || metaByPeriod[prev]?.declared)) return prev;
         return list.find((ym) => (data[ym] ?? []).length > 0) ?? list[0] ?? currentPeriod(isChile);
       });
     } catch (e) {
@@ -134,9 +168,12 @@ export default function TopPicksPanel({ defaultRegion, region: regionProp }: Pro
     return rows;
   }, [allPicks, sectors]);
 
+  // Columnas de la grilla: las que tienen picks, más las abiertas a propósito. Sin
+  // esta segunda parte un quarter recién abierto no se vería hasta cargarle algo,
+  // que es justo lo contrario de para qué se abre.
   const activePeriods = useMemo(
-    () => periods.filter((p) => (byPeriod[p] ?? []).length > 0),
-    [periods, byPeriod],
+    () => periods.filter((p) => (byPeriod[p] ?? []).length > 0 || meta[p]?.declared),
+    [periods, byPeriod, meta],
   );
 
   const writable = useMemo(() => sectors.filter((s) => s.canWrite), [sectors]);
@@ -150,7 +187,12 @@ export default function TopPicksPanel({ defaultRegion, region: regionProp }: Pro
   // período, y en cada celda los nombres (con TP entre paréntesis en Chile). Los
   // legacy van marcados con "(legacy)" porque en Excel no hay gris que valga.
   async function exportSummary() {
-    const headers = ["Sector", ...activePeriods.map((p) => periodLabel(p, isChile))];
+    // La fecha del informe viaja en el encabezado, igual que en pantalla: un Excel
+    // que dice sólo "Q3 2026" pierde cuándo se cerró esa selección.
+    const headers = ["Sector", ...activePeriods.map((p) => {
+      const d = meta[p]?.reportDate;
+      return d ? `${periodLabel(p, isChile)} (${formatReportDate(d)})` : periodLabel(p, isChile);
+    })];
     const rows = rowSectors.map((sec) => [
       sec.name,
       ...activePeriods.map((period) => {
@@ -214,6 +256,31 @@ export default function TopPicksPanel({ defaultRegion, region: regionProp }: Pro
     }
   }
 
+  /**
+   * Fija (o borra) la fecha del informe de un período. Upsert del lado del servidor:
+   * los períodos viejos no tienen fila propia y ponerles fecha no debería obligar a
+   * "abrirlos" primero.
+   */
+  async function saveReportDate(period: string, iso: string | null) {
+    setBusyId(`period:${period}`);
+    setError(null);
+    try {
+      const res = await fetch("/api/top-picks/periods", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ region, period, reportDate: iso }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error ?? "No se pudo guardar la fecha");
+      // Optimista sobre el estado local: la fecha es un dato suelto, recargar los
+      // picks de todos los períodos para pintar una línea de texto es desmedido.
+      setMeta((prev) => ({ ...prev, [period]: { reportDate: iso, declared: true } }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo guardar la fecha");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function removePick(pick: TopPickDTO) {
     if (!confirm(`¿Quitar ${pick.nombreLatam} de los Top Picks de ${periodLabel(detailPeriod, isChile)}?`)) return;
     setBusyId(pick.id);
@@ -246,7 +313,7 @@ export default function TopPicksPanel({ defaultRegion, region: regionProp }: Pro
     <div>
       {/* ── Barra de control ─────────────────────────────────────────────────── */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-        <div style={{
+        <div className="tab-rail" style={{
           display: "inline-flex", background: "rgba(13,13,56,0.04)",
           border: `1px solid ${BORDER.base}`, borderRadius: 9, padding: 3,
         }}>
@@ -273,23 +340,48 @@ export default function TopPicksPanel({ defaultRegion, region: regionProp }: Pro
         </div>
 
         {view === "detail" && (
-          <select
-            value={detailPeriod}
-            onChange={(e) => setDetailPeriod(e.target.value)}
-            style={{
-              padding: "6px 11px", borderRadius: 8, fontSize: 12.5,
-              border: `1px solid ${BORDER.base}`, background: "#F5F7FD",
-              color: PATRIA.darkBlue, cursor: "pointer", outline: "none",
-            }}
-          >
-            {periods.map((p) => <option key={p} value={p}>{periodLabel(p, isChile)}</option>)}
-          </select>
+          <>
+            <select
+              value={detailPeriod}
+              onChange={(e) => setDetailPeriod(e.target.value)}
+              style={{
+                padding: "6px 11px", borderRadius: 8, fontSize: 12.5,
+                border: `1px solid ${BORDER.base}`, background: "#F5F7FD",
+                color: PATRIA.darkBlue, cursor: "pointer", outline: "none",
+              }}
+            >
+              {periods.map((p) => (
+                <option key={p} value={p}>
+                  {periodLabel(p, isChile)}
+                  {meta[p]?.reportDate ? ` · ${formatReportDate(meta[p].reportDate!)}` : ""}
+                </option>
+              ))}
+            </select>
+            {/* La fecha del período abierto, editable acá mismo para el admin. */}
+            <ReportDate
+              iso={meta[detailPeriod]?.reportDate ?? null}
+              canEdit={isAdmin}
+              busy={busyId === `period:${detailPeriod}`}
+              onSave={(v) => saveReportDate(detailPeriod, v)}
+              size="bar"
+            />
+          </>
         )}
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
           {view === "summary" && activePeriods.length > 0 && (
             <button onClick={exportSummary} style={ghostBtn}>
               <Download size={12} /> Excel
+            </button>
+          )}
+          {/* Abrir el período siguiente: estructura de la grilla, sólo admin. */}
+          {isAdmin && (
+            <button
+              onClick={() => setPeriodOpen(true)}
+              style={ghostBtn}
+              title={isChile ? "Abrir el quarter siguiente" : "Abrir el período siguiente"}
+            >
+              <CalendarPlus size={12} /> {isChile ? "Nuevo quarter" : "Nuevo período"}
             </button>
           )}
           {isAdmin && (
@@ -339,12 +431,17 @@ export default function TopPicksPanel({ defaultRegion, region: regionProp }: Pro
             rowSectors={rowSectors}
             activePeriods={activePeriods}
             byPeriod={byPeriod}
+            meta={meta}
             isChile={isChile}
+            isAdmin={isAdmin}
+            busyId={busyId}
+            onSaveDate={saveReportDate}
           />
         : <DetailList
             picks={byPeriod[detailPeriod] ?? []}
             rowSectors={rowSectors}
             sectors={sectors}
+            analysts={analysts}
             isAdmin={isAdmin}
             busyId={busyId}
             onRemove={removePick}
@@ -356,11 +453,31 @@ export default function TopPicksPanel({ defaultRegion, region: regionProp }: Pro
       {addOpen && (
         <AddPickModal
           region={region}
-          periodIso={`${detailPeriod}-01`}
+          periodIso={periodToIso(detailPeriod)}
           sectors={isAdmin ? sectors : writable}
           taken={takenInPeriod}
+          isAdmin={isAdmin}
+          analysts={analysts}
           onClose={() => setAddOpen(false)}
           onAdded={load}
+        />
+      )}
+
+      {periodOpen && (
+        <NewPeriodModal
+          region={region}
+          isChile={isChile}
+          // Los que EXISTEN de verdad, no la lista de la grilla: ésa inyecta siempre
+          // el período del calendario para poder empezar a cargarlo, y pasarlo como
+          // existente dejaría el mes en curso sin poder abrirse.
+          existing={activePeriods}
+          onClose={() => setPeriodOpen(false)}
+          onCreated={(p) => {
+            // Se salta directo al período recién abierto: se abre para cargarlo.
+            setDetailPeriod(p);
+            setView("detail");
+            load();
+          }}
         />
       )}
 
@@ -378,12 +495,16 @@ export default function TopPicksPanel({ defaultRegion, region: regionProp }: Pro
 
 // ── Summary Table ─────────────────────────────────────────────────────────────
 function SummaryTable({
-  rowSectors, activePeriods, byPeriod, isChile,
+  rowSectors, activePeriods, byPeriod, meta, isChile, isAdmin, busyId, onSaveDate,
 }: {
   rowSectors:    { id: string; name: string; analysts: string }[];
   activePeriods: string[];
   byPeriod:      Record<string, TopPickDTO[]>;
+  meta:          Record<string, PeriodMeta>;
   isChile:       boolean;
+  isAdmin:       boolean;
+  busyId:        string | null;
+  onSaveDate:    (period: string, iso: string | null) => void;
 }) {
   if (activePeriods.length === 0) {
     return (
@@ -403,7 +524,16 @@ function SummaryTable({
             </th>
             {activePeriods.map((p) => (
               <th key={p} style={{ ...thBase, textAlign: "center", minWidth: 155, borderLeft: `1px solid ${BORDER.subtle}` }}>
-                {periodLabel(p, isChile)}
+                <span style={{ display: "block" }}>{periodLabel(p, isChile)}</span>
+                {/* Cuándo se cerró esa selección, debajo del título de la columna:
+                    "Q3 2026" solo no dice si el informe es de julio o de septiembre. */}
+                <ReportDate
+                  iso={meta[p]?.reportDate ?? null}
+                  canEdit={isAdmin}
+                  busy={busyId === `period:${p}`}
+                  onSave={(v) => onSaveDate(p, v)}
+                  size="header"
+                />
               </th>
             ))}
           </tr>
@@ -473,6 +603,92 @@ function SummaryTable({
   );
 }
 
+// ── Fecha del informe de un período ───────────────────────────────────────────
+// La fecha NO se deduce de los picks: los históricos entraron todos en una sola carga
+// y comparten created_at al milisegundo, así que mostrar el mínimo diría la fecha de
+// la migración y no la del informe. Se escribe a mano, y por eso el admin la edita
+// donde la ve — en el encabezado de la columna o al lado del selector de período.
+function ReportDate({
+  iso, canEdit, busy, onSave, size,
+}: {
+  iso:     string | null;
+  canEdit: boolean;
+  busy:    boolean;
+  onSave:  (iso: string | null) => void;
+  size:    "header" | "bar";
+}) {
+  const [editing, setEditing] = useState(false);
+  const bar = size === "bar";
+
+  if (editing) {
+    return (
+      <input
+        type="date"
+        autoFocus
+        defaultValue={iso ?? ""}
+        disabled={busy}
+        onBlur={(e) => {
+          setEditing(false);
+          const next = e.target.value || null;   // vacío = borrar la fecha
+          if (next !== iso) onSave(next);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter")  (e.target as HTMLInputElement).blur();
+          if (e.key === "Escape") setEditing(false);
+        }}
+        style={{
+          padding: bar ? "5px 8px" : "1px 4px", borderRadius: 6,
+          border: `1px solid ${PATRIA.kingBlue}`, background: "#FFFFFF",
+          fontSize: bar ? 12 : 9.5, fontWeight: 700, outline: "none",
+          fontFamily: FONT_SECONDARY, color: PATRIA.darkBlue,
+          textTransform: "none", letterSpacing: 0,
+        }}
+      />
+    );
+  }
+
+  if (!iso && !canEdit) return null;
+
+  const label = iso ? formatReportDate(iso) : "+ fecha";
+  const common: React.CSSProperties = {
+    fontFamily: FONT_SECONDARY, fontWeight: 700,
+    letterSpacing: 0, textTransform: "none", whiteSpace: "nowrap",
+    color: iso ? TEXT.label : PATRIA.orange,
+  };
+
+  if (!canEdit) {
+    return <span style={{ ...common, display: "block", marginTop: 2, fontSize: 9.5 }}>{label}</span>;
+  }
+
+  return (
+    <button
+      onClick={() => setEditing(true)}
+      disabled={busy}
+      title={iso ? "Cambiar la fecha del informe" : "Poner la fecha del informe"}
+      style={{
+        ...common,
+        display: "inline-flex", alignItems: "center", gap: 4,
+        marginTop: bar ? 0 : 2,
+        padding: bar ? "5px 9px" : "1px 5px",
+        fontSize: bar ? 11.5 : 9.5,
+        borderRadius: bar ? 8 : 5, cursor: "pointer",
+        background: bar ? "#FFFFFF" : "transparent",
+        border: `1px solid ${bar ? BORDER.base : "transparent"}`,
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.borderColor = BORDER.base; e.currentTarget.style.background = "#F5F7FD"; }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = bar ? BORDER.base : "transparent";
+        e.currentTarget.style.background  = bar ? "#FFFFFF" : "transparent";
+      }}
+    >
+      {busy
+        ? <Loader2 size={9} style={{ animation: "spin 0.8s linear infinite" }} />
+        : <CalendarDays size={bar ? 11 : 9} />}
+      {label}
+    </button>
+  );
+}
+
 // ── Nombre de empresa, gris si es legacy ──────────────────────────────────────
 function PickChip({ pick, isChile }: { pick: TopPickDTO; isChile: boolean }) {
   return (
@@ -514,11 +730,12 @@ function PickChip({ pick, isChile }: { pick: TopPickDTO; isChile: boolean }) {
 
 // ── Detalle ───────────────────────────────────────────────────────────────────
 function DetailList({
-  picks, rowSectors, sectors, isAdmin, busyId, onRemove, onMove, onEdit, isChile,
+  picks, rowSectors, sectors, analysts, isAdmin, busyId, onRemove, onMove, onEdit, isChile,
 }: {
   picks:      TopPickDTO[];
   rowSectors: { id: string; name: string; analysts: string }[];
   sectors:    PickSectorDTO[];
+  analysts:   AnalystOption[];
   isAdmin:    boolean;
   busyId:     string | null;
   onRemove:   (p: TopPickDTO) => void;
@@ -637,6 +854,21 @@ function DetailList({
                   </span>
                 ) : null}
 
+                {/* Reasignar el analista. SÓLO admin, y es la contrapartida de que el
+                    pick se firme con la sesión al crearlo: un admin que corrige el
+                    pick de otro no tiene por qué quedar como autor, y un heredado se
+                    puede atribuir a quien de verdad lo recomendó. Cambiar el analista
+                    también decide el gris: si el nuevo es miembro del sector, el pick
+                    vuelve a activo solo. */}
+                {isAdmin && analysts.length > 0 && (
+                  <AuthorSelect
+                    pick={p}
+                    analysts={analysts}
+                    disabled={busyId === p.id}
+                    onChange={(authorId) => onEdit(p, { authorId })}
+                  />
+                )}
+
                 {/* Mover de sector. Es un select y no un drag: la lista está agrupada
                     y con scroll, así que elegir el destino por nombre es más directo
                     que arrastrar entre grupos. Sólo destinos donde puedas escribir. */}
@@ -682,6 +914,51 @@ function DetailList({
         );
       })}
     </div>
+  );
+}
+
+// ── Analista del pick (sólo admin) ───────────────────────────────────────────
+// El valor del select es el authorId RESUELTO que manda el servidor: si el analista
+// se dio de alta después de que sus picks se cargaran, el enlace en la base es NULL
+// pero acá igual aparece seleccionado por nombre. Un autor que ya no existe como
+// usuario no está en la lista, así que se le agrega su propia opción —deshabilitada—
+// para que el select no muestre a otra persona en su lugar.
+const GONE = "__gone__";
+
+function AuthorSelect({
+  pick, analysts, disabled, onChange,
+}: {
+  pick:     TopPickDTO;
+  analysts: AnalystOption[];
+  disabled: boolean;
+  onChange: (authorId: string | null) => void;
+}) {
+  const known = pick.authorId != null && analysts.some((a) => a.id === pick.authorId);
+  const value = known ? pick.authorId! : (pick.authorName ? GONE : "");
+
+  return (
+    <select
+      value={value}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value || null)}
+      title={pick.authorName ? `Analista: ${pick.authorName}` : "Sin analista — asignar"}
+      style={{
+        flexShrink: 0, maxWidth: 130, padding: "3px 6px", borderRadius: 6,
+        border: `1px solid ${pick.isLegacy ? "rgba(255,107,6,0.35)" : BORDER.base}`,
+        background: pick.isLegacy ? "rgba(255,187,141,0.14)" : "#F5F7FD",
+        color: TEXT.label, fontSize: 10.5, cursor: "pointer", outline: "none",
+      }}
+    >
+      {!known && pick.authorName && (
+        <option value={GONE} disabled>{pick.authorName} · anterior</option>
+      )}
+      <option value="">— sin analista —</option>
+      {analysts.map((a) => (
+        <option key={a.id} value={a.id}>
+          {a.initials ?? a.name ?? a.email ?? "—"}
+        </option>
+      ))}
+    </select>
   );
 }
 

@@ -40,7 +40,7 @@ export default function PlanningPanel() {
       </p>
 
       {/* View switcher */}
-      <div style={{
+      <div className="tab-rail" style={{
         display: "inline-flex", background: "rgba(13,13,56,0.04)",
         border: `1px solid ${BORDER.base}`, borderRadius: 10, padding: 3, marginBottom: 18,
       }}>

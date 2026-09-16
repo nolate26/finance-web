@@ -86,6 +86,7 @@ export default function KPISummary({ companies }: Props) {
 
   return (
     <div
+      className="g-2col-sm"
       style={{
         display: "grid",
         gridTemplateColumns: "repeat(5, 1fr)",

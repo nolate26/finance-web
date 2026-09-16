@@ -16,6 +16,7 @@ export const ENTITY = {
   sectorSection: "sector_sections",
   pickSector: "pick_sectors",
   topPick: "top_picks",
+  topPickPeriod: "top_pick_periods",
   task: "tasks",
 } as const;
 

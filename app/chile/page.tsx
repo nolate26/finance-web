@@ -21,7 +21,7 @@ export default function ChilePage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("stock-selection");
 
   return (
-    <div className="max-w-[1600px] mx-auto px-6 py-6">
+    <div className="max-w-[1600px] mx-auto page-shell">
       {/* Page header */}
       <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
         <div>
@@ -36,7 +36,7 @@ export default function ChilePage() {
 
       {/* Sub-navigation tabs */}
       <div
-        className="flex items-center mb-5"
+        className="tab-rail flex items-center mb-5"
         style={{
           gap: 2, padding: "3px", borderRadius: 10,
           background: "rgba(13,13,56,0.04)",

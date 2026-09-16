@@ -457,6 +457,7 @@ function HistoricalView({ periods }: { periods: Period[] }) {
         style={{
           display: "flex",
           alignItems: "center",
+          flexWrap: "wrap",
           gap: 12,
           marginBottom: 16,
         }}
@@ -784,6 +785,7 @@ function EditModal({
 
   return (
     <div
+      className="modal-overlay--scroll"
       style={{
         position: "fixed",
         inset: 0,
@@ -839,12 +841,13 @@ function EditModal({
         <div
           style={{
             padding: "24px",
-            maxHeight: "calc(100vh - 200px)",
+            maxHeight: "calc(100dvh - 200px)",
             overflowY: "auto",
           }}
         >
           {/* Metadata */}
           <div
+            className="g-stack-sm"
             style={{
               display: "grid",
               gridTemplateColumns: "1fr 1fr",

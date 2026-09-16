@@ -35,7 +35,7 @@ export default function QuantAnalysisPanel() {
       </p>
 
       {/* View switcher (segmented control) */}
-      <div style={{ display: "inline-flex", background: "rgba(13,13,56,0.04)", border: "1px solid rgba(13,13,56,0.08)", borderRadius: 10, padding: 3, marginBottom: 24 }}>
+      <div className="tab-rail" style={{ display: "inline-flex", background: "rgba(13,13,56,0.04)", border: "1px solid rgba(13,13,56,0.08)", borderRadius: 10, padding: 3, marginBottom: 24 }}>
         {VIEWS.map(v => {
           const isActive = view === v.key;
           return (

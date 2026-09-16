@@ -149,6 +149,7 @@ export default function FreshnessModal({ scope, title, subtitle, storageKey, blo
       role="dialog"
       aria-modal="true"
       aria-label={title}
+      className="modal-overlay"
       style={{
         position: "fixed", inset: 0, zIndex: 200,
         background: "rgba(13,13,56,0.45)", backdropFilter: "blur(3px)",
@@ -157,9 +158,10 @@ export default function FreshnessModal({ scope, title, subtitle, storageKey, blo
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        className="modal-card"
         style={{
           background: "#FFFFFF", borderRadius: 14, width: "min(470px, 100%)",
-          maxHeight: "88vh", display: "flex", flexDirection: "column",
+          maxHeight: "88dvh", display: "flex", flexDirection: "column",
           boxShadow: "0 24px 70px rgba(13,13,56,0.30)",
           border: `1px solid ${BORDER.base}`, overflow: "hidden",
         }}

@@ -51,7 +51,7 @@ export default function EstimatesPage() {
   const active = VIEWS.find((v) => v.key === view) ?? VIEWS[0];
 
   return (
-    <div className="max-w-[1800px] mx-auto px-6 py-6">
+    <div className="max-w-[1800px] mx-auto page-shell">
       {/* Las tablas internas usan este keyframe para sus spinners. */}
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
@@ -66,7 +66,7 @@ export default function EstimatesPage() {
       </div>
 
       {/* ── View switcher ───────────────────────────────────────────────────── */}
-      <div style={{
+      <div className="tab-rail" style={{
         display: "inline-flex", background: "rgba(13,13,56,0.04)",
         border: `1px solid ${BORDER.base}`, borderRadius: 10, padding: 3, marginBottom: 18,
       }}>

@@ -11,6 +11,7 @@ import {
   BarChart3, TrendingUp, Building2, Globe2,
   FileText, BookOpen, Sigma, Newspaper,
   ShieldCheck, LogOut, ChevronDown, CalendarRange,
+  Menu, X,
 } from "lucide-react";
 
 type Tab = { href: string; label: string; icon: typeof Sigma };
@@ -21,26 +22,46 @@ type Tab = { href: string; label: string; icon: typeof Sigma };
 //   2. Los datos que consulta: mercado, países, empresas, análisis.
 //   3. La coordinación interna, sola y al extremo derecho.
 // Las rutas (href) no cambiaron nunca: sólo las etiquetas visibles.
-const NAV_GROUPS: Tab[][] = [
-  [
-    { href: "/estimates",     label: "Analyst Estimates",     icon: Sigma      },
-    { href: "/fondos",        label: "Moneda Funds",          icon: BarChart3  },
-    { href: "/research",      label: "Company Meetings",      icon: Newspaper  },
-    { href: "/presentations", label: "Research PPT Database", icon: FileText   },
-  ],
-  [
-    { href: "/economia",      label: "Market Data",           icon: TrendingUp },
-    { href: "/chile",         label: "Chile",                 icon: Building2  },
-    { href: "/latam",         label: "LatAm / Brazil",        icon: Globe2     },
-    { href: "/companies",     label: "Company Info",          icon: BookOpen   },
-  ],
-  [
-    { href: "/planning",      label: "Team Planning",         icon: CalendarRange },
-  ],
+// `title` sólo se usa en el cajón móvil: ahí los grupos se apilan en vertical y
+// sin un encabezado el agrupamiento —que en escritorio lo comunica la separación
+// entre píldoras— se perdería del todo.
+const NAV_GROUPS: { title: string; tabs: Tab[] }[] = [
+  {
+    title: "Team output",
+    tabs: [
+      { href: "/estimates",     label: "Analyst Estimates",     icon: Sigma      },
+      { href: "/fondos",        label: "Moneda Funds",          icon: BarChart3  },
+      { href: "/research",      label: "Company Meetings",      icon: Newspaper  },
+      { href: "/presentations", label: "Research PPT Database", icon: FileText   },
+    ],
+  },
+  {
+    title: "Market data",
+    tabs: [
+      { href: "/economia",      label: "Market Data",           icon: TrendingUp },
+      { href: "/chile",         label: "Chile",                 icon: Building2  },
+      { href: "/latam",         label: "LatAm / Brazil",        icon: Globe2     },
+      { href: "/companies",     label: "Company Info",          icon: BookOpen   },
+    ],
+  },
+  {
+    title: "Internal",
+    tabs: [
+      { href: "/planning",      label: "Team Planning",         icon: CalendarRange },
+    ],
+  },
 ];
 
+const ALL_TABS: Tab[] = NAV_GROUPS.flatMap((g) => g.tabs);
+
 // Vista por defecto de la app: es a donde vuelve el logo, que hace de botón "home".
-const HOME_HREF = NAV_GROUPS[0][0].href;   // /estimates
+const HOME_HREF = NAV_GROUPS[0].tabs[0].href;   // /estimates
+
+/** Pestaña activa según la ruta. Coincide por prefijo para que /companies/XYZ
+ *  siga marcando "Company Info". */
+function activeTabOf(pathname: string): Tab | null {
+  return ALL_TABS.find((t) => pathname === t.href || pathname.startsWith(t.href + "/")) ?? null;
+}
 
 const FONT = "var(--font-sans, 'Figtree', sans-serif)";
 const MONO = FONT_SECONDARY;   // Regla 4 — Arial, no monoespaciada
@@ -158,6 +179,199 @@ function UserMenu() {
   );
 }
 
+// ── Cajón de navegación móvil ───────────────────────────────────────────────────
+// Bajo 1280px las nueve pestañas no caben: en escritorio la corrida central
+// scrollea, pero con el dedo eso significa buscar a ciegas una pestaña de 11px
+// dentro de un riel de 30px de alto. Acá los mismos nueve destinos se apilan en
+// filas de 46px, agrupados igual que las tres píldoras del escritorio.
+function MobileDrawer({
+  open, onClose, pathname, onNavigate,
+}: {
+  open:       boolean;
+  onClose:    () => void;
+  pathname:   string;
+  onNavigate: (href: string) => void;
+}) {
+  const router = useRouter();
+  const { data: session } = useSession();
+  const user    = session?.user;
+  const isAdmin = user?.role === "admin";
+
+  // El cajón cubre la pantalla completa: si el documento sigue scrolleando
+  // detrás, el gesto de deslizar dentro del cajón arrastra la página.
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
+  // Escape cierra, igual que cualquier diálogo de la plataforma.
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Navegación"
+      style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", justifyContent: "flex-end" }}
+    >
+      {/* Velo — toque fuera cierra */}
+      <div
+        onClick={onClose}
+        style={{
+          position: "absolute", inset: 0,
+          background: "rgba(13,13,56,0.42)",
+          backdropFilter: "blur(2px)",
+          animation: "patria-fade-in 0.15s ease-out",
+        }}
+      />
+
+      <aside
+        style={{
+          position: "relative",
+          width: "min(320px, 86vw)",
+          height: "100%",
+          background: "#fff",
+          borderLeft: "1px solid rgba(13,13,56,0.10)",
+          boxShadow: "-8px 0 34px rgba(13,13,56,0.18)",
+          display: "flex",
+          flexDirection: "column",
+          animation: "patria-drawer-in 0.18s ease-out",
+          paddingTop: "env(safe-area-inset-top)",
+        }}
+      >
+        {/* Cabecera del cajón */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "14px 14px 12px", borderBottom: "1px solid rgba(13,13,56,0.08)",
+          flexShrink: 0,
+        }}>
+          <Image
+            src="/img/moneda_patria.png"
+            alt="Moneda Patria"
+            height={26} width={130}
+            style={{ objectFit: "contain", height: 26, width: "auto" }}
+          />
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Cerrar navegación"
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: 36, height: 36, borderRadius: 9, flexShrink: 0,
+              background: "rgba(13,13,56,0.04)", border: "1px solid rgba(13,13,56,0.09)",
+              cursor: "pointer", color: "#0D0D38",
+            }}
+          >
+            <X size={17} />
+          </button>
+        </div>
+
+        {/* Destinos — scrollean solos si no caben (teléfono chico en horizontal) */}
+        <nav style={{ flex: 1, overflowY: "auto", padding: "10px 10px 14px", minHeight: 0 }}>
+          {NAV_GROUPS.map(({ title, tabs }) => (
+            <div key={title} style={{ marginBottom: 14 }}>
+              <div style={{
+                fontSize: 9.5, fontWeight: 800, letterSpacing: "0.09em", textTransform: "uppercase",
+                color: "rgba(13,13,56,0.40)", padding: "0 8px 6px", fontFamily: FONT,
+              }}>
+                {title}
+              </div>
+              {tabs.map(({ href, label, icon: Icon }) => {
+                const active = pathname === href || pathname.startsWith(href + "/");
+                return (
+                  <button
+                    key={href}
+                    type="button"
+                    onClick={() => { onNavigate(href); onClose(); }}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 11, width: "100%",
+                      minHeight: 46, padding: "0 10px", marginBottom: 2,
+                      borderRadius: 10, textAlign: "left", cursor: "pointer",
+                      fontFamily: FONT, fontSize: 13.5,
+                      fontWeight:  active ? 700 : 500,
+                      color:       active ? "#001EAF" : "#0D0D38",
+                      background:  active ? "rgba(32,68,220,0.08)" : "transparent",
+                      border:      active ? "1px solid rgba(32,68,220,0.22)" : "1px solid transparent",
+                    }}
+                  >
+                    <Icon size={16} strokeWidth={active ? 2.5 : 2} style={{ flexShrink: 0, color: active ? "#2044DC" : "rgba(13,13,56,0.48)" }} />
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+
+        {/* Pie — identidad y sesión. En escritorio esto es el menú del avatar;
+            en el cajón va desplegado porque ya hay espacio vertical de sobra. */}
+        {user && (
+          <div style={{
+            flexShrink: 0, borderTop: "1px solid rgba(13,13,56,0.08)", background: "#F5F7FD",
+            padding: `12px 14px calc(12px + env(safe-area-inset-bottom))`,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 10 }}>
+              <span style={{
+                width: 32, height: 32, borderRadius: 9, flexShrink: 0,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                background: isAdmin ? "linear-gradient(135deg,#001EAF,#2044DC)" : "rgba(13,13,56,0.10)",
+                color: isAdmin ? "#fff" : "rgba(13,13,56,0.62)",
+                fontSize: 12, fontWeight: 800, fontFamily: FONT,
+              }}>
+                {initialsOf(user.name || user.email || "?")}
+              </span>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: "#0D0D38", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {user.name || "—"}
+                </div>
+                <div style={{ fontSize: 10.5, color: "rgba(13,13,56,0.58)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {user.email}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 8 }}>
+              {isAdmin && (
+                <button
+                  onClick={() => { onClose(); router.push("/admin"); }}
+                  style={{
+                    flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                    minHeight: 38, borderRadius: 9, cursor: "pointer",
+                    background: "#fff", border: "1px solid rgba(32,68,220,0.28)",
+                    fontSize: 12, fontWeight: 700, color: "#001EAF", fontFamily: FONT,
+                  }}
+                >
+                  <ShieldCheck size={14} /> Admin
+                </button>
+              )}
+              <button
+                onClick={() => signOut({ callbackUrl: "/login" })}
+                style={{
+                  flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  minHeight: 38, borderRadius: 9, cursor: "pointer",
+                  background: "#fff", border: "1px solid rgba(248,72,94,0.28)",
+                  fontSize: 12, fontWeight: 700, color: "#F8485E", fontFamily: FONT,
+                }}
+              >
+                <LogOut size={14} /> Salir
+              </button>
+            </div>
+          </div>
+        )}
+      </aside>
+    </div>
+  );
+}
+
 // Una píldora = un grupo del navbar. El estilo (fondo claro, borde, radio) es el
 // mismo que tenía el contenedor único; lo que cambia es que ahora hay tres.
 function NavGroup({
@@ -236,12 +450,14 @@ function NavGroup({
 export default function Navbar() {
   const pathname = usePathname();
   const router   = useRouter();
+  const [drawer, setDrawer] = useState(false);
 
   const [g1, g2, g3] = NAV_GROUPS;
+  const current = activeTabOf(pathname);
 
   return (
     <nav
-      className="nav-root fixed top-0 left-0 right-0 z-50 h-16 flex items-center justify-between px-5 gap-4"
+      className="nav-root fixed top-0 left-0 right-0 z-50 h-16 flex items-center justify-between px-3 min-[1280px]:px-5 gap-2 min-[1280px]:gap-4"
       style={{
         background:          "rgba(255,255,255,0.98)",
         borderBottom:        "1px solid rgba(13,13,56,0.09)",
@@ -253,7 +469,8 @@ export default function Navbar() {
       {/* scrollbarWidth cubre Firefox; WebKit necesita el pseudo-elemento. */}
       <style>{`.nav-root ::-webkit-scrollbar { height: 0; width: 0; }`}</style>
 
-      {/* LEFT — logo: es el botón de "home" y siempre lleva a la vista por defecto. */}
+      {/* LEFT — logo: es el botón de "home" y siempre lleva a la vista por defecto.
+          El alto baja a 26px bajo 1280px para dejarle ancho al nombre de la vista. */}
       <Link
         href={HOME_HREF}
         aria-label="Inicio — Analyst Estimates"
@@ -267,26 +484,62 @@ export default function Navbar() {
           alt="Moneda Patria"
           height={32}
           width={160}
-          style={{ objectFit: "contain", height: 32, width: "auto" }}
+          className="h-[26px] min-[1280px]:h-8"
+          style={{ objectFit: "contain", width: "auto" }}
           priority
         />
       </Link>
+
+      {/* ── CENTRO, bajo 1280px — nombre de la vista actual ─────────────────────
+          Reemplaza a las píldoras: con el dedo no se navega desde un riel de
+          pestañas de 11px, se navega desde el cajón. Lo que sí hace falta acá es
+          saber dónde estás parado. */}
+      {current && (
+        <span
+          className="min-[1280px]:hidden flex items-center gap-1.5 min-w-0"
+          style={{
+            fontFamily: FONT, fontSize: 12.5, fontWeight: 700, color: "#0D0D38",
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}
+        >
+          <current.icon size={13} strokeWidth={2.5} style={{ flexShrink: 0, color: "#2044DC" }} />
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{current.label}</span>
+        </span>
+      )}
 
       {/* CENTER — bloques 1 y 2, dos islas separadas.
           El contenedor es flex-1 con min-w-0 para poder encogerse antes que el logo
           o el menú de usuario; si aun así no cabe, scrollea horizontal en vez de
           romper la barra. */}
       <div
-        className="flex items-center justify-center flex-1 min-w-0"
+        className="hidden min-[1280px]:flex items-center justify-center flex-1 min-w-0"
         style={{ gap: 22, overflowX: "auto", scrollbarWidth: "none" }}
       >
-        <NavGroup tabs={g1} pathname={pathname} onNavigate={router.push} />
-        <NavGroup tabs={g2} pathname={pathname} onNavigate={router.push} />
+        <NavGroup tabs={g1.tabs} pathname={pathname} onNavigate={router.push} />
+        <NavGroup tabs={g2.tabs} pathname={pathname} onNavigate={router.push} />
       </div>
 
+      {/* ── DERECHA, bajo 1280px — hamburguesa ─────────────────────────────────
+          `ml-auto` la pega al borde: el nombre de la vista queda a la izquierda,
+          junto al logo, y no flotando en el medio. */}
+      <button
+        type="button"
+        onClick={() => setDrawer(true)}
+        aria-label="Abrir navegación"
+        aria-expanded={drawer}
+        className="min-[1280px]:hidden flex items-center justify-center flex-shrink-0 ml-auto"
+        style={{
+          width: 40, height: 40, borderRadius: 10,
+          background: "rgba(13,13,56,0.04)", border: "1px solid rgba(13,13,56,0.09)",
+          cursor: "pointer", color: "#0D0D38",
+        }}
+      >
+        <Menu size={19} />
+      </button>
+
       {/* RIGHT — bloque 3 (Team Planning) + metadatos de sesión */}
-      <div className="flex items-center gap-3 flex-shrink-0">
-        <NavGroup tabs={g3} pathname={pathname} onNavigate={router.push} />
+      <div className="hidden min-[1280px]:flex items-center gap-3 flex-shrink-0">
+        <NavGroup tabs={g3.tabs} pathname={pathname} onNavigate={router.push} />
 
         {/* Thin divider */}
         <div style={{ width: 1, height: 20, background: "rgba(13,13,56,0.09)" }} />
@@ -330,6 +583,13 @@ export default function Navbar() {
         {/* User menu — session, role badge & logout */}
         <UserMenu />
       </div>
+
+      <MobileDrawer
+        open={drawer}
+        onClose={() => setDrawer(false)}
+        pathname={pathname}
+        onNavigate={router.push}
+      />
     </nav>
   );
 }

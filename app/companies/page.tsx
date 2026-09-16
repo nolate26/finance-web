@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import { PanelLeft } from "lucide-react";
 import CompanySidebar from "@/components/deep-dive/CompanySidebar";
 import ValuationChart from "@/components/deep-dive/ValuationChart";
 import KPICards from "@/components/deep-dive/KPICards";
@@ -20,6 +21,7 @@ import type { DeepDivePayload, PortfolioWeightSnap } from "@/app/api/companies/[
 import { PATRIA, FONT_PRIMARY, FONT_SECONDARY, TEXT_ON_DARK } from "@/lib/patriaTheme";
 import { PatriaTitle } from "@/components/patria/PatriaTitle";
 import { useIsAdmin } from "@/lib/useIsAdmin";
+import { useCompact } from "@/lib/useBreakpoint";
 
 // ── Shared card style ─────────────────────────────────────────────────────────
 const CARD: React.CSSProperties = {
@@ -140,8 +142,11 @@ function ActiveWeightBadge({ weights }: { weights: PortfolioWeightSnap[] }) {
         Portfolio Positioning
       </div>
 
-      {/* Table */}
-      <div style={{ display: "grid", gridTemplateColumns: `80px repeat(${weights.length}, 1fr)`, gap: "3px 10px", alignItems: "center" }}>
+      {/* Table — `minWidth` en la grilla y no `1fr` a secas: con cuatro fondos en
+          un teléfono cada columna quedaba en 55px y "OW/UW −1.2%" se partía en
+          dos líneas. Con el mínimo, la grilla desborda y el envoltorio arrastra. */}
+      <div className="scroll-x">
+        <div style={{ display: "grid", gridTemplateColumns: `80px repeat(${weights.length}, minmax(64px, 1fr))`, gap: "3px 10px", alignItems: "center", minWidth: "min-content" }}>
 
         {/* Header row — fund display names */}
         <div style={{ fontSize: 9, color: "rgba(13,13,56,0.45)" }} />
@@ -182,6 +187,7 @@ function ActiveWeightBadge({ weights }: { weights: PortfolioWeightSnap[] }) {
             </div>
           );
         })}
+        </div>
       </div>
     </div>
   );
@@ -208,6 +214,12 @@ function CompaniesPageContent() {
   const [tickerNotFound, setTickerNotFound] = useState<string | null>(null);
   // Uploaded docs keyed by ticker → array of {url, label}
   const [companyDocs, setCompanyDocs] = useState<Record<string, { url: string; label: string }[]>>({});
+
+  // Bajo 1024px el panel de empresas no cabe al lado del contenido: 220px de
+  // lista + un deep dive de gráficos y tablas en 768px deja las dos cosas
+  // ilegibles. Pasa a ser un cajón que se abre desde la barra de la empresa.
+  const compact = useCompact();
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   // Fetch company list once, then auto-select from ?ticker= param, CCU, or first
   useEffect(() => {
@@ -286,20 +298,76 @@ function CompaniesPageContent() {
       {/* Spin keyframe — injected once */}
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
-      <div style={{ display: "flex", height: "calc(100vh - 64px)", overflow: "hidden" }}>
+      {/* `dvh` y no `vh`: en Safari móvil `100vh` mide la ventana sin la barra de
+          direcciones, así que el pie del panel (el contador de empresas) queda
+          debajo del borde visible y no se puede llegar nunca. */}
+      <div style={{ display: "flex", height: "calc(100dvh - 64px)", overflow: "hidden" }}>
         {/* ── Sidebar ───────────────────────────────────────────────────────── */}
-        <div style={{ width: 220, flexShrink: 0, overflow: "hidden" }}>
-          <CompanySidebar
-            companies={companies}
-            universe={universe}
-            selectedTicker={selectedItem?.ticker ?? null}
-            onSelect={handleSelect}
-            loading={listLoading}
-          />
-        </div>
+        {!compact && (
+          <div style={{ width: 220, flexShrink: 0, overflow: "hidden" }}>
+            <CompanySidebar
+              companies={companies}
+              universe={universe}
+              selectedTicker={selectedItem?.ticker ?? null}
+              onSelect={handleSelect}
+              loading={listLoading}
+            />
+          </div>
+        )}
+
+        {/* ── Sidebar como cajón, bajo 1024px ───────────────────────────────── */}
+        {compact && pickerOpen && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Elegir empresa"
+            style={{ position: "fixed", inset: 0, zIndex: 90, display: "flex" }}
+          >
+            <div style={{ width: "min(300px, 84vw)", flexShrink: 0, background: "#F5F7FD", boxShadow: "8px 0 34px rgba(13,13,56,0.18)" }}>
+              <CompanySidebar
+                companies={companies}
+                universe={universe}
+                selectedTicker={selectedItem?.ticker ?? null}
+                onSelect={(item) => { handleSelect(item); setPickerOpen(false); }}
+                loading={listLoading}
+              />
+            </div>
+            <div
+              onClick={() => setPickerOpen(false)}
+              style={{ flex: 1, background: "rgba(13,13,56,0.42)", backdropFilter: "blur(2px)" }}
+            />
+          </div>
+        )}
 
         {/* ── Main content ──────────────────────────────────────────────────── */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", display: "flex", flexDirection: "column", gap: 0 }}>
+        <div
+          className="companies-main"
+          style={{ flex: 1, minWidth: 0, overflowY: "auto", padding: "20px 24px", display: "flex", flexDirection: "column", gap: 0 }}
+        >
+          {/* Barra de empresa — sólo bajo 1024px. Reemplaza al panel lateral como
+              punto de entrada: dice qué empresa está abierta y abre el cajón. */}
+          {compact && (
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              style={{
+                display: "flex", alignItems: "center", gap: 9, width: "100%",
+                minHeight: 44, padding: "0 12px", marginBottom: 14, flexShrink: 0,
+                borderRadius: 10, cursor: "pointer", textAlign: "left",
+                background: "#fff", border: "1px solid rgba(13,13,56,0.10)",
+                boxShadow: "0 1px 4px rgba(13,13,56,0.06)",
+              }}
+            >
+              <PanelLeft size={15} style={{ flexShrink: 0, color: PATRIA.kingBlue }} />
+              <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13, fontWeight: 700, color: PATRIA.darkBlue }}>
+                {selectedItem?.nombre ?? "Elegir empresa"}
+              </span>
+              <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "rgba(13,13,56,0.45)" }}>
+                Cambiar
+              </span>
+            </button>
+          )}
+
 
           {/* Alerta de admin, arriba de todo: tickers con modelos o consensus cargados que
               no existen en la maestra y por eso no salen en el sidebar. Va acá y no dentro
@@ -357,7 +425,7 @@ function CompaniesPageContent() {
           {tickerNotFound && (
             <div style={{
               display: "flex", alignItems: "center", justifyContent: "space-between",
-              gap: 12, marginBottom: 16, padding: "10px 16px", borderRadius: 9,
+              flexWrap: "wrap", gap: 12, marginBottom: 16, padding: "10px 16px", borderRadius: 9,
               background: "rgba(255,107,6,0.07)", border: "1px solid rgba(255,107,6,0.28)",
             }}>
               <span style={{ fontSize: 12, color: "#FF6B06" }}>
@@ -457,10 +525,13 @@ function CompaniesPageContent() {
                 </div>
 
                 {/* ── Band 2: Description + Portfolio grid ── */}
-                <div className="grid grid-cols-12 gap-6 items-start">
+                {/* 7 + 5 columnas en escritorio; apilado bajo 1024px, porque una
+                    descripción en 5 columnas de un iPad en vertical son cuatro
+                    palabras por línea. */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start">
 
                   {/* Description — 7 cols */}
-                  <div className={deepDive.portfolioWeights.length > 0 ? "col-span-7" : "col-span-12"}>
+                  <div className={deepDive.portfolioWeights.length > 0 ? "lg:col-span-7" : "lg:col-span-12"}>
                     {deepDive.companyDescription ? (
                       <p style={{ fontSize: 14, color: "rgba(13,13,56,0.62)", margin: 0, lineHeight: 1.8 }}>
                         {deepDive.companyDescription}
@@ -474,7 +545,7 @@ function CompaniesPageContent() {
 
                   {/* Portfolio Positioning — 5 cols */}
                   {deepDive.portfolioWeights.length > 0 && (
-                    <div className="col-span-5">
+                    <div className="lg:col-span-5 min-w-0">
                       <ActiveWeightBadge weights={deepDive.portfolioWeights} />
                     </div>
                   )}

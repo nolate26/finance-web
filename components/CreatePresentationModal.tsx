@@ -387,11 +387,12 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
 
       {/* Backdrop */}
       <div
+        className="modal-overlay"
         style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(13,13,56,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backdropFilter: "blur(2px)" }}
         onClick={(e) => { if (!isSubmitting && e.target === e.currentTarget) onClose(); }}
       >
         {/* Card */}
-        <div style={{ background: "#fff", borderRadius: 14, boxShadow: "0 20px 60px rgba(13,13,56,0.22)", width: "100%", maxWidth: 560, maxHeight: "calc(100vh - 40px)", overflowY: "auto" }}>
+        <div className="modal-card" style={{ background: "#fff", borderRadius: 14, boxShadow: "0 20px 60px rgba(13,13,56,0.22)", width: "100%", maxWidth: 560, maxHeight: "calc(100dvh - 40px)", overflowY: "auto" }}>
 
           {/* Header */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 22px 16px", borderBottom: "1px solid rgba(13,13,56,0.07)", position: "sticky", top: 0, background: "#fff", zIndex: 1 }}>
@@ -470,7 +471,7 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
             </div>
 
             {/* ── Category + Is Sell Side ────────────────────────────────── */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="g-stack-sm" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               {/* Category */}
               <div>
                 <label style={LABEL}>Category</label>

@@ -168,7 +168,7 @@ export default function SsV1OrdenTab({ onSourceChanged }: { onSourceChanged: () 
       {loading && <div style={{ fontSize: 12, color: TEXT3, padding: 20, textAlign: "center" }}>Cargando…</div>}
 
       {!loading && (
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(190px, 260px) 1fr", gap: 10, alignItems: "start" }}>
+        <div className="g-stack-md" style={{ display: "grid", gridTemplateColumns: "minmax(190px, 260px) 1fr", gap: 10, alignItems: "start" }}>
 
           {/* ── Secciones ──────────────────────────────────────────────────── */}
           <div style={{ border: `1px solid ${BORDER}`, borderRadius: 8, overflow: "hidden" }}>

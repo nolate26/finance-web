@@ -784,7 +784,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
     <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 6px" }}>
 
       {/* ── TOP PANEL: Info + actions (left half) · Estimate chart (right half) ── */}
-      <div style={{
+      <div className="g-stack-md" style={{
         display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)",
         gap: 16, alignItems: "stretch",
         padding: "12px 16px",

@@ -185,6 +185,7 @@ Ya hay ${enGris} pick(s) en gris de analistas previos: siguen igual.` : "")
       role="dialog"
       aria-modal="true"
       aria-label="Manage pick sectors"
+      className="modal-overlay"
       style={{
         position: "fixed", inset: 0, zIndex: 150,
         background: "rgba(13,13,56,0.45)", backdropFilter: "blur(3px)",
@@ -193,9 +194,10 @@ Ya hay ${enGris} pick(s) en gris de analistas previos: siguen igual.` : "")
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        className="modal-card"
         style={{
           background: "#FFFFFF", borderRadius: 14, width: "min(620px, 100%)",
-          maxHeight: "88vh", display: "flex", flexDirection: "column",
+          maxHeight: "88dvh", display: "flex", flexDirection: "column",
           boxShadow: "0 24px 70px rgba(13,13,56,0.30)", border: `1px solid ${BORDER.base}`,
           overflow: "hidden",
         }}

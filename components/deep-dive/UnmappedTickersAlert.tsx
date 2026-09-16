@@ -42,7 +42,10 @@ function HeaderTable({ title, rows }: { title: string; rows: UnmappedHeader[] })
       <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: TEXT.muted, marginBottom: 5 }}>
         {title}
       </div>
-      <div style={{ border: `1px solid ${BORDER.base}`, borderRadius: 7, overflow: "hidden" }}>
+      <div
+        className="grid-table-wrap"
+        style={{ border: `1px solid ${BORDER.base}`, borderRadius: 7, ["--grid-min" as string]: "560px" } as React.CSSProperties}
+      >
         <div style={{
           display: "grid", gridTemplateColumns: "96px 1fr 74px 84px 84px", gap: "0 10px",
           padding: "5px 10px", background: SURFACE.subtle, borderBottom: `1px solid ${BORDER.subtle}`,
@@ -292,7 +295,10 @@ export default function UnmappedTickersAlert() {
       </button>
 
       {open && (
-        <div style={{ background: SURFACE.card, borderTop: "1px solid rgba(255,107,6,0.22)" }}>
+        <div
+          className="grid-table-wrap"
+          style={{ background: SURFACE.card, borderTop: "1px solid rgba(255,107,6,0.22)", ["--grid-min" as string]: "680px" } as React.CSSProperties}
+        >
           <div style={{ padding: "10px 16px", fontSize: 11, color: TEXT.label, lineHeight: 1.65, borderBottom: `1px solid ${BORDER.subtle}` }}>
             El sidebar se arma solo con tickers de <strong>empresas_industrias_v2</strong>, así que estos
             datos están cargados pero son inalcanzables. Haz clic en una fila para ver qué es exactamente.

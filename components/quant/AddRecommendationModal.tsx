@@ -151,6 +151,7 @@ export default function AddRecommendationModal({
   return (
     <div
       onMouseDown={close}
+      className="modal-overlay"
       style={{
         position: "fixed", inset: 0, zIndex: 1000,
         background: "rgba(13,13,56,0.45)", backdropFilter: "blur(2px)",
@@ -159,8 +160,9 @@ export default function AddRecommendationModal({
     >
       <div
         onMouseDown={e => e.stopPropagation()}
+        className="modal-card"
         style={{
-          width: 560, maxWidth: "100%", maxHeight: "90vh", overflowY: "auto",
+          width: 560, maxWidth: "100%", maxHeight: "90dvh", overflowY: "auto",
           background: "#FFFFFF", borderRadius: 14, border: `1px solid ${BORDER}`,
           boxShadow: "0 18px 50px rgba(13,13,56,0.22)",
         }}
@@ -181,7 +183,7 @@ export default function AddRecommendationModal({
         </div>
 
         {/* Body */}
-        <div style={{ padding: "18px 20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <div className="g-stack-sm" style={{ padding: "18px 20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
           <Field label="Date">
             <input type="date" value={date} onChange={e => setDate(e.target.value)} style={inputStyle} />
           </Field>

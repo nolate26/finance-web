@@ -364,7 +364,10 @@ export default function OrphanNotesPanel({ onResolved }: { onResolved?: () => vo
       </button>
 
       {open && (
-        <div style={{ background: SURFACE.card, borderTop: "1px solid rgba(255,107,6,0.22)" }}>
+        <div
+          className="grid-table-wrap"
+          style={{ background: SURFACE.card, borderTop: "1px solid rgba(255,107,6,0.22)", ["--grid-min" as string]: "808px" } as React.CSSProperties}
+        >
           <div style={{
             display: "grid",
             gridTemplateColumns: "78px minmax(140px,1.4fr) 130px 180px 200px",

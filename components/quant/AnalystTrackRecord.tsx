@@ -307,7 +307,7 @@ function MetricsRail({ s, ccy, benchLabel }: { s: Summary; ccy: string; benchLab
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+      <div className="g-stack-sm" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
         <Metric label="CAGR" value={fmtPct(s.cagr)} color={sign(s.cagr)} />
         <Metric label="Hit rate" value={s.hitRate == null ? "—" : `${s.hitRate.toFixed(0)}%`} sub={`${s.positions} positions`} />
         <Metric label="Best call" value={fmtPct(s.bestCall)} color={sign(s.bestCall)} />

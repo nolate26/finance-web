@@ -50,7 +50,7 @@ export default function ProjectionsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[80vh]">
+      <div className="flex items-center justify-center h-[80dvh]">
         <div className="flex flex-col items-center gap-4">
           <div
             className="w-10 h-10 rounded-full border-2 animate-spin"
@@ -66,7 +66,7 @@ export default function ProjectionsPage() {
 
   if (error || !data) {
     return (
-      <div className="flex items-center justify-center h-[80vh]">
+      <div className="flex items-center justify-center h-[80dvh]">
         <p style={{ color: "#F8485E" }}>Error loading projections data</p>
       </div>
     );
@@ -75,7 +75,7 @@ export default function ProjectionsPage() {
   const hasDelta = data.rows.some((r) => r.delta !== null);
 
   return (
-    <div className="max-w-[1600px] mx-auto px-6 py-6">
+    <div className="max-w-[1600px] mx-auto page-shell">
       {/* Header */}
       <div className="flex items-start justify-between mb-5">
         <div>

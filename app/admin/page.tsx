@@ -190,7 +190,7 @@ export default function AdminPage() {
   // ── Guard states ──────────────────────────────────────────────────────────
   if (status === "loading" || (!isAdmin && status !== "unauthenticated")) {
     return (
-      <div className="max-w-[1100px] mx-auto px-6 py-10" style={{ display: "flex", justifyContent: "center" }}>
+      <div className="max-w-[1100px] mx-auto page-shell" style={{ display: "flex", justifyContent: "center" }}>
         <Loader2 size={20} style={{ color: BLUE, animation: "spin 0.8s linear infinite" }} />
       </div>
     );
@@ -200,7 +200,7 @@ export default function AdminPage() {
   return (
     <>
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-      <div className="max-w-[1100px] mx-auto px-6 py-6">
+      <div className="max-w-[1100px] mx-auto page-shell">
 
         {/* Header */}
         <div style={{ marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
@@ -240,7 +240,7 @@ export default function AdminPage() {
             <UserPlus size={15} style={{ color: BLUE }} />
             <h2 style={{ fontSize: 14, fontWeight: 700, color: TEXT1, margin: 0 }}>Crear usuario</h2>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1.2fr 1fr 0.7fr 0.6fr auto", gap: 10, alignItems: "end" }}>
+          <div className="composer-grid" style={{ display: "grid", gridTemplateColumns: "1.4fr 1.2fr 1fr 0.7fr 0.6fr auto", gap: 10, alignItems: "end" }}>
             <div>
               <label style={{ fontSize: 10, fontWeight: 700, color: TEXT2, letterSpacing: "0.05em", textTransform: "uppercase", display: "block", marginBottom: 5 }}>Email</label>
               <input value={nEmail} onChange={(e) => setNEmail(e.target.value)} placeholder="usuario@patria.com" style={inputStyle} />
@@ -307,7 +307,8 @@ export default function AdminPage() {
           ) : users.length === 0 ? (
             <div style={{ padding: 40, textAlign: "center", color: TEXT3, fontSize: 13 }}>No hay usuarios.</div>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1.2fr 78px 130px auto", gap: "0 14px" }}>
+            <div className="scroll-x">
+            <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1.2fr 78px 130px auto", gap: "0 14px", minWidth: 660 }}>
               {/* Header row */}
               <div style={{ display: "contents" }}>
                 {["Email", "Nombre", "Sigla", "Rol", "Acciones"].map((h) => (
@@ -390,6 +391,7 @@ export default function AdminPage() {
                   </div>
                 );
               })}
+            </div>
             </div>
           )}
         </div>

@@ -345,7 +345,7 @@ export default function QuantModelTable() {
 
         {/* ── Tabs (segmented control) ──────────────────────────────────────── */}
         <div style={{ padding: "12px 16px 0", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <div style={{ display: "inline-flex", background: "rgba(13,13,56,0.04)", border: `1px solid ${BORDER}`, borderRadius: 9, padding: 3 }}>
+          <div className="tab-rail" style={{ display: "inline-flex", background: "rgba(13,13,56,0.04)", border: `1px solid ${BORDER}`, borderRadius: 9, padding: 3 }}>
             {TABS.map(t => {
               const active = tab === t.key;
               return (

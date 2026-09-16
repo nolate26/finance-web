@@ -955,11 +955,13 @@ function ProjectionRowEditor({
   return (
     <div
       onClick={onClose}
+      className="modal-overlay"
       style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(13,13,56,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{ background: PATRIA.white, borderRadius: 12, width: "min(620px, 96vw)", maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 12px 48px rgba(13,13,56,0.35)", overflow: "hidden" }}
+        className="modal-card"
+        style={{ background: PATRIA.white, borderRadius: 12, width: "min(620px, 96vw)", maxHeight: "92dvh", display: "flex", flexDirection: "column", boxShadow: "0 12px 48px rgba(13,13,56,0.35)", overflow: "hidden" }}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "13px 16px", background: EDIT_INK, color: PATRIA.white }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
@@ -978,7 +980,7 @@ function ProjectionRowEditor({
           {!loading && state && (
             <>
               {/* Métricas por año */}
-              <div style={{ display: "grid", gridTemplateColumns: "110px repeat(3, 1fr)", gap: "10px 6px", alignItems: "start" }}>
+              <div className="g-stack-sm" style={{ display: "grid", gridTemplateColumns: "110px repeat(3, 1fr)", gap: "10px 6px", alignItems: "start" }}>
                 <div />
                 {columns.map((y) => (
                   <div key={y} style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.05em", textAlign: "center", color: TEXT.label }}>

@@ -1245,7 +1245,7 @@ export default function StockSelectionV1() {
         const nCols = idxGroupDefs.reduce((n, g) => n + idxCols(g).length, 0);
         return (
           <div style={{ marginTop: 22 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 8 }}>
               <div style={{ width: 3, height: 18, background: IDX_HEAD, borderRadius: 2 }} />
               <h3 style={{ fontSize: 14, fontWeight: 700, color: IDX_HEAD, letterSpacing: "-0.01em", margin: 0 }}>
                 {fundAggregates.length > 0 ? "Índices y fondos — sumaproducto" : "Índices — sumaproducto de sus miembros"}
@@ -1254,7 +1254,7 @@ export default function StockSelectionV1() {
                 Cada índice = Σ (M.Cap y fundamentales × peso); los múltiplos salen de esas sumas. Precio = nivel real del índice (solo IPSA/IGPA). Los retornos van en blanco: el snapshot de Bloomberg es por ticker de acción, y ponderar los de los miembros no da el retorno del índice. {fundAggregates.length > 0 && "En los fondos el peso es la participación —acciones en cartera / acciones de la compañía— y el FV/EBITDA excluye a las que no reportan EBITDA en ese horizonte. "}{priced ? "" : "Traé precios para llenar."}
               </span>
             </div>
-            <div style={{ overflow: "auto", maxHeight: "72vh", border: `1px solid ${IDX_HEAD}33`, borderRadius: 8, background: IDX_TINT }}>
+            <div style={{ overflow: "auto", maxHeight: "72dvh", border: `1px solid ${IDX_HEAD}33`, borderRadius: 8, background: IDX_TINT }}>
               <table style={{ borderCollapse: "separate", borderSpacing: 0, fontSize: 11, width: "100%" }}>
                 <thead>
                   <tr ref={idxHeadRef}>
@@ -1464,10 +1464,10 @@ function IndexMembershipEditor({ onClose, onSaved }: { onClose: () => void; onSa
   const stickyLeft: React.CSSProperties = { position: "sticky", left: 0, zIndex: 2, background: "#fff", borderRight: `1px solid ${BORDER}` };
 
   return (
-    <div onClick={tryClose}
+    <div onClick={tryClose} className="modal-overlay"
       style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(13,13,56,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div onClick={(e) => e.stopPropagation()}
-        style={{ background: "#fff", borderRadius: 12, width: "min(1100px, 96vw)", maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 12px 48px rgba(13,13,56,0.35)", overflow: "hidden" }}>
+      <div onClick={(e) => e.stopPropagation()} className="modal-card"
+        style={{ background: "#fff", borderRadius: 12, width: "min(1100px, 96vw)", maxHeight: "92dvh", display: "flex", flexDirection: "column", boxShadow: "0 12px 48px rgba(13,13,56,0.35)", overflow: "hidden" }}>
         {/* Encabezado */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "13px 16px", background: NAVY, color: NAVY_TEXT }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
@@ -1626,8 +1626,8 @@ function SsV1OverrideEditor({ company, fy, q, onClose, onSaved }: { company: SsV
   for (const f of fields) { if (!byGroup.has(f.group)) { byGroup.set(f.group, []); groupsOrder.push(f.group); } byGroup.get(f.group)!.push(f); }
 
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(13,13,56,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, width: "min(560px, 96vw)", maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 12px 48px rgba(13,13,56,0.35)", overflow: "hidden" }}>
+    <div onClick={onClose} className="modal-overlay" style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(13,13,56,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div onClick={(e) => e.stopPropagation()} className="modal-card" style={{ background: "#fff", borderRadius: 12, width: "min(560px, 96vw)", maxHeight: "92dvh", display: "flex", flexDirection: "column", boxShadow: "0 12px 48px rgba(13,13,56,0.35)", overflow: "hidden" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "13px 16px", background: EDIT_BORDER, color: "#fff" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
             <Pencil size={15} />

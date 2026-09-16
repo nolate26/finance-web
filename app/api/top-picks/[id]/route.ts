@@ -40,6 +40,13 @@ interface PatchBody {
   targetPrice?:  number | null;
   sectorId?:     string | null;
   industryGroup?: string | null;
+  /**
+   * Reasignar el analista del pick. SÓLO admin, y es la contrapartida de que crear un
+   * pick lo firme con la sesión: un admin que corrige el pick de otro no debe quedar
+   * como autor, y un pick heredado se puede atribuir a quien de verdad lo recomendó.
+   * null lo deja sin analista.
+   */
+  authorId?:     string | null;
 }
 
 export async function PATCH(req: NextRequest, { params }: Ctx) {
@@ -56,10 +63,35 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   catch { return NextResponse.json({ error: "JSON inválido" }, { status: 400 }); }
 
   const data: Prisma.TopPickUpdateInput = {};
+  // Qué cambió, para que la bitácora diga algo más útil que "actualizado".
+  const changes: string[] = [];
 
   if (body.comment !== undefined)     data.comment     = body.comment.trim();
   if (body.targetPrice !== undefined) data.targetPrice = body.targetPrice;
   if (body.industryGroup !== undefined) data.industryGroup = body.industryGroup?.trim() || null;
+
+  // Cambiar el analista. La autoría se guarda en dos piezas y hay que mover LAS DOS:
+  // authorId es la FK viva que decide si el pick sale en gris, authorName la copia
+  // congelada que sobrevive al borrado del usuario. Dejar una sin la otra deja el
+  // pick firmado por una persona y contado como de otra.
+  if (body.authorId !== undefined) {
+    if (self.role !== "admin") {
+      return NextResponse.json({ error: "Sólo un admin puede cambiar el analista de un pick" }, { status: 403 });
+    }
+    if (body.authorId) {
+      const author = await prisma.user.findUnique({
+        where: { id: body.authorId }, select: { id: true, name: true, email: true },
+      });
+      if (!author) return NextResponse.json({ error: "El analista no existe" }, { status: 404 });
+      data.author     = { connect: { id: author.id } };
+      data.authorName = author.name || author.email || null;
+      changes.push(`analista: ${pick.authorName ?? "—"} → ${author.name || author.email}`);
+    } else {
+      data.author     = { disconnect: true };
+      data.authorName = null;
+      changes.push(`analista: ${pick.authorName ?? "—"} → sin analista`);
+    }
+  }
 
   // Mover de sector exige permiso en el DESTINO además del origen; si no, un miembro
   // podría empujar picks a un sector ajeno. Y NO se reescribe la autoría: el pick
@@ -75,11 +107,13 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
         return NextResponse.json({ error: `No eres miembro de "${target.name}".` }, { status: 403 });
       }
       data.sector = { connect: { id: target.id } };
+      changes.push(`sector: ${pick.sector?.name ?? "Unassigned"} → ${target.name}`);
     } else {
       if (self.role !== "admin") {
         return NextResponse.json({ error: "Sólo un admin puede dejar un pick sin sector" }, { status: 403 });
       }
       data.sector = { disconnect: true };
+      changes.push(`sector: ${pick.sector?.name ?? "Unassigned"} → Unassigned`);
     }
   }
 
@@ -93,7 +127,8 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
       [{
         entity: ENTITY.topPick, entityKey: id, label: pick.nombreLatam,
         field: "pick", oldValue: pick.sector?.name ?? "Unassigned",
-        newValue: "actualizado", context: pick.periodDate.toISOString().slice(0, 10),
+        newValue: changes.length ? changes.join(" · ") : "actualizado",
+        context: pick.periodDate.toISOString().slice(0, 10),
         action: "update",
       }],
       self.email ?? null,

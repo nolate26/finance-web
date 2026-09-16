@@ -153,6 +153,7 @@ export default function TaskDetailModal({ taskId, analysts, sectors, onClose, on
   return (
     <div
       onClick={onClose}
+      className="modal-overlay"
       style={{
         position: "fixed", inset: 0, zIndex: 100,
         background: "rgba(13,13,56,0.42)", backdropFilter: "blur(3px)",
@@ -161,9 +162,10 @@ export default function TaskDetailModal({ taskId, analysts, sectors, onClose, on
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        className="modal-card"
         style={{
           background: "#FFFFFF", borderRadius: 14, width: "min(660px, 100%)",
-          maxHeight: "88vh", display: "flex", flexDirection: "column",
+          maxHeight: "88dvh", display: "flex", flexDirection: "column",
           boxShadow: "0 20px 60px rgba(13,13,56,0.28)", border: `1px solid ${BORDER.base}`,
         }}
       >

@@ -209,6 +209,36 @@ model TopPick {
   @@map("top_picks")
 }
 
+// Cabecera de un período de Top Picks: existe para dos cosas que la tabla de picks
+// no puede sostener sola.
+//
+//   1. ABRIR EL SIGUIENTE QUARTER. Antes el único período disponible era el del
+//      calendario (el trimestre en curso), así que no había dónde empezar a cargar
+//      el siguiente hasta que el calendario llegara. Una fila acá declara el período
+//      y lo hace visible aunque todavía no tenga un solo pick.
+//   2. LA FECHA DEL INFORME. report_date es el día en que se cerró la selección, que
+//      NO es deducible de los picks: los históricos entraron todos en una sola carga
+//      y comparten created_at al milisegundo.
+//
+// Un período puede existir sin fila acá — los que ya tenían picks antes de esta
+// tabla—; la vista une ambas fuentes. Por eso no hay FK contra top_picks.
+model TopPickPeriod {
+  id         String    @id @default(cuid())
+  region     String    @db.VarChar(20)                    // "CHILE" | "LATAM"
+  // Primer día del período: del trimestre en Chile (ene/abr/jul/oct), del mes en LatAm.
+  periodDate DateTime  @map("period_date") @db.Date
+  // Nullable: un período recién abierto puede no tener fecha de informe todavía.
+  reportDate DateTime? @map("report_date") @db.Date
+
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at")
+  updatedBy  String?   @map("updated_by") @db.VarChar(200)
+
+  @@unique([region, periodDate])
+  @@index([region, periodDate])
+  @@map("top_pick_periods")
+}
+
 
 // ─── Tabla 7: Total Return Index con dividendos brutos ───────────────────
 model TotalReturnIndex {

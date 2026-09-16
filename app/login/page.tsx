@@ -48,6 +48,11 @@ export default function LoginPage() {
         alignItems:     "center",
         justifyContent: "center",
         background:     "#F5F7FD",
+        // Sin este padding la tarjeta toca los dos bordes en un teléfono de
+        // 360px: `maxWidth: 420` no la frena porque el ancho es 100%.
+        padding:        "16px",
+        paddingBottom:  "max(16px, env(safe-area-inset-bottom))",
+        overflowY:      "auto",
       }}
     >
       {/* Card */}

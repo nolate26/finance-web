@@ -30,6 +30,7 @@ export default function IndustryView({ companies, onSectorClick, activeSector }:
 
   return (
     <div
+      className="g-2col-sm"
       style={{
         display: "grid",
         gridTemplateColumns: "repeat(3, 1fr)",

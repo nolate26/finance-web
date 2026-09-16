@@ -423,7 +423,7 @@ export default function ConsensusCheckTable() {
       {notFoundMsg && (
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          gap: 12, marginBottom: 10, padding: "9px 14px", borderRadius: 8,
+          flexWrap: "wrap", gap: 12, marginBottom: 10, padding: "9px 14px", borderRadius: 8,
           background: "rgba(255,107,6,0.07)", border: "1px solid rgba(255,107,6,0.28)",
         }}>
           <span style={{ fontSize: 12, color: "#FF6B06" }}>

@@ -81,7 +81,7 @@ export default function EconomiaPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[80vh]">
+      <div className="flex items-center justify-center h-[80dvh]">
         <div className="flex flex-col items-center gap-4">
           <div
             className="w-10 h-10 rounded-full border-2 animate-spin"
@@ -97,7 +97,7 @@ export default function EconomiaPage() {
 
   if (!data) {
     return (
-      <div className="flex items-center justify-center h-[80vh]">
+      <div className="flex items-center justify-center h-[80dvh]">
         <p style={{ color: "#F8485E" }}>Error loading market data</p>
       </div>
     );
@@ -107,7 +107,7 @@ export default function EconomiaPage() {
   const allIndices = (data.resumenPE as { Index: string }[]).map((r) => r.Index);
 
   return (
-    <div className="max-w-[1600px] mx-auto px-6 py-6">
+    <div className="max-w-[1600px] mx-auto page-shell">
       {/* Page header */}
       {/* Regla 1 — título principal de la vista: banda dark-blue, Aptos Bold. */}
       <div
@@ -135,7 +135,7 @@ export default function EconomiaPage() {
 
       {/* Sub-tab nav */}
       <div
-        className="flex items-center mb-6"
+        className="tab-rail flex items-center mb-6"
         style={{
           gap: 2, padding: "3px", borderRadius: 10,
           background: "rgba(13,13,56,0.04)",

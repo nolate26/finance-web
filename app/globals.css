@@ -46,6 +46,17 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     box-sizing: border-box;
+    /* Inercia en cualquier contenedor que scrollee. En elementos que no scrollean
+       la propiedad no hace nada, así que sale más barato declararla global que
+       perseguir los ~35 `overflowX: "auto"` inline que hay repartidos. */
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* iOS infla el cuerpo del texto al rotar a horizontal si no se fija. Con tablas
+     de fuente 9–11px eso descuadra los anchos de columna calculados. */
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
 
   /* Regla 4 — texto general: Arial, color patria-dark-blue. */
@@ -251,7 +262,254 @@
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════
+   TABLET Y TELÉFONO
+   La vista NO cambia de forma: las tablas siguen siendo las mismas tablas de 20
+   columnas, los gráficos los mismos gráficos. Lo que cambia es que el contenido
+   ancho pasa a vivir dentro de contenedores que se pueden arrastrar, y el
+   cromo alrededor (padding, barras de pestañas, modales, navbar) se encoge en
+   vez de empujar la página.
+
+   Tres primitivas cubren casi todo:
+     · .page-shell  — el marco de cada página: margen lateral que se achica.
+     · .tab-rail    — barra de pestañas que scrollea en lugar de desbordar.
+     · .scroll-x    — envoltorio de tabla ancha, arrastrable con el dedo.
+   Y dos para diálogos: .modal-overlay + .modal-card.
+
+   Los `!important` de los bloques @media son deliberados: media parte de la
+   plataforma pinta con `style={{...}}` inline y no hay forma de ganarle a un
+   estilo inline desde una hoja de estilos sin eso. Están todos dentro de media
+   queries, así que en escritorio no aplican nunca.
+   ══════════════════════════════════════════════════════════════════════════ */
+@layer components {
+
+  /* ── Marco de página ──────────────────────────────────────────────────────
+     Reemplaza el `px-6 py-6` que repetían las 13 páginas. El ancho máximo lo
+     sigue poniendo cada página con su propia `max-w-[...]`. */
+  .page-shell {
+    width: 100%;
+    margin-inline: auto;
+    padding-inline: 24px;
+    padding-block: 24px;
+  }
+
+  /* ── Barra de pestañas ────────────────────────────────────────────────────
+     Las píldoras de pestañas son `width: fit-content`, así que al angostar la
+     ventana desbordaban y arrastraban la página entera en horizontal. Acá
+     quedan acotadas al ancho disponible y scrollean solas.
+     `flex-shrink: 0` en los hijos evita que los botones se compriman hasta
+     volverse ilegibles antes de empezar a scrollear. */
+  .tab-rail {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+  .tab-rail::-webkit-scrollbar { height: 0; width: 0; }
+  .tab-rail > * { flex-shrink: 0; }
+
+  /* ── Envoltorio de contenido ancho ───────────────────────────────────────
+     `overscroll-behavior-x: contain` es lo que impide que al llegar al final de
+     una tabla el gesto se propague al contenedor de atrás (o al swipe-back del
+     navegador) y uno pierda la página sin querer. */
+  .scroll-x {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+
+  /* ── Grillas que se apilan ───────────────────────────────────────────────
+     La plataforma define sus grillas con `gridTemplateColumns` inline, donde
+     no llegan los prefijos `md:` / `lg:` de Tailwind. Estas tres clases son el
+     equivalente: no hacen nada en escritorio y reordenan más abajo.
+
+       .g-stack-md  dos paneles lado a lado (tabla + gráfico) → apilados ≤1024
+       .g-stack-sm  pares de campos de formulario            → apilados ≤640
+       .g-2col-sm   filas de 3–5 tarjetas de KPI             → 2 columnas ≤640
+
+     El criterio para elegir: si las dos mitades son CONTENIDO (un gráfico y su
+     tabla) va -md, porque a 768px ninguna de las dos se lee. Si son campos
+     cortos aguantan hasta el teléfono y va -sm. */
+  .g-stack-md, .g-stack-sm, .g-2col-sm { min-width: 0; }
+
+  /* ── Grillas que en realidad son tablas ──────────────────────────────────
+     Varias vistas dibujan tablas como grids hermanas: un div de encabezado y
+     un div por fila, todos con las mismas columnas. Envolverlas en un
+     `.scroll-x` por fila las desalinea (cada una scrollearía sola), así que el
+     scroll va en el ENVOLTORIO común y el ancho mínimo baja por herencia:
+
+       <div className="grid-table-wrap" style={{ "--grid-min": "808px" }}>
+         <div style={{ gridTemplateColumns: COL }}>…encabezado…</div>
+         …filas con el mismo COL…
+
+     El valor de --grid-min es la suma de las columnas + gaps + padding: por
+     debajo de eso arrastra, por encima no hace nada. */
+  .grid-table-wrap     { overflow-x: auto; overscroll-behavior-x: contain; }
+  .grid-table-wrap > * { min-width: var(--grid-min, 0); }
+
+  /* ── Diálogos ────────────────────────────────────────────────────────────
+     En escritorio no hacen nada: el centrado y el ancho siguen viniendo de los
+     estilos inline de cada modal. En teléfono el diálogo baja a ser una hoja
+     anclada abajo, a la altura del pulgar, con scroll propio. */
+  .modal-overlay { overscroll-behavior: contain; }
+  .modal-card    { overscroll-behavior: contain; }
+
+  /* Variante para los diálogos donde scrollea el velo y no la tarjeta (la
+     tarjeta crece todo lo que necesite). Ahí no se puede anclar abajo: con
+     `align-items: flex-end` en un contenedor scrolleable el navegador corta el
+     borde superior del contenido y ya no se puede llegar. Sólo se le baja el
+     margen. */
+  .modal-overlay--scroll { overscroll-behavior: contain; }
+}
+
+/* ── Tablet — hasta 1024px ─────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .page-shell {
+    padding-inline: 16px;
+    padding-block:  16px;
+  }
+
+  /* Compositor de notas de research: de seis columnas a dos. Ticker y Título
+     —los dos campos de texto libre— se quedan con el ancho completo; Type,
+     Date, REC y TP son cortos y van de a dos. */
+  .composer-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .composer-grid > :nth-child(2),
+  .composer-grid > :nth-child(3) {
+    grid-column: 1 / -1;
+  }
+
+  .g-stack-md { grid-template-columns: minmax(0, 1fr) !important; }
+
+  /* Paso intermedio para las corridas de KPI de 5 tarjetas: 5 → 3 → 2. Las de
+     3 no se mueven acá (ya son 3). */
+  .g-2col-sm  { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+}
+
+/* ── Teléfono — hasta 640px ────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .page-shell {
+    padding-inline: 12px;
+    padding-block:  12px;
+    /* Horizontal con notch: sin esto el contenido se mete bajo el borde curvo. */
+    padding-left:  max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+
+  /* Diálogos como hoja inferior. `88dvh` y no `88vh` porque en Safari móvil
+     `vh` mide la ventana SIN la barra de direcciones: un modal a 100vh queda
+     con el pie tapado y los botones de guardar inalcanzables. */
+  .modal-overlay {
+    padding: 0 !important;
+    align-items: flex-end !important;
+  }
+  .modal-card {
+    width:         100% !important;
+    max-width:     100% !important;
+    max-height:    90dvh !important;
+    border-radius: 16px 16px 0 0 !important;
+    padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
+  }
+
+  .modal-overlay--scroll {
+    padding: 10px 8px calc(10px + env(safe-area-inset-bottom)) !important;
+  }
+  .modal-overlay--scroll > * {
+    max-width: 100% !important;
+  }
+
+  /* Company Info no usa .page-shell (es un layout de alto fijo con panel
+     lateral), así que su margen se encoge acá. */
+  .companies-main { padding: 12px !important; }
+
+  /* Formularios de tres columnas: en un teléfono tres inputs uno al lado del
+     otro son tres campos de 100px. Se apilan. */
+  .form-grid-3 { grid-template-columns: 1fr !important; }
+
+  /* El lector de notas de research tiene 40px de margen interno para dar una
+     medida de línea cómoda en escritorio; en 390px eso es un quinto del ancho. */
+  .research-reader { padding-left: 16px !important; padding-right: 16px !important; }
+
+  .composer-grid { grid-template-columns: 1fr !important; }
+
+  .g-stack-sm { grid-template-columns: minmax(0, 1fr) !important; }
+  .g-2col-sm  { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+}
+
+/* ── Punteros gruesos (dedo) ───────────────────────────────────────────────────
+   Se engancha a `pointer: coarse` y no al ancho: un iPad de 1366px en
+   horizontal entra igual, y un monitor angosto con mouse no. */
+@media (pointer: coarse) {
+  /* Barra de scroll de 5px es imposible de agarrar y, peor, casi invisible:
+     en una tabla de 20 columnas es la única señal de que hay más a la derecha.
+     En táctil se arrastra el contenido directo, así que acá sólo importa que
+     se vea. */
+  ::-webkit-scrollbar       { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-thumb { background: rgba(13,13,56,0.26); }
+
+  /* La plataforma tiene ~35 contenedores de tabla con `overflowX: "auto"`
+     escrito inline, de antes de que existiera `.scroll-x`. El selector de
+     atributo los alcanza sin tener que ir a editarlos uno por uno.
+     `overscroll-behavior-x: contain` es lo que importa en táctil: sin eso, al
+     llegar al final de una tabla el gesto sigue de largo y dispara el
+     swipe-back del navegador — uno pierde la página entera intentando ver la
+     última columna.
+
+     Las dos variantes de cada valor NO son redundantes: React serializa los
+     estilos inline SIN espacio en el render del servidor (`overflow-x:auto`)
+     y CON espacio cuando el cliente los escribe por CSSOM
+     (`overflow-x: auto`). Con una sola forma, la mitad de los contenedores
+     queda afuera. Y se compara contra el valor completo a propósito: un
+     `[style*="overflow-x:"]` pelado también agarraría `overflow:hidden`. */
+  [style*="overflow-x:auto"],
+  [style*="overflow-x: auto"],
+  [style*="overflow:auto"],
+  [style*="overflow: auto"],
+  .overflow-x-auto,
+  .overflow-auto {
+    overscroll-behavior-x: contain;
+  }
+
+  /* Blanco de toque mínimo. Tres exclusiones, todas por una razón concreta:
+       · `table *` y `.tab-rail *` — ahí los botones son celdas densas y
+         estirarlos rompe la altura de fila calculada.
+       · `[style*="width:"]` — los botones con ancho inline son los cuadrados
+         de icono (cerrar 28×28, flechas 22×22). Subirles sólo el alto los
+         deja rectangulares y se nota; ya son objetivos aceptables.
+       · `.keep-dense` — escape manual para casos nuevos. */
+  button:not(table button):not(.tab-rail *):not([style*="width:"]):not(.keep-dense),
+  select:not(table select):not([style*="width:"]):not(.keep-dense) {
+    min-height: 34px;
+  }
+
+  /* iOS hace zoom automático al enfocar un input de menos de 16px y después no
+     vuelve — deja la página corrida y hay que hacer pinch para recuperarla.
+     Subirlos a 16px lo evita. Dentro de tablas se respeta el tamaño original:
+     ahí son celdas editables y el zoom es el menor de los males. */
+  input:not([type="checkbox"]):not([type="radio"]):not(table input):not(.keep-dense),
+  textarea:not(table textarea):not(.keep-dense),
+  select:not(table select):not(.keep-dense) {
+    font-size: 16px;
+  }
+}
+
+/* ── Impresión ─────────────────────────────────────────────────────────────── */
+@media print {
+  .page-shell { padding: 0; }
+}
+
 /* ── Keyframes ───────────────────────────────────────────────────────────────── */
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+@keyframes patria-drawer-in {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+@keyframes patria-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }

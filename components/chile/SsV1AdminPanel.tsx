@@ -420,8 +420,8 @@ function ClonarHistorial({ destino, onClose, onDone }: {
   };
 
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(13,13,56,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, width: "min(470px, 96vw)", boxShadow: "0 12px 48px rgba(13,13,56,0.35)", overflow: "hidden" }}>
+    <div onClick={onClose} className="modal-overlay" style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(13,13,56,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div onClick={(e) => e.stopPropagation()} className="modal-card" style={{ background: "#fff", borderRadius: 12, width: "min(470px, 96vw)", boxShadow: "0 12px 48px rgba(13,13,56,0.35)", overflow: "hidden" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "13px 16px", background: NAVY, color: "#fff" }}>
           <Copy size={15} />
           <span style={{ fontSize: 14, fontWeight: 700 }}>Clonar historial → {destino.nombreLatam}</span>

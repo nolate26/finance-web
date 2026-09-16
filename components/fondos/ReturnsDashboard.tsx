@@ -549,6 +549,7 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
         style={{
           display: "flex",
           alignItems: "center",
+          flexWrap: "wrap",
           gap: 10,
           padding: "8px 18px",
           borderBottom: "1px solid rgba(13,13,56,0.06)",
@@ -556,7 +557,7 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
         }}
       >
         {/* Search input */}
-        <div style={{ position: "relative", flex: "0 0 220px" }}>
+        <div style={{ position: "relative", flex: "1 1 200px", minWidth: 150, maxWidth: 260 }}>
           <span
             style={{
               position: "absolute",

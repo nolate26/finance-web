@@ -93,6 +93,13 @@ interface CreateBody {
   comment?:      string;
   targetPrice?:  number | null;
   industryGroup?: string | null;
+  /**
+   * A nombre de QUIÉN queda el pick. Sólo un admin puede mandar a alguien que no sea
+   * él: carga los picks del equipo y cada uno tiene que quedar firmado por su
+   * analista, no por quien lo tipeó. Sin el campo, el autor es la sesión (lo de
+   * siempre). null = sin analista, también reservado a admin.
+   */
+  authorId?:     string | null;
 }
 
 export async function POST(request: NextRequest) {
@@ -137,6 +144,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Elige un sector para agregar el pick" }, { status: 400 });
   }
 
+  // ── Autoría ─────────────────────────────────────────────────────────────────
+  // Por defecto es la sesión. El admin puede atribuirlo a otro analista: si carga
+  // los picks del equipo, el pick tiene que salir a nombre de quien lo recomendó.
+  let authorId:   string | null = self.id;
+  let authorName: string | null = self.name || self.email || null;
+
+  if (body.authorId !== undefined && body.authorId !== self.id) {
+    if (!isAdmin) {
+      return NextResponse.json({ error: "Sólo un admin puede atribuir un pick a otro analista" }, { status: 403 });
+    }
+    if (body.authorId) {
+      const author = await prisma.user.findUnique({
+        where: { id: body.authorId }, select: { id: true, name: true, email: true },
+      });
+      if (!author) return NextResponse.json({ error: "El analista no existe" }, { status: 404 });
+      authorId   = author.id;
+      authorName = author.name || author.email || null;
+    } else {
+      authorId   = null;
+      authorName = null;
+    }
+  }
+
   try {
     const pick = await prisma.topPick.create({
       data: {
@@ -146,9 +176,9 @@ export async function POST(request: NextRequest) {
         comment:       body.comment?.trim() ?? "",
         targetPrice:   body.targetPrice ?? null,
         sectorId,
-        authorId:      self.id,
+        authorId,
         // Copia congelada: es lo que sobrevive si el usuario se borra más adelante.
-        authorName:    self.name || self.email || null,
+        authorName,
         industryGroup: body.industryGroup?.trim() || null,
       },
       include: { sector: { select: { name: true } }, author: { select: { initials: true } } },
@@ -158,7 +188,10 @@ export async function POST(request: NextRequest) {
       [{
         entity: ENTITY.topPick, entityKey: pick.id, label: nombreLatam,
         field: "pick", oldValue: null,
-        newValue: `${region} · ${pick.sector?.name ?? "Unassigned"}`,
+        // Si el pick quedó a nombre de otro, el log lo dice: la bitácora firma con el
+        // email de quien lo cargó, y sin esto no se vería a quién se le atribuyó.
+        newValue: `${region} · ${pick.sector?.name ?? "Unassigned"}`
+          + (authorId !== self.id ? ` · analista: ${authorName ?? "sin analista"}` : ""),
         context: pick.periodDate.toISOString().slice(0, 10), action: "create",
       }],
       self.email ?? null,

@@ -8,7 +8,7 @@ import PlanningPanel from "@/components/planning/PlanningPanel";
 
 export default function PlanningPage() {
   return (
-    <div className="max-w-[1800px] mx-auto px-6 py-6">
+    <div className="max-w-[1800px] mx-auto page-shell">
       <div className="mb-6">
         <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0D0D38", letterSpacing: "-0.035em", lineHeight: 1.15, margin: 0 }}>
           Team Planning

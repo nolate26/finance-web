@@ -158,7 +158,7 @@ export default function CompanyModal({ company, onClose }: Props) {
       </div>
 
       {/* Body — two-column layout for wide panels */}
-      <div style={{ padding: "20px 24px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32 }}>
+      <div className="g-stack-md" style={{ padding: "20px 24px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32 }}>
         {/* Left column */}
         <div>
           <div style={SECTION_LABEL as React.CSSProperties}>Price &amp; Returns</div>
@@ -195,7 +195,7 @@ export default function CompanyModal({ company, onClose }: Props) {
           )}
           <div style={DIVIDER} />
           <div style={SECTION_LABEL as React.CSSProperties}>Quality &amp; Capital</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <div className="g-stack-sm" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {qualityChips.map(({ label, value, color }) => (
               <div key={label} style={{ background: "#F5F7FD", border: "1px solid rgba(13,13,56,0.08)", borderRadius: 8, padding: "10px 12px" }}>
                 <div style={{ fontSize: 10, color: "rgba(13,13,56,0.62)", marginBottom: 3 }}>{label}</div>

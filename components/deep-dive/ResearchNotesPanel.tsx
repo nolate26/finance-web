@@ -199,6 +199,7 @@ function DetailModal({
   return (
     <div
       onClick={onClose}
+      className="modal-overlay"
       style={{
         position: "fixed", inset: 0, zIndex: 2000,
         background: "rgba(13,13,56,0.55)",
@@ -209,11 +210,12 @@ function DetailModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        className="modal-card"
         style={{
           background: "#fff", borderRadius: 18,
           boxShadow: "0 32px 80px rgba(13,13,56,0.28), 0 0 0 1px rgba(13,13,56,0.06)",
           width: "100%", maxWidth: 1020,
-          maxHeight: "90vh", display: "flex", flexDirection: "column",
+          maxHeight: "90dvh", display: "flex", flexDirection: "column",
           overflow: "hidden",
         }}
       >
@@ -334,7 +336,7 @@ function DetailModal({
         {/* ── Admin edit form ─────────────────────────────────────────────── */}
         {editing && (
           <div style={{ padding: "16px 28px", borderBottom: `1px solid ${BORDER}`, background: "#F5F7FD", flexShrink: 0 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+            <div className="form-grid-3" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
               <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(13,13,56,0.62)", letterSpacing: "0.05em", textTransform: "uppercase" }}>Company (mover)</span>
                 <input value={form.company} onChange={(e) => patch({ company: e.target.value })} style={editInput} />
@@ -646,12 +648,15 @@ export default function ResearchNotesPanel({ ticker }: Props) {
         </div>
 
         {/* Notes list */}
-        <div style={{
-          background: "#fff",
-          border: `1px solid ${BORDER}`,
-          borderRadius: 10,
-          overflow: "hidden",
-        }}>
+        <div
+          className="grid-table-wrap"
+          style={{
+            background: "#fff",
+            border: `1px solid ${BORDER}`,
+            borderRadius: 10,
+            ["--grid-min" as string]: "811px",
+          } as React.CSSProperties}
+        >
           {/* Column headers */}
           <div style={{
             display: "grid",

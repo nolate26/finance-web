@@ -147,7 +147,7 @@ export default function ConsensusCards({ data }: Props) {
       </div>
 
       {/* 3-column card grid */}
-      <div style={{
+      <div className="g-2col-sm" style={{
         display: "grid",
         gridTemplateColumns: "repeat(3, 1fr)",
         gap: 10,

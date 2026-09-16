@@ -285,7 +285,7 @@ export default function MacroPanel({ revisions = [], tenYearHistory = [] }: Prop
 
       {/* ── 10Y Rate — split layout: simplified table + twin-axis chart ─────── */}
       {is10Y && (
-        <div className="grid gap-5" style={{ gridTemplateColumns: "1fr 2fr" }}>
+        <div className="grid g-stack-md gap-5" style={{ gridTemplateColumns: "1fr 2fr" }}>
           {/* Left: simplified table */}
           <div className="card" style={{ overflow: "hidden", padding: 0, alignSelf: "start" }}>
             <div
@@ -299,6 +299,7 @@ export default function MacroPanel({ revisions = [], tenYearHistory = [] }: Prop
               </span>
             </div>
 
+            <div className="scroll-x">
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "#F5F7FD" }}>
@@ -374,6 +375,7 @@ export default function MacroPanel({ revisions = [], tenYearHistory = [] }: Prop
                 })}
               </tbody>
             </table>
+            </div>
 
             <div className="flex justify-end px-4 py-2">
               <span className="text-xs" style={{ color: "rgba(13,13,56,0.28)" }}>Fuente: Bloomberg</span>

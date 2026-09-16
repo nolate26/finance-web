@@ -189,7 +189,7 @@ function HistoricalPanel({
   const filteredMeta = q ? meta.filter((r) => r.name.toLowerCase().includes(q)) : meta;
 
   return (
-    <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 2fr" }}>
+    <div className="grid g-stack-md gap-4" style={{ gridTemplateColumns: "1fr 2fr" }}>
       {/* Left — table */}
       <div className="card" style={{ overflow: "hidden", padding: 0, alignSelf: "start" }}>
         {/* Search bar */}
@@ -247,7 +247,7 @@ function HistoricalPanel({
             )}
           </div>
         </div>
-        <div style={{ maxHeight: 600, overflowY: "auto" }}>
+        <div className="scroll-x" style={{ maxHeight: 600, overflowY: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ background: "#F5F7FD", position: "sticky", top: 0, zIndex: 1 }}>
@@ -508,7 +508,7 @@ function ProjectionsPanel({ projections }: { projections: ProjEntry[] }) {
   const spotDec = smartDec(spotVal);
 
   return (
-    <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 2fr" }}>
+    <div className="grid g-stack-md gap-4" style={{ gridTemplateColumns: "1fr 2fr" }}>
       {/* Left — table */}
       <div className="card" style={{ overflow: "hidden", padding: 0, alignSelf: "start" }}>
         <div
@@ -523,6 +523,7 @@ function ProjectionsPanel({ projections }: { projections: ProjEntry[] }) {
         >
           COMMODITY — SELECT TO CHART
         </div>
+        <div className="scroll-x">
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ background: "#F5F7FD" }}>
@@ -583,6 +584,7 @@ function ProjectionsPanel({ projections }: { projections: ProjEntry[] }) {
             })}
           </tbody>
         </table>
+        </div>
         <div className="flex justify-end px-4 py-2">
           <span className="text-xs" style={{ color: "rgba(13,13,56,0.28)" }}>Fuente: Bloomberg</span>
         </div>
@@ -708,7 +710,7 @@ export default function CommoditiesPanel({ historical, projections }: Props) {
     <div>
       {/* Tab selector */}
       <div
-        className="flex items-center gap-1 mb-5 p-1 rounded-lg"
+        className="tab-rail flex items-center gap-1 mb-5 p-1 rounded-lg"
         style={{
           background: "rgba(13,13,56,0.04)",
           border: "1px solid rgba(13,13,56,0.08)",

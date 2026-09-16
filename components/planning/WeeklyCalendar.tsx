@@ -159,8 +159,11 @@ export default function WeeklyCalendar({ onOpenTasks }: Props) {
             <span style={{ fontSize: 12, color: TEXT.label }}>Loading calendar…</span>
           </div>
         ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          // `minWidth` en la tabla: son dos regiones × 3 columnas (fecha, tópico,
+          // analistas). Sin mínimo, `width: 100%` las comprime hasta que el
+          // tópico queda en una palabra por línea.
+          <div className="scroll-x">
+            <table style={{ width: "100%", minWidth: 760, borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
                 <tr>
                   {regions.map((r) => (

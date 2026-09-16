@@ -124,6 +124,14 @@ function recColor(rec: string) {
 
 const GRID = "110px 150px minmax(160px,1fr) 120px 90px 120px 140px 36px";
 
+/**
+ * Ancho mínimo de la lista = suma de las columnas de GRID (926px) + los 7 gaps
+ * de 16px + los 20px de padding a cada lado. Debajo de eso la fila no cabe y el
+ * envoltorio `.scroll-x` empieza a arrastrar en horizontal, con encabezado y
+ * filas dentro del MISMO contenedor para que no se desalineen al scrollear.
+ */
+const GRID_MIN = 1078;
+
 // ── Filter chip ───────────────────────────────────────────────────────────────
 
 function FilterSelect({
@@ -275,6 +283,7 @@ function DetailModal({
   return (
     <div
       onClick={onClose}
+      className="modal-overlay"
       style={{
         position: "fixed", inset: 0, zIndex: 1000,
         background: "rgba(13,13,56,0.55)",
@@ -285,11 +294,12 @@ function DetailModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        className="modal-card"
         style={{
           background: "#fff", borderRadius: 18,
           boxShadow: "0 32px 80px rgba(13,13,56,0.28), 0 0 0 1px rgba(13,13,56,0.06)",
           width: "100%", maxWidth: 1020,
-          maxHeight: "90vh", display: "flex", flexDirection: "column",
+          maxHeight: "90dvh", display: "flex", flexDirection: "column",
           overflow: "hidden",
         }}
       >
@@ -473,7 +483,7 @@ function DetailModal({
         {/* ── Admin edit form ─────────────────────────────────────────── */}
         {editing && (
           <div style={{ padding: "16px 28px", borderBottom: "1px solid rgba(13,13,56,0.07)", background: "#F5F7FD", flexShrink: 0 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+            <div className="form-grid-3" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
               <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(13,13,56,0.62)", letterSpacing: "0.05em", textTransform: "uppercase" }}>Company (mover)</span>
                 <input value={form.company} onChange={(e) => patch({ company: e.target.value })} style={editInput} />
@@ -530,13 +540,13 @@ function DetailModal({
         {/* ── HTML body ─────────────────────────────────────────────── */}
         <div style={{ flex: 1, overflowY: "auto", background: "#fff" }}>
           {editing && (
-            <div style={{ maxWidth: 760, margin: "0 auto", padding: "14px 40px 0", display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 600, color: "#2044DC" }}>
+            <div className="research-reader" style={{ maxWidth: 760, margin: "0 auto", padding: "14px 40px 0", display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 600, color: "#2044DC" }}>
               <Pencil size={12} /> Contenido editable — escribe directamente sobre el texto de la nota.
             </div>
           )}
           <div
             ref={bodyRef}
-            className="research-html"
+            className="research-html research-reader"
             contentEditable={editing}
             suppressContentEditableWarning
             style={{
@@ -901,7 +911,7 @@ function SubjectComposer({ universe, onClose }: { universe: ResearchTicker[]; on
 
       {/* Header — el título ya lo carga el disparador de la cabecera, así que aquí
           sólo queda el destinatario y el cierre. */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
         <Send size={13} style={{ color: "#2044DC", flexShrink: 0 }} />
         <span style={{ fontSize: 11, color: "rgba(13,13,56,0.62)" }}>
           Genera el asunto para enviar a{" "}
@@ -924,8 +934,10 @@ function SubjectComposer({ universe, onClose }: { universe: ResearchTicker[]; on
         </button>
       </div>
 
-      {/* Inputs */}
-      <div style={{
+      {/* Inputs — seis campos en una corrida. No se envuelve en un `.scroll-x`
+          como las tablas: arrastrar un formulario para llegar al campo siguiente
+          es peor que apilarlo. Los cortes están en globals.css (.composer-grid). */}
+      <div className="composer-grid" style={{
         display: "grid",
         gridTemplateColumns: "130px minmax(200px,1.4fr) minmax(170px,1.5fr) 140px 100px 90px",
         gap: 10, alignItems: "end",
@@ -1122,7 +1134,7 @@ export default function ResearchPage() {
   const forceExpand = fSearch.trim().length > 0;
 
   return (
-    <div style={{ maxWidth: 1280, margin: "0 auto", padding: "32px 24px" }}>
+    <div className="page-shell" style={{ maxWidth: 1280 }}>
       {/* ── Page header ─────────────────────────────────────────────────── */}
       <div style={{ marginBottom: 24, display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <div>
@@ -1245,6 +1257,8 @@ export default function ResearchPage() {
         overflow: "hidden",
         boxShadow: "0 1px 4px rgba(13,13,56,0.05)",
       }}>
+       <div className="scroll-x">
+        <div style={{ minWidth: GRID_MIN }}>
         {/* Column headers */}
         <div style={{
           display: "grid",
@@ -1345,6 +1359,8 @@ export default function ResearchPage() {
             );
           })
         )}
+        </div>
+       </div>
       </div>
 
       {/* ── Bandeja de admin al pie: notas cuyo ticker no existe en la maestra ─
