@@ -69,7 +69,9 @@ export interface ModelHistoryPayload {
   snapshots: ModelSnapshot[];
   // Precio de mercado más reciente (price_range_52w). El explorer lo usa para sobre-escribir
   // el precio de los años proyectados y recalcular los múltiplos con el precio vivo.
-  livePrice: { value: number; date: string } | null;
+  // `marketCap` es el de Bloomberg (unidades de moneda) y sólo entra en juego cuando el header
+  // tiene has_series (dual-class); null en filas anteriores al 2026-09-16.
+  livePrice: { value: number; date: string; marketCap: number | null } | null;
 }
 
 // Keep backward compat alias
@@ -176,10 +178,10 @@ export async function GET(
     const priceRow = await prisma.priceRange52w.findFirst({
       where:   { ticker },
       orderBy: { date: "desc" },
-      select:  { pxLast: true, date: true },
+      select:  { pxLast: true, date: true, marketCap: true },
     });
     const livePrice = priceRow
-      ? { value: priceRow.pxLast, date: priceRow.date.toISOString().slice(0, 10) }
+      ? { value: priceRow.pxLast, date: priceRow.date.toISOString().slice(0, 10), marketCap: priceRow.marketCap ?? null }
       : null;
 
     const snapshots: ModelSnapshot[] = headers.map((h) => ({

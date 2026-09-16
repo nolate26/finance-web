@@ -1,17 +1,20 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { FileText, Download, Upload } from "lucide-react";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { FileText, Download, Upload, Trash2, Search } from "lucide-react";
 import CreatePresentationModal, { type Presentation } from "@/components/CreatePresentationModal";
+import type { FichaRow as Ficha } from "@/app/api/fichas/route";
 import { useIsAdmin } from "@/lib/useIsAdmin";
+import { countryName } from "@/lib/countryNames";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-type MainCategory = "investment_cases" | "client_presentations" | "sell_side";
+type MainCategory = "investment_cases" | "fichas" | "client_presentations" | "sell_side";
 
 const MAIN_TABS: { key: MainCategory; label: string }[] = [
-  { key: "client_presentations", label: "Client Presentations" },
   { key: "investment_cases",     label: "Investment Cases"     },
+  { key: "fichas",               label: "Fichas"               },
+  { key: "client_presentations", label: "Client Presentations" },
   { key: "sell_side",            label: "Sell Side"            },
 ];
 
@@ -33,7 +36,47 @@ function formatDate(iso: string): string {
 const CP_CHILE_FUNDS = CLIENT_FUND_FILTERS.filter((f) => f.group === "Chile");
 const CP_LATAM_FUNDS = CLIENT_FUND_FILTERS.filter((f) => f.group === "LatAm");
 
-// ── File row ──────────────────────────────────────────────────────────────────
+// ── Shared bits ───────────────────────────────────────────────────────────────
+
+const PILL_WRAP: React.CSSProperties = { background: "rgba(13,13,56,0.04)", border: "1px solid rgba(13,13,56,0.08)", width: "fit-content" };
+
+function pillStyle(active: boolean): React.CSSProperties {
+  return {
+    background: active ? "#fff" : "transparent",
+    color:      active ? "#001EAF" : "rgba(13,13,56,0.62)",
+    boxShadow:  active ? "0 1px 3px rgba(13,13,56,0.10)" : "none",
+    whiteSpace: "nowrap",
+  };
+}
+
+function PdfIcon() {
+  return (
+    <div
+      className="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-lg"
+      style={{ background: "rgba(248,72,94,0.08)", border: "1px solid rgba(248,72,94,0.15)" }}
+    >
+      <FileText size={16} style={{ color: "#F8485E" }} />
+    </div>
+  );
+}
+
+function PdfLink({ href }: { href: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all"
+      style={{ background: "rgba(32,68,220,0.08)", color: "#2044DC", border: "1px solid rgba(32,68,220,0.20)", textDecoration: "none" }}
+      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.14)")}
+      onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.08)")}
+    >
+      <Download size={11} /> PDF
+    </a>
+  );
+}
+
+// ── Presentation row ──────────────────────────────────────────────────────────
 
 function FileRow({ pres }: { pres: Presentation }) {
   return (
@@ -42,13 +85,7 @@ function FileRow({ pres }: { pres: Presentation }) {
       onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.02)")}
       onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
     >
-      {/* PDF icon */}
-      <div
-        className="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-lg"
-        style={{ background: "rgba(248,72,94,0.08)", border: "1px solid rgba(248,72,94,0.15)" }}
-      >
-        <FileText size={16} style={{ color: "#F8485E" }} />
-      </div>
+      <PdfIcon />
 
       {/* Title + description */}
       <div className="flex-1 min-w-0">
@@ -82,18 +119,71 @@ function FileRow({ pres }: { pres: Presentation }) {
         {formatDate(pres.created_at)}
       </span>
 
-      {/* Download button */}
-      <a
-        href={pres.file_url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all"
-        style={{ background: "rgba(32,68,220,0.08)", color: "#2044DC", border: "1px solid rgba(32,68,220,0.20)", textDecoration: "none" }}
-        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.14)")}
-        onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.08)")}
+      <PdfLink href={pres.file_url} />
+    </div>
+  );
+}
+
+// ── Ficha row ─────────────────────────────────────────────────────────────────
+
+function FichaRowView({
+  ficha, isAdmin, deleting, onDelete,
+}: {
+  ficha: Ficha; isAdmin: boolean; deleting: boolean; onDelete: (f: Ficha) => void;
+}) {
+  return (
+    <div
+      className="flex items-center gap-4 px-5 py-4 border-b border-patria-dark-blue/[0.06] last:border-0 transition-colors"
+      style={{ opacity: deleting ? 0.45 : 1 }}
+      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.02)")}
+      onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
+    >
+      <PdfIcon />
+
+      {/* Company + title */}
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold truncate" style={{ color: "#0D0D38" }}>{ficha.company_name}</p>
+        <p className="text-xs mt-0.5 truncate" style={{ color: "rgba(13,13,56,0.62)" }}>
+          {ficha.title}
+          {ficha.description && <span style={{ color: "rgba(13,13,56,0.40)" }}> · {ficha.description}</span>}
+        </p>
+      </div>
+
+      {/* Ticker BBG */}
+      <span className="flex-shrink-0 text-xs font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.45)", whiteSpace: "nowrap" }}>
+        {ficha.ticker}
+      </span>
+
+      {/* Country badge */}
+      <span
+        className="flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-md"
+        style={{ background: "rgba(32,68,220,0.07)", color: "#2044DC", border: "1px solid rgba(32,68,220,0.18)", whiteSpace: "nowrap" }}
       >
-        <Download size={11} /> PDF
-      </a>
+        {countryName(ficha.country)}
+      </span>
+
+      {/* Date */}
+      <span className="font-secondary tabular-nums text-xs flex-shrink-0" style={{ color: "rgba(13,13,56,0.28)", minWidth: 90, textAlign: "right" }}>
+        {formatDate(ficha.created_at)}
+      </span>
+
+      <PdfLink href={ficha.file_url} />
+
+      {/* Delete (admin) */}
+      {isAdmin && (
+        <button
+          type="button"
+          title="Delete ficha"
+          disabled={deleting}
+          onClick={() => onDelete(ficha)}
+          className="flex-shrink-0 inline-flex items-center justify-center rounded-md transition-all"
+          style={{ width: 30, height: 30, background: "transparent", border: "1px solid rgba(248,72,94,0.18)", color: "#F8485E", cursor: deleting ? "not-allowed" : "pointer" }}
+          onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(248,72,94,0.08)")}
+          onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
+        >
+          <Trash2 size={13} />
+        </button>
+      )}
     </div>
   );
 }
@@ -102,31 +192,35 @@ function FileRow({ pres }: { pres: Presentation }) {
 
 export default function PresentationsPage() {
   const [presentations, setPresentations] = useState<Presentation[]>([]);
+  const [fichas,        setFichas]        = useState<Ficha[]>([]);
   const [loading,       setLoading]       = useState(true);
   const [showModal,     setShowModal]     = useState(false);
   const isAdmin = useIsAdmin();
 
-  const [mainCategory, setMainCategory] = useState<MainCategory>("client_presentations");
+  const [mainCategory, setMainCategory] = useState<MainCategory>("investment_cases");
   // For investment_cases / sell_side
   const [subFilter,    setSubFilter]    = useState<string>("chile");
   // For client_presentations — two-level: region → fund
   const [cpRegion,     setCpRegion]     = useState<"chile" | "latam">("chile");
   const [cpFund,       setCpFund]       = useState<string>("All");
+  // For fichas — country (code) + free text over company / ticker / title
+  const [fichaCountry, setFichaCountry] = useState<string>("All");
+  const [fichaSearch,  setFichaSearch]  = useState("");
+  const [deletingId,   setDeletingId]   = useState<string | null>(null);
+  const [deleteError,  setDeleteError]  = useState<string | null>(null);
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
-  const fetchPresentations = useCallback(async () => {
-    try {
-      const res  = await fetch("/api/presentations");
-      const data = await res.json() as { presentations?: Presentation[] };
-      setPresentations(data.presentations ?? []);
-    } catch {
-      setPresentations([]);
-    } finally {
-      setLoading(false);
-    }
+  const fetchAll = useCallback(async () => {
+    const [pres, fic] = await Promise.all([
+      fetch("/api/presentations").then((r) => r.json() as Promise<{ presentations?: Presentation[] }>).catch(() => ({})),
+      fetch("/api/fichas").then((r) => r.json() as Promise<{ fichas?: Ficha[] }>).catch(() => ({})),
+    ]);
+    setPresentations((pres as { presentations?: Presentation[] }).presentations ?? []);
+    setFichas((fic as { fichas?: Ficha[] }).fichas ?? []);
+    setLoading(false);
   }, []);
 
-  useEffect(() => { fetchPresentations(); }, [fetchPresentations]);
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
   // ── Tab switch ────────────────────────────────────────────────────────────
   function handleMainCategory(cat: MainCategory) {
@@ -134,6 +228,9 @@ export default function PresentationsPage() {
     setSubFilter("chile");   // for investment_cases / sell_side
     setCpRegion("chile");    // for client_presentations
     setCpFund("All");
+    setFichaCountry("All");
+    setFichaSearch("");
+    setDeleteError(null);
   }
 
   function handleCpRegion(r: "chile" | "latam") {
@@ -156,7 +253,34 @@ export default function PresentationsPage() {
     }
   }
 
-  // ── Filtered list ─────────────────────────────────────────────────────────
+  function handleFichaSaved(f: Ficha) {
+    setFichas((prev) => [f, ...prev]);
+    setShowModal(false);
+    setMainCategory("fichas");
+    setFichaCountry(f.country);
+    setFichaSearch("");
+  }
+
+  // ── Delete ficha (admin) ──────────────────────────────────────────────────
+  async function handleDeleteFicha(f: Ficha) {
+    if (!window.confirm(`Delete "${f.title}" (${f.ticker})? The PDF will be removed from storage.`)) return;
+    setDeletingId(f.id);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/fichas/${encodeURIComponent(f.id)}`, { method: "DELETE" });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(error ?? `HTTP ${res.status}`);
+      }
+      setFichas((prev) => prev.filter((x) => x.id !== f.id));
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Could not delete ficha");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  // ── Filtered lists ────────────────────────────────────────────────────────
   const activeCpFundValues: string[] = (cpRegion === "chile" ? CP_CHILE_FUNDS : CP_LATAM_FUNDS).map((f) => f.value);
 
   const displayFiles = presentations.filter((p) => {
@@ -169,6 +293,48 @@ export default function PresentationsPage() {
     }
     return true;
   });
+
+  // Países presentes en las fichas, con conteo, ordenados por nombre visible.
+  const fichaCountries = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const f of fichas) counts.set(f.country, (counts.get(f.country) ?? 0) + 1);
+    return [...counts.entries()]
+      .map(([code, n]) => ({ code, label: countryName(code), n }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [fichas]);
+
+  const displayFichas = useMemo(() => {
+    const q = fichaSearch.trim().toLowerCase();
+    return fichas.filter((f) => {
+      if (fichaCountry !== "All" && f.country !== fichaCountry) return false;
+      if (q && !(
+        f.company_name.toLowerCase().includes(q) ||
+        f.ticker.toLowerCase().includes(q) ||
+        f.title.toLowerCase().includes(q)
+      )) return false;
+      return true;
+    });
+  }, [fichas, fichaCountry, fichaSearch]);
+
+  // Agrupadas por país (sólo cuando se ve "All"); dentro del país, por empresa.
+  const fichaGroups = useMemo(() => {
+    const byCountry = new Map<string, Ficha[]>();
+    for (const f of displayFichas) {
+      const arr = byCountry.get(f.country) ?? [];
+      arr.push(f);
+      byCountry.set(f.country, arr);
+    }
+    return [...byCountry.entries()]
+      .map(([code, rows]) => ({
+        code,
+        label: countryName(code),
+        rows: [...rows].sort((a, b) => a.company_name.localeCompare(b.company_name) || b.created_at.localeCompare(a.created_at)),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [displayFichas]);
+
+  const isFichas = mainCategory === "fichas";
+  const docCount = isFichas ? displayFichas.length : displayFiles.length;
 
   // ── Loading ───────────────────────────────────────────────────────────────
   if (loading) {
@@ -184,11 +350,14 @@ export default function PresentationsPage() {
 
   return (
     <>
+      {/* Un solo uploader: abre en la categoría de la pestaña activa, pero el admin
+          puede cambiarla adentro (Fichas incluida). */}
       {showModal && isAdmin && (
         <CreatePresentationModal
           defaultCategory={mainCategory}
-          defaultRegion={mainCategory === "client_presentations" ? subFilter : subFilter}
+          defaultRegion={subFilter}
           onSave={handleSaved}
+          onSaveFicha={handleFichaSaved}
           onClose={() => setShowModal(false)}
         />
       )}
@@ -199,7 +368,7 @@ export default function PresentationsPage() {
         <div className="flex items-start justify-between mb-6">
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0D0D38", letterSpacing: "-0.035em", lineHeight: 1.15, margin: 0 }}>Presentations</h1>
-            <p style={{ fontSize: 12, marginTop: 5, color: "rgba(13,13,56,0.62)", fontWeight: 500, letterSpacing: "0.01em" }}>Research reports · Investor presentations</p>
+            <p style={{ fontSize: 12, marginTop: 5, color: "rgba(13,13,56,0.62)", fontWeight: 500, letterSpacing: "0.01em" }}>Research reports · Company fichas · Investor presentations</p>
           </div>
           <div className="flex items-center gap-3">
             {isAdmin && (
@@ -211,7 +380,7 @@ export default function PresentationsPage() {
               </button>
             )}
             <span className="text-xs font-secondary tabular-nums px-2 py-1 rounded" style={{ background: "rgba(32,68,220,0.08)", color: "#2044DC" }}>
-              {displayFiles.length} document{displayFiles.length !== 1 ? "s" : ""}
+              {docCount} document{docCount !== 1 ? "s" : ""}
             </span>
           </div>
         </div>
@@ -232,6 +401,7 @@ export default function PresentationsPage() {
                   boxShadow:  active ? "0 1px 3px rgba(13,13,56,0.09)" : "none",
                   fontWeight: active ? 700 : 500,
                   cursor: "pointer",
+                  whiteSpace: "nowrap",
                 }}
               >
                 {label}
@@ -248,13 +418,13 @@ export default function PresentationsPage() {
             <>
               {/* Row 1: Chile / LatAm region toggle */}
               <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1 p-0.5 rounded-md" style={{ background: "rgba(13,13,56,0.04)", border: "1px solid rgba(13,13,56,0.08)" }}>
+                <div className="flex items-center gap-1 p-0.5 rounded-md" style={PILL_WRAP}>
                   {(["chile", "latam"] as const).map((r) => (
                     <button
                       key={r}
                       onClick={() => handleCpRegion(r)}
                       className="px-4 py-1 rounded text-xs font-semibold transition-all"
-                      style={{ background: cpRegion === r ? "#fff" : "transparent", color: cpRegion === r ? "#001EAF" : "rgba(13,13,56,0.62)", boxShadow: cpRegion === r ? "0 1px 3px rgba(13,13,56,0.10)" : "none" }}
+                      style={pillStyle(cpRegion === r)}
                     >
                       {r === "chile" ? "Chile" : "LatAm"}
                     </button>
@@ -263,12 +433,11 @@ export default function PresentationsPage() {
               </div>
 
               {/* Row 2: fund buttons for the selected region */}
-              <div className="flex items-center gap-1 p-0.5 rounded-md" style={{ background: "rgba(13,13,56,0.04)", border: "1px solid rgba(13,13,56,0.08)", width: "fit-content" }}>
-                {/* "All" within this region */}
+              <div className="tab-rail flex items-center gap-1 p-0.5 rounded-md" style={PILL_WRAP}>
                 <button
                   onClick={() => setCpFund("All")}
                   className="px-3 py-1 rounded text-xs font-semibold transition-all"
-                  style={{ background: cpFund === "All" ? "#fff" : "transparent", color: cpFund === "All" ? "#001EAF" : "rgba(13,13,56,0.62)", boxShadow: cpFund === "All" ? "0 1px 3px rgba(13,13,56,0.10)" : "none" }}
+                  style={pillStyle(cpFund === "All")}
                 >
                   All
                 </button>
@@ -277,7 +446,7 @@ export default function PresentationsPage() {
                     key={f.value}
                     onClick={() => setCpFund(f.value)}
                     className="px-3 py-1 rounded text-xs font-semibold transition-all"
-                    style={{ background: cpFund === f.value ? "#fff" : "transparent", color: cpFund === f.value ? "#001EAF" : "rgba(13,13,56,0.62)", boxShadow: cpFund === f.value ? "0 1px 3px rgba(13,13,56,0.10)" : "none", whiteSpace: "nowrap" }}
+                    style={pillStyle(cpFund === f.value)}
                   >
                     {f.label}
                   </button>
@@ -287,24 +456,99 @@ export default function PresentationsPage() {
           )}
 
           {/* Investment Cases & Sell Side → Chile / LatAm */}
-          {mainCategory !== "client_presentations" && (
-            <div className="flex items-center gap-1 p-0.5 rounded-md" style={{ background: "rgba(13,13,56,0.04)", border: "1px solid rgba(13,13,56,0.08)", width: "fit-content" }}>
+          {(mainCategory === "investment_cases" || mainCategory === "sell_side") && (
+            <div className="flex items-center gap-1 p-0.5 rounded-md" style={PILL_WRAP}>
               {[{ value: "chile", label: "Chile" }, { value: "latam", label: "LatAm" }].map((r) => (
                 <button
                   key={r.value}
                   onClick={() => setSubFilter(r.value)}
                   className="px-4 py-1 rounded text-xs font-semibold transition-all"
-                  style={{ background: subFilter === r.value ? "#fff" : "transparent", color: subFilter === r.value ? "#001EAF" : "rgba(13,13,56,0.62)", boxShadow: subFilter === r.value ? "0 1px 3px rgba(13,13,56,0.10)" : "none" }}
+                  style={pillStyle(subFilter === r.value)}
                 >
                   {r.label}
                 </button>
               ))}
             </div>
           )}
+
+          {/* Fichas → country chips + search */}
+          {isFichas && (
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="tab-rail flex items-center gap-1 p-0.5 rounded-md" style={PILL_WRAP}>
+                <button
+                  onClick={() => setFichaCountry("All")}
+                  className="px-3 py-1 rounded text-xs font-semibold transition-all"
+                  style={pillStyle(fichaCountry === "All")}
+                >
+                  All
+                </button>
+                {fichaCountries.map((c) => (
+                  <button
+                    key={c.code}
+                    onClick={() => setFichaCountry(c.code)}
+                    className="px-3 py-1 rounded text-xs font-semibold transition-all"
+                    style={pillStyle(fichaCountry === c.code)}
+                  >
+                    {c.label}
+                    <span className="font-secondary tabular-nums" style={{ marginLeft: 5, opacity: 0.55, fontWeight: 500 }}>{c.n}</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2 px-2.5 rounded-md" style={{ background: "#F5F7FD", border: "1px solid rgba(13,13,56,0.12)", height: 30, minWidth: 220, flex: "1 1 220px", maxWidth: 360 }}>
+                <Search size={13} style={{ color: "rgba(13,13,56,0.40)", flexShrink: 0 }} />
+                <input
+                  value={fichaSearch}
+                  onChange={(e) => setFichaSearch(e.target.value)}
+                  placeholder="Company, ticker or title…"
+                  className="font-secondary"
+                  style={{ flex: 1, minWidth: 0, background: "transparent", border: "none", outline: "none", fontSize: 12, color: "#0D0D38" }}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
+        {deleteError && (
+          <div className="mb-4 px-3 py-2 rounded-md text-xs" style={{ background: "rgba(248,72,94,0.05)", border: "1px solid rgba(248,72,94,0.18)", color: "#F8485E" }}>
+            {deleteError}
+          </div>
+        )}
+
         {/* ── File list ────────────────────────────────────────────────── */}
-        {displayFiles.length === 0 ? (
+        {isFichas ? (
+          displayFichas.length === 0 ? (
+            <div className="card flex flex-col items-center justify-center py-20 gap-4" style={{ color: "rgba(13,13,56,0.45)" }}>
+              <FileText size={40} style={{ opacity: 0.3 }} />
+              <p className="text-sm">{fichas.length === 0 ? "No fichas uploaded yet." : "No fichas match this selection."}</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {fichaGroups.map((g) => (
+                <div key={g.code}>
+                  {/* Section header: sólo aporta cuando hay más de un país en pantalla */}
+                  {fichaCountry === "All" && (
+                    <div className="flex items-baseline gap-2 mb-2 px-1">
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(13,13,56,0.62)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{g.label}</span>
+                      <span className="font-secondary tabular-nums" style={{ fontSize: 11, color: "rgba(13,13,56,0.40)" }}>{g.rows.length}</span>
+                    </div>
+                  )}
+                  <div className="card overflow-hidden" style={{ padding: 0 }}>
+                    {g.rows.map((f) => (
+                      <FichaRowView
+                        key={f.id}
+                        ficha={f}
+                        isAdmin={isAdmin}
+                        deleting={deletingId === f.id}
+                        onDelete={handleDeleteFicha}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        ) : displayFiles.length === 0 ? (
           <div className="card flex flex-col items-center justify-center py-20 gap-4" style={{ color: "rgba(13,13,56,0.45)" }}>
             <FileText size={40} style={{ opacity: 0.3 }} />
             <p className="text-sm">No documents found for this selection.</p>

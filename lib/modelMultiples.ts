@@ -3,8 +3,9 @@
  * ModelExplorer / BankModelExplorer (deep-dive) y /api/latam/consensus-check (tabla
  * Estimates), para que EV/EBITDA y P/E sean exactamente el mismo número en ambos lados.
  *
- * `livePrice` es el px_last de price_range_52w y SÓLO debe pasarse en años proyectados;
- * en años históricos el caller manda null y se usa el market_cap que dejó el analista.
+ * `live` es la última fila de price_range_52w (px_last + market_cap de Bloomberg) y SÓLO debe
+ * pasarse en años proyectados; en años históricos el caller manda null y se usa el market_cap
+ * que dejó el analista.
  */
 
 // ── Market cap efectivo ────────────────────────────────────────────────────────
@@ -16,19 +17,59 @@ export interface CompanyMcapInputs {
   fxEop:      number | null;
 }
 
+/** Última cotización de price_range_52w: px_last y, desde 2026-09-16, el market cap de Bloomberg. */
+export interface LiveQuote {
+  price:     number;
+  marketCap: number | null;
+}
+
+/** De dónde salió el market cap efectivo (la UI resalta los dos orígenes "vivos"). */
+export type McapSource = "live_mcap" | "live_price" | "model" | "none";
+
+// El market_cap de price_range_52w llega en UNIDADES de moneda (Bloomberg: 4,02e12 CLP para
+// Andina) mientras que precio × shares_out del modelo queda en millones (o miles, si el analista
+// cargó las acciones en miles). Para que `× fxEop` lo deje en la escala de los financials hay que
+// llevarlo primero a la escala de precio × acciones: el cociente entre ambos es una potencia de
+// 10 limpia (1e6, 1e3…) más el descuento real entre series (0.8–1.2), así que redondear el log10
+// recupera el factor sin ambigüedad. Mismo criterio que consensusScaleFactor para el consenso.
+export function liveMarketCapAtPriceSharesScale(liveMarketCap: number, price: number, sharesOut: number): number | null {
+  const ref = price * sharesOut;
+  if (!liveMarketCap || !ref || liveMarketCap < 0 || ref < 0) return null;
+  const factor = Math.pow(10, Math.round(Math.log10(liveMarketCap / ref)));
+  return liveMarketCap / factor;
+}
+
 // Market cap en la escala de los financials (revenue/EBITDA/NI). Reglas:
-//  • Precio vivo (proyectado): se arma desde precio×acciones CRUDO y el fxEop del analista lo
+//  • Proyectado + has_series (dual-class, ej. Andina A/B): precio de UNA serie × todas las
+//    acciones sobreestima el market cap, así que se usa el market cap de Bloomberg (todas las
+//    series) llevado a la escala de precio×acciones y × fxEop. Si esa fila aún no trae market
+//    cap, cae a la regla siguiente.
+//  • Proyectado (precio vivo): se arma desde precio×acciones CRUDO y el fxEop del analista lo
 //    lleva a la escala de los financials (ej. CLP: fxEop=0.001, porque precio×acciones queda en
 //    CLP mn y los financials están en CLP bn).
 //  • Resto de años: la columna market_cap del modelo YA viene en esa escala → se usa tal cual.
 //    Aplicarle fxEop encima la escalaría DOS veces (ese era el bug del histórico: los yields
 //    salían ~1000× altos y el market cap real no cuadraba con el proyectado).
 //  • Sin market_cap: se reconstruye desde precio×acciones × fxEop.
-export function companyEffMarketCap(f: CompanyMcapInputs, livePrice: number | null): number | null {
-  if (livePrice !== null && f.sharesOut !== null) return livePrice * f.sharesOut * (f.fxEop ?? 1);
-  if (f.marketCap !== null) return f.marketCap;
-  if (f.sharePrice !== null && f.sharesOut !== null) return f.sharePrice * f.sharesOut * (f.fxEop ?? 1);
-  return null;
+export function companyEffMarketCapDetailed(
+  f: CompanyMcapInputs, live: LiveQuote | null, hasSeries = false,
+): { value: number | null; source: McapSource } {
+  if (live !== null && f.sharesOut !== null) {
+    if (hasSeries && live.marketCap !== null) {
+      const scaled = liveMarketCapAtPriceSharesScale(live.marketCap, live.price, f.sharesOut);
+      if (scaled !== null) return { value: scaled * (f.fxEop ?? 1), source: "live_mcap" };
+    }
+    return { value: live.price * f.sharesOut * (f.fxEop ?? 1), source: "live_price" };
+  }
+  if (f.marketCap !== null) return { value: f.marketCap, source: "model" };
+  if (f.sharePrice !== null && f.sharesOut !== null) {
+    return { value: f.sharePrice * f.sharesOut * (f.fxEop ?? 1), source: "model" };
+  }
+  return { value: null, source: "none" };
+}
+
+export function companyEffMarketCap(f: CompanyMcapInputs, live: LiveQuote | null, hasSeries = false): number | null {
+  return companyEffMarketCapDetailed(f, live, hasSeries).value;
 }
 
 export interface BankMcapInputs {

@@ -6,6 +6,7 @@ import { Download, CalendarDays, Eye, EyeOff } from "lucide-react";
 import type { ConsensusCheckPayload, ConsensusCheckRow } from "@/app/api/latam/consensus-check/route";
 import { downloadExcel } from "@/lib/exportExcel";
 import { FONT_SECONDARY } from "@/lib/patriaTheme";
+import { countryName } from "@/lib/countryNames";
 
 // ── Palette ────────────────────────────────────────────────────────────────────
 const C = {
@@ -224,12 +225,6 @@ function Th({
   );
 }
 
-// ── Country code → display name ─────────────────────────────────────────────────
-const COUNTRY_NAMES: Record<string, string> = {
-  AR: "Argentina", BR: "Brazil", CL: "Chile", CN: "China", CO: "Colombia",
-  MX: "Mexico", PA: "Panama", PE: "Peru", US: "United States", UY: "Uruguay", OT: "Other",
-};
-const countryName = (c: string) => COUNTRY_NAMES[c] ?? c;
 
 // Shared select style for the filter dropdowns.
 const selStyle = (active: boolean): React.CSSProperties => ({

@@ -9,7 +9,7 @@ import type {
 } from "@/app/api/companies/[ticker]/model/route";
 import { consensusScaleFactor } from "@/lib/consensusScale";
 import { ccySuffix } from "@/lib/ccySuffix";
-import { companyEffMarketCap, companyEv, companyEvEbitda, companyPe } from "@/lib/modelMultiples";
+import { companyEffMarketCapDetailed, companyEv, companyEvEbitda, companyPe, type LiveQuote } from "@/lib/modelMultiples";
 import ModelEstimateChart, { buildEstimateRows, buildRecommendationRows, type EstimateMetric, type EstimateRow } from "@/components/deep-dive/ModelEstimateChart";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { PATRIA, FONT_PRIMARY, FONT_SECONDARY, TEXT, BORDER } from "@/lib/patriaTheme";
@@ -85,24 +85,26 @@ interface YearData extends ModelFinancialRow {
   effPrice:     number | null;
   effMarketCap: number | null;
   priceIsLive:  boolean;   // true si effPrice viene de price_range_52w (año proyectado con precio vivo)
+  mcapIsLive:   boolean;   // true si effMarketCap es el market cap de Bloomberg (has_series, dual-class)
 }
 
-function enrich(financials: ModelFinancialRow[], livePrice: number | null): YearData[] {
+function enrich(financials: ModelFinancialRow[], live: LiveQuote | null, hasSeries: boolean): YearData[] {
   const now = new Date().getFullYear();
   return financials.map(f => {
     const isEst = f.year >= now;
     // En años proyectados, si hay precio de mercado (price_range_52w) lo usamos en vez del precio
     // del modelo y recomputamos el market cap con él, para que TODOS los múltiplos derivados
     // (EV/EBITDA, P/E, P/BV, yields, upside…) queden calculados con el precio vivo.
-    const priceIsLive = isEst && livePrice !== null;
-    const effPrice     = priceIsLive ? livePrice : f.sharePrice;
+    const priceIsLive = isEst && live !== null;
+    const effPrice     = priceIsLive ? live.price : f.sharePrice;
 
-    // Market cap en la escala de los financials: reglas (precio vivo × acciones × fxEop en
-    // proyectados, market_cap del modelo en el resto) viven en lib/modelMultiples, compartidas
-    // con la tabla Estimates para que los múltiplos coincidan en ambas vistas.
-    const effMarketCap = companyEffMarketCap(f, priceIsLive ? livePrice : null);
+    // Market cap en la escala de los financials: reglas (has_series → market cap de Bloomberg;
+    // si no, precio vivo × acciones × fxEop en proyectados; market_cap del modelo en el resto)
+    // viven en lib/modelMultiples, compartidas con la tabla Estimates para que los múltiplos
+    // coincidan en ambas vistas.
+    const mcap = companyEffMarketCapDetailed(f, priceIsLive ? live : null, hasSeries);
 
-    return { ...f, isEst, effPrice, effMarketCap, priceIsLive };
+    return { ...f, isEst, effPrice, effMarketCap: mcap.value, priceIsLive, mcapIsLive: mcap.source === "live_mcap" };
   });
 }
 
@@ -410,10 +412,12 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
     [history, selectedDate],
   );
 
-  const enriched = useMemo(
-    () => (snapshot ? enrich(snapshot.financials, history?.livePrice?.value ?? null) : []),
-    [snapshot, history],
-  );
+  const enriched = useMemo(() => {
+    if (!snapshot) return [];
+    const lp = history?.livePrice ?? null;
+    const live: LiveQuote | null = lp ? { price: lp.value, marketCap: lp.marketCap ?? null } : null;
+    return enrich(snapshot.financials, live, snapshot.header.hasSeries);
+  }, [snapshot, history]);
 
   const byYear = useMemo(() => {
     const m = new Map<number, YearData>();
@@ -709,8 +713,8 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                 text = r.text;
                 if (row.colorize) fColor = r.color === C.BLUE ? "001EAF" : r.color === C.RED ? "F8485E" : "0D0D38";
               }
-              // Precio vivo (Share Price, año proyectado con price_range_52w) → resaltado.
-              if (row.key === "price" && d.priceIsLive) { fFill = F_LIVE; fColor = "0D0D38"; }
+              // Celda viva (precio en proyectados; market cap de Bloomberg con has_series) → resaltado.
+              if ((row.key === "price" && d.priceIsLive) || (row.key === "mktcap" && d.mcapIsLive)) { fFill = F_LIVE; fColor = "0D0D38"; }
             }
 
             return xc(text, {
@@ -898,6 +902,8 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
           }}>
             <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.LIVE_ACC, flexShrink: 0 }} />
             Price {fmtSmall(livePrice.value)} @ {fmtDate(livePrice.date)}
+            {/* Dual-class: el market cap proyectado sale de Bloomberg, no de precio × acciones. */}
+            {header.hasSeries && livePrice.marketCap != null && " · Mkt cap BBG (series)"}
           </span>
         )}
 
@@ -1103,8 +1109,9 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                         }
 
                         const { text, color } = renderCell(value, row.fmt, !!row.colorize);
-                        // Celda de precio vivo (Share Price, año proyectado con price_range_52w) → color distinto.
-                        const liveCell = row.key === "price" && d.priceIsLive;
+                        // Celda viva (price_range_52w): el precio en años proyectados y, con has_series,
+                        // también el market cap (viene de Bloomberg, no de precio × acciones).
+                        const liveCell = (row.key === "price" && d.priceIsLive) || (row.key === "mktcap" && d.mcapIsLive);
                         return (
                           <td key={yr} style={{
                             ...yearColW, padding: CELL_PAD, textAlign: "center",

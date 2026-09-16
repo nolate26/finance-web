@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { bankEffMarketCap, bankPe, companyEffMarketCap, companyEvEbitda, companyPe } from "@/lib/modelMultiples";
+import { bankEffMarketCap, bankPe, companyEffMarketCap, companyEvEbitda, companyPe, type LiveQuote } from "@/lib/modelMultiples";
 
 export const dynamic = "force-dynamic";
 
@@ -108,7 +108,7 @@ export async function GET() {
       prisma.modelHeader.findMany({
         distinct: ["ticker"],
         orderBy:  { updateDate: "desc" },
-        select:   { ticker: true, updateDate: true, analyst: true, recc: true, tp: true, thesis: true, currency: true, unit: true },
+        select:   { ticker: true, updateDate: true, analyst: true, recc: true, tp: true, thesis: true, currency: true, unit: true, hasSeries: true },
       }),
       prisma.bankHeader.findMany({
         distinct: ["ticker"],
@@ -183,15 +183,15 @@ export async function GET() {
       prisma.empresasIndustriasV2.findMany({
         select: { tickerBloomberg: true, countryRisk: true, industriaGics: true },
       }),
-      // Precios de la ventana reciente (px_last) para el Upside. Ordenados por fecha desc para
-      // quedarnos, por ticker, con la fila más nueva al construir el mapa.
+      // Precios de la ventana reciente (px_last + market cap Bloomberg) para el Upside y los
+      // múltiplos. Ordenados por fecha desc para quedarnos, por ticker, con la fila más nueva.
       priceWindowStart
         ? prisma.priceRange52w.findMany({
             where:   { date: { gte: priceWindowStart } },
             orderBy: { date: "desc" },
-            select:  { ticker: true, date: true, pxLast: true },
+            select:  { ticker: true, date: true, pxLast: true, marketCap: true },
           })
-        : Promise.resolve([] as { ticker: string; date: Date; pxLast: number }[]),
+        : Promise.resolve([] as { ticker: string; date: Date; pxLast: number; marketCap: number | null }[]),
       // Precio de referencia del modelo para "Upside @Model": algunos analistas NO cargan el
       // share_price en los años proyectados (year1FY/year2FY) sino en el último año con dato real
       // (p.ej. 2025). Traemos todos los años ≤ year1FY con share_price no nulo, ordenados por año
@@ -220,12 +220,12 @@ export async function GET() {
         : Promise.resolve([] as { ticker: string; sharePrice: number | null }[]),
     ]);
 
-    // Precio de mercado más reciente por ticker: normTicker → px_last. Como `prices` viene
-    // ordenado por fecha desc, la primera aparición de cada ticker es su último precio.
-    const priceMap = new Map<string, number>();
+    // Cotización más reciente por ticker: normTicker → { px_last, market cap }. Como `prices`
+    // viene ordenado por fecha desc, la primera aparición de cada ticker es su última fila.
+    const priceMap = new Map<string, LiveQuote>();
     for (const p of prices) {
       const k = normTicker(p.ticker);
-      if (!priceMap.has(k)) priceMap.set(k, p.pxLast);
+      if (!priceMap.has(k)) priceMap.set(k, { price: p.pxLast, marketCap: p.marketCap ?? null });
     }
 
     // Precio de referencia del modelo por ticker: normTicker → share_price del mayor año ≤ year1FY
@@ -285,12 +285,13 @@ export async function GET() {
     }
 
     // Múltiplos por año: year1FY/year2FY son siempre proyectados (≥ año actual), así que —
-    // igual que enrich() en los explorers — con precio vivo el market cap se re-marca a px_last;
-    // sin precio se cae al market_cap del modelo. Financials en la escala cruda del modelo
-    // (sin fxConsensus ni ÷1000): los múltiplos son adimensionales.
-    const companyMultiples = (fin: CompanyFin | undefined, livePrice: number | null) => {
+    // igual que enrich() en los explorers — con cotización viva el market cap se re-marca
+    // (has_series → market cap Bloomberg; si no, px_last × acciones); sin cotización se cae al
+    // market_cap del modelo. Financials en la escala cruda del modelo (sin fxConsensus ni
+    // ÷1000): los múltiplos son adimensionales.
+    const companyMultiples = (fin: CompanyFin | undefined, live: LiveQuote | null, hasSeries: boolean) => {
       if (!fin) return { evEbitda: null, pe: null };
-      const mcap = companyEffMarketCap(fin, livePrice);
+      const mcap = companyEffMarketCap(fin, live, hasSeries);
       return {
         evEbitda: companyEvEbitda(mcap, fin.netDebt, fin.ebitda),
         pe:       companyPe(mcap, fin.netIncome),
@@ -319,7 +320,8 @@ export async function GET() {
       const getCon = (metric: string, period: string) =>
         conMap.get(`${normTicker(h.ticker)}::${metric.toUpperCase()}::${period}`) ?? null;
 
-      const price       = priceMap.get(normTicker(h.ticker)) ?? null;     // px_last más reciente (live)
+      const live        = priceMap.get(normTicker(h.ticker)) ?? null;     // cotización más reciente (live)
+      const price       = live?.price ?? null;
       const modelPrice  = modelPriceMap.get(normTicker(h.ticker))         // precio de referencia (mayor año ≤ year1FY)
                         ?? fin1?.sharePrice ?? fin2?.sharePrice ?? null;   // fallback: años proyectados
       const tp          = h.tp ?? null;
@@ -345,8 +347,8 @@ export async function GET() {
         ni1FY:     getCon("NET_INCOME", String(year1FY)),
         ni2FY:     getCon("NET_INCOME", String(year2FY)),
       };
-      const m1 = companyMultiples(fin1, price);
-      const m2 = companyMultiples(fin2, price);
+      const m1 = companyMultiples(fin1, live, h.hasSeries);
+      const m2 = companyMultiples(fin2, live, h.hasSeries);
 
       return {
         ticker:     h.ticker,
@@ -376,7 +378,7 @@ export async function GET() {
       const getCon = (metric: string, period: string) =>
         conMap.get(`${normTicker(h.ticker)}::${metric.toUpperCase()}::${period}`) ?? null;
 
-      const price       = priceMap.get(normTicker(h.ticker)) ?? null;     // px_last más reciente (live)
+      const price       = priceMap.get(normTicker(h.ticker))?.price ?? null;  // px_last más reciente (live)
       const modelPrice  = modelPriceMap.get(normTicker(h.ticker))         // precio de referencia (mayor año ≤ year1FY)
                         ?? fin1?.sharePrice ?? fin2?.sharePrice ?? null;   // fallback: años proyectados
       const tp          = h.tp ?? null;

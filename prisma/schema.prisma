@@ -1051,10 +1051,37 @@ model EmpresasIndustriasV2 {
   companyDescription String?  @db.Text @map("company_description")
   yahooFinanceTicker String?  @map("yahoo_finance_ticker") // <-- NUEVA COLUMNA AGREGADA
 
+  fichas             Ficha[]
+
   // @@index([tickerBloomberg]) eliminado: era un duplicado literal del índice que ya
   // crea el @unique de esa misma columna.
   @@index([isin])
   @@map("empresas_industrias_v2")
+}
+
+// Fichas de compañía: PDFs que SIEMPRE cuelgan de un ticker Bloomberg de la maestra.
+// Es una tabla aparte de `presentations` justamente por eso: ahí company_name es un
+// texto libre opcional; acá el vínculo es una FK real, así que no puede existir una
+// ficha sin empresa ni con un ticker mal escrito. El país para agrupar no se guarda:
+// sale del join con empresas_industrias_v2.country_risk.
+model Ficha {
+  id          String   @id @default(uuid())
+  ticker      String   @db.VarChar(100)   // empresas_industrias_v2.ticker_bloomberg
+  title       String   @db.VarChar(300)
+  description String?  @db.Text
+  fileUrl     String   @map("file_url") @db.VarChar(1000)
+  // Key del objeto en R2 (lo devuelve /api/upload). Se guarda para poder borrar el
+  // PDF del bucket al eliminar la ficha; sin esto sólo se borraría la fila.
+  fileKey     String?  @map("file_key") @db.VarChar(500)
+  uploadedBy  String?  @map("uploaded_by") @db.VarChar(200)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Restrict: no se puede borrar una empresa de la maestra mientras tenga fichas;
+  // primero hay que borrarlas (y así tampoco quedan PDFs huérfanos en R2).
+  empresa     EmpresasIndustriasV2 @relation(fields: [ticker], references: [tickerBloomberg], onDelete: Restrict)
+
+  @@index([ticker, createdAt])
+  @@map("fichas")
 }
 
  

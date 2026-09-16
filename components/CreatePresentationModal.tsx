@@ -1,8 +1,10 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
-import { Upload, X, FileText, AlertCircle, ChevronDown } from "lucide-react";
+import { useRef, useState } from "react";
+import { Upload, X, FileText, AlertCircle } from "lucide-react";
 import { FONT_SECONDARY } from "@/lib/patriaTheme";
+import CompanyCombobox from "@/components/CompanyCombobox";
+import type { FichaRow } from "@/app/api/fichas/route";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -18,12 +20,12 @@ export interface Presentation {
   created_at: string;
 }
 
-interface CompanyOption { ticker: string; nombre: string; }
-
 interface Props {
   defaultCategory: string;
   defaultRegion: string;
   onSave: (pres: Presentation) => void;
+  /** Se llama en lugar de onSave cuando la categoría elegida es "fichas". */
+  onSaveFicha: (ficha: FichaRow) => void;
   onClose: () => void;
 }
 
@@ -31,7 +33,10 @@ interface Props {
 
 type Phase = "idle" | "requesting" | "uploading" | "saving";
 
-type Category = "investment_cases" | "client_presentations" | "sell_side";
+// Un solo modal para todo el uploader. "fichas" no va a `presentations` sino a la
+// tabla `fichas` (ticker obligatorio, sólo PDF, sin origen ni región): el formulario
+// cambia de forma según la categoría y el submit elige el endpoint.
+type Category = "investment_cases" | "fichas" | "client_presentations" | "sell_side";
 
 const MIME_MAP: Record<string, string> = {
   pdf:  "application/pdf",
@@ -40,6 +45,7 @@ const MIME_MAP: Record<string, string> = {
 };
 
 const ALLOWED_EXTS = new Set(["pdf", "ppt", "pptx"]);
+const FICHA_EXTS   = new Set(["pdf"]);
 
 // Fund options for "client_presentations" — stored as region value in DB
 const CLIENT_FUNDS = [
@@ -61,9 +67,13 @@ function getMimeType(file: File): string {
   return MIME_MAP[ext] ?? file.type;
 }
 
-function isAllowedFile(file: File): boolean {
+function isAllowedFile(file: File, cat: Category): boolean {
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-  return ALLOWED_EXTS.has(ext);
+  return (cat === "fichas" ? FICHA_EXTS : ALLOWED_EXTS).has(ext);
+}
+
+function fileTypeError(cat: Category): string {
+  return cat === "fichas" ? "Fichas must be PDF files." : "Only PDF, PPT, and PPTX files are accepted.";
 }
 
 function formatFileSize(bytes: number): string {
@@ -100,141 +110,9 @@ function SubmitLabel({ phase, progress }: { phase: Phase; progress: number }) {
   return <>Upload &amp; Save to Library</>;
 }
 
-// ── Company combobox ──────────────────────────────────────────────────────────
-
-function CompanyCombobox({
-  value,
-  onChange,
-  disabled,
-}: {
-  value: string;
-  onChange: (ticker: string, nombre: string) => void;
-  disabled: boolean;
-}) {
-  const [query,   setQuery]   = useState("");
-  const [open,    setOpen]    = useState(false);
-  const [options, setOptions] = useState<CompanyOption[]>([]);
-  const [display, setDisplay] = useState("");   // human-readable label shown in input
-  const wrapperRef = useRef<HTMLDivElement>(null);
-
-  // Load company list once
-  useEffect(() => {
-    fetch("/api/companies/list")
-      .then((r) => r.json())
-      .then((d: { companies?: CompanyOption[] }) => setOptions(d.companies ?? []))
-      .catch(() => {});
-  }, []);
-
-  // Sync display label when value is set externally (initial defaultCategory)
-  useEffect(() => {
-    if (!value) { setDisplay(""); return; }
-    const match = options.find((o) => o.ticker === value);
-    if (match) setDisplay(`${match.nombre} — ${match.ticker}`);
-  }, [value, options]);
-
-  // Close on outside click
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const filtered = query.trim()
-    ? options.filter(
-        (o) =>
-          o.nombre.toLowerCase().includes(query.toLowerCase()) ||
-          o.ticker.toLowerCase().includes(query.toLowerCase())
-      ).slice(0, 8)
-    : options.slice(0, 8);
-
-  function handleSelect(opt: CompanyOption) {
-    setDisplay(`${opt.nombre} — ${opt.ticker}`);
-    setQuery("");
-    setOpen(false);
-    onChange(opt.ticker, opt.nombre);
-  }
-
-  function handleClear() {
-    setDisplay("");
-    setQuery("");
-    onChange("", "");
-  }
-
-  const showClear = !!(display || query) && !disabled;
-
-  return (
-    <div ref={wrapperRef} style={{ position: "relative" }}>
-      <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-        <input
-          value={open ? query : (display || query)}
-          onChange={(e) => { setQuery(e.target.value); setDisplay(""); setOpen(true); onChange("", ""); }}
-          onFocus={() => setOpen(true)}
-          placeholder="Search company or ticker…"
-          disabled={disabled}
-          style={{
-            ...INPUT,
-            paddingRight: 56,
-            opacity: disabled ? 0.6 : 1,
-          }}
-          autoComplete="off"
-        />
-        {showClear && (
-          <button
-            type="button"
-            onClick={handleClear}
-            style={{ position: "absolute", right: 28, background: "none", border: "none", cursor: "pointer", color: "rgba(13,13,56,0.45)", padding: 2, display: "flex" }}
-          >
-            <X size={12} />
-          </button>
-        )}
-        <ChevronDown
-          size={13}
-          style={{ position: "absolute", right: 10, color: "rgba(13,13,56,0.45)", pointerEvents: "none" }}
-        />
-      </div>
-
-      {open && filtered.length > 0 && (
-        <div style={{
-          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 100,
-          background: "#fff",
-          border: "1px solid rgba(13,13,56,0.12)",
-          borderRadius: 8,
-          boxShadow: "0 8px 24px rgba(13,13,56,0.12)",
-          maxHeight: 220,
-          overflowY: "auto",
-        }}>
-          {filtered.map((opt) => (
-            <button
-              key={opt.ticker}
-              type="button"
-              onMouseDown={(e) => { e.preventDefault(); handleSelect(opt); }}
-              style={{
-                display: "flex", flexDirection: "column", alignItems: "flex-start",
-                width: "100%", padding: "8px 12px",
-                background: "none", border: "none", cursor: "pointer",
-                borderBottom: "1px solid rgba(13,13,56,0.05)",
-                textAlign: "left",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(32,68,220,0.05)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-            >
-              <span style={{ fontSize: 12, fontWeight: 600, color: "#0D0D38" }}>{opt.nombre}</span>
-              <span style={{ fontSize: 10, color: "rgba(13,13,56,0.45)", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>{opt.ticker}</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export default function CreatePresentationModal({ defaultCategory, defaultRegion, onSave, onClose }: Props) {
+export default function CreatePresentationModal({ defaultCategory, defaultRegion, onSave, onSaveFicha, onClose }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   // File
@@ -263,12 +141,16 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
     setRegion(defaultRegionFor(cat));
     if (cat === "sell_side") setIsSellSide(true);
     // don't auto-clear isSellSide when switching away — let user decide
+    // Un PPT ya elegido deja de ser válido al pasar a Fichas: se suelta con aviso.
+    if (file && !isAllowedFile(file, cat)) { setFile(null); setFileError(fileTypeError(cat)); }
   }
+
+  const isFicha = category === "fichas";
 
   // ── File handling ────────────────────────────────────────────────────────────
 
   function applyFile(f: File) {
-    if (!isAllowedFile(f)) { setFileError("Only PDF, PPT, and PPTX files are accepted."); return; }
+    if (!isAllowedFile(f, category)) { setFileError(fileTypeError(category)); return; }
     setFile(f);
     setFileError(null);
     setError(null);
@@ -295,31 +177,36 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!file)         { setError("Please select a file first.");  return; }
-    if (!title.trim()) { setError("Title is required.");           return; }
+    if (!file)                    { setError("Please select a file first.");     return; }
+    if (isFicha && !companyTicker) { setError("A company ticker is required for fichas."); return; }
+    if (!title.trim())            { setError("Title is required.");              return; }
 
     setError(null);
     const contentType = getMimeType(file);
 
-    // Step 1 — presigned URL
+    // Step 1 — presigned URL. Carpeta por ticker para fichas, por categoría/región
+    // para el resto, así el bucket queda navegable.
     setPhase("requesting");
-    let presignedUrl: string, fileUrl: string;
+    let presignedUrl: string, fileUrl: string, fileKey: string;
     try {
       const res = await fetch("/api/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           filename: file.name, contentType,
-          folder: `presentations/${category}/${region.replace(/[^a-z0-9]/gi, "_")}`,
+          folder: isFicha
+            ? `fichas/${companyTicker.replace(/[^a-z0-9]/gi, "_")}`
+            : `presentations/${category}/${region.replace(/[^a-z0-9]/gi, "_")}`,
         }),
       });
       if (!res.ok) {
         const { error: msg } = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
         throw new Error(msg ?? `HTTP ${res.status}`);
       }
-      const data = await res.json() as { presignedUrl: string; fileUrl: string };
+      const data = await res.json() as { presignedUrl: string; fileUrl: string; key: string };
       presignedUrl = data.presignedUrl;
       fileUrl      = data.fileUrl;
+      fileKey      = data.key;
     } catch (err) {
       setError(`Could not get upload URL: ${err instanceof Error ? err.message : String(err)}`);
       setPhase("idle");
@@ -347,9 +234,30 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
       return;
     }
 
-    // Step 3 — save metadata (only if R2 succeeded)
+    // Step 3 — save metadata (only if R2 succeeded). Fichas van a su propia tabla.
     setPhase("saving");
     try {
+      if (isFicha) {
+        const res = await fetch("/api/fichas", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ticker:      companyTicker,
+            title:       title.trim(),
+            description: desc.trim() || null,
+            file_url:    fileUrl,
+            file_key:    fileKey,
+          }),
+        });
+        if (!res.ok) {
+          const { error: msg } = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+          throw new Error(msg ?? `HTTP ${res.status}`);
+        }
+        const { ficha } = await res.json() as { ficha: FichaRow };
+        onSaveFicha(ficha);
+        return;
+      }
+
       const res = await fetch("/api/presentations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -397,9 +305,9 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
           {/* Header */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 22px 16px", borderBottom: "1px solid rgba(13,13,56,0.07)", position: "sticky", top: 0, background: "#fff", zIndex: 1 }}>
             <div>
-              <p style={{ fontSize: 15, fontWeight: 700, color: "#0D0D38", margin: 0 }}>New Presentation</p>
+              <p style={{ fontSize: 15, fontWeight: 700, color: "#0D0D38", margin: 0 }}>Upload document</p>
               <p style={{ fontSize: 11, color: "rgba(13,13,56,0.45)", margin: "3px 0 0", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
-                Select a file, fill in the details, then upload
+                {isFicha ? "One PDF, linked to a Bloomberg ticker" : "Select a file, fill in the details, then upload"}
               </p>
             </div>
             <button onClick={onClose} disabled={isSubmitting} style={{ background: "none", border: "none", cursor: isSubmitting ? "not-allowed" : "pointer", color: isSubmitting ? "rgba(13,13,56,0.28)" : "rgba(13,13,56,0.45)", padding: 4, borderRadius: 6 }}>
@@ -412,7 +320,7 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
 
             {/* ── File drop zone ──────────────────────────────────────────── */}
             <div>
-              <input ref={inputRef} type="file" accept=".pdf,.ppt,.pptx" style={{ display: "none" }} onChange={handleInputChange} disabled={isSubmitting} />
+              <input ref={inputRef} type="file" accept={isFicha ? ".pdf" : ".pdf,.ppt,.pptx"} style={{ display: "none" }} onChange={handleInputChange} disabled={isSubmitting} />
 
               {!file ? (
                 <div
@@ -434,7 +342,7 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
                     <p style={{ fontSize: 13, fontWeight: 600, color: "#0D0D38", margin: 0 }}>
                       Drag &amp; drop or <span style={{ color: "#2044DC", textDecoration: "underline" }}>browse</span>
                     </p>
-                    <p style={{ fontSize: 11, color: "rgba(13,13,56,0.45)", margin: "3px 0 0" }}>PDF, PPT, PPTX</p>
+                    <p style={{ fontSize: 11, color: "rgba(13,13,56,0.45)", margin: "3px 0 0" }}>{isFicha ? "PDF only" : "PDF, PPT, PPTX"}</p>
                   </div>
                 </div>
               ) : (
@@ -477,13 +385,23 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
                 <label style={LABEL}>Category</label>
                 <select value={category} onChange={(e) => handleCategoryChange(e.target.value as Category)} disabled={isSubmitting} style={{ ...INPUT, opacity: isSubmitting ? 0.6 : 1 }}>
                   <option value="investment_cases">Investment Cases</option>
+                  <option value="fichas">Fichas</option>
                   <option value="client_presentations">Client Presentations</option>
                   <option value="sell_side">Sell Side</option>
                 </select>
               </div>
 
-              {/* Origen — Moneda / Sell Side toggle (hidden for "sell_side" category) */}
-              {category !== "sell_side" ? (
+              {/* Origen — Moneda / Sell Side toggle (hidden for "sell_side"; fichas no tienen origen) */}
+              {isFicha ? (
+                <div>
+                  <label style={LABEL}>Type</label>
+                  <div style={{ display: "flex", alignItems: "center", height: 36 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#001EAF", background: "rgba(32,68,220,0.10)", border: "1px solid #2044DC", borderRadius: 7, padding: "5px 14px" }}>
+                      Company ficha
+                    </span>
+                  </div>
+                </div>
+              ) : category !== "sell_side" ? (
                 <div>
                   <label style={LABEL}>Origin <span style={{ color: "#F8485E" }}>*</span></label>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -527,8 +445,8 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
               )}
             </div>
 
-            {/* ── Region / Fund ─────────────────────────────────────────── */}
-            {category === "client_presentations" ? (
+            {/* ── Region / Fund (fichas: el país sale de la maestra, no se pide) ── */}
+            {isFicha ? null : category === "client_presentations" ? (
               <div>
                 <label style={LABEL}>Fund</label>
                 <select value={region} onChange={(e) => setRegion(e.target.value)} disabled={isSubmitting} style={{ ...INPUT, opacity: isSubmitting ? 0.6 : 1 }}>
@@ -576,12 +494,18 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
             {/* ── Company autocomplete ──────────────────────────────────── */}
             <div>
               <label style={LABEL}>
-                Company / Ticker <span style={{ color: "rgba(13,13,56,0.45)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(optional)</span>
+                Company / Ticker{" "}
+                {isFicha
+                  ? <span style={{ color: "#F8485E" }}>*</span>
+                  : <span style={{ color: "rgba(13,13,56,0.45)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(optional)</span>}
               </label>
+              {/* Fichas buscan en TODA la maestra: una empresa puede tener ficha antes que modelo o posición. */}
               <CompanyCombobox
                 value={companyTicker}
                 onChange={(ticker) => setCompanyTicker(ticker)}
                 disabled={isSubmitting}
+                includeUniverse={isFicha}
+                placeholder={isFicha ? "Search any company in empresas_industrias_v2…" : undefined}
               />
             </div>
 
