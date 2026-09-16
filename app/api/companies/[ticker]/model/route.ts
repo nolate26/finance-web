@@ -47,6 +47,7 @@ export interface ModelHeaderSnap {
   link:       string | null;
   currency:   string | null;
   unit:       string | null;   // "mn" | "000 mn" — analyst's number scale
+  hasSeries:  boolean;         // flag del analista (celda C9 de la macro); false en modelos previos
   thesis:     string | null;
 }
 
@@ -146,6 +147,7 @@ export async function GET(
         link:       true,
         currency:   true,
         unit:       true,
+        hasSeries:  true,
         thesis:     true,
         financials: {
           orderBy: { year: "asc" },
@@ -190,6 +192,7 @@ export async function GET(
         link:       h.link     ?? null,
         currency:   h.currency ?? null,
         unit:       h.unit     ?? null,
+        hasSeries:  h.hasSeries,
         thesis:     h.thesis   ?? null,
       },
       financials: h.financials.map(mapRow),

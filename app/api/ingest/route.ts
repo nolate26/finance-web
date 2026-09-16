@@ -35,6 +35,15 @@ function withCanonicalTicker(rows: Record<string, any>[]): any[] {
   return rows.map((r) => (r.ticker == null ? r : { ...r, ticker: normalizeTicker(String(r.ticker)) }));
 }
 
+// Booleano tolerante para flags que vienen de Excel/VBA. La macro manda `true`/`false` JSON,
+// pero una celda leída como texto llega "TRUE" o, en Excel en español, "VERDADERO"; y una
+// macro vieja no manda nada → false. Todo lo que no sea un sí explícito es false.
+function toBool(v: unknown): boolean {
+  if (v === true || v === 1) return true;
+  if (typeof v === 'string') return ['true', '1', 'verdadero', 'si', 'sí', 'yes'].includes(v.trim().toLowerCase());
+  return false;
+}
+
 export async function POST(request: Request) {
   // Declaramos la variable afuera para que sobreviva si ocurre un error
   let tableName = 'Desconocida';
@@ -287,9 +296,22 @@ export async function POST(request: Request) {
       case 'ShortInterest':
         await prisma.shortInterest.createMany({ data: withCanonicalTicker(rows), skipDuplicates: true });
         break;
-      case 'PriceRange52w':
-        await prisma.priceRange52w.createMany({ data: withCanonicalTicker(rows), skipDuplicates: true });
+      case 'PriceRange52w': {
+        // Columnas explícitas (camelCase o snake_case, como los otros casos): Prisma rechaza
+        // claves desconocidas, así que `market_cap` del script tiene que mapearse a marketCap.
+        // Sigue siendo insert-only (skipDuplicates): el market cap entra en las fechas nuevas.
+        const priceRows = (rows as any[]).map((r) => ({
+          ticker:    r.ticker,
+          date:      r.date,
+          pxLast:    r.pxLast    ?? r.px_last   ?? null,
+          high52w:   r.high52w   ?? r.high_52w  ?? null,
+          low52w:    r.low52w    ?? r.low_52w   ?? null,
+          pctRange:  r.pctRange  ?? r.pct_range ?? null,
+          marketCap: r.marketCap ?? r.market_cap ?? null,
+        }));
+        await prisma.priceRange52w.createMany({ data: withCanonicalTicker(priceRows), skipDuplicates: true });
         break;
+      }
       case 'AnalystRecommendation':
         await prisma.analystRecommendation.createMany({ data: withCanonicalTicker(rows), skipDuplicates: true });
         break;
@@ -316,6 +338,8 @@ export async function POST(request: Request) {
 
         const modelDate = new Date(header.updateDate);
         const modelKey = { ticker: modelTicker, updateDate: modelDate };
+        // Celda C9 de la macro; ausente (macro vieja) → false.
+        const hasSeries = toBool(header.hasSeries ?? header.has_series);
 
         const modelFinRows = normalizeRows(
           financials.map((f: any) => ({ ...modelKey, ...f }))
@@ -343,13 +367,14 @@ export async function POST(request: Request) {
           await tx.modelHeader.upsert({
             where: { ticker_updateDate: modelKey },
             update: {
-              recc:     header.recc,
-              tp:       header.tp,
-              analyst:  header.analyst,
-              currency: header.currency,
-              unit:     header.unit,
-              thesis:   header.thesis,
-              link:     header.link
+              recc:      header.recc,
+              tp:        header.tp,
+              analyst:   header.analyst,
+              currency:  header.currency,
+              unit:      header.unit,
+              hasSeries,
+              thesis:    header.thesis,
+              link:      header.link
             },
             create: {
               ...modelKey,
@@ -358,6 +383,7 @@ export async function POST(request: Request) {
               analyst:    header.analyst,
               currency:   header.currency,
               unit:       header.unit,
+              hasSeries,
               thesis:     header.thesis,
               link:       header.link
             }

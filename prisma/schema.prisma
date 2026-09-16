@@ -633,6 +633,9 @@ model PriceRange52w {
     high52w  Float?           // ahora opcional
     low52w   Float?           // ahora opcional
     pctRange Float?
+    // Market cap de Bloomberg del mismo día. Opcional: el histórico no lo trae y sólo llega
+    // en las fechas nuevas que cargue el script (la tabla es insert-only, ver /api/ingest).
+    marketCap Float?          @map("market_cap")
 
     @@id([ticker, date])
     @@map("price_range_52w")
@@ -743,6 +746,9 @@ model ModelHeader {
   analyst    String?  @db.VarChar(100)
   currency   String?  @db.VarChar(50)
   unit       String?  @map("unit") @db.VarChar(20)   // ← NUEVO (D6)
+  // Flag del analista (celda C9 de la macro). NOT NULL con default: `db push` deja en false
+  // todos los modelos ya cargados, y una macro vieja que no lo mande también cae en false.
+  hasSeries  Boolean  @default(false) @map("has_series")
   thesis     String?  @db.Text
   link       String?  @db.VarChar(500)
   financials ModelFinancials[]
