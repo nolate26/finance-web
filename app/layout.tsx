@@ -4,6 +4,7 @@ import "./globals.css";
 import Navbar       from "@/components/Navbar";
 import AuthProvider from "@/components/AuthProvider";
 import SystemFreshnessModal from "@/components/SystemFreshnessModal";
+import FitTablesLandscape   from "@/components/FitTablesLandscape";
 
 // Aptos (títulos) y Arial (todo lo demás) son fuentes de sistema: se declaran en
 // globals.css como --font-primary / --font-secondary, no vía next/font.
@@ -60,6 +61,9 @@ export default function RootLayout({
           {/* Va en el layout raíz a propósito: así NO se vuelve a montar en cada
               navegación del router, sólo en una carga completa de página. */}
           <SystemFreshnessModal />
+          {/* Encoge las tablas anchas para que entren completas en táctil
+              horizontal. No renderiza nada; vive acá para cubrir toda ruta. */}
+          <FitTablesLandscape />
         </AuthProvider>
       </body>
     </html>

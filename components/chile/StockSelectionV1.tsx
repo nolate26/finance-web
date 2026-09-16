@@ -86,6 +86,15 @@ const Z = { corner: 40, head: 30, leftCol: 20, body: 1 } as const;
 // Alto de la barra de navegación (Navbar: `fixed h-16`, main: `pt-16`). Es el `top` al que
 // se pega el encabezado de la tabla principal cuando scrollea la página.
 const NAV_H = 64;
+
+/**
+ * Offset sticky compensado por el shrink-to-fit de táctil horizontal.
+ * FitTablesLandscape pone `zoom` a la tabla y publica el factor como
+ * `--fit-zoom` en el wrapper: un `top: 64px` dentro de un elemento con zoom
+ * 0.5 se pega a 32px de pantalla —debajo del navbar—, dividirlo lo devuelve a
+ * 64. Sin zoom la variable no existe y el fallback 1 deja el valor intacto.
+ */
+const fitPx = (px: number) => `calc(${px}px / var(--fit-zoom, 1))`;
 const RET_HEAD = PATRIA.darkSkyBlue;       // encabezado del grupo
 
 // ── Formatters ──────────────────────────────────────────────────────────────────
@@ -1144,18 +1153,18 @@ export default function StockSelectionV1() {
           y el encabezado se iría con la página), así que en una ventana angosta con todos
           los grupos abiertos la tabla puede sobresalir a la derecha y scrollear la página
           en horizontal — la columna Empresa queda fija igual. */}
-      <div ref={tableWrapRef} style={{ overflow: "visible", border: "1px solid rgba(13,13,56,0.18)", borderRadius: 8, background: "#fff" }}>
+      <div ref={tableWrapRef} className="fit-width" style={{ overflow: "visible", border: "1px solid rgba(13,13,56,0.18)", borderRadius: 8, background: "#fff" }}>
         <table style={{ borderCollapse: "separate", borderSpacing: 0, fontSize: 11, width: "100%" }}>
           <thead>
             <tr ref={headRowRef}>
-              <th style={{ ...stickyTh, left: stickyLeftPx, top: NAV_H, zIndex: Z.corner }} rowSpan={2}>Empresa</th>
+              <th style={{ ...stickyTh, left: fitPx(stickyLeftPx), top: fitPx(NAV_H), zIndex: Z.corner }} rowSpan={2}>Empresa</th>
               {groupDefs.map((g, gIdx) => {
                 const open = !g.collapsible || expandedGroups.has(g.id);
                 return (
                   <th key={g.id} colSpan={visibleCols(g, expandedGroups).length}
                     onClick={() => g.collapsible && toggleGroup(g.id)}
                     title={[g.hint, g.collapsible ? (open ? "Clic para contraer" : "Clic para desplegar") : null].filter(Boolean).join(" · ") || undefined}
-                    style={{ position: "sticky", top: NAV_H, zIndex: Z.head, padding: "5px 7px", textAlign: "center", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: NAVY_TEXT, borderLeft: "1px solid rgba(255,255,255,0.14)", whiteSpace: "nowrap", background: g.headBg ?? (gIdx % 2 === 1 ? NAVY_BAND : NAVY), cursor: g.collapsible ? "pointer" : "default", userSelect: "none" }}>
+                    style={{ position: "sticky", top: fitPx(NAV_H), zIndex: Z.head, padding: "5px 7px", textAlign: "center", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: NAVY_TEXT, borderLeft: "1px solid rgba(255,255,255,0.14)", whiteSpace: "nowrap", background: g.headBg ?? (gIdx % 2 === 1 ? NAVY_BAND : NAVY), cursor: g.collapsible ? "pointer" : "default", userSelect: "none" }}>
                     {g.collapsible && <span style={{ fontSize: 8, marginRight: 3, opacity: 0.7 }}>{open ? "▾" : "▸"}</span>}
                     {g.title}
                   </th>
@@ -1168,7 +1177,7 @@ export default function StockSelectionV1() {
                   const active = sortKey === col.id;
                   return (
                     <th key={col.id} onClick={() => col.sortVal && sortBy(col.id)}
-                      style={{ position: "sticky", top: NAV_H + headRowH, zIndex: Z.head, padding: "5px 7px", textAlign: col.align ?? "right", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: active ? "#fff" : HEAD2_TEXT, borderBottom: `2px solid ${g.headBg ?? NAVY}`, borderLeft: i === 0 ? `1px solid ${GROUP_RULE}` : "none", whiteSpace: "nowrap", cursor: col.sortVal ? "pointer" : "default", userSelect: "none", background: active ? NAVY_BAND : solidTint(g.tint) ?? (gIdx % 2 === 1 ? HEAD2_BAND_SOLID : HEAD2_BG) }}>
+                      style={{ position: "sticky", top: fitPx(NAV_H + headRowH), zIndex: Z.head, padding: "5px 7px", textAlign: col.align ?? "right", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: active ? "#fff" : HEAD2_TEXT, borderBottom: `2px solid ${g.headBg ?? NAVY}`, borderLeft: i === 0 ? `1px solid ${GROUP_RULE}` : "none", whiteSpace: "nowrap", cursor: col.sortVal ? "pointer" : "default", userSelect: "none", background: active ? NAVY_BAND : solidTint(g.tint) ?? (gIdx % 2 === 1 ? HEAD2_BAND_SOLID : HEAD2_BG) }}>
                       {col.label}{col.sortVal && <span style={{ fontSize: 8, opacity: active ? 1 : 0.45, marginLeft: 3 }}>{active ? (sortDir === "asc" ? "▲" : "▼") : "↕"}</span>}
                     </th>
                   );
@@ -1188,7 +1197,7 @@ export default function StockSelectionV1() {
                   <tr key={`${r.company}-${r.label || "cons"}`} style={{ background: bg }}>
                     <td onClick={editMode && !isSeries ? () => { const c = companyByName.get(normName(r.company)); if (c) setEditCompany(c); } : undefined}
                       title={editMode && !isSeries ? "Editar valores de esta compañía" : undefined}
-                      style={{ ...stickyTd, left: stickyLeftPx, borderTop: topBorder ? SECTION_BORDER : undefined, background: editMode && !isSeries ? EDIT_ROW_SOLID : bg, paddingLeft: isSeries ? 18 : 8, cursor: editMode && !isSeries ? "pointer" : undefined }}>
+                      style={{ ...stickyTd, left: fitPx(stickyLeftPx), borderTop: topBorder ? SECTION_BORDER : undefined, background: editMode && !isSeries ? EDIT_ROW_SOLID : bg, paddingLeft: isSeries ? 18 : 8, cursor: editMode && !isSeries ? "pointer" : undefined }}>
                       {isSeries ? (
                         <>
                           <div style={{ fontSize: 10, fontWeight: 600, color: TEXT2, whiteSpace: "nowrap" }}>
@@ -1269,7 +1278,7 @@ export default function StockSelectionV1() {
                   <tr>
                     {idxGroupDefs.map((g, gi) =>
                       idxCols(g).map((col, i) => (
-                        <th key={col.id} style={{ position: "sticky", top: idxHeadTop, zIndex: Z.head, padding: "4px 7px", textAlign: col.align ?? "right", fontSize: 9, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: IDX_HEAD, background: gi % 2 === 1 ? IDX_ZEBRA_SOLID : IDX_TINT_SOLID, borderBottom: `2px solid ${IDX_HEAD}`, borderLeft: i === 0 ? `1px solid ${IDX_HEAD}22` : "none", whiteSpace: "nowrap" }}>
+                        <th key={col.id} style={{ position: "sticky", top: fitPx(idxHeadTop), zIndex: Z.head, padding: "4px 7px", textAlign: col.align ?? "right", fontSize: 9, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: IDX_HEAD, background: gi % 2 === 1 ? IDX_ZEBRA_SOLID : IDX_TINT_SOLID, borderBottom: `2px solid ${IDX_HEAD}`, borderLeft: i === 0 ? `1px solid ${IDX_HEAD}22` : "none", whiteSpace: "nowrap" }}>
                           {col.label}
                         </th>
                       )),
