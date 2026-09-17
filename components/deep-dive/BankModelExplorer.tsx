@@ -11,6 +11,8 @@ import { consensusScaleFactor } from "@/lib/consensusScale";
 import { ccySuffix } from "@/lib/ccySuffix";
 import { bankEffMarketCap, bankPe } from "@/lib/modelMultiples";
 import ModelEstimateChart, { buildEstimateRows, type EstimateMetric, type EstimateRow } from "@/components/deep-dive/ModelEstimateChart";
+import LastFichaButton from "@/components/deep-dive/LastFichaButton";
+import { exportRowsToPdf } from "@/lib/exportPdf";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { PATRIA, FONT_PRIMARY, FONT_SECONDARY, TEXT, BORDER } from "@/lib/patriaTheme";
 
@@ -553,8 +555,9 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
     }
   }
 
-  // ── Excel export ──────────────────────────────────────────────────────────
-  function exportToExcel() {
+  // ── Excel / PDF export ────────────────────────────────────────────────────
+  // Misma grilla de celdas para ambos; el PDF la aplana al final vía exportRowsToPdf.
+  function exportToExcel(format: "xlsx" | "pdf" = "xlsx") {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     type XCell = Record<string, any>;
     type XRow  = (XCell | null)[];
@@ -693,6 +696,15 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
       }
     }
 
+    const sheetName = header.ticker.replace(/[\\/:*?[\]]/g, "").slice(0, 31);
+    const filename  = `${sheetName}_${header.updateDate}`;
+
+    if (format === "pdf") {
+      // Fila de años = primera después del bloque de metadata + separador.
+      void exportRowsToPdf(rows, metaItems.length + 1, filename, header.ticker, metaItems);
+      return;
+    }
+
     const ws: Record<string, unknown> = {};
     for (let r = 0; r < rows.length; r++) {
       for (let c = 0; c < rows[r].length; c++) {
@@ -705,9 +717,8 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
     ws["!views"] = [{ state: "frozen", xSplit: 1, ySplit: metaItems.length + 2 }];
 
     const wb = XLSX.utils.book_new();
-    const sheetName = header.ticker.replace(/[\\/:*?[\]]/g, "").slice(0, 31);
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
-    XLSX.writeFile(wb, `${sheetName}_${header.updateDate}.xlsx`);
+    XLSX.writeFile(wb, `${filename}.xlsx`);
   }
 
   return (
@@ -812,21 +823,28 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
           </button>
         )}
 
-        <button
-          onClick={exportToExcel}
-          style={{
-            display: "inline-flex", alignItems: "center", gap: 5,
-            padding: "5px 12px", borderRadius: 5, cursor: "pointer",
-            background: "#001EAF", color: C.WHITE, fontWeight: 700, fontSize: 11,
-            letterSpacing: "0.02em", border: "none", outline: "none",
-          }}
-        >
-          <svg width="12" height="12" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
-            <rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.3"/>
-            <path d="M4 7l3 3 3-3M7 4v6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-          Export Excel
-        </button>
+        {/* Última ficha del banco — sólo aparece si tiene alguna */}
+        <LastFichaButton ticker={ticker} />
+
+        {/* Excel / PDF export — misma grilla, distinto escritor */}
+        {([["xlsx", "Export Excel"], ["pdf", "PDF"]] as const).map(([fmt, label]) => (
+          <button
+            key={fmt}
+            onClick={() => exportToExcel(fmt)}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 5,
+              padding: "5px 12px", borderRadius: 5, cursor: "pointer",
+              background: "#001EAF", color: C.WHITE, fontWeight: 700, fontSize: 11,
+              letterSpacing: "0.02em", border: "none", outline: "none",
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
+              <rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.3"/>
+              <path d="M4 7l3 3 3-3M7 4v6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            {label}
+          </button>
+        ))}
 
         <div style={{ display: "flex", alignItems: "center", gap: 0, border: `2px solid ${C.TXT}`, borderRadius: 6, overflow: "hidden" }}>
           <span style={{ padding: "5px 14px", background: C.HDR, color: C.WHITE, fontWeight: 800, fontSize: 12, letterSpacing: "0.06em", textTransform: "uppercase" }}>

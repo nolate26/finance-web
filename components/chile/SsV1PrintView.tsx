@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { PATRIA, FONT_PRIMARY, FONT_SECONDARY } from "@/lib/patriaTheme";
 import { affectedCols } from "@/lib/ssOverrideFields";
-import { GROUP_RULE, SECTION_RULE, EDIT_BG, EDIT_BORDER } from "./ssTokens";
+import { GROUP_RULE, EDIT_BG, EDIT_BORDER } from "./ssTokens";
 import type { ColDef, CompanyGroup, DisplayRow, IndexAggRow, FundAggRow } from "./StockSelectionV1";
 
 // ── Hoja imprimible de Stock Selection ──────────────────────────────────────────
@@ -168,8 +168,10 @@ export default function SsV1PrintView(p: PrintProps) {
              edición (inline en el <td>) se compongan encima, igual que en pantalla. */
           .pr-series { background: #F5F7FD; }
           .pr-series .pr-td { font-size: 5.5pt; color: rgba(13,13,56,0.72); }
-          /* Separador entre secciones del orden: misma alfa que SECTION_RULE en pantalla. */
-          .pr-section .pr-td { border-top: 1.5pt solid ${SECTION_RULE}; }
+          /* Separador entre secciones del orden. En pantalla es SECTION_RULE (30% alfa),
+             pero impreso a 6pt y con el zoom de ajuste a página esa línea se confunde con
+             la regla entre filas: acá va sólida, en tinta, y con un respiro arriba. */
+          .pr-section .pr-td { border-top: 2pt solid ${INK}; padding-top: 2pt; }
           .pr-edit { box-shadow: inset 0 0 0 0.6pt ${EDIT_BORDER}; }
           .pr-agg-title { font-size: 7.5pt; font-weight: 700; margin: 5pt 0 2.5pt; display: flex; align-items: center; gap: 5pt; }
           .pr-agg-title::before { content: ""; width: 2.5pt; height: 8.5pt; background: ${INK}; border-radius: 1pt; }

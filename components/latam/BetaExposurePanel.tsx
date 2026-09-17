@@ -15,8 +15,9 @@ import {
   Legend,
   ReferenceLine,
 } from "recharts";
-import { Download, AlertTriangle, X, RotateCcw } from "lucide-react";
+import { Download, FileText, AlertTriangle, X, RotateCcw } from "lucide-react";
 import { downloadExcel } from "@/lib/exportExcel";
+import { downloadPdf } from "@/lib/exportPdf";
 import type {
   BetaExposurePayload,
   BetaExposureBootstrapPayload,
@@ -640,7 +641,8 @@ export default function BetaExposurePanel() {
   // Excel sheet names: max 31 chars, and : \ / ? * [ ] are illegal
   const sheetName = (s: string) => s.replace(/[:\\/?*[\]]/g, "-").slice(0, 31);
 
-  async function handleExport() {
+  // Excel y PDF arman exactamente las mismas hojas; sólo cambia el escritor final.
+  async function handleExport(format: "xlsx" | "pdf") {
     if (!data) return;
     setExporting(true);
     try {
@@ -740,7 +742,15 @@ export default function BetaExposurePanel() {
         });
       }
 
-      await downloadExcel(sheets, `beta_exposure_${data.fundName}_${data.reportDate}`);
+      const filename = `beta_exposure_${data.fundName}_${data.reportDate}`;
+      if (format === "pdf") {
+        await downloadPdf(sheets, filename, {
+          title:    `Beta Exposure — ${data.fundName}`,
+          subtitle: `vs ${data.benchmarkName} · report ${data.reportDate}${data.betaAsOf ? ` · betas as of ${data.betaAsOf}` : ""}`,
+        });
+      } else {
+        await downloadExcel(sheets, filename);
+      }
     } finally {
       setExporting(false);
     }
@@ -795,21 +805,24 @@ export default function BetaExposurePanel() {
               vs {data.benchmarkName}
               {data.betaAsOf && <> · betas as of {data.betaAsOf}</>}
             </span>
-            <button
-              onClick={handleExport}
-              disabled={exporting}
-              title="Summary + one sheet per factor with every company's beta"
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600,
-                color: GREEN, background: "rgba(0,30,175,0.07)", border: "1px solid rgba(0,30,175,0.22)",
-                borderRadius: 7, padding: "5px 14px", cursor: exporting ? "wait" : "pointer",
-                transition: "all 0.12s", opacity: exporting ? 0.6 : 1,
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,30,175,0.13)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,30,175,0.07)"; }}
-            >
-              <Download size={12} /> {exporting ? "Building…" : "Excel (full detail)"}
-            </button>
+            {([["xlsx", "Excel (full detail)", Download], ["pdf", "PDF", FileText]] as const).map(([fmt, label, Icon]) => (
+              <button
+                key={fmt}
+                onClick={() => handleExport(fmt)}
+                disabled={exporting}
+                title="Summary + one sheet per factor with every company's beta"
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600,
+                  color: GREEN, background: "rgba(0,30,175,0.07)", border: "1px solid rgba(0,30,175,0.22)",
+                  borderRadius: 7, padding: "5px 14px", cursor: exporting ? "wait" : "pointer",
+                  transition: "all 0.12s", opacity: exporting ? 0.6 : 1,
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,30,175,0.13)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,30,175,0.07)"; }}
+              >
+                <Icon size={12} /> {exporting ? "Building…" : label}
+              </button>
+            ))}
           </span>
         )}
       </div>

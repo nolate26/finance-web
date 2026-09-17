@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Download, CalendarDays, Eye, EyeOff } from "lucide-react";
+import { CalendarDays, Eye, EyeOff } from "lucide-react";
 import type { ConsensusCheckPayload, ConsensusCheckRow } from "@/app/api/latam/consensus-check/route";
-import { downloadExcel } from "@/lib/exportExcel";
+import type { SheetDef } from "@/lib/exportExcel";
+import ExportButtons from "@/components/ExportButtons";
 import { FONT_SECONDARY } from "@/lib/patriaTheme";
 import { countryName } from "@/lib/countryNames";
 
@@ -44,6 +45,17 @@ function fmtPct(v: number | null): string {
 function fmtMult(v: number | null): string {
   if (v == null) return "—";
   return v.toFixed(1) + "x";
+}
+
+// TP del modelo: moneda del analista. Sin decimales para precios de 3+ cifras (CLP, BRL
+// grandes); con un decimal bajo 100, donde el redondeo a entero se come el upside.
+function tpDecimals(v: number): number {
+  return Math.abs(v) < 100 ? 1 : 0;
+}
+function fmtTp(v: number | null): string {
+  if (v == null) return "—";
+  const d = tpDecimals(v);
+  return v.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
 }
 
 function fmtUpside(v: number | null): { text: string; color: string } {
@@ -240,7 +252,7 @@ const selStyle = (active: boolean): React.CSSProperties => ({
 // Cada columna es ordenable. Var% ordena por valor CON SIGNO (sin abs → negativos y
 // positivos no se mezclan).
 type SortKey =
-  | "ticker" | "updateDate" | "recc" | "upside" | "upsideModel" | "currency" | "unit"
+  | "ticker" | "updateDate" | "recc" | "tp" | "upside" | "upsideModel" | "currency" | "unit"
   | "monEbitda1" | "monEbitda2" | "monNi1" | "monNi2"
   | "conEbitda1" | "conEbitda2" | "conNi1" | "conNi2"
   | "varEbitda1" | "varEbitda2" | "varNi1" | "varNi2"
@@ -281,6 +293,7 @@ function sortValue(row: ConsensusCheckRow, key: SortKey): number | string | null
     case "ticker":     return row.ticker;
     case "updateDate": return row.updateDate;
     case "recc":        return recRank(row.recc);
+    case "tp":          return row.tp;
     case "upside":      return row.upside;
     case "upsideModel": return row.upsideModel;
     case "currency":    return row.currency;
@@ -412,6 +425,38 @@ export default function ConsensusCheckTable() {
   const sections = COL_GROUPS.filter((g) => showConsensus || g.key !== "consensus");
   const dataCols = sections.flatMap((g) => g.cols);
 
+  // Una sola hoja para Excel y PDF: lo que está filtrado/ordenado en pantalla.
+  function buildSheet(): SheetDef {
+    const headers = [
+      "Ticker", "Update Date", "Analyst", "Rec", "TP", "Upside @Model", "Upside Live", "CCY", "Unit",
+      `Moneda EBITDA ${y1}`, `Moneda EBITDA ${y2}`, `Moneda NI ${y1}`, `Moneda NI ${y2}`,
+      `BBG EBITDA ${y1}`,    `BBG EBITDA ${y2}`,    `BBG NI ${y1}`,    `BBG NI ${y2}`,
+      `Var EBITDA ${y1}`,    `Var EBITDA ${y2}`,    `Var NI ${y1}`,    `Var NI ${y2}`,
+      `EV/EBITDA ${y1}`,     `EV/EBITDA ${y2}`,     `P/E ${y1}`,       `P/E ${y2}`,
+    ];
+    const rows = filtered.map((r) => [
+      shortTicker(r.ticker), r.updateDate, r.analyst ?? "", r.recc ?? "",
+      r.tp != null ? +r.tp.toFixed(tpDecimals(r.tp)) : null,
+      r.upsideModel != null ? +(r.upsideModel * 100).toFixed(2) : null,
+      r.upside      != null ? +(r.upside      * 100).toFixed(2) : null,
+      r.currency ?? "", r.unit ?? "",
+      r.moneda.ebitda1FY, r.moneda.ebitda2FY, r.moneda.ni1FY, r.moneda.ni2FY,
+      r.consensus.ebitda1FY != null ? +(r.consensus.ebitda1FY / 1000).toFixed(1) : null,
+      r.consensus.ebitda2FY != null ? +(r.consensus.ebitda2FY / 1000).toFixed(1) : null,
+      r.consensus.ni1FY    != null ? +(r.consensus.ni1FY     / 1000).toFixed(1) : null,
+      r.consensus.ni2FY    != null ? +(r.consensus.ni2FY     / 1000).toFixed(1) : null,
+      varPct(r.moneda.ebitda1FY, r.consensus.ebitda1FY) != null ? +varPct(r.moneda.ebitda1FY, r.consensus.ebitda1FY)!.toFixed(1) : null,
+      varPct(r.moneda.ebitda2FY, r.consensus.ebitda2FY) != null ? +varPct(r.moneda.ebitda2FY, r.consensus.ebitda2FY)!.toFixed(1) : null,
+      varPct(r.moneda.ni1FY,     r.consensus.ni1FY)     != null ? +varPct(r.moneda.ni1FY,     r.consensus.ni1FY)!.toFixed(1)     : null,
+      varPct(r.moneda.ni2FY,     r.consensus.ni2FY)     != null ? +varPct(r.moneda.ni2FY,     r.consensus.ni2FY)!.toFixed(1)     : null,
+      r.multiples.evEbitda1FY != null ? +r.multiples.evEbitda1FY.toFixed(1) : null,
+      r.multiples.evEbitda2FY != null ? +r.multiples.evEbitda2FY.toFixed(1) : null,
+      r.multiples.pe1FY       != null ? +r.multiples.pe1FY.toFixed(1)       : null,
+      r.multiples.pe2FY       != null ? +r.multiples.pe2FY.toFixed(1)       : null,
+    ]);
+    return { name: "Estimates vs Consensus", headers, rows };
+  }
+
   return (
     <>
       {/* ── Ticker not found warning ── */}
@@ -478,43 +523,17 @@ export default function ConsensusCheckTable() {
           )}
         </div>
 
-        {/* Download */}
-        <button
-          onClick={() => {
-            const headers = [
-              "Ticker", "Update Date", "Analyst", "Rec", "Upside @Model", "Upside Live", "CCY", "Unit",
-              `Moneda EBITDA ${y1}`, `Moneda EBITDA ${y2}`, `Moneda NI ${y1}`, `Moneda NI ${y2}`,
-              `BBG EBITDA ${y1}`,    `BBG EBITDA ${y2}`,    `BBG NI ${y1}`,    `BBG NI ${y2}`,
-              `Var EBITDA ${y1}`,    `Var EBITDA ${y2}`,    `Var NI ${y1}`,    `Var NI ${y2}`,
-              `EV/EBITDA ${y1}`,     `EV/EBITDA ${y2}`,     `P/E ${y1}`,       `P/E ${y2}`,
-            ];
-            const rows = filtered.map((r) => [
-              shortTicker(r.ticker), r.updateDate, r.analyst ?? "", r.recc ?? "",
-              r.upsideModel != null ? +(r.upsideModel * 100).toFixed(2) : null,
-              r.upside      != null ? +(r.upside      * 100).toFixed(2) : null,
-              r.currency ?? "", r.unit ?? "",
-              r.moneda.ebitda1FY, r.moneda.ebitda2FY, r.moneda.ni1FY, r.moneda.ni2FY,
-              r.consensus.ebitda1FY != null ? +(r.consensus.ebitda1FY / 1000).toFixed(1) : null,
-              r.consensus.ebitda2FY != null ? +(r.consensus.ebitda2FY / 1000).toFixed(1) : null,
-              r.consensus.ni1FY    != null ? +(r.consensus.ni1FY     / 1000).toFixed(1) : null,
-              r.consensus.ni2FY    != null ? +(r.consensus.ni2FY     / 1000).toFixed(1) : null,
-              varPct(r.moneda.ebitda1FY, r.consensus.ebitda1FY) != null ? +varPct(r.moneda.ebitda1FY, r.consensus.ebitda1FY)!.toFixed(1) : null,
-              varPct(r.moneda.ebitda2FY, r.consensus.ebitda2FY) != null ? +varPct(r.moneda.ebitda2FY, r.consensus.ebitda2FY)!.toFixed(1) : null,
-              varPct(r.moneda.ni1FY,     r.consensus.ni1FY)     != null ? +varPct(r.moneda.ni1FY,     r.consensus.ni1FY)!.toFixed(1)     : null,
-              varPct(r.moneda.ni2FY,     r.consensus.ni2FY)     != null ? +varPct(r.moneda.ni2FY,     r.consensus.ni2FY)!.toFixed(1)     : null,
-              r.multiples.evEbitda1FY != null ? +r.multiples.evEbitda1FY.toFixed(1) : null,
-              r.multiples.evEbitda2FY != null ? +r.multiples.evEbitda2FY.toFixed(1) : null,
-              r.multiples.pe1FY       != null ? +r.multiples.pe1FY.toFixed(1)       : null,
-              r.multiples.pe2FY       != null ? +r.multiples.pe2FY.toFixed(1)       : null,
-            ]);
-            downloadExcel([{ name: "Estimates vs Consensus", headers, rows }], "latam_estimates_consensus");
+        {/* Download: Excel y PDF con la misma hoja */}
+        <ExportButtons
+          style={{ marginLeft: "auto" }}
+          sheets={() => [buildSheet()]}
+          filename="latam_estimates_consensus"
+          count={filtered.length}
+          pdf={{
+            title:    "Analyst Estimates vs Consensus",
+            subtitle: pricesAsOf ? `Prices as of ${fmtDate(pricesAsOf)} · ${filtered.length} companies` : `${filtered.length} companies`,
           }}
-          style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: "#001EAF", background: "rgba(0,30,175,0.07)", border: "1px solid rgba(0,30,175,0.22)", borderRadius: 7, padding: "5px 14px", cursor: "pointer", transition: "all 0.12s" }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,30,175,0.13)"; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,30,175,0.07)"; }}
-        >
-          <Download size={12} /> Download Excel ({filtered.length})
-        </button>
+        />
       </div>
 
       {/* Prices as of — último día de precios (px_last) usado para el Upside Live, igual para todos */}
@@ -539,7 +558,7 @@ export default function ConsensusCheckTable() {
 
       {/* ── Table ── */}
       <div style={{ overflowX: "auto", borderRadius: 10, border: `1px solid ${C.BDR}`, boxShadow: "0 1px 6px rgba(13,13,56,0.07)" }}>
-        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: showConsensus ? 1280 : 1060, tableLayout: "auto" }}>
+        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: showConsensus ? 1350 : 1130, tableLayout: "auto" }}>
           <thead>
             {/* ── Row 1: section headers ── */}
             <tr>
@@ -549,6 +568,8 @@ export default function ConsensusCheckTable() {
               <Th level={0} rowSpan={3} sortKey="updateDate" {...thProps}>Update As Of</Th>
               <Th level={0} rowSpan={3}>Analyst</Th>
               <Th level={0} rowSpan={3} sortKey="recc" {...thProps}>Rec</Th>
+              {/* Target price del header del modelo (empresa o banco), en la moneda del analista */}
+              <Th level={0} rowSpan={3} sortKey="tp" {...thProps}>TP</Th>
               <Th level={0} rowSpan={3} sortKey="upsideModel" {...thProps}>Upside @Model</Th>
               <Th level={0} rowSpan={3} sortKey="upside" {...thProps}>Upside Live</Th>
               {/* Moneda y unidad del modelo (header del analista), como en "Reported CCY" del deep-dive */}
@@ -718,6 +739,21 @@ export default function ConsensusCheckTable() {
                     <ReccBadge recc={row.recc} />
                   </td>
 
+                  {/* TP del modelo */}
+                  <td style={{
+                    padding:     "6px 10px",
+                    fontSize:    12,
+                    fontFamily:  FONT_SECONDARY,
+                    fontVariantNumeric: "tabular-nums",
+                    textAlign:   "right",
+                    fontWeight:  row.tp != null ? 700 : 400,
+                    color:       row.tp != null ? "#0D0D38" : C.NIL_TXT,
+                    borderRight: `1px solid ${C.BDR}`,
+                    whiteSpace:  "nowrap",
+                  }}>
+                    {fmtTp(row.tp)}
+                  </td>
+
                   {/* Upside @Model (analyst, al hacer el modelo) */}
                   <td style={{
                     padding:     "6px 10px",
@@ -795,7 +831,7 @@ export default function ConsensusCheckTable() {
 
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={8 + dataCols.length} style={{ textAlign: "center", padding: 32, color: "rgba(13,13,56,0.45)", fontSize: 13 }}>
+                <td colSpan={9 + dataCols.length} style={{ textAlign: "center", padding: 32, color: "rgba(13,13,56,0.45)", fontSize: 13 }}>
                   No model data available.
                 </td>
               </tr>

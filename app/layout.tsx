@@ -19,9 +19,20 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Research Hub",
   description: "Investment research platform — Chile & LatAm equities",
+  // Íconos de "Add to Home Screen". El apple-touch-icon tiene que ser un PNG
+  // cuadrado con fondo sólido: iOS no respeta transparencias (las compone sobre
+  // negro) y si la imagen no es cuadrada la estira. Antes apuntaba al wordmark
+  // horizontal (914×244, transparente) → salía como un pantallazo recortado.
+  // Los PNG se generan desde public/img/moneda_patria.png (wordmark en blanco
+  // sobre #0D0D38, el themeColor).
   icons: {
     icon:  "/icon.svg",
-    apple: "/img/moneda_patria.png",
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    title: "Research Hub",
+    statusBarStyle: "black-translucent",
   },
 };
 

@@ -3,15 +3,35 @@
 import { useEffect, useState } from "react";
 import { FileText, ExternalLink } from "lucide-react";
 import type { Presentation } from "@/components/CreatePresentationModal";
+import type { FichaRow } from "@/app/api/fichas/route";
 import { FONT_SECONDARY } from "@/lib/patriaTheme";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
 function fmtDate(iso: string): string {
   const d = new Date(iso);
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  return `${d.getDate()} ${months[d.getMonth()]}`;
+  return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
 }
+
+// Las fichas son documentos fechados (una foto de la empresa): el año importa.
+function fmtDateFull(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+// Forma mínima que comparten presentaciones y fichas para pintar una fila.
+interface DocLike {
+  id:          string;
+  title:       string;
+  description: string | null;
+  file_url:    string;
+  dateLabel:   string;
+}
+
+const presToDoc  = (p: Presentation): DocLike => ({ id: p.id, title: p.title, description: p.description, file_url: p.file_url, dateLabel: fmtDate(p.created_at) });
+const fichaToDoc = (f: FichaRow):     DocLike => ({ id: f.id, title: f.title, description: f.description, file_url: f.file_url, dateLabel: fmtDateFull(f.created_at) });
 
 // ── Section divider ────────────────────────────────────────────────────────────
 
@@ -31,7 +51,7 @@ function SectionDivider({ label, count }: { label: string; count: number }) {
 
 // ── Report row ─────────────────────────────────────────────────────────────────
 
-function ReportRow({ report }: { report: Presentation }) {
+function ReportRow({ report }: { report: DocLike }) {
   return (
     <a
       href={report.file_url}
@@ -65,7 +85,7 @@ function ReportRow({ report }: { report: Presentation }) {
 
       {/* Date */}
       <span className="flex-shrink-0 text-[9px] font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.45)", marginTop: 2 }}>
-        {fmtDate(report.created_at)}
+        {report.dateLabel}
       </span>
     </a>
   );
@@ -89,26 +109,45 @@ interface Props {
 }
 
 export default function RelatedReports({ ticker }: Props) {
-  const [moneda,   setMoneda]   = useState<Presentation[]>([]);
-  const [sellSide, setSellSide] = useState<Presentation[]>([]);
+  const [fichas,   setFichas]   = useState<DocLike[]>([]);
+  const [moneda,   setMoneda]   = useState<DocLike[]>([]);
+  const [sellSide, setSellSide] = useState<DocLike[]>([]);
   const [loading,  setLoading]  = useState(false);
 
   useEffect(() => {
-    if (!ticker) { setMoneda([]); setSellSide([]); return; }
+    if (!ticker) { setFichas([]); setMoneda([]); setSellSide([]); return; }
 
+    let cancelled = false;
     setLoading(true);
-    fetch(`/api/presentations?company_name=${encodeURIComponent(ticker)}`)
-      .then((r) => r.json())
-      .then((d: { presentations?: Presentation[] }) => {
-        const all = d.presentations ?? [];
-        setMoneda(all.filter((p) => !p.is_sell_side));
-        setSellSide(all.filter((p) =>  p.is_sell_side));
-      })
-      .catch(() => { setMoneda([]); setSellSide([]); })
-      .finally(() => setLoading(false));
+    // Dos fuentes en paralelo: presentaciones (company_name = ticker BBG) y fichas
+    // (FK real al ticker). Si una falla, la otra igual se muestra.
+    Promise.all([
+      fetch(`/api/presentations?company_name=${encodeURIComponent(ticker)}`)
+        .then((r) => r.json() as Promise<{ presentations?: Presentation[] }>)
+        .then((d) => d.presentations ?? [])
+        .catch(() => [] as Presentation[]),
+      fetch(`/api/fichas?ticker=${encodeURIComponent(ticker)}`)
+        .then((r) => r.json() as Promise<{ fichas?: FichaRow[] }>)
+        .then((d) => d.fichas ?? [])
+        .catch(() => [] as FichaRow[]),
+    ]).then(([pres, fic]) => {
+      if (cancelled) return;
+      setFichas(fic.map(fichaToDoc));
+      setMoneda(pres.filter((p) => !p.is_sell_side).map(presToDoc));
+      setSellSide(pres.filter((p) =>  p.is_sell_side).map(presToDoc));
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
   }, [ticker]);
 
-  const total = moneda.length + sellSide.length;
+  const total = fichas.length + moneda.length + sellSide.length;
+
+  // Orden de secciones: Fichas primero, después Sell Sides, después Moneda.
+  const sections: { label: string; docs: DocLike[] }[] = [
+    { label: "Fichas",     docs: fichas   },
+    { label: "Sell Sides", docs: sellSide },
+    { label: "Moneda",     docs: moneda   },
+  ];
 
   return (
     <div className="flex flex-col h-full">
@@ -144,29 +183,14 @@ export default function RelatedReports({ ticker }: Props) {
       {!loading && ticker && total === 0 && <EmptyReports />}
 
       {/* Content */}
-      {!loading && total > 0 && (
-        <>
-          {/* Moneda */}
-          {moneda.length > 0 && (
-            <div className="mb-2">
-              <SectionDivider label="Moneda" count={moneda.length} />
-              <div className="flex flex-col">
-                {moneda.map((r) => <ReportRow key={r.id} report={r} />)}
-              </div>
-            </div>
-          )}
-
-          {/* Sell Sides */}
-          {sellSide.length > 0 && (
-            <div className="mb-2">
-              <SectionDivider label="Sell Sides" count={sellSide.length} />
-              <div className="flex flex-col">
-                {sellSide.map((r) => <ReportRow key={r.id} report={r} />)}
-              </div>
-            </div>
-          )}
-        </>
-      )}
+      {!loading && total > 0 && sections.map(({ label, docs }) => docs.length > 0 && (
+        <div key={label} className="mb-2">
+          <SectionDivider label={label} count={docs.length} />
+          <div className="flex flex-col">
+            {docs.map((r) => <ReportRow key={r.id} report={r} />)}
+          </div>
+        </div>
+      ))}
 
       {/* Footer */}
       {!loading && (

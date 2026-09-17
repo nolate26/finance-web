@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Download, Loader2, Settings2, Table2, List, Trash2, Info, CalendarPlus, CalendarDays } from "lucide-react";
-import { downloadExcel } from "@/lib/exportExcel";
+import { Plus, Download, FileText, Loader2, Settings2, Table2, List, Trash2, Info, CalendarPlus, CalendarDays } from "lucide-react";
+import { downloadExcel, type SheetDef } from "@/lib/exportExcel";
+import { downloadPdf } from "@/lib/exportPdf";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { FONT_SECONDARY, TEXT, BORDER, PATRIA } from "@/lib/patriaTheme";
 import { currentPeriod, periodLabel, periodToIso } from "@/lib/topPicks";
@@ -186,7 +187,7 @@ export default function TopPicksPanel({ defaultRegion, region: regionProp }: Pro
   // Reproduce EXACTAMENTE la grilla de la web: una fila por sector, una columna por
   // período, y en cada celda los nombres (con TP entre paréntesis en Chile). Los
   // legacy van marcados con "(legacy)" porque en Excel no hay gris que valga.
-  async function exportSummary() {
+  function buildSummarySheet(): SheetDef {
     // La fecha del informe viaja en el encabezado, igual que en pantalla: un Excel
     // que dice sólo "Q3 2026" pierde cuándo se cerró esa selección.
     const headers = ["Sector", ...activePeriods.map((p) => {
@@ -206,11 +207,11 @@ export default function TopPicksPanel({ defaultRegion, region: regionProp }: Pro
         }).join("\n");
       }),
     ]);
-    await downloadExcel(
-      [{ name: "Top Picks", headers, rows }],
-      `top_picks_${region.toLowerCase()}`,
-    );
+    return { name: "Top Picks", headers, rows };
   }
+  const exportFile = `top_picks_${region.toLowerCase()}`;
+  const exportSummary    = () => downloadExcel([buildSummarySheet()], exportFile);
+  const exportSummaryPdf = () => downloadPdf([buildSummarySheet()], exportFile, { title: `Top Picks ${isChile ? "Chile" : "LatAm / Brazil"}` });
 
   // ── Acciones ────────────────────────────────────────────────────────────────
   /**
@@ -370,9 +371,14 @@ export default function TopPicksPanel({ defaultRegion, region: regionProp }: Pro
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
           {view === "summary" && activePeriods.length > 0 && (
-            <button onClick={exportSummary} style={ghostBtn}>
-              <Download size={12} /> Excel
-            </button>
+            <>
+              <button onClick={exportSummary} style={ghostBtn}>
+                <Download size={12} /> Excel
+              </button>
+              <button onClick={exportSummaryPdf} style={ghostBtn}>
+                <FileText size={12} /> PDF
+              </button>
+            </>
           )}
           {/* Abrir el período siguiente: estructura de la grilla, sólo admin. */}
           {isAdmin && (

@@ -39,6 +39,8 @@ export const config = {
     "/api/research/:path*",
     "/api/analysis/:path*",
     "/api/presentations/:path*",
+    "/api/fichas/:path*",
+    "/api/upload/:path*",
     "/api/planning/:path*",
   ],
 };

@@ -1,0 +1,14 @@
+{
+  "name": "Research Hub",
+  "short_name": "Research Hub",
+  "description": "Investment research platform — Chile & LatAm equities",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0D0D38",
+  "theme_color": "#0D0D38",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
