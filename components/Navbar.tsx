@@ -11,7 +11,7 @@ import {
   BarChart3, TrendingUp, Building2, Globe2,
   FileText, BookOpen, Sigma, Newspaper,
   ShieldCheck, LogOut, ChevronDown, CalendarRange,
-  Menu, X,
+  Menu, X, DatabaseZap,
 } from "lucide-react";
 
 type Tab = { href: string; label: string; icon: typeof Sigma };
@@ -42,6 +42,7 @@ const NAV_GROUPS: { title: string; tabs: Tab[] }[] = [
       { href: "/chile",         label: "Chile",                 icon: Building2  },
       { href: "/latam",         label: "LatAm / Brazil",        icon: Globe2     },
       { href: "/companies",     label: "Company Info",          icon: BookOpen   },
+      { href: "/extract",       label: "Extract Data",          icon: DatabaseZap },
     ],
   },
   {

@@ -20,6 +20,7 @@ export const config = {
     "/estimates/:path*",
     "/planning/:path*",
     "/companies/:path*",
+    "/extract/:path*",
     "/chile/:path*",
     "/latam/:path*",
     "/economia/:path*",
@@ -31,6 +32,7 @@ export const config = {
 
     // Private API routes
     "/api/companies/:path*",
+    "/api/extract/:path*",
     "/api/reports/:path*",
     "/api/chile/:path*",
     "/api/latam/:path*",
