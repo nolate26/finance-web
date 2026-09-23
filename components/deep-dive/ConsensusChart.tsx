@@ -12,8 +12,10 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
+import { Download } from "lucide-react";
 import type { ConsensusPoint } from "@/app/api/companies/[ticker]/route";
 import { PATRIA, FONT_SECONDARY } from "@/lib/patriaTheme";
+import { downloadExcel, type SheetDef } from "@/lib/exportExcel";
 
 // ── Metric config ─────────────────────────────────────────────────────────────
 
@@ -239,9 +241,35 @@ function ConsLegend({ cfg, years }: { cfg: MetricCfg; years: string[] }) {
 
 interface Props {
   data: ConsensusPoint[];
+  /** Sólo para nombrar el archivo exportado. */
+  ticker?: string;
 }
 
-export default function ConsensusChart({ data }: Props) {
+// Excel "en detalle": una hoja por métrica (fecha × año objetivo, SIN el recorte de
+// cola continua que aplica el gráfico — acá va todo lo cargado) más una hoja cruda en
+// formato largo (fecha, métrica, año, valor) para pivotear a gusto.
+function buildConsensusSheets(data: ConsensusPoint[]): SheetDef[] {
+  const sheets: SheetDef[] = [];
+  for (const m of METRICS) {
+    const { rows, availableYears } = pivotByDate(data, m.key);
+    if (rows.length === 0) continue;
+    sheets.push({
+      name:    m.label,
+      headers: ["Month", ...availableYears.map((y) => `${y}E`)],
+      rows:    rows.map((r) => [r.date, ...availableYears.map((y) => (r[y] as number | null) ?? null)]),
+    });
+  }
+  sheets.push({
+    name:    "Raw",
+    headers: ["Date", "Metric", "Target year", "Value"],
+    rows:    [...data]
+      .sort((a, b) => a.metric.localeCompare(b.metric) || a.period.localeCompare(b.period) || a.date.localeCompare(b.date))
+      .map((r) => [r.date, ALIASES[r.metric.toUpperCase()] ?? r.metric, r.period, r.value]),
+  });
+  return sheets;
+}
+
+export default function ConsensusChart({ data, ticker }: Props) {
   const [activeMetric, setActiveMetric] = useState<MetricKey>("NET_INCOME");
   const cfg = METRICS.find((m) => m.key === activeMetric)!;
 
@@ -271,7 +299,24 @@ export default function ConsensusChart({ data }: Props) {
         justifyContent: "space-between",
         marginBottom: 4, flexWrap: "wrap", gap: 6,
       }}>
-        
+        {/* Excel con el detalle completo (las tres métricas, todos los años, todas las fotos) */}
+        <button
+          type="button"
+          disabled={data.length === 0}
+          onClick={() => {
+            const slug = (ticker ?? "consensus").replace(/ EQUITY$/i, "").replace(/[^a-z0-9]+/gi, "_");
+            void downloadExcel(buildConsensusSheets(data), `consensus_evolution_${slug}`);
+          }}
+          title="Download the full consensus history (Revenue, EBITDA, Net Income × target year × month) as Excel"
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 5,
+            padding: "3px 9px", borderRadius: 6, fontSize: 10, fontWeight: 600,
+            color: "#001EAF", background: "rgba(0,30,175,0.07)", border: "1px solid rgba(0,30,175,0.22)",
+            cursor: data.length === 0 ? "not-allowed" : "pointer", opacity: data.length === 0 ? 0.5 : 1, whiteSpace: "nowrap",
+          }}
+        >
+          <Download size={10} /> Excel (detail)
+        </button>
 
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {lastDate && (

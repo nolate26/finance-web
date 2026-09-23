@@ -11,3 +11,15 @@ export function useIsAdmin(): boolean {
   const { data } = useSession();
   return data?.user?.role === "admin";
 }
+
+/**
+ * Hook cliente: true si hay sesión, sea admin o no.
+ *
+ * Es el gate de las acciones que puede hacer TODO el equipo (subir a Presentations),
+ * frente a useIsAdmin() que sigue cubriendo lo destructivo (borrar). Devuelve false
+ * mientras la sesión carga, así un botón no parpadea antes de saber quién mira.
+ */
+export function useIsSignedIn(): boolean {
+  const { status } = useSession();
+  return status === "authenticated";
+}

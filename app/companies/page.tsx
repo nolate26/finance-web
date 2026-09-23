@@ -683,7 +683,7 @@ function CompaniesPageContent() {
                 <div className="lg:col-span-2 flex flex-col" style={{ ...CARD }}>
                   <SectionLabel>Consensus Evolution</SectionLabel>
                   <div style={{ flex: 1, minHeight: 0 }}>
-                    <ConsensusChart data={deepDive.consensusEstimates} />
+                    <ConsensusChart data={deepDive.consensusEstimates} ticker={selectedItem?.ticker} />
                   </div>
                 </div>
 

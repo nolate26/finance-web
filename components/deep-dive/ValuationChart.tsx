@@ -18,6 +18,8 @@ import type { ValuationHistoryPayload } from "@/app/api/companies/[ticker]/valua
 import type { UniverseItem } from "@/app/api/analysis/universe/route";
 import { PATRIA, FONT_SECONDARY, seriesColor } from "@/lib/patriaTheme";
 import ComparablePicker, { MAX_COMPARABLES, type Comparable } from "./ComparablePicker";
+import { downloadExcel, type SheetDef } from "@/lib/exportExcel";
+import { Download } from "lucide-react";
 
 type MetricKey  = "peFwd" | "evEbitdaFwd" | "pbv_vs_roe";
 
@@ -322,6 +324,52 @@ export default function ValuationChart({
   // Last value for end-label and discount badge
   const currentVal = !isDual ? (single.chartData.at(-1)?.value ?? null) : null;
 
+  // ── Export: exactamente lo que está en pantalla ────────────────────────────
+  // Métrica activa, rango de tiempo y comparables superpuestas (una columna por
+  // ticker, alineadas por fecha igual que en el gráfico). La segunda hoja lleva la
+  // estadística de la base (mediana, promedio, ±1σ y descuento vs mediana), que es lo
+  // que dibujan la banda y el badge. Sólo Excel: 2.500 filas diarias no son un PDF.
+  function exportExcel() {
+    const base = companyName || ticker || "Company";
+    const range = `${timeRange}`;
+    const sheets: SheetDef[] = [];
+
+    if (!isDual) {
+      const cmpCols = comparables.filter((c) => !c.loading);
+      sheets.push({
+        name:    `${tab.label} ${range}`,
+        headers: ["Date", base, ...cmpCols.map((c) => c.ticker)],
+        rows:    single.chartData.map((r) => [r.date, r.value, ...cmpCols.map((c) => (r[c.ticker] as number | null) ?? null)]),
+      });
+      if (hasBands) {
+        const b = single.bands;
+        const disc = currentVal != null && b.median ? (currentVal / b.median - 1) * 100 : null;
+        sheets.push({
+          name:    "Stats",
+          headers: ["Company", "Metric", "Range", "Last", "Median", "Average", "+1 SD", "-1 SD", "Discount vs median %"],
+          rows:    [[base, tab.label, range, currentVal, b.median, b.avg, b.upper, b.lower, disc != null ? +disc.toFixed(2) : null]],
+        });
+      }
+    } else {
+      sheets.push({
+        name:    `P/BV vs ROE ${range}`,
+        headers: ["Date", "P/BV", "ROE Fwd %"],
+        rows:    dual.chartData.map((r) => [r.date, r.pbv, r.roeFwd != null ? +(r.roeFwd * 100).toFixed(2) : null]),
+      });
+      if (hasPbvBands) {
+        const b = dual.pbvBands;
+        sheets.push({
+          name:    "Stats",
+          headers: ["Company", "Metric", "Range", "Last", "Median", "Average", "+1 SD", "-1 SD"],
+          rows:    [[base, "P/BV", range, dual.chartData.at(-1)?.pbv ?? null, b.median, b.avg, b.upper, b.lower]],
+        });
+      }
+    }
+
+    const slug = (ticker ?? base).replace(/ EQUITY$/i, "").replace(/[^a-z0-9]+/gi, "_");
+    void downloadExcel(sheets, `valuation_${slug}_${activeMetric}_${range}`);
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
 
@@ -386,6 +434,22 @@ export default function ValuationChart({
             </button>
           ))}
         </div>
+
+        {/* Excel con lo que se ve: métrica, rango y comparables */}
+        <button
+          type="button"
+          onClick={exportExcel}
+          disabled={noData}
+          title={comparables.length ? "Download this chart (base + comparables) as Excel" : "Download this chart as Excel"}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 5,
+            padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
+            color: "#001EAF", background: "rgba(0,30,175,0.07)", border: "1px solid rgba(0,30,175,0.22)",
+            cursor: noData ? "not-allowed" : "pointer", opacity: noData ? 0.5 : 1, whiteSpace: "nowrap",
+          }}
+        >
+          <Download size={11} /> Excel
+        </button>
         </div>
       </div>
 

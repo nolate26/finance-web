@@ -155,7 +155,9 @@ export async function writableSectorIds(): Promise<string[] | null> {
  * Guard para API routes mutantes abiertas a CUALQUIER usuario autenticado (user o admin).
  * Mismo uso que requireAdmin(): devuelve una NextResponse 401 si no hay sesión, o null si
  * puede continuar. Lo usa la edición de proyecciones, donde el permiso no es de admin pero
- * el cambio igual queda firmado en la bitácora con el email de quien lo hizo.
+ * el cambio igual queda firmado en la bitácora con el email de quien lo hizo; y las subidas
+ * a Presentations (/api/upload, /api/presentations, /api/fichas), que son de todo el equipo
+ * y quedan firmadas en `uploaded_by`.
  */
 export async function requireAuth(): Promise<NextResponse | null> {
   const user = await getSessionUser();

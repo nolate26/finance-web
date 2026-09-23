@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -23,8 +23,9 @@ export async function GET(request: Request) {
 }
 
 // ── POST: create a presentation record after R2 upload ────────────────────────
+// Cualquier usuario con sesión: aportar material es de todo el equipo.
 export async function POST(request: Request) {
-  const deny = await requireAdmin();
+  const deny = await requireAuth();
   if (deny) return deny;
   try {
     const body = await request.json() as {

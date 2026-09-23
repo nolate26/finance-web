@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { r2 } from "@/lib/r2";
-import { requireAdmin } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -18,11 +18,11 @@ const EXT_MAP: Record<string, string> = {
   "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
 };
 
-// Sólo admin: la URL prefirmada escribe directo en R2, así que sin este guard
-// cualquiera con el endpoint podía subir archivos al bucket aunque después no
-// pudiera registrarlos (POST /api/presentations y /api/fichas ya eran admin-only).
+// Requiere sesión: la URL prefirmada escribe directo en R2, así que sin este guard
+// cualquiera con el endpoint podría llenar el bucket. No pide admin — subir material
+// a Presentations es de todo el equipo; lo destructivo (borrar) sí es admin.
 export async function POST(request: Request) {
-  const deny = await requireAdmin();
+  const deny = await requireAuth();
   if (deny) return deny;
   try {
     const body = await request.json() as { filename?: string; contentType?: string; folder?: string };

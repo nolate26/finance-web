@@ -4,8 +4,9 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { FileText, Download, Upload, Trash2, Search } from "lucide-react";
 import CreatePresentationModal, { type Presentation } from "@/components/CreatePresentationModal";
 import type { FichaRow as Ficha } from "@/app/api/fichas/route";
-import { useIsAdmin } from "@/lib/useIsAdmin";
+import { useIsAdmin, useIsSignedIn } from "@/lib/useIsAdmin";
 import { countryName } from "@/lib/countryNames";
+import { quarterKey } from "@/lib/quarters";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -154,6 +155,14 @@ function FichaRowView({
         {ficha.ticker}
       </span>
 
+      {/* Quarter del informe — el dato que ordena las fichas */}
+      <span
+        className="flex-shrink-0 text-xs font-bold font-secondary tabular-nums px-2 py-0.5 rounded-md"
+        style={{ background: "rgba(13,13,56,0.06)", color: "#0D0D38", border: "1px solid rgba(13,13,56,0.14)", whiteSpace: "nowrap", letterSpacing: "0.02em" }}
+      >
+        {ficha.quarter_label}
+      </span>
+
       {/* Country badge */}
       <span
         className="flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-md"
@@ -195,7 +204,9 @@ export default function PresentationsPage() {
   const [fichas,        setFichas]        = useState<Ficha[]>([]);
   const [loading,       setLoading]       = useState(true);
   const [showModal,     setShowModal]     = useState(false);
-  const isAdmin = useIsAdmin();
+  // Subir es de todo el equipo; borrar, sólo admin.
+  const isAdmin   = useIsAdmin();
+  const canUpload = useIsSignedIn();
 
   const [mainCategory, setMainCategory] = useState<MainCategory>("investment_cases");
   // For investment_cases / sell_side
@@ -203,20 +214,33 @@ export default function PresentationsPage() {
   // For client_presentations — two-level: region → fund
   const [cpRegion,     setCpRegion]     = useState<"chile" | "latam">("chile");
   const [cpFund,       setCpFund]       = useState<string>("All");
-  // For fichas — country (code) + free text over company / ticker / title
+  // For fichas — country (code) + quarter + free text over company / ticker / title
   const [fichaCountry, setFichaCountry] = useState<string>("All");
+  const [fichaQuarter, setFichaQuarter] = useState<string>("All");
   const [fichaSearch,  setFichaSearch]  = useState("");
   const [deletingId,   setDeletingId]   = useState<string | null>(null);
   const [deleteError,  setDeleteError]  = useState<string | null>(null);
+  // Un error de la API NO debe verse como "no hay documentos": son dos cosas
+  // distintas y confundirlas manda a buscar el problema al lado equivocado.
+  const [fichasError,  setFichasError]  = useState<string | null>(null);
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
   const fetchAll = useCallback(async () => {
     const [pres, fic] = await Promise.all([
-      fetch("/api/presentations").then((r) => r.json() as Promise<{ presentations?: Presentation[] }>).catch(() => ({})),
-      fetch("/api/fichas").then((r) => r.json() as Promise<{ fichas?: Ficha[] }>).catch(() => ({})),
+      fetch("/api/presentations")
+        .then((r) => r.json() as Promise<{ presentations?: Presentation[] }>)
+        .catch(() => ({} as { presentations?: Presentation[] })),
+      fetch("/api/fichas")
+        .then(async (r) => {
+          const d = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error((d as { error?: string }).error ?? `HTTP ${r.status}`);
+          return d as { fichas?: Ficha[] };
+        })
+        .catch((e: unknown) => ({ error: e instanceof Error ? e.message : "Failed to load fichas" })),
     ]);
-    setPresentations((pres as { presentations?: Presentation[] }).presentations ?? []);
-    setFichas((fic as { fichas?: Ficha[] }).fichas ?? []);
+    setPresentations(pres.presentations ?? []);
+    if ("error" in fic) { setFichas([]); setFichasError(fic.error as string); }
+    else                { setFichas(fic.fichas ?? []); setFichasError(null); }
     setLoading(false);
   }, []);
 
@@ -229,6 +253,7 @@ export default function PresentationsPage() {
     setCpRegion("chile");    // for client_presentations
     setCpFund("All");
     setFichaCountry("All");
+    setFichaQuarter("All");
     setFichaSearch("");
     setDeleteError(null);
   }
@@ -254,16 +279,19 @@ export default function PresentationsPage() {
   }
 
   function handleFichaSaved(f: Ficha) {
-    setFichas((prev) => [f, ...prev]);
+    // Una ficha viva por ticker: la nueva reemplaza a la anterior de esa empresa,
+    // igual que hizo el servidor.
+    setFichas((prev) => [f, ...prev.filter((x) => x.ticker.toUpperCase() !== f.ticker.toUpperCase())]);
     setShowModal(false);
     setMainCategory("fichas");
     setFichaCountry(f.country);
+    setFichaQuarter("All");
     setFichaSearch("");
   }
 
   // ── Delete ficha (admin) ──────────────────────────────────────────────────
   async function handleDeleteFicha(f: Ficha) {
-    if (!window.confirm(`Delete "${f.title}" (${f.ticker})? The PDF will be removed from storage.`)) return;
+    if (!window.confirm(`Delete the ${f.quarter_label} ficha of ${f.company_name} (${f.ticker})? The PDF will be removed from storage.`)) return;
     setDeletingId(f.id);
     setDeleteError(null);
     try {
@@ -303,10 +331,22 @@ export default function PresentationsPage() {
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [fichas]);
 
+  // Quarters presentes, del más nuevo al más viejo, con su conteo.
+  const fichaQuarters = useMemo(() => {
+    const counts = new Map<string, { label: string; key: number; n: number }>();
+    for (const f of fichas) {
+      const prev = counts.get(f.quarter_label);
+      if (prev) prev.n++;
+      else counts.set(f.quarter_label, { label: f.quarter_label, key: quarterKey(f.fiscal_year, f.quarter), n: 1 });
+    }
+    return [...counts.values()].sort((a, b) => b.key - a.key);
+  }, [fichas]);
+
   const displayFichas = useMemo(() => {
     const q = fichaSearch.trim().toLowerCase();
     return fichas.filter((f) => {
       if (fichaCountry !== "All" && f.country !== fichaCountry) return false;
+      if (fichaQuarter !== "All" && f.quarter_label !== fichaQuarter) return false;
       if (q && !(
         f.company_name.toLowerCase().includes(q) ||
         f.ticker.toLowerCase().includes(q) ||
@@ -314,7 +354,7 @@ export default function PresentationsPage() {
       )) return false;
       return true;
     });
-  }, [fichas, fichaCountry, fichaSearch]);
+  }, [fichas, fichaCountry, fichaQuarter, fichaSearch]);
 
   // Agrupadas por país (sólo cuando se ve "All"); dentro del país, por empresa.
   const fichaGroups = useMemo(() => {
@@ -328,7 +368,10 @@ export default function PresentationsPage() {
       .map(([code, rows]) => ({
         code,
         label: countryName(code),
-        rows: [...rows].sort((a, b) => a.company_name.localeCompare(b.company_name) || b.created_at.localeCompare(a.created_at)),
+        // Quarter más nuevo primero; dentro del quarter, por empresa.
+        rows: [...rows].sort((a, b) =>
+          quarterKey(b.fiscal_year, b.quarter) - quarterKey(a.fiscal_year, a.quarter) ||
+          a.company_name.localeCompare(b.company_name)),
       }))
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [displayFichas]);
@@ -352,12 +395,13 @@ export default function PresentationsPage() {
     <>
       {/* Un solo uploader: abre en la categoría de la pestaña activa, pero el admin
           puede cambiarla adentro (Fichas incluida). */}
-      {showModal && isAdmin && (
+      {showModal && canUpload && (
         <CreatePresentationModal
           defaultCategory={mainCategory}
           defaultRegion={subFilter}
           onSave={handleSaved}
           onSaveFicha={handleFichaSaved}
+          existingFichas={fichas}
           onClose={() => setShowModal(false)}
         />
       )}
@@ -371,7 +415,7 @@ export default function PresentationsPage() {
             <p style={{ fontSize: 12, marginTop: 5, color: "rgba(13,13,56,0.62)", fontWeight: 500, letterSpacing: "0.01em" }}>Research reports · Company fichas · Investor presentations</p>
           </div>
           <div className="flex items-center gap-3">
-            {isAdmin && (
+            {canUpload && (
               <button
                 onClick={() => setShowModal(true)}
                 style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 15px", borderRadius: 8, background: "#2044DC", border: "none", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
@@ -471,41 +515,70 @@ export default function PresentationsPage() {
             </div>
           )}
 
-          {/* Fichas → country chips + search */}
+          {/* Fichas → country chips + quarter chips + search */}
           {isFichas && (
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="tab-rail flex items-center gap-1 p-0.5 rounded-md" style={PILL_WRAP}>
-                <button
-                  onClick={() => setFichaCountry("All")}
-                  className="px-3 py-1 rounded text-xs font-semibold transition-all"
-                  style={pillStyle(fichaCountry === "All")}
-                >
-                  All
-                </button>
-                {fichaCountries.map((c) => (
+            <>
+              {/* Row 1: país */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "rgba(13,13,56,0.45)", minWidth: 52 }}>Country</span>
+                <div className="tab-rail flex items-center gap-1 p-0.5 rounded-md" style={PILL_WRAP}>
                   <button
-                    key={c.code}
-                    onClick={() => setFichaCountry(c.code)}
+                    onClick={() => setFichaCountry("All")}
                     className="px-3 py-1 rounded text-xs font-semibold transition-all"
-                    style={pillStyle(fichaCountry === c.code)}
+                    style={pillStyle(fichaCountry === "All")}
                   >
-                    {c.label}
-                    <span className="font-secondary tabular-nums" style={{ marginLeft: 5, opacity: 0.55, fontWeight: 500 }}>{c.n}</span>
+                    All
                   </button>
-                ))}
+                  {fichaCountries.map((c) => (
+                    <button
+                      key={c.code}
+                      onClick={() => setFichaCountry(c.code)}
+                      className="px-3 py-1 rounded text-xs font-semibold transition-all"
+                      style={pillStyle(fichaCountry === c.code)}
+                    >
+                      {c.label}
+                      <span className="font-secondary tabular-nums" style={{ marginLeft: 5, opacity: 0.55, fontWeight: 500 }}>{c.n}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div className="flex items-center gap-2 px-2.5 rounded-md" style={{ background: "#F5F7FD", border: "1px solid rgba(13,13,56,0.12)", height: 30, minWidth: 220, flex: "1 1 220px", maxWidth: 360 }}>
-                <Search size={13} style={{ color: "rgba(13,13,56,0.40)", flexShrink: 0 }} />
-                <input
-                  value={fichaSearch}
-                  onChange={(e) => setFichaSearch(e.target.value)}
-                  placeholder="Company, ticker or title…"
-                  className="font-secondary"
-                  style={{ flex: 1, minWidth: 0, background: "transparent", border: "none", outline: "none", fontSize: 12, color: "#0D0D38" }}
-                />
+              {/* Row 2: quarter del informe + buscador */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "rgba(13,13,56,0.45)", minWidth: 52 }}>Quarter</span>
+                <div className="tab-rail flex items-center gap-1 p-0.5 rounded-md" style={PILL_WRAP}>
+                  <button
+                    onClick={() => setFichaQuarter("All")}
+                    className="px-3 py-1 rounded text-xs font-semibold transition-all"
+                    style={pillStyle(fichaQuarter === "All")}
+                  >
+                    All
+                  </button>
+                  {fichaQuarters.map((q) => (
+                    <button
+                      key={q.label}
+                      onClick={() => setFichaQuarter(q.label)}
+                      className="px-3 py-1 rounded text-xs font-semibold font-secondary tabular-nums transition-all"
+                      style={pillStyle(fichaQuarter === q.label)}
+                    >
+                      {q.label}
+                      <span className="font-secondary tabular-nums" style={{ marginLeft: 5, opacity: 0.55, fontWeight: 500 }}>{q.n}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-2 px-2.5 rounded-md" style={{ background: "#F5F7FD", border: "1px solid rgba(13,13,56,0.12)", height: 30, minWidth: 220, flex: "1 1 220px", maxWidth: 360 }}>
+                  <Search size={13} style={{ color: "rgba(13,13,56,0.40)", flexShrink: 0 }} />
+                  <input
+                    value={fichaSearch}
+                    onChange={(e) => setFichaSearch(e.target.value)}
+                    placeholder="Company, ticker or title…"
+                    className="font-secondary"
+                    style={{ flex: 1, minWidth: 0, background: "transparent", border: "none", outline: "none", fontSize: 12, color: "#0D0D38" }}
+                  />
+                </div>
               </div>
-            </div>
+            </>
           )}
         </div>
 
@@ -517,7 +590,13 @@ export default function PresentationsPage() {
 
         {/* ── File list ────────────────────────────────────────────────── */}
         {isFichas ? (
-          displayFichas.length === 0 ? (
+          fichasError ? (
+            <div className="card flex flex-col items-center justify-center py-16 gap-3 text-center" style={{ color: "#F8485E" }}>
+              <FileText size={34} style={{ opacity: 0.4 }} />
+              <p className="text-sm font-semibold">Could not load fichas.</p>
+              <p className="text-xs font-secondary" style={{ color: "rgba(13,13,56,0.62)", maxWidth: 460 }}>{fichasError}</p>
+            </div>
+          ) : displayFichas.length === 0 ? (
             <div className="card flex flex-col items-center justify-center py-20 gap-4" style={{ color: "rgba(13,13,56,0.45)" }}>
               <FileText size={40} style={{ opacity: 0.3 }} />
               <p className="text-sm">{fichas.length === 0 ? "No fichas uploaded yet." : "No fichas match this selection."}</p>

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { prisma } from "@/lib/prisma";
-import { r2 } from "@/lib/r2";
+import { deleteFromR2 } from "@/lib/r2";
 import { requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -33,16 +32,6 @@ export async function DELETE(
     return NextResponse.json({ error: "No se pudo eliminar la ficha" }, { status: 500 });
   }
 
-  let r2Deleted = false;
-  const bucket = process.env.R2_BUCKET_NAME;
-  if (fileKey && bucket) {
-    try {
-      await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: fileKey }));
-      r2Deleted = true;
-    } catch (e) {
-      console.error("[fichas/[id] DELETE] R2 object not removed:", fileKey, e);
-    }
-  }
-
+  const r2Deleted = await deleteFromR2(fileKey);
   return NextResponse.json({ ok: true, r2Deleted });
 }

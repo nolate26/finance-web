@@ -1,10 +1,11 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Upload, X, FileText, AlertCircle } from "lucide-react";
+import { Upload, X, FileText, AlertCircle, RefreshCw } from "lucide-react";
 import { FONT_SECONDARY } from "@/lib/patriaTheme";
 import CompanyCombobox from "@/components/CompanyCombobox";
 import type { FichaRow } from "@/app/api/fichas/route";
+import { currentQuarter, quarterKey, quarterLabel, quarterOptions, parseQuarterLabel } from "@/lib/quarters";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -26,6 +27,11 @@ interface Props {
   onSave: (pres: Presentation) => void;
   /** Se llama en lugar de onSave cuando la categoría elegida es "fichas". */
   onSaveFicha: (ficha: FichaRow) => void;
+  /**
+   * Fichas vigentes, para avisar a qué empresa se le va a reemplazar la suya. Sale
+   * de la lista que ya tiene la página: evita un fetch y no se desincroniza.
+   */
+  existingFichas?: FichaRow[];
   onClose: () => void;
 }
 
@@ -112,7 +118,7 @@ function SubmitLabel({ phase, progress }: { phase: Phase; progress: number }) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export default function CreatePresentationModal({ defaultCategory, defaultRegion, onSave, onSaveFicha, onClose }: Props) {
+export default function CreatePresentationModal({ defaultCategory, defaultRegion, onSave, onSaveFicha, existingFichas = [], onClose }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   // File
@@ -127,6 +133,11 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
   const [region,      setRegion]     = useState(() => defaultRegionFor((defaultCategory as Category) || "investment_cases"));
   const [companyTicker, setCompanyTicker] = useState("");  // stored value (ticker)
   const [isSellSide,  setIsSellSide] = useState(false);
+  // Fichas: quarter del informe. Por defecto el trimestre calendario actual.
+  const [quarterSel,  setQuarterSel]  = useState(() => {
+    const q = currentQuarter();
+    return quarterLabel(q.fiscalYear, q.quarter);
+  });
 
   // Submit
   const [phase,    setPhase]    = useState<Phase>("idle");
@@ -147,6 +158,18 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
 
   const isFicha = category === "fichas";
 
+  // Quarter elegido, ya parseado. El selector sólo ofrece etiquetas válidas.
+  const quarter = parseQuarterLabel(quarterSel);
+
+  // Ficha vigente de esta empresa: la que se va a reemplazar al guardar.
+  const replacing = isFicha && companyTicker
+    ? existingFichas.find((f) => f.ticker.toUpperCase() === companyTicker.toUpperCase()) ?? null
+    : null;
+  // Subir un quarter MÁS VIEJO que el vigente casi siempre es un error de dedo, y
+  // acá es destructivo: se avisa distinto, pero no se bloquea.
+  const replacingNewer = !!(replacing && quarter &&
+    quarterKey(replacing.fiscal_year, replacing.quarter) > quarterKey(quarter.fiscalYear, quarter.quarter));
+
   // ── File handling ────────────────────────────────────────────────────────────
 
   function applyFile(f: File) {
@@ -155,6 +178,13 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
     setFileError(null);
     setError(null);
     if (!title) setTitle(f.name.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ").trim());
+    // El equipo nombra los archivos "CCU_2Q26.pdf": si el nombre trae el quarter, se
+    // toma de ahí en vez de dejar el default del trimestre actual.
+    const fromName = f.name.match(/([1-4])\s*[Qq]\s*(\d{2}|\d{4})/);
+    if (fromName) {
+      const parsed = parseQuarterLabel(`${fromName[1]}Q${fromName[2]}`);
+      if (parsed) setQuarterSel(quarterLabel(parsed.fiscalYear, parsed.quarter));
+    }
   }
 
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -179,6 +209,7 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
     e.preventDefault();
     if (!file)                    { setError("Please select a file first.");     return; }
     if (isFicha && !companyTicker) { setError("A company ticker is required for fichas."); return; }
+    if (isFicha && !quarter)       { setError("A valid quarter is required (e.g. 2Q26)."); return; }
     if (!title.trim())            { setError("Title is required.");              return; }
 
     setError(null);
@@ -243,6 +274,8 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             ticker:      companyTicker,
+            fiscal_year: quarter!.fiscalYear,
+            quarter:     quarter!.quarter,
             title:       title.trim(),
             description: desc.trim() || null,
             file_url:    fileUrl,
@@ -508,6 +541,48 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
                 placeholder={isFicha ? "Search any company in empresas_industrias_v2…" : undefined}
               />
             </div>
+
+            {/* ── Quarter de la ficha + aviso de reemplazo ──────────────── */}
+            {isFicha && (
+              <div>
+                <label style={LABEL}>Quarter <span style={{ color: "#F8485E" }}>*</span></label>
+                <select
+                  value={quarterSel}
+                  onChange={(e) => setQuarterSel(e.target.value)}
+                  disabled={isSubmitting}
+                  style={{ ...INPUT, opacity: isSubmitting ? 0.6 : 1 }}
+                >
+                  {quarterOptions().map((q) => {
+                    const label = quarterLabel(q.fiscalYear, q.quarter);
+                    return <option key={label} value={label}>{label}</option>;
+                  })}
+                </select>
+
+                {replacing && (
+                  <div style={{
+                    display: "flex", gap: 8, alignItems: "flex-start", marginTop: 8,
+                    padding: "9px 12px", borderRadius: 8,
+                    background:  replacingNewer ? "rgba(248,72,94,0.05)" : "rgba(255,107,6,0.06)",
+                    border: `1px solid ${replacingNewer ? "rgba(248,72,94,0.22)" : "rgba(255,107,6,0.24)"}`,
+                  }}>
+                    <RefreshCw size={13} color={replacingNewer ? "#F8485E" : "#FF6B06"} style={{ flexShrink: 0, marginTop: 1 }} />
+                    <p style={{ fontSize: 11.5, color: replacingNewer ? "#F8485E" : "#C25205", margin: 0, lineHeight: 1.5 }}>
+                      {replacingNewer ? (
+                        <>
+                          <strong>{replacing.company_name}</strong> ya tiene la ficha de <strong>{replacing.quarter_label}</strong>, que es
+                          MÁS NUEVA que {quarterSel}. Si continuás, la de {replacing.quarter_label} se borra y su PDF se elimina.
+                        </>
+                      ) : (
+                        <>
+                          Reemplaza la ficha <strong>{replacing.quarter_label}</strong> de <strong>{replacing.company_name}</strong>:
+                          al guardar se borra y su PDF se elimina del almacenamiento.
+                        </>
+                      )}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* ── Upload progress ───────────────────────────────────────── */}
             {phase === "uploading" && (
