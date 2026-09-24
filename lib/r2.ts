@@ -29,3 +29,20 @@ export async function deleteFromR2(fileKey: string | null | undefined): Promise<
     return false;
   }
 }
+
+/**
+ * Key del objeto a partir de su URL pública.
+ *
+ * `presentations` guarda sólo `file_url` (a diferencia de `fichas`, que tiene
+ * `file_key`), así que para borrar el archivo hay que recuperar la key. La URL la
+ * arma /api/upload como `${R2_PUBLIC_URL}/${key}`, así que alcanza con sacarle ese
+ * prefijo. Devuelve null si la URL NO pertenece al bucket configurado —por ejemplo
+ * las presentaciones viejas servidas desde /api/presentations/download—, y así el
+ * borrado no intenta tocar algo que no es suyo.
+ */
+export function r2KeyFromUrl(fileUrl: string | null | undefined): string | null {
+  const base = process.env.R2_PUBLIC_URL?.replace(/\/$/, "");
+  if (!fileUrl || !base || !fileUrl.startsWith(`${base}/`)) return null;
+  const key = decodeURIComponent(fileUrl.slice(base.length + 1)).trim();
+  return key || null;
+}

@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { FileText, Download, Upload, Trash2, Search } from "lucide-react";
-import CreatePresentationModal, { type Presentation } from "@/components/CreatePresentationModal";
+import { FileText, Download, Upload, Trash2, Search, ShieldAlert, Pencil } from "lucide-react";
+import CreatePresentationModal from "@/components/CreatePresentationModal";
+import ReviewCaseModal from "@/components/presentations/ReviewCaseModal";
+import { REVIEWABLE_CATEGORY, type Presentation } from "@/lib/presentationDto";
+import { recommendationColors, formatTargetPrice } from "@/lib/recommendations";
 import type { FichaRow as Ficha } from "@/app/api/fichas/route";
 import { useIsAdmin, useIsSignedIn } from "@/lib/useIsAdmin";
 import { countryName } from "@/lib/countryNames";
@@ -79,20 +82,58 @@ function PdfLink({ href }: { href: string }) {
 
 // ── Presentation row ──────────────────────────────────────────────────────────
 
-function FileRow({ pres }: { pres: Presentation }) {
+// Una empresa del caso: ticker + TP + rating, en el color de la recomendación.
+function TickerChip({ t }: { t: Presentation["tickers"][number] }) {
+  const c = recommendationColors(t.recommendation);
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 text-[10px] font-secondary tabular-nums px-2 py-0.5 rounded-md"
+      style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, whiteSpace: "nowrap" }}
+      title={`${t.company_name}${t.target_price != null ? ` · TP ${formatTargetPrice(t.target_price)}` : ""}`}
+    >
+      <strong style={{ fontWeight: 800 }}>{t.ticker.replace(/ EQUITY$/i, "")}</strong>
+      {t.recommendation && <span style={{ fontWeight: 800, opacity: 0.85 }}>{t.recommendation}</span>}
+      {t.target_price != null && <span style={{ opacity: 0.75 }}>TP {formatTargetPrice(t.target_price)}</span>}
+    </span>
+  );
+}
+
+function FileRow({
+  pres, isAdmin, deleting, onReview, onDelete,
+}: {
+  pres: Presentation; isAdmin: boolean; deleting: boolean;
+  onReview: (p: Presentation) => void; onDelete: (p: Presentation) => void;
+}) {
+  const pending = pres.review_status === "pending";
   return (
     <div
       className="flex items-center gap-4 px-5 py-4 border-b border-patria-dark-blue/[0.06] last:border-0 transition-colors"
+      style={{ ...(pending ? { background: "rgba(255,107,6,0.035)" } : {}), opacity: deleting ? 0.45 : 1 }}
       onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.02)")}
-      onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
+      onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = pending ? "rgba(255,107,6,0.035)" : "transparent")}
     >
       <PdfIcon />
 
-      {/* Title + description */}
+      {/* Title + description + empresas cubiertas */}
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold truncate" style={{ color: "#0D0D38" }}>{pres.title}</p>
+        <div className="flex items-center gap-2 min-w-0">
+          <p className="text-sm font-semibold truncate" style={{ color: "#0D0D38" }}>{pres.title}</p>
+          {pending && (
+            <span
+              className="flex-shrink-0 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+              style={{ background: "rgba(255,107,6,0.12)", color: "#C25205", border: "1px solid rgba(255,107,6,0.30)", whiteSpace: "nowrap" }}
+            >
+              Pending review
+            </span>
+          )}
+        </div>
         {pres.description && (
           <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "rgba(13,13,56,0.62)" }}>{pres.description}</p>
+        )}
+        {pres.tickers.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-1.5">
+            {pres.tickers.map((t) => <TickerChip key={t.ticker} t={t} />)}
+          </div>
         )}
       </div>
 
@@ -108,19 +149,52 @@ function FileRow({ pres }: { pres: Presentation }) {
         {pres.is_sell_side ? "Sell Side" : "Moneda"}
       </span>
 
-      {/* Company chip */}
-      {pres.company_name && (
+      {/* Company chip — sólo el texto libre heredado; los casos usan los chips de arriba */}
+      {pres.company_name && pres.tickers.length === 0 && (
         <span className="flex-shrink-0 text-xs font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.45)", whiteSpace: "nowrap" }}>
           {pres.company_name}
         </span>
       )}
 
-      {/* Date */}
+      {/* Fecha del caso si la tiene; si no, la de carga */}
       <span className="font-secondary tabular-nums text-xs flex-shrink-0" style={{ color: "rgba(13,13,56,0.28)", minWidth: 90, textAlign: "right" }}>
-        {formatDate(pres.created_at)}
+        {formatDate(pres.case_date ?? pres.created_at)}
       </span>
 
+      {/* Revisar / editar — sólo admin, sólo casos */}
+      {isAdmin && pres.category === REVIEWABLE_CATEGORY && (
+        <button
+          type="button"
+          onClick={() => onReview(pres)}
+          title={pending ? "Review this case" : "Edit this case"}
+          className="flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all"
+          style={
+            pending
+              ? { background: "rgba(255,107,6,0.10)", color: "#C25205", border: "1px solid rgba(255,107,6,0.30)", cursor: "pointer" }
+              : { background: "#fff", color: "rgba(13,13,56,0.62)", border: "1px solid rgba(13,13,56,0.16)", cursor: "pointer" }
+          }
+        >
+          {pending ? <><ShieldAlert size={11} /> Review</> : <><Pencil size={11} /> Edit</>}
+        </button>
+      )}
+
       <PdfLink href={pres.file_url} />
+
+      {/* Eliminar — sólo admin, igual que en fichas */}
+      {isAdmin && (
+        <button
+          type="button"
+          title="Delete this document"
+          disabled={deleting}
+          onClick={() => onDelete(pres)}
+          className="flex-shrink-0 inline-flex items-center justify-center rounded-md transition-all"
+          style={{ width: 30, height: 30, background: "transparent", border: "1px solid rgba(248,72,94,0.18)", color: "#F8485E", cursor: deleting ? "not-allowed" : "pointer" }}
+          onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(248,72,94,0.08)")}
+          onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
+        >
+          <Trash2 size={13} />
+        </button>
+      )}
     </div>
   );
 }
@@ -220,27 +294,43 @@ export default function PresentationsPage() {
   const [fichaSearch,  setFichaSearch]  = useState("");
   const [deletingId,   setDeletingId]   = useState<string | null>(null);
   const [deleteError,  setDeleteError]  = useState<string | null>(null);
-  // Un error de la API NO debe verse como "no hay documentos": son dos cosas
-  // distintas y confundirlas manda a buscar el problema al lado equivocado.
-  const [fichasError,  setFichasError]  = useState<string | null>(null);
+  const [fichasError,        setFichasError]        = useState<string | null>(null);
+  const [presentationsError, setPresentationsError] = useState<string | null>(null);
+  // Caso abierto en el panel de revisión del admin.
+  const [reviewing,    setReviewing]    = useState<Presentation | null>(null);
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
+  // Un endpoint caído NO debe verse como "no hay documentos": son dos cosas distintas
+  // y confundirlas manda a buscar el problema al lado equivocado.
   const fetchAll = useCallback(async () => {
+    type Loaded<T> = { ok: true; data: T } | { ok: false; error: string };
+
+    async function load<T>(
+      url: string,
+      pick: (d: Record<string, unknown>) => T,
+      fallbackMsg: string,
+    ): Promise<Loaded<T>> {
+      try {
+        const res = await fetch(url);
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error((d as { error?: string }).error ?? `HTTP ${res.status}`);
+        return { ok: true, data: pick(d as Record<string, unknown>) };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : fallbackMsg };
+      }
+    }
+
     const [pres, fic] = await Promise.all([
-      fetch("/api/presentations")
-        .then((r) => r.json() as Promise<{ presentations?: Presentation[] }>)
-        .catch(() => ({} as { presentations?: Presentation[] })),
-      fetch("/api/fichas")
-        .then(async (r) => {
-          const d = await r.json().catch(() => ({}));
-          if (!r.ok) throw new Error((d as { error?: string }).error ?? `HTTP ${r.status}`);
-          return d as { fichas?: Ficha[] };
-        })
-        .catch((e: unknown) => ({ error: e instanceof Error ? e.message : "Failed to load fichas" })),
+      load("/api/presentations", (d) => (d.presentations as Presentation[]) ?? [], "Failed to load presentations"),
+      load("/api/fichas",        (d) => (d.fichas as Ficha[]) ?? [],               "Failed to load fichas"),
     ]);
-    setPresentations(pres.presentations ?? []);
-    if ("error" in fic) { setFichas([]); setFichasError(fic.error as string); }
-    else                { setFichas(fic.fichas ?? []); setFichasError(null); }
+
+    if (pres.ok) { setPresentations(pres.data); setPresentationsError(null); }
+    else         { setPresentations([]);        setPresentationsError(pres.error); }
+
+    if (fic.ok)  { setFichas(fic.data); setFichasError(null); }
+    else         { setFichas([]);       setFichasError(fic.error); }
+
     setLoading(false);
   }, []);
 
@@ -275,6 +365,36 @@ export default function PresentationsPage() {
       setCpFund(pres.region);
     } else {
       setSubFilter(pres.region);
+    }
+  }
+
+  // Revisión: el caso vuelve actualizado (editado y/o aprobado) y se reemplaza en sitio.
+  function handleReviewed(p: Presentation) {
+    setPresentations((prev) => prev.map((x) => (x.id === p.id ? p : x)));
+    setReviewing(null);
+  }
+
+  // ── Borrar una presentación (admin) ───────────────────────────────────────
+  async function handleDeletePresentation(p: Presentation) {
+    const what = p.tickers.length
+      ? `"${p.title}" (${p.tickers.map((t) => t.ticker.replace(/ EQUITY$/i, "")).join(", ")})`
+      : `"${p.title}"`;
+    if (!window.confirm(`Delete ${what}? The file will be removed from storage.`)) return;
+
+    setDeletingId(p.id);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/presentations/${encodeURIComponent(p.id)}`, { method: "DELETE" });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(error ?? `HTTP ${res.status}`);
+      }
+      setPresentations((prev) => prev.filter((x) => x.id !== p.id));
+      setReviewing((r) => (r?.id === p.id ? null : r));   // si estaba abierto en revisión, se cierra
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Could not delete document");
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -379,6 +499,12 @@ export default function PresentationsPage() {
   const isFichas = mainCategory === "fichas";
   const docCount = isFichas ? displayFichas.length : displayFiles.length;
 
+  // Cola de revisión: investment cases que nadie verificó todavía. Sólo la ve el admin.
+  const pendingCases = useMemo(
+    () => presentations.filter((p) => p.review_status === "pending" && p.category === REVIEWABLE_CATEGORY),
+    [presentations],
+  );
+
   // ── Loading ───────────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -406,6 +532,16 @@ export default function PresentationsPage() {
         />
       )}
 
+      {/* Panel de revisión de un caso — sólo admin */}
+      {reviewing && isAdmin && (
+        <ReviewCaseModal
+          presentation={reviewing}
+          onSaved={handleReviewed}
+          onDelete={handleDeletePresentation}
+          onClose={() => setReviewing(null)}
+        />
+      )}
+
       <div className="max-w-[1200px] mx-auto page-shell">
 
         {/* ── Header ──────────────────────────────────────────────────── */}
@@ -428,6 +564,45 @@ export default function PresentationsPage() {
             </span>
           </div>
         </div>
+
+        {/* ── Cola de revisión (admin) ────────────────────────────────────
+            Los casos los sube cualquiera del equipo, así que el admin necesita ver
+            de una que hay algo esperando verificación. Mismo patrón que el
+            UnmappedTickersAlert del deep-dive. */}
+        {isAdmin && pendingCases.length > 0 && (
+          <div
+            className="mb-4 rounded-lg"
+            style={{ background: "rgba(255,107,6,0.06)", border: "1px solid rgba(255,107,6,0.28)", padding: "11px 14px" }}
+          >
+            <div className="flex items-start gap-2.5 flex-wrap">
+              <ShieldAlert size={15} style={{ color: "#FF6B06", flexShrink: 0, marginTop: 1 }} />
+              <div className="flex-1 min-w-0">
+                <p style={{ fontSize: 12.5, fontWeight: 700, color: "#C25205", margin: 0 }}>
+                  {pendingCases.length} investment case{pendingCases.length !== 1 ? "s" : ""} pendiente{pendingCases.length !== 1 ? "s" : ""} de revisión
+                </p>
+                <p style={{ fontSize: 11, color: "rgba(13,13,56,0.62)", margin: "3px 0 0", lineHeight: 1.5 }}>
+                  Verificá empresas, target price y recomendación contra el documento, y aprobalos.
+                </p>
+                <div className="flex flex-wrap gap-2 mt-2.5">
+                  {pendingCases.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => { setMainCategory(REVIEWABLE_CATEGORY as MainCategory); setSubFilter(p.region); setReviewing(p); }}
+                      className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all"
+                      style={{ background: "#fff", color: "#0D0D38", border: "1px solid rgba(255,107,6,0.30)", cursor: "pointer", maxWidth: 340 }}
+                    >
+                      <span className="truncate">{p.title}</span>
+                      <span className="font-secondary tabular-nums flex-shrink-0" style={{ color: "rgba(13,13,56,0.45)", fontWeight: 500 }}>
+                        {p.tickers.map((t) => t.ticker.replace(/ EQUITY$/i, "")).join(", ") || "sin tickers"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── Level 1: Category tabs ──────────────────────────────────── */}
         <div className="tab-rail flex items-center mb-4" style={{ gap: 2, padding: "3px", borderRadius: 10, background: "rgba(13,13,56,0.04)", border: "1px solid rgba(13,13,56,0.08)", width: "fit-content" }}>
@@ -627,6 +802,12 @@ export default function PresentationsPage() {
               ))}
             </div>
           )
+        ) : presentationsError ? (
+          <div className="card flex flex-col items-center justify-center py-16 gap-3 text-center" style={{ color: "#F8485E" }}>
+            <FileText size={34} style={{ opacity: 0.4 }} />
+            <p className="text-sm font-semibold">Could not load presentations.</p>
+            <p className="text-xs font-secondary" style={{ color: "rgba(13,13,56,0.62)", maxWidth: 460 }}>{presentationsError}</p>
+          </div>
         ) : displayFiles.length === 0 ? (
           <div className="card flex flex-col items-center justify-center py-20 gap-4" style={{ color: "rgba(13,13,56,0.45)" }}>
             <FileText size={40} style={{ opacity: 0.3 }} />
@@ -634,7 +815,16 @@ export default function PresentationsPage() {
           </div>
         ) : (
           <div className="card overflow-hidden" style={{ padding: 0 }}>
-            {displayFiles.map((pres) => <FileRow key={pres.id} pres={pres} />)}
+            {displayFiles.map((pres) => (
+              <FileRow
+                key={pres.id}
+                pres={pres}
+                isAdmin={isAdmin}
+                deleting={deletingId === pres.id}
+                onReview={setReviewing}
+                onDelete={handleDeletePresentation}
+              />
+            ))}
           </div>
         )}
       </div>

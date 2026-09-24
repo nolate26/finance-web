@@ -183,6 +183,33 @@ export function cellDateLabel(region: string, weekIso: string): string {
   return dateLabel(displayDate(region, weekIso));
 }
 
+// ── Orden dentro de una casilla ───────────────────────────────────────────────
+
+/**
+ * Nuevo orden de una casilla del calendario al colocar `id` delante de `beforeId`.
+ *
+ * `ids` son las actividades que ya están en la casilla destino, ordenadas. La que se
+ * mueve se saca primero: cuando el movimiento es un reordenamiento dentro de la misma
+ * casilla, ella ya está en la lista y sin quitarla quedaría dos veces.
+ *
+ * Un `beforeId` ausente o que no esté en la casilla significa "al final" — no es un
+ * error: pasa al soltar en la franja de abajo, y también si el ancla se borró entre
+ * que empezó el arrastre y se soltó.
+ *
+ * Vive acá, y no en la route, para poder probarlo sin base de datos: es la única
+ * parte del movimiento con lógica propia.
+ */
+export function orderWithInserted(ids: string[], id: string, beforeId?: string | null): string[] {
+  // Soltar una actividad sobre SÍ MISMA no la mueve. Sin esto se sacaría de la lista,
+  // no encontraría su propia ancla y terminaría al final: un movimiento que nadie pidió.
+  if (beforeId === id && ids.includes(id)) return [...ids];
+
+  const out = ids.filter((x) => x !== id);
+  const at = beforeId ? out.indexOf(beforeId) : -1;
+  out.splice(at >= 0 ? at : out.length, 0, id);
+  return out;
+}
+
 /** Lista de lunes consecutivos entre dos fechas, ambas inclusive. */
 export function weekRange(fromIso: string, toIso: string): string[] {
   const out: string[] = [];

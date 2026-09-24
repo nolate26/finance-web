@@ -727,11 +727,55 @@ model Presentation {
   file_url     String
   category     String   // ej: 'Investment Cases', 'Client Presentations'
   region       String   // ej: 'Chile', 'LATAM'
-  company_name String?  // Opcional: para vincularlo a un ticker o empresa
+  // Texto libre heredado: un ticker suelto escrito a mano. Para investment cases lo
+  // reemplaza la relación `tickers`, que es la que tiene FK, TP y recomendación. Se
+  // conserva porque lo siguen usando las presentaciones viejas y RelatedReports.
+  company_name String?
   is_sell_side Boolean  @default(false) // <--- NUEVO CAMPO AÑADIDO
   created_at   DateTime @default(now())
 
+  // ── Investment cases ───────────────────────────────────────────────────────
+  // Fecha del caso (la del informe, no la de carga). Nullable: el resto de las
+  // categorías no la pide.
+  caseDate     DateTime? @map("case_date") @db.Date
+  // Email de quien lo subió — ahora que subir es de todo el equipo, es lo que le
+  // dice al admin a quién preguntarle al revisar.
+  uploadedBy   String?   @map("uploaded_by") @db.VarChar(200)
+
+  // Flujo de revisión. Sólo los investment cases nacen en "pending": el admin
+  // verifica tickers / TP / recomendación y los pasa a "approved". Default
+  // "approved" para que todo lo ya cargado (y las otras categorías) no aparezca
+  // como pendiente de la nada.
+  reviewStatus String    @default("approved") @map("review_status") @db.VarChar(20) // pending | approved
+  reviewedBy   String?   @map("reviewed_by") @db.VarChar(200)
+  reviewedAt   DateTime? @map("reviewed_at")
+
+  tickers      PresentationTicker[]
+
+  @@index([reviewStatus])
   @@map("presentations") // (Opcional) para que la tabla en Postgres se llame en minúsculas y plural
+}
+
+// Empresas cubiertas por una presentación (hoy: investment cases), con la tesis que
+// el analista declara para CADA una. Es una tabla aparte y no columnas en
+// `presentations` porque un caso puede cubrir varias empresas, y el target price y la
+// recomendación son de la ACCIÓN, no del documento: un caso sobre CCU y Andina lleva
+// un TP por cada una.
+model PresentationTicker {
+  id             String  @id @default(uuid())
+  presentationId String  @map("presentation_id")
+  ticker         String  @db.VarChar(100)   // empresas_industrias_v2.ticker_bloomberg
+  targetPrice    Float?  @map("target_price")
+  recommendation String? @db.VarChar(10)    // BUY | HOLD | SELL
+
+  // Cascade: borrar la presentación se lleva sus tickers (no tienen vida propia).
+  presentation Presentation         @relation(fields: [presentationId], references: [id], onDelete: Cascade)
+  // Restrict, igual que en fichas: la maestra no se borra si alguien la referencia.
+  empresa      EmpresasIndustriasV2 @relation(fields: [ticker], references: [tickerBloomberg], onDelete: Restrict)
+
+  @@unique([presentationId, ticker])
+  @@index([ticker])
+  @@map("presentation_tickers")
 }
 
 
@@ -1052,6 +1096,7 @@ model EmpresasIndustriasV2 {
   yahooFinanceTicker String?  @map("yahoo_finance_ticker") // <-- NUEVA COLUMNA AGREGADA
 
   fichas             Ficha[]
+  presentaciones     PresentationTicker[]
 
   // @@index([tickerBloomberg]) eliminado: era un duplicado literal del índice que ya
   // crea el @unique de esa misma columna.
@@ -1302,6 +1347,18 @@ model WeeklyPlan {
   allAnalysts Boolean  @default(false) @map("all_analysts")
   highlighted Boolean  @default(false)  // el recuadro rojo del Excel: semana a vigilar
   notes       String?  @db.Text
+  // Posición DENTRO de su casilla (región × semana), de arriba hacia abajo.
+  //
+  // Existe porque una casilla dejó de tener una sola actividad: en un mismo día puede
+  // haber dos (o más) y la fila se estira para mostrarlas todas. Antes la unicidad de
+  // (region, week_start) garantizaba una por casilla y el orden no era un problema
+  // que existiera; ahora hace falta decir cuál va primero.
+  //
+  // NO es único: al reordenar se reescribe la casilla entera (0..n-1) en una
+  // transacción, y un índice único obligaría al baile de valores temporales que hacía
+  // el swap de celdas. Con pocas filas por casilla, renumerar sale más barato y no
+  // deja huecos ni colisiones.
+  sortOrder   Int      @default(0) @map("sort_order")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
   updatedBy   String?  @map("updated_by") @db.VarChar(200) // users.email del último editor
@@ -1309,7 +1366,10 @@ model WeeklyPlan {
   analysts    WeeklyPlanAnalyst[]
   tasks       Task[]
 
-  @@unique([region, weekStart])
+  // Sin @@unique([region, weekStart]): varias actividades comparten casilla. La
+  // identidad de una celda es su id, y por ahí la direccionan el PUT, el DELETE y el
+  // move — antes los tres la buscaban por (región, semana), que ya es ambiguo.
+  @@index([region, weekStart, sortOrder])
   @@index([weekStart])
   @@map("weekly_plan")
 }

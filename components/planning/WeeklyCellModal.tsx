@@ -10,11 +10,13 @@ import {
 import type { WeeklyCell } from "@/app/api/planning/weekly/route";
 import type { AnalystOption } from "@/app/api/planning/analysts/route";
 
-// Editor de una celda del calendario. Sólo lo monta el admin.
-// La celda puede no existir todavía: en ese caso `cell` es null y el PUT la crea.
+// Editor de UNA actividad del calendario. Sólo lo monta el admin.
+// `cell` null = actividad nueva en esa casilla, y el PUT la crea. Como un día puede
+// tener varias, "nueva" ya no significa "la casilla está vacía": también se llega acá
+// desde "+ add another" sobre una casilla que ya tiene una.
 //
 // El header muestra la fecha que le TOCA a la región (Chile martes, LatAm jueves),
-// pero lo que se manda al PUT sigue siendo el lunes: ésa es la llave de la fila.
+// pero lo que se manda al PUT sigue siendo el lunes: así se indexan las semanas.
 
 interface Props {
   region:   string;
@@ -59,6 +61,8 @@ export default function WeeklyCellModal({ region, weekIso, cell, analysts, onClo
         method:  "PUT",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
+          // Sin id el servidor CREA otra actividad en la casilla; con id edita ésa.
+          id: cell?.id,
           region, weekStart: weekIso, topic, category,
           allAnalysts, highlighted, notes,
           analystIds: allAnalysts ? [] : selected,
@@ -80,16 +84,14 @@ export default function WeeklyCellModal({ region, weekIso, cell, analysts, onClo
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(
-        `/api/planning/weekly?region=${encodeURIComponent(region)}&weekStart=${weekIso}`,
-        { method: "DELETE" },
-      );
+      // Por id: en un día con dos actividades, la región y la semana no dicen cuál.
+      const res = await fetch(`/api/planning/weekly?id=${encodeURIComponent(cell.id)}`, { method: "DELETE" });
       const d = await res.json();
-      if (!res.ok) throw new Error(d.error ?? "Could not clear the cell");
+      if (!res.ok) throw new Error(d.error ?? "Could not delete the activity");
       onSaved();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not clear the cell");
+      setError(e instanceof Error ? e.message : "Could not delete the activity");
     } finally {
       setSaving(false);
     }
@@ -126,6 +128,9 @@ export default function WeeklyCellModal({ region, weekIso, cell, analysts, onClo
             </div>
             <div style={{ fontSize: 11, color: TEXT.muted, marginTop: 2, fontFamily: FONT_SECONDARY }}>
               {regionDayName(region)}, {displayDate(region, weekIso)}
+              {/* Sin celda se está agregando: el mismo día puede tener varias, así
+                  que conviene decir que ésta se suma y no reemplaza a la que ya hay. */}
+              {!cell && <span style={{ color: PATRIA.blue, fontWeight: 700 }}> · new activity</span>}
             </div>
           </div>
           <button
@@ -277,7 +282,7 @@ export default function WeeklyCellModal({ region, weekIso, cell, analysts, onClo
                 cursor: saving ? "default" : "pointer", padding: "6px 2px",
               }}
             >
-              <Trash2 size={13} /> Clear cell
+              <Trash2 size={13} /> Delete activity
             </button>
           ) : <span />}
 

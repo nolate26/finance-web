@@ -4,22 +4,16 @@ import { useRef, useState } from "react";
 import { Upload, X, FileText, AlertCircle, RefreshCw } from "lucide-react";
 import { FONT_SECONDARY } from "@/lib/patriaTheme";
 import CompanyCombobox from "@/components/CompanyCombobox";
+import CaseTickersEditor, { type CaseTicker } from "@/components/presentations/CaseTickersEditor";
 import type { FichaRow } from "@/app/api/fichas/route";
 import { currentQuarter, quarterKey, quarterLabel, quarterOptions, parseQuarterLabel } from "@/lib/quarters";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export interface Presentation {
-  id: string;
-  title: string;
-  description: string | null;
-  file_url: string;
-  category: string;
-  region: string;
-  company_name: string | null;
-  is_sell_side: boolean;
-  created_at: string;
-}
+// El tipo canónico vive en lib/presentationDto (lo comparten API y UI); se re-exporta
+// acá porque media app ya lo importaba desde este módulo.
+export type { Presentation } from "@/lib/presentationDto";
+import type { Presentation } from "@/lib/presentationDto";
 
 interface Props {
   defaultCategory: string;
@@ -138,6 +132,9 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
     const q = currentQuarter();
     return quarterLabel(q.fiscalYear, q.quarter);
   });
+  // Investment cases: empresas cubiertas (con TP y rating) + fecha del caso.
+  const [caseTickers, setCaseTickers] = useState<CaseTicker[]>([]);
+  const [caseDate,    setCaseDate]    = useState(() => new Date().toISOString().slice(0, 10));
 
   // Submit
   const [phase,    setPhase]    = useState<Phase>("idle");
@@ -157,6 +154,7 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
   }
 
   const isFicha = category === "fichas";
+  const isCase  = category === "investment_cases";
 
   // Quarter elegido, ya parseado. El selector sólo ofrece etiquetas válidas.
   const quarter = parseQuarterLabel(quarterSel);
@@ -210,6 +208,7 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
     if (!file)                    { setError("Please select a file first.");     return; }
     if (isFicha && !companyTicker) { setError("A company ticker is required for fichas."); return; }
     if (isFicha && !quarter)       { setError("A valid quarter is required (e.g. 2Q26)."); return; }
+    if (isCase && caseTickers.length === 0) { setError("Pick at least one company for this investment case."); return; }
     if (!title.trim())            { setError("Title is required.");              return; }
 
     setError(null);
@@ -302,6 +301,13 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
           region,
           company_name: companyTicker || null,
           is_sell_side: isSellSide,
+          // Sólo los investment cases llevan empresas cubiertas y fecha del caso.
+          ...(isCase ? {
+            case_date: caseDate || null,
+            tickers: caseTickers.map((t) => ({
+              ticker: t.ticker, target_price: t.target_price, recommendation: t.recommendation,
+            })),
+          } : {}),
         }),
       });
       if (!res.ok) {
@@ -525,22 +531,49 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
             )}
 
             {/* ── Company autocomplete ──────────────────────────────────── */}
-            <div>
-              <label style={LABEL}>
-                Company / Ticker{" "}
-                {isFicha
-                  ? <span style={{ color: "#F8485E" }}>*</span>
-                  : <span style={{ color: "rgba(13,13,56,0.45)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(optional)</span>}
-              </label>
-              {/* Fichas buscan en TODA la maestra: una empresa puede tener ficha antes que modelo o posición. */}
-              <CompanyCombobox
-                value={companyTicker}
-                onChange={(ticker) => setCompanyTicker(ticker)}
-                disabled={isSubmitting}
-                includeUniverse={isFicha}
-                placeholder={isFicha ? "Search any company in empresas_industrias_v2…" : undefined}
-              />
-            </div>
+            {/* Investment cases: varias empresas, cada una con su TP y rating.
+                El resto de las categorías sigue con el ticker suelto opcional. */}
+            {isCase ? (
+              <>
+                <div>
+                  <label style={LABEL}>
+                    Companies covered <span style={{ color: "#F8485E" }}>*</span>
+                  </label>
+                  <CaseTickersEditor value={caseTickers} onChange={setCaseTickers} disabled={isSubmitting} />
+                </div>
+
+                <div>
+                  <label style={LABEL}>Case date</label>
+                  <input
+                    type="date"
+                    value={caseDate}
+                    onChange={(e) => setCaseDate(e.target.value)}
+                    disabled={isSubmitting}
+                    style={{ ...INPUT, opacity: isSubmitting ? 0.6 : 1 }}
+                  />
+                  <p style={{ fontSize: 10.5, color: "rgba(13,13,56,0.45)", margin: "5px 0 0", lineHeight: 1.5 }}>
+                    La fecha del informe, no la de carga.
+                  </p>
+                </div>
+              </>
+            ) : (
+              <div>
+                <label style={LABEL}>
+                  Company / Ticker{" "}
+                  {isFicha
+                    ? <span style={{ color: "#F8485E" }}>*</span>
+                    : <span style={{ color: "rgba(13,13,56,0.45)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(optional)</span>}
+                </label>
+                {/* Fichas buscan en TODA la maestra: una empresa puede tener ficha antes que modelo o posición. */}
+                <CompanyCombobox
+                  value={companyTicker}
+                  onChange={(ticker) => setCompanyTicker(ticker)}
+                  disabled={isSubmitting}
+                  includeUniverse={isFicha}
+                  placeholder={isFicha ? "Search any company in empresas_industrias_v2…" : undefined}
+                />
+              </div>
+            )}
 
             {/* ── Quarter de la ficha + aviso de reemplazo ──────────────── */}
             {isFicha && (
@@ -602,6 +635,14 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
                 <AlertCircle size={14} color="#F8485E" style={{ flexShrink: 0, marginTop: 1 }} />
                 <p style={{ fontSize: 12, color: "#F8485E", margin: 0, lineHeight: 1.5 }}>{error}</p>
               </div>
+            )}
+
+            {/* Los casos entran a la cola de revisión del admin. */}
+            {isCase && (
+              <p style={{ fontSize: 11, color: "rgba(13,13,56,0.45)", margin: 0, lineHeight: 1.5 }}>
+                El caso queda marcado como <strong style={{ color: "#FF6B06" }}>pendiente de revisión</strong>: un admin
+                verifica empresas, target price y recomendación antes de darlo por aprobado.
+              </p>
             )}
 
             {/* ── Actions ───────────────────────────────────────────────── */}

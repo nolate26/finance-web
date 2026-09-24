@@ -1,31 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, getSessionUser } from "@/lib/auth";
-import { logAdminChanges, ENTITY, type AdminLogEntry } from "@/lib/adminLog";
-import { mondayOf, isoDate } from "@/lib/planning";
+import { logAdminChanges, ENTITY } from "@/lib/adminLog";
+import { mondayOf, isoDate, orderWithInserted } from "@/lib/planning";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// Mover una celda del calendario a otra casilla (drag & drop). Si el destino ya
-// tiene celda, las dos se intercambian. La fila conserva su id: los analistas y
-// las tareas colgadas (tasks.weekly_plan_id) viajan con ella sin tocar nada más.
-// Sólo admin, igual que el PUT/DELETE de la celda.
+// Mover una actividad del calendario a otra casilla (drag & drop), o reordenarla
+// dentro de la suya. La fila conserva su id: los analistas y las tareas colgadas
+// (tasks.weekly_plan_id) viajan con ella sin tocar nada más. Sólo admin.
+//
+// QUÉ CAMBIÓ Y POR QUÉ. Antes una casilla tenía como mucho una celda, así que esto
+// recibía (origen, destino) y, si el destino estaba ocupado, INTERCAMBIABA las dos —
+// era la única salida cuando no cabían las dos en el mismo lugar. Ahora sí caben: se
+// manda el `id` de la que se arrastra y soltar sobre una casilla ocupada la suma a la
+// lista en vez de desplazar a nadie. `beforeId` dice delante de cuál entra; sin él va
+// al final.
 
-interface SlotBody { region?: string; weekStart?: string }
-interface MoveBody { from?: SlotBody; to?: SlotBody }
-
-interface Slot { region: string; weekStart: Date }
-
-function parseSlot(s: SlotBody | undefined): Slot | null {
-  const region = s?.region?.trim().toUpperCase();
-  if (!region || !s?.weekStart) return null;
-  const weekStart = mondayOf(s.weekStart);
-  if (Number.isNaN(weekStart.getTime())) return null;
-  return { region, weekStart };
+interface MoveBody {
+  id?:       string;
+  to?:       { region?: string; weekStart?: string };
+  /** Id de la actividad del destino delante de la cual insertar. null/ausente = al final. */
+  beforeId?: string | null;
 }
 
-const slotKey = (s: Slot) => `${s.region}|${isoDate(s.weekStart)}`;
+/** Reescribe sort_order 0..n-1 en el orden dado. */
+async function renumber(tx: Prisma.TransactionClient, ids: string[]) {
+  for (let i = 0; i < ids.length; i++) {
+    await tx.weeklyPlan.update({ where: { id: ids[i] }, data: { sortOrder: i } });
+  }
+}
 
 export async function POST(req: NextRequest) {
   const deny = await requireAdmin();
@@ -39,72 +45,79 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
 
-  const from = parseSlot(body.from);
-  const to   = parseSlot(body.to);
-  if (!from || !to) {
-    return NextResponse.json({ error: "from y to necesitan region y weekStart" }, { status: 400 });
+  const id     = body.id?.trim();
+  const region = body.to?.region?.trim().toUpperCase();
+  if (!id)     return NextResponse.json({ error: "id es obligatorio" }, { status: 400 });
+  if (!region || !body.to?.weekStart) {
+    return NextResponse.json({ error: "to necesita region y weekStart" }, { status: 400 });
   }
-  if (slotKey(from) === slotKey(to)) return NextResponse.json({ ok: true, swapped: false });
-
-  const stamp = { updatedBy: self?.email ?? null };
+  const weekStart = mondayOf(body.to.weekStart);
+  if (Number.isNaN(weekStart.getTime())) {
+    return NextResponse.json({ error: "weekStart inválida" }, { status: 400 });
+  }
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      const src = await tx.weeklyPlan.findUnique({
-        where:  { region_weekStart: from },
-        select: { id: true, topic: true, category: true },
+      const cell = await tx.weeklyPlan.findUnique({
+        where:  { id },
+        select: { id: true, region: true, weekStart: true, topic: true },
       });
-      if (!src) return null;
+      if (!cell) return null;
 
-      const dst = await tx.weeklyPlan.findUnique({
-        where:  { region_weekStart: to },
-        select: { id: true, topic: true, category: true },
+      const fromKey = `${cell.region}|${isoDate(cell.weekStart)}`;
+      const toKey   = `${region}|${isoDate(weekStart)}`;
+
+      // Las que ya están en el destino, en orden. orderWithInserted saca la que se
+      // mueve si estaba entre ellas (reordenamiento dentro de la misma casilla).
+      const target = await tx.weeklyPlan.findMany({
+        where:   { region, weekStart },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        select:  { id: true },
       });
+      const ordered = orderWithInserted(target.map((r) => r.id), id, body.beforeId);
 
-      if (!dst) {
-        await tx.weeklyPlan.update({ where: { id: src.id }, data: { ...to, ...stamp } });
-        return { src, dst: null };
+      await tx.weeklyPlan.update({
+        where: { id },
+        data:  { region, weekStart, updatedBy: self?.email ?? null },
+      });
+      await renumber(tx, ordered);
+
+      // Si salió de otra casilla, la de origen queda con huecos en el orden.
+      if (fromKey !== toKey) {
+        const rest = await tx.weeklyPlan.findMany({
+          where:   { region: cell.region, weekStart: cell.weekStart },
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+          select:  { id: true },
+        });
+        await renumber(tx, rest.map((r) => r.id));
       }
 
-      // Intercambio. (region, weekStart) es único y Postgres lo chequea en cada
-      // UPDATE, así que el origen pasa por una región temporal (derivada de su
-      // propio id para que dos swaps simultáneos no choquen) mientras el destino
-      // ocupa su casilla.
-      await tx.weeklyPlan.update({ where: { id: src.id }, data: { region: `~${src.id}`.slice(0, 40) } });
-      await tx.weeklyPlan.update({ where: { id: dst.id }, data: { ...from, ...stamp } });
-      await tx.weeklyPlan.update({ where: { id: src.id }, data: { ...to,   ...stamp } });
-      return { src, dst };
+      return { topic: cell.topic, fromKey, toKey };
     });
 
-    if (!result) return NextResponse.json({ error: "La celda de origen ya no existe" }, { status: 404 });
+    if (!result) return NextResponse.json({ error: "La actividad ya no existe" }, { status: 404 });
 
-    const entries: AdminLogEntry[] = [{
-      entity:    ENTITY.weeklyPlan,
-      entityKey: slotKey(to),
-      label:     result.src.topic,
-      field:     "week",
-      oldValue:  slotKey(from),
-      newValue:  slotKey(to),
-      context:   isoDate(to.weekStart),
-      action:    "update",
-    }];
-    if (result.dst) {
-      entries.push({
-        entity:    ENTITY.weeklyPlan,
-        entityKey: slotKey(from),
-        label:     result.dst.topic,
-        field:     "week",
-        oldValue:  slotKey(to),
-        newValue:  slotKey(from),
-        context:   isoDate(from.weekStart),
-        action:    "update",
-      });
+    // Un reordenamiento dentro de la misma casilla no ensucia la bitácora: no cambió
+    // ni la fecha ni la región, que es lo que el log de esta entidad registra.
+    if (result.fromKey !== result.toKey) {
+      await logAdminChanges(
+        [{
+          entity:    ENTITY.weeklyPlan,
+          entityKey: result.toKey,
+          label:     result.topic,
+          field:     "week",
+          oldValue:  result.fromKey,
+          newValue:  result.toKey,
+          context:   isoDate(weekStart),
+          action:    "update",
+        }],
+        self?.email ?? null,
+      );
     }
-    await logAdminChanges(entries, self?.email ?? null);
 
-    return NextResponse.json({ ok: true, swapped: !!result.dst });
+    return NextResponse.json({ ok: true, moved: result.fromKey !== result.toKey });
   } catch (e) {
     console.error("[planning/weekly/move POST]", e);
-    return NextResponse.json({ error: "No se pudo mover la celda" }, { status: 500 });
+    return NextResponse.json({ error: "No se pudo mover la actividad" }, { status: 500 });
   }
 }

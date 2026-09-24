@@ -573,7 +573,7 @@ export default function ConsensusCheckTable() {
               <Th level={0} rowSpan={3} sortKey="upsideModel" {...thProps}>Upside @Model</Th>
               <Th level={0} rowSpan={3} sortKey="upside" {...thProps}>Upside Live</Th>
               {/* Moneda y unidad del modelo (header del analista), como en "Reported CCY" del deep-dive */}
-              <Th level={0} rowSpan={3} sortKey="currency" {...thProps}>CCY</Th>
+              <Th level={0} rowSpan={3} sortKey="currency" {...thProps}>CCY (FFSS)</Th>
               <Th level={0} rowSpan={3} sortKey="unit" {...thProps}>Unit</Th>
 
               {sections.map((s) => (

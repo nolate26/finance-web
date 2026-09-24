@@ -7,7 +7,7 @@ import {
   useDraggable, useDroppable, pointerWithin,
   type DragStartEvent, type DragEndEvent,
 } from "@dnd-kit/core";
-import { ArrowLeftRight, ChevronLeft, ChevronRight, GripVertical, ListChecks } from "lucide-react";
+import { ChevronLeft, ChevronRight, GripVertical, ListChecks } from "lucide-react";
 import { FONT_SECONDARY, TEXT, BORDER, PATRIA } from "@/lib/patriaTheme";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import {
@@ -26,9 +26,14 @@ import WeeklyCellModal from "./WeeklyCellModal";
 // se RENDERIZA en el día que le toca — Chile martes, LatAm jueves. Ver displayDate()
 // en lib/planning.ts. Por eso una misma fila muestra dos fechas distintas.
 //
-// DRAG & DROP: cada celda con contenido es un draggable (id = weekly_plan.id) y cada
-// casilla (región × semana) un droppable. Soltar sobre una casilla vacía mueve la
-// celda; sobre una ocupada, las intercambia. El cambio se pinta al soltar y
+// VARIAS POR CASILLA: un mismo día puede tener dos o más actividades y la fila se
+// estira para mostrarlas todas, una debajo de otra. Por eso la casilla es una LISTA
+// —byKey devuelve WeeklyCell[]— y cada actividad se direcciona por su id.
+//
+// DRAG & DROP: cada actividad es un draggable (id = weekly_plan.id). Soltar sobre una
+// casilla la suma al final; soltar SOBRE otra actividad la inserta delante de ella,
+// que es como se reordena un día con dos. Ya no hay intercambio: existía porque no
+// cabían dos en el mismo lugar y ahora sí caben. El cambio se pinta al soltar y
 // POST /api/planning/weekly/move lo confirma; si falla, se recarga y se revierte.
 
 const WEEKS_AHEAD = 16;   // ventana por defecto: ~4 meses hacia adelante
@@ -41,7 +46,8 @@ const DATE_COL_W    = 72;
 const ANALYST_COL_W = 74;
 
 interface DragData { cell: WeeklyCell; region: string; weekIso: string }
-interface DropData { region: string; weekIso: string }
+/** `beforeId` = insertar delante de esa actividad; null = al final de la casilla. */
+interface DropData { region: string; weekIso: string; beforeId: string | null }
 
 interface Props {
   /** Se llama al pinchar el contador de tareas de una celda. */
@@ -54,6 +60,9 @@ function initialsOf(cell: WeeklyCell | undefined): string {
   return cell.analysts.map((a) => a.initials).filter(Boolean).join(" / ") || "-";
 }
 
+/** Qué celda se está editando: una existente, o una nueva en esa casilla. */
+interface Editing { region: string; weekIso: string; cell: WeeklyCell | null }
+
 export default function WeeklyCalendar({ onOpenTasks }: Props) {
   const isAdmin = useIsAdmin();
 
@@ -62,7 +71,7 @@ export default function WeeklyCalendar({ onOpenTasks }: Props) {
   const [analysts, setAnalysts] = useState<AnalystOption[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
-  const [editing, setEditing]   = useState<{ region: string; weekIso: string } | null>(null);
+  const [editing, setEditing]   = useState<Editing | null>(null);
   const [dragging, setDragging] = useState<WeeklyCell | null>(null);   // celda en el aire
   const [moving, setMoving]     = useState(false);                     // POST /move en vuelo
   const [portalEl, setPortalEl] = useState<HTMLElement | null>(null);
@@ -116,9 +125,19 @@ export default function WeeklyCalendar({ onOpenTasks }: Props) {
     return [...PLAN_REGIONS, ...extra];
   }, [cells]);
 
+  // Una casilla es una LISTA: varias actividades pueden compartir región y semana.
   const byKey = useMemo(() => {
-    const m = new Map<string, WeeklyCell>();
-    for (const c of cells) m.set(`${c.region}|${c.weekStart}`, c);
+    const m = new Map<string, WeeklyCell[]>();
+    for (const c of cells) {
+      const k = `${c.region}|${c.weekStart}`;
+      const list = m.get(k);
+      if (list) list.push(c);
+      else m.set(k, [c]);
+    }
+    // El servidor ya las manda ordenadas, pero el estado optimista de un arrastre
+    // mete un sortOrder fraccionario: sin reordenar acá, la actividad movida se
+    // vería en su posición vieja hasta que llegara el refetch.
+    for (const list of m.values()) list.sort((a, b) => a.sortOrder - b.sortOrder);
     return m;
   }, [cells]);
 
@@ -143,18 +162,28 @@ export default function WeeklyCalendar({ onOpenTasks }: Props) {
     const src = e.active.data.current as DragData | undefined;
     const dst = e.over?.data.current as DropData | undefined;
     if (!src || !dst) return;
-    if (src.region === dst.region && src.weekIso === dst.weekIso) return;
+    // Soltar sobre sí misma no es un movimiento.
+    if (dst.beforeId === src.cell.id) return;
 
-    const target = byKey.get(`${dst.region}|${dst.weekIso}`);
+    const sameSlot = src.region === dst.region && src.weekIso === dst.weekIso;
+    if (sameSlot && !dst.beforeId) return;   // al final de su propia casilla: nada que hacer
 
-    // Optimista: la celda cambia de casilla al soltar (y la del destino, si había,
-    // pasa a la de origen). El refetch de abajo deja el estado igual al servidor,
-    // haya ido bien o mal.
-    setCells((prev) => prev.map((c) => {
-      if (c.id === src.cell.id) return { ...c, region: dst.region, weekStart: dst.weekIso };
-      if (target && c.id === target.id) return { ...c, region: src.region, weekStart: src.weekIso };
-      return c;
-    }));
+    const targetList = byKey.get(`${dst.region}|${dst.weekIso}`) ?? [];
+    const anchor = dst.beforeId ? targetList.find((c) => c.id === dst.beforeId) : null;
+
+    // Optimista: la actividad salta a la casilla destino al soltar. El sortOrder
+    // provisional es fraccionario a propósito —medio punto antes del ancla, o uno
+    // más que el último—: sólo tiene que ordenar bien hasta que el refetch de abajo
+    // traiga la numeración entera que dejó el servidor.
+    const provisional = anchor
+      ? anchor.sortOrder - 0.5
+      : (targetList.filter((c) => c.id !== src.cell.id).at(-1)?.sortOrder ?? -1) + 1;
+
+    setCells((prev) => prev.map((c) => (
+      c.id === src.cell.id
+        ? { ...c, region: dst.region, weekStart: dst.weekIso, sortOrder: provisional }
+        : c
+    )));
 
     setMoving(true);
     let failure: string | null = null;
@@ -163,21 +192,20 @@ export default function WeeklyCalendar({ onOpenTasks }: Props) {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
-          from: { region: src.region, weekStart: src.weekIso },
-          to:   { region: dst.region, weekStart: dst.weekIso },
+          id:       src.cell.id,
+          to:       { region: dst.region, weekStart: dst.weekIso },
+          beforeId: dst.beforeId,
         }),
       });
       const d = await res.json();
-      if (!res.ok) throw new Error(d.error ?? "Could not move the cell");
+      if (!res.ok) throw new Error(d.error ?? "Could not move the activity");
     } catch (err) {
-      failure = err instanceof Error ? err.message : "Could not move the cell";
+      failure = err instanceof Error ? err.message : "Could not move the activity";
     }
     await fetchData({ silent: true });
     if (failure) setError(failure);
     setMoving(false);
   }
-
-  const editingCell = editing ? byKey.get(`${editing.region}|${editing.weekIso}`) ?? null : null;
 
   return (
     <div>
@@ -241,7 +269,7 @@ export default function WeeklyCalendar({ onOpenTasks }: Props) {
           // Las instrucciones por defecto hablan de la barra espaciadora y acá no
           // hay sensor de teclado: sólo mouse y toque sostenido.
           screenReaderInstructions: {
-            draggable: "Drag with the mouse, or press and hold on touch, to move this week to another slot. Dropping on an occupied slot swaps the two.",
+            draggable: "Drag with the mouse, or press and hold on touch, to move this activity to another day. Dropping on a day that already has activities adds it to that day; dropping on an activity places it above.",
           },
         }}
       >
@@ -300,24 +328,21 @@ export default function WeeklyCalendar({ onOpenTasks }: Props) {
                     const isNow = wk === thisMonday;
                     return (
                       <tr key={wk}>
-                        {regions.map((r) => {
-                          const cell = byKey.get(`${r}|${wk}`);
-                          return (
-                            <CellGroup
-                              key={`${r}|${wk}`}
-                              region={r}
-                              weekIso={wk}
-                              isNow={isNow}
-                              isToday={displayDate(r, wk) === todayIso}
-                              cell={cell}
-                              isAdmin={isAdmin}
-                              draggingId={dragging?.id ?? null}
-                              dragDisabled={moving}
-                              onEdit={() => isAdmin && setEditing({ region: r, weekIso: wk })}
-                              onOpenTasks={onOpenTasks}
-                            />
-                          );
-                        })}
+                        {regions.map((r) => (
+                          <CellGroup
+                            key={`${r}|${wk}`}
+                            region={r}
+                            weekIso={wk}
+                            isNow={isNow}
+                            isToday={displayDate(r, wk) === todayIso}
+                            cells={byKey.get(`${r}|${wk}`) ?? []}
+                            isAdmin={isAdmin}
+                            draggingId={dragging?.id ?? null}
+                            dragDisabled={moving}
+                            onEdit={(cell) => isAdmin && setEditing({ region: r, weekIso: wk, cell })}
+                            onOpenTasks={onOpenTasks}
+                          />
+                        ))}
                       </tr>
                     );
                   })}
@@ -356,7 +381,7 @@ export default function WeeklyCalendar({ onOpenTasks }: Props) {
         <WeeklyCellModal
           region={editing.region}
           weekIso={editing.weekIso}
-          cell={editingCell}
+          cell={editing.cell}
           analysts={analysts}
           onClose={() => setEditing(null)}
           onSaved={fetchData}
@@ -366,133 +391,225 @@ export default function WeeklyCalendar({ onOpenTasks }: Props) {
   );
 }
 
-// ── Una celda = 3 <td>: fecha | tópico | analistas ───────────────────────────
+// ── Una casilla = 2 <td>: fecha | pila de actividades ────────────────────────
+// El segundo <td> abarca las columnas de tópico y analistas (colSpan 2) porque cada
+// actividad lleva SUS analistas: con tres <td> sueltos, una casilla de dos actividades
+// tendría una columna de tópicos de dos líneas y una de analistas de una, sin forma de
+// saber cuál es de cuál. Adentro, cada fila reparte el ancho igual que las columnas —
+// el resto para el tópico, ANALYST_COL_W para las siglas—, así la grilla se sigue
+// leyendo alineada entre regiones.
 function CellGroup({
-  region, weekIso, isNow, isToday, cell, isAdmin, draggingId, dragDisabled, onEdit, onOpenTasks,
+  region, weekIso, isNow, isToday, cells, isAdmin, draggingId, dragDisabled, onEdit, onOpenTasks,
 }: {
   region:       string;
   weekIso:      string;
   isNow:        boolean;
   isToday:      boolean;
-  cell:         WeeklyCell | undefined;
+  /** Las actividades de esta casilla, ya ordenadas. Vacío = casilla libre. */
+  cells:        WeeklyCell[];
   isAdmin:      boolean;
-  /** id de la celda que se está arrastrando ahora, si hay una. */
+  /** id de la actividad que se está arrastrando ahora, si hay una. */
   draggingId:   string | null;
   dragDisabled: boolean;
-  onEdit:       () => void;
+  /** null = crear una actividad nueva en esta casilla. */
+  onEdit:       (cell: WeeklyCell | null) => void;
   onOpenTasks?: (cell: WeeklyCell) => void;
 }) {
-  const s = categoryStyle(cell?.category);
   const rowBorder = `1px solid ${BORDER.subtle}`;
-  const hl = cell?.highlighted;
-  const draggable = isAdmin && !!cell && !dragDisabled;
-
-  // Los tres <td> son droppables (con ids distintos, misma data): así se puede
-  // soltar en cualquier parte de la fila de la región, no sólo sobre el tópico.
+  // La casilla se marca si CUALQUIERA de sus actividades está destacada.
+  const hl = cells.some((c) => c.highlighted);
   const slotKey = `${region}|${weekIso}`;
-  const dropData = { region, weekIso } satisfies DropData;
-  const dropDate    = useDroppable({ id: `${slotKey}#date`,    data: dropData, disabled: !isAdmin });
-  const dropTopic   = useDroppable({ id: slotKey,              data: dropData, disabled: !isAdmin });
-  const dropAnalyst = useDroppable({ id: `${slotKey}#analyst`, data: dropData, disabled: !isAdmin });
-  const isOver = dropDate.isOver || dropTopic.isOver || dropAnalyst.isOver;
 
-  const { setNodeRef: setDragRef, attributes, listeners, isDragging } = useDraggable({
-    id: cell?.id ?? `empty:${region}|${weekIso}`,
-    data: cell ? ({ cell, region, weekIso } satisfies DragData) : undefined,
-    disabled: !draggable,
-  });
+  // Dos destinos de nivel casilla —la columna de fecha y la franja de abajo—, los dos
+  // "al final". Insertar en una posición concreta es cosa de cada actividad, que trae
+  // su propio droppable con beforeId.
+  const appendData = { region, weekIso, beforeId: null } satisfies DropData;
+  const dropDate = useDroppable({ id: `${slotKey}#date`, data: appendData, disabled: !isAdmin });
+  const dropTail = useDroppable({ id: `${slotKey}#tail`, data: appendData, disabled: !isAdmin });
 
-  // Qué pasaría si se suelta acá: mover a casilla vacía o intercambiar con la
-  // ocupada. Sobre la propia casilla de origen no se marca nada.
-  const drop: "move" | "swap" | null =
-    isOver && draggingId && draggingId !== cell?.id ? (cell ? "swap" : "move") : null;
-  const ring = drop === "swap" ? PATRIA.orange : PATRIA.kingBlue;
-  const dropTint = drop ? (drop === "swap" ? "rgba(255,107,6,0.08)" : "rgba(32,68,220,0.06)") : null;
+  const dragActive = !!draggingId;
+  const tailDrop   = dropTail.isOver && dragActive;
+  const dateDrop   = dropDate.isOver && dragActive;
+  const dropTint   = "rgba(32,68,220,0.06)";
+
+  // La franja de abajo es a la vez el "+ add" y la zona para soltar al final. Sin
+  // actividades ocupa la casilla entera; con actividades es una línea fina, y para
+  // quien no es admin no existe.
+  const showTail = isAdmin || cells.length === 0;
+
+  // Con actividades cargadas la franja va MUDA: un "+ add another" fijo debajo de
+  // cada día llenaba el calendario de texto que no es contenido. Sigue estando y
+  // sigue siendo clickeable —ahí se agrega la segunda actividad y ahí se suelta al
+  // final—, pero sólo se anuncia al pasar por encima o al arrastrar algo.
+  const [hover, setHover] = useState(false);
+  const stacked = cells.length > 0;
+  const tailLabel = tailDrop ? "Drop here"
+    : !isAdmin ? ""
+    : !stacked ? "+ add"
+    : hover ? "+ add another"
+    : "";
 
   return (
     <>
       {/* Date — el día que le toca a la región, no el lunes de la llave */}
       <td ref={dropDate.setNodeRef} style={{
         padding: "6px 10px", textAlign: "right", whiteSpace: "nowrap",
-        borderBottom: rowBorder,
+        verticalAlign: "top", borderBottom: rowBorder,
         fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
         fontSize: 11, fontWeight: isToday ? 800 : 600,
         color: isToday ? PATRIA.kingBlue : TEXT.label,
-        background: dropTint ?? (hl ? "rgba(255,187,141,0.20)" : isNow ? "rgba(32,68,220,0.05)" : "transparent"),
-        borderLeft: drop ? `2px solid ${ring}` : hl ? `2px solid ${PATRIA.orange}` : isNow ? `2px solid ${PATRIA.kingBlue}` : "2px solid transparent",
+        background: dateDrop ? dropTint : hl ? "rgba(255,187,141,0.20)" : isNow ? "rgba(32,68,220,0.05)" : "transparent",
+        borderLeft: dateDrop ? `2px solid ${PATRIA.kingBlue}`
+          : hl ? `2px solid ${PATRIA.orange}`
+          : isNow ? `2px solid ${PATRIA.kingBlue}` : "2px solid transparent",
       }}>
         {cellDateLabel(region, weekIso)}
       </td>
 
-      {/* Topic — draggable el contenido */}
+      {/* Actividades: una debajo de otra, la fila se estira sola */}
       <td
-        ref={dropTopic.setNodeRef}
-        onClick={onEdit}
-        title={
-          !isAdmin ? cell?.notes ?? undefined
-          : cell   ? "Click to edit · drag to move"
-          : "Edit cell"
-        }
+        colSpan={2}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
         style={{
-          padding: 0, borderBottom: rowBorder,
-          cursor: isAdmin ? "pointer" : "default",
-          background: dropTint ?? "transparent",
+          padding: 0, verticalAlign: "top",
+          borderBottom: rowBorder, borderRight: "3px solid #FFFFFF",
         }}
       >
-        <div
-          ref={setDragRef}
-          {...(draggable ? attributes : {})}
-          {...listeners}
-          style={{
-            cursor: draggable ? "grab" : undefined,
-            opacity: isDragging ? 0.35 : 1,
-            boxShadow: drop ? `inset 0 0 0 2px ${ring}` : "none",
-            // Sin esto, el toque sostenido en iOS selecciona el texto o abre el
-            // menú contextual en vez de levantar la celda.
-            userSelect: draggable ? "none" : undefined,
-            WebkitUserSelect: draggable ? "none" : undefined,
-            WebkitTouchCallout: draggable ? "none" : undefined,
-            transition: "opacity 0.12s, box-shadow 0.12s",
-          }}
-        >
-          {cell ? (
-            <TopicPill cell={cell} isAdmin={isAdmin} style={s} swapHint={drop === "swap"} onOpenTasks={onOpenTasks} />
-          ) : (
-            <div style={{
-              padding: "6px 11px", minHeight: 26, display: "flex", alignItems: "center",
-              fontSize: 11.5, fontWeight: drop ? 700 : 500,
-              color: drop ? PATRIA.kingBlue : TEXT.disabled,
-            }}>
-              {drop === "move" ? "Drop here" : isAdmin ? "+ add" : ""}
-            </div>
-          )}
-        </div>
-      </td>
+        {cells.map((cell) => (
+          <ActivityRow
+            key={cell.id}
+            cell={cell}
+            region={region}
+            weekIso={weekIso}
+            isAdmin={isAdmin}
+            draggingId={draggingId}
+            dragDisabled={dragDisabled}
+            onEdit={onEdit}
+            onOpenTasks={onOpenTasks}
+          />
+        ))}
 
-      {/* Analysts */}
-      <td ref={dropAnalyst.setNodeRef} style={{
-        padding: "6px 10px", textAlign: "center", whiteSpace: "nowrap",
-        borderBottom: rowBorder, borderRight: "3px solid #FFFFFF",
-        fontFamily: FONT_SECONDARY, fontSize: 10.5, fontWeight: 700,
-        color: cell ? PATRIA.darkBlue : TEXT.disabled,
-        background: dropTint ?? "transparent",
-        opacity: isDragging ? 0.35 : 1,
-      }}>
-        {initialsOf(cell)}
+        {showTail && (
+          <div
+            ref={dropTail.setNodeRef}
+            onClick={() => isAdmin && onEdit(null)}
+            title={isAdmin ? (stacked ? "Add another activity this day" : "Add activity") : undefined}
+            style={{
+              display: "flex", alignItems: "center",
+              // Muda y fina cuando ya hay actividades: ocupa lo justo para poder
+              // pincharla sin agregar una línea de texto a cada día del calendario.
+              padding: stacked ? "0 11px" : "6px 11px",
+              minHeight: stacked ? 13 : 26,
+              cursor: isAdmin ? "pointer" : "default",
+              background: tailDrop ? dropTint : "transparent",
+              boxShadow: tailDrop ? `inset 0 0 0 2px ${PATRIA.kingBlue}` : "none",
+              fontSize: stacked ? 10 : 11.5,
+              fontWeight: tailDrop ? 700 : 500,
+              color: tailDrop ? PATRIA.kingBlue : TEXT.disabled,
+              transition: "background 0.12s, box-shadow 0.12s, opacity 0.12s",
+              opacity: tailLabel ? 1 : 0,
+            }}
+          >
+            {tailLabel}
+          </div>
+        )}
       </td>
     </>
+  );
+}
+
+// ── Una actividad dentro de la casilla ───────────────────────────────────────
+// Es a la vez draggable (se lleva a otra casilla) y droppable (soltar encima inserta
+// DELANTE de ella, que es como se ordenan dos actividades del mismo día).
+function ActivityRow({
+  cell, region, weekIso, isAdmin, draggingId, dragDisabled, onEdit, onOpenTasks,
+}: {
+  cell:         WeeklyCell;
+  region:       string;
+  weekIso:      string;
+  isAdmin:      boolean;
+  draggingId:   string | null;
+  dragDisabled: boolean;
+  onEdit:       (cell: WeeklyCell) => void;
+  onOpenTasks?: (cell: WeeklyCell) => void;
+}) {
+  const s = categoryStyle(cell.category);
+  const draggable = isAdmin && !dragDisabled;
+
+  const { setNodeRef: setDropRef, isOver } = useDroppable({
+    id:   `cell:${cell.id}`,
+    data: { region, weekIso, beforeId: cell.id } satisfies DropData,
+    disabled: !isAdmin,
+  });
+
+  const { setNodeRef: setDragRef, attributes, listeners, isDragging } = useDraggable({
+    id:   cell.id,
+    data: { cell, region, weekIso } satisfies DragData,
+    disabled: !draggable,
+  });
+
+  // Se inserta ARRIBA de ésta, así que la guía va arriba. Va posicionada en absoluto
+  // para no empujar la fila 2px cada vez que el puntero pasa por encima.
+  const showInsert = isOver && !!draggingId && draggingId !== cell.id;
+
+  return (
+    <div ref={setDropRef} style={{ position: "relative" }}>
+      {showInsert && (
+        <div style={{
+          position: "absolute", left: 0, right: 0, top: -1, height: 2,
+          background: PATRIA.kingBlue, zIndex: 2, pointerEvents: "none",
+        }} />
+      )}
+
+      <div
+        ref={setDragRef}
+        {...(draggable ? attributes : {})}
+        {...listeners}
+        onClick={() => isAdmin && onEdit(cell)}
+        title={
+          !isAdmin ? cell.notes ?? undefined
+          : "Click to edit · drag to move or reorder"
+        }
+        style={{
+          display: "flex", alignItems: "stretch",
+          cursor: draggable ? "grab" : isAdmin ? "pointer" : "default",
+          opacity: isDragging ? 0.35 : 1,
+          // Sin esto, el toque sostenido en iOS selecciona el texto o abre el
+          // menú contextual en vez de levantar la actividad.
+          userSelect: draggable ? "none" : undefined,
+          WebkitUserSelect: draggable ? "none" : undefined,
+          WebkitTouchCallout: draggable ? "none" : undefined,
+          transition: "opacity 0.12s",
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <TopicPill cell={cell} isAdmin={isAdmin} style={s} onOpenTasks={onOpenTasks} />
+        </div>
+
+        {/* Las siglas de ESTA actividad, alineadas con la columna de analistas */}
+        <div style={{
+          width: ANALYST_COL_W, flexShrink: 0,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: "0 10px", whiteSpace: "nowrap",
+          fontFamily: FONT_SECONDARY, fontSize: 10.5, fontWeight: 700,
+          color: PATRIA.darkBlue,
+        }}>
+          {initialsOf(cell)}
+        </div>
+      </div>
+    </div>
   );
 }
 
 // ── La "tarjeta" del tópico: se pinta en la celda y, mientras se arrastra, en el
 //    DragOverlay que sigue al puntero ────────────────────────────────────────
 function TopicPill({
-  cell, isAdmin, style: s, swapHint = false, onOpenTasks,
+  cell, isAdmin, style: s, onOpenTasks,
 }: {
   cell:         WeeklyCell;
   isAdmin:      boolean;
   style:        { bg: string; border: string; text: string };
-  swapHint?:    boolean;
   onOpenTasks?: (cell: WeeklyCell) => void;
 }) {
   return (
@@ -512,18 +629,7 @@ function TopicPill({
         {cell.topic}
       </span>
 
-      {swapHint ? (
-        <span
-          title="Swap with this cell"
-          style={{
-            display: "inline-flex", alignItems: "center", gap: 3, flexShrink: 0,
-            fontSize: 9.5, fontWeight: 800, padding: "1px 6px", borderRadius: 5,
-            background: PATRIA.orange, color: "#FFFFFF", fontFamily: FONT_SECONDARY,
-          }}
-        >
-          <ArrowLeftRight size={9} /> swap
-        </span>
-      ) : !!cell.taskCount && (
+      {!!cell.taskCount && (
         <button
           onClick={(e) => { e.stopPropagation(); onOpenTasks?.(cell); }}
           title={`${cell.taskCount} task${cell.taskCount === 1 ? "" : "s"} on the board`}
