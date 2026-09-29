@@ -5,6 +5,7 @@ import { requireAuth, getSessionUser, canWriteSector } from "@/lib/auth";
 import { logAdminChanges, ENTITY } from "@/lib/adminLog";
 import { TASK_STATUSES, TASK_PRIORITIES, type TaskStatus, type TaskPriority } from "@/lib/planning";
 import { TASK_INCLUDE, toTaskDTO } from "@/lib/planningTasks";
+import { notify } from "@/lib/notify";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -217,6 +218,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   try {
     const updated = await prisma.task.update({ where: { id }, data, include: TASK_INCLUDE });
+
+    // Correo solo en la transición a done (no al re-guardar una tarea ya cerrada).
+    if (task.status !== "done" && updated.status === "done") {
+      notify({
+        kind:     "task_done",
+        taskId:   id,
+        title:    updated.title,
+        sectorId: updated.section.sectorId,
+        company:  updated.company,
+        assignee: updated.assignee?.name ?? updated.assignee?.email ?? null,
+        closedBy: self.name ?? self.email ?? null,
+      });
+    }
 
     // Sólo se registran cambios de fondo; el reordenamiento no aporta a la bitácora.
     if (log.length) {

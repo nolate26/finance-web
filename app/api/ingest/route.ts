@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { normalizeTicker } from '@/lib/issuer';
 import { normBBG } from '@/lib/bbg';
+import { notify } from '@/lib/notify';
 // ❌ ELIMINADO: import { table } from 'console'; (Esto rompe la API en producción)
 
 // createMany necesita que todas las filas tengan el mismo set de claves:
@@ -186,6 +187,12 @@ export async function POST(request: Request) {
           )
         );
 
+        // Solo se avisa por correo si esta versión (ticker, fecha) es nueva: re-subir la
+        // misma planilla corrige datos pero no es un "modelo nuevo" para el equipo.
+        const bankExisted = await prisma.bankHeader.findUnique({
+          where: { ticker_updateDate: bankKey }, select: { ticker: true },
+        });
+
         await prisma.$transaction(async (tx) => {
           // 1. Header — dentro del tx: financials y KPIs tienen FK contra él.
           await tx.bankHeader.upsert({
@@ -223,6 +230,14 @@ export async function POST(request: Request) {
             await tx.bankKPI.createMany({ data: bankKpiRows });
           }
         }, { timeout: 20_000 });
+
+        if (!bankExisted) {
+          notify({
+            kind: 'model', modelType: 'bank', ticker: bankTicker, updateDate: bankDate,
+            recc: bHeader.recc, tp: bHeader.tp, analyst: bHeader.analyst,
+            thesis: bHeader.thesis, link: bHeader.link,
+          });
+        }
 
         return NextResponse.json({
           success: true,
@@ -362,6 +377,11 @@ export async function POST(request: Request) {
           )
         );
 
+        // Mismo criterio que BankModel: correo solo para versiones nuevas.
+        const modelExisted = await prisma.modelHeader.findUnique({
+          where: { ticker_updateDate: modelKey }, select: { ticker: true },
+        });
+
         await prisma.$transaction(async (tx) => {
           // 1. Header — dentro del tx: financials y KPIs tienen FK contra él.
           await tx.modelHeader.upsert({
@@ -401,6 +421,14 @@ export async function POST(request: Request) {
             await tx.modelKPI.createMany({ data: modelKpiRows });
           }
         }, { timeout: 20_000 });
+
+        if (!modelExisted) {
+          notify({
+            kind: 'model', modelType: 'company', ticker: modelTicker, updateDate: modelDate,
+            recc: header.recc, tp: header.tp, analyst: header.analyst,
+            thesis: header.thesis, link: header.link,
+          });
+        }
 
         return NextResponse.json({
           success: true,
