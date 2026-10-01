@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 
 // Detalle, edición y borrado de una tarea.
 //   · GET    — cualquier autenticado: la lectura es abierta a todo el equipo.
-//   · PATCH  — sólo si puedes escribir en el sector de la tarea (miembro, o admin).
+//   · PATCH  — cualquier autenticado (canWriteSector).
 //   · DELETE — igual que PATCH.
 
 type TaskRow = Prisma.TaskGetPayload<{ include: typeof TASK_INCLUDE }>;
@@ -34,7 +34,7 @@ async function load(id: string): Promise<Loaded> {
   return { error: null, task };
 }
 
-/** Como load(), pero además exige permiso de escritura sobre el sector de la tarea. */
+/** Como load(), pero además exige permiso de escritura (canWriteSector). */
 async function loadWritable(id: string): Promise<Writable> {
   const self = await getSessionUser();
   if (!self) {
@@ -47,7 +47,7 @@ async function loadWritable(id: string): Promise<Writable> {
   if (!(await canWriteSector(loaded.task.section.sectorId))) {
     return {
       error: NextResponse.json(
-        { error: "No eres miembro de este sector: solo puedes verlo." },
+        { error: "No tienes permiso para editar esta tarea." },
         { status: 403 },
       ),
       task: null, self: null,

@@ -2,8 +2,11 @@ import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 // Avisos del Research Hub por Telegram. Un bot publica en dos grupos:
-//   · "model"     → TELEGRAM_CHAT_MODELS: entra un modelo nuevo por /api/ingest (compañía o banco).
-//   · "task_done" → TELEGRAM_CHAT_TASKS:  una tarea de Planning pasa a done.
+//   · "model"        → TELEGRAM_CHAT_MODELS: entra un modelo nuevo por /api/ingest (compañía o banco).
+//   · "task_created" → TELEGRAM_CHAT_TASKS:  se crea una tarea en Planning (🟦).
+//   · "task_done"    → TELEGRAM_CHAT_TASKS:  una tarea de Planning pasa a done (🟩).
+// Telegram no permite colorear texto: creada vs completada se distinguen por el
+// cuadrado de color y el emoji del encabezado.
 // Quién recibe cada aviso = quién está en cada grupo; se administra en Telegram, no en la app.
 //
 // Fire-and-forget: notify() nunca lanza ni se espera. El trabajo se agenda con after()
@@ -31,6 +34,18 @@ export type NotifyEvent =
       company?:  string | null;
       assignee?: string | null;
       closedBy?: string | null;
+    }
+  | {
+      kind:         "task_created";
+      taskId:       string;
+      title:        string;
+      sectorId:     string;
+      description?: string | null;
+      priority?:    string | null;
+      dueDate?:     Date | null;
+      company?:     string | null;
+      assignee?:    string | null;
+      createdBy?:   string | null;
     };
 
 const THESIS_MAX = 700;   // Telegram corta en 4096 caracteres; la tesis es lo único largo
@@ -53,7 +68,9 @@ async function send(event: NotifyEvent): Promise<void> {
     return;
   }
 
-  const text = event.kind === "model" ? await modelMessage(event) : await taskMessage(event);
+  const text = event.kind === "model"        ? await modelMessage(event)
+             : event.kind === "task_created" ? await taskCreatedMessage(event)
+             :                                 await taskMessage(event);
 
   const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method:  "POST",
@@ -79,6 +96,13 @@ async function send(event: NotifyEvent): Promise<void> {
 
 type ModelEvent = Extract<NotifyEvent, { kind: "model" }>;
 type TaskEvent  = Extract<NotifyEvent, { kind: "task_done" }>;
+type TaskCreatedEvent = Extract<NotifyEvent, { kind: "task_created" }>;
+
+const PRIORITY_LABEL: Record<string, string> = {
+  high:   "🔴 Alta",
+  medium: "🟠 Media",
+  low:    "⚪ Baja",
+};
 
 async function modelMessage(e: ModelEvent): Promise<string> {
   // findFirst y no findUnique por costumbre: la maestra tiene fan-out por nombre_latam.
@@ -114,7 +138,7 @@ async function taskMessage(e: TaskEvent): Promise<string> {
   const app    = appUrl("/planning");
 
   return [
-    `✅ <b>Tarea completada</b>`,
+    `🟩 ✅ <b>TAREA COMPLETADA</b>`,
     `<b>${esc(e.title)}</b>`,
     "",
     field("Completada por", e.closedBy),
@@ -122,6 +146,28 @@ async function taskMessage(e: TaskEvent): Promise<string> {
     field("Empresa",        e.company),
     field("Asignada a",     e.assignee),
     app ? `\n<a href="${esc(app)}">Ver en Planning</a>` : null,
+  ].filter((l) => l !== null).join("\n");
+}
+
+async function taskCreatedMessage(e: TaskCreatedEvent): Promise<string> {
+  const sector = await prisma.sector.findUnique({ where: { id: e.sectorId }, select: { name: true } });
+  const app    = appUrl("/planning");
+  const desc   = e.description && e.description.length > THESIS_MAX
+    ? e.description.slice(0, THESIS_MAX) + "…"
+    : e.description;
+
+  return [
+    `🟦 🆕 <b>NUEVA TAREA</b>`,
+    `<b>${esc(e.title)}</b>`,
+    "",
+    field("Creada por",  e.createdBy),
+    field("Sector",      sector?.name),
+    field("Empresa",     e.company),
+    field("Asignada a",  e.assignee),
+    e.priority ? `Prioridad: ${PRIORITY_LABEL[e.priority] ?? esc(e.priority)}` : null,
+    field("Vence",       e.dueDate ? e.dueDate.toISOString().slice(0, 10) : null),
+    desc ? `\n<i>${esc(desc)}</i>` : null,
+    app  ? `\n<a href="${esc(app)}">Ver en Planning</a>` : null,
   ].filter((l) => l !== null).join("\n");
 }
 

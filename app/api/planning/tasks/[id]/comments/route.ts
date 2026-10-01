@@ -9,8 +9,7 @@ export const runtime = "nodejs";
 //
 //   · LEER      es abierto: cualquier autenticado ve el hilo de cualquier tarea, igual
 //               que ve la tarea misma.
-//   · COMENTAR  sigue la misma regla que editar — miembros del sector, o admin. Ver una
-//               tarea ajena no habilita a intervenir en su hilo.
+//   · COMENTAR  sigue la misma regla que editar: cualquier autenticado (canWriteSector).
 //   · BORRAR    un comentario: su autor, o un admin.
 //
 // El autor sale SIEMPRE de la sesión, nunca del body — si no, cualquiera podría firmar
@@ -83,7 +82,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (!(await canWriteSector(task.section.sectorId))) {
     return NextResponse.json(
-      { error: "No eres miembro de este sector: puedes leer el hilo, pero no comentar." },
+      { error: "No tienes permiso para comentar esta tarea." },
       { status: 403 },
     );
   }

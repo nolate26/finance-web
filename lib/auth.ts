@@ -120,35 +120,26 @@ export async function requireAdmin(): Promise<NextResponse | null> {
 }
 
 /**
- * ¿Puede este usuario ESCRIBIR dentro de un sector del módulo de planificación?
+ * ¿Puede este usuario ESCRIBIR tareas dentro de un sector del módulo de planificación?
  *
- * Regla única del módulo: leer es abierto (cualquier autenticado ve todos los sectores
- * y todas las tareas), escribir depende de la membresía. Un admin escribe en todos;
- * un `user` sólo en los sectores donde es miembro, y el resto los ve en modo lectura.
- * "Coordinación General" no es un caso especial: se rige por su propia membresía.
+ * Regla del módulo: TODO autenticado lee y escribe en TODOS los sectores — crear,
+ * editar, completar, mover, comentar y borrar tareas. La membresía (sector_members)
+ * ya no es un permiso: queda sólo como referencia de quién cubre cada sector.
+ * Lo único reservado al admin es la ESTRUCTURA (crear/editar sectores, sub-secciones
+ * y miembros), que va por requireAdmin().
  *
- * Devuelve false si no hay sesión.
+ * Se mantiene la firma con sectorId para que los endpoints no cambien si algún día
+ * se vuelve a restringir por sector. Devuelve false si no hay sesión.
  */
-export async function canWriteSector(sectorId: string): Promise<boolean> {
-  const user = await getSessionUser();
-  if (!user) return false;
-  if (user.role === "admin") return true;
-  const member = await prisma.sectorMember.count({
-    where: { sectorId, userId: user.id },
-  });
-  return member > 0;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function canWriteSector(_sectorId: string): Promise<boolean> {
+  return !!(await getSessionUser());
 }
 
-/** Ids de los sectores donde el usuario puede escribir. Un admin recibe `null` = todos. */
+/** Ids de los sectores donde el usuario puede escribir: `null` = todos (ver canWriteSector). */
 export async function writableSectorIds(): Promise<string[] | null> {
   const user = await getSessionUser();
-  if (!user) return [];
-  if (user.role === "admin") return null;
-  const rows = await prisma.sectorMember.findMany({
-    where:  { userId: user.id },
-    select: { sectorId: true },
-  });
-  return rows.map((r) => r.sectorId);
+  return user ? null : [];
 }
 
 /**

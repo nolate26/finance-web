@@ -12,8 +12,8 @@ export const runtime = "nodejs";
 // Sectores del módulo de planificación.
 //
 //   GET  — abierto a cualquier autenticado: devuelve TODOS los sectores con sus
-//          miembros y sub-secciones, más un `canWrite` por sector calculado en el
-//          servidor. La visibilidad es total; lo que cambia es qué puedes tocar.
+//          miembros y sub-secciones. `canWrite` hoy es siempre true: cualquier
+//          usuario escribe tareas en cualquier sector (ver canWriteSector).
 //   POST — sólo admin.
 
 // Las tablas de sectores llegaron en un refactor posterior al resto del módulo, así
@@ -49,7 +49,8 @@ export async function GET() {
       sortOrder:   s.sortOrder,
       members:     s.members.map((m) => m.user),
       sections:    s.sections.map((sec) => ({ id: sec.id, name: sec.name, sortOrder: sec.sortOrder })),
-      canWrite:    isAdmin || s.members.some((m) => m.userId === self.id),
+      // Cualquier autenticado escribe tareas en cualquier sector (ver canWriteSector).
+      canWrite:    true,
     }));
 
     return NextResponse.json({ sectors, isAdmin } satisfies SectorsPayload);

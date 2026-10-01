@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Plus, MessageSquare, CalendarDays, Loader2, Check, Lock,
+  Plus, MessageSquare, CalendarDays, Loader2, Check,
   ChevronDown, ChevronRight, Settings2, Users,
 } from "lucide-react";
 import { FONT_SECONDARY, TEXT, BORDER, PATRIA } from "@/lib/patriaTheme";
@@ -16,9 +16,9 @@ import SectorEditorModal from "./SectorEditorModal";
 // Vista micro: una caja por SECTOR, y dentro de cada sector una lista por sub-sección.
 // Reemplazó a la grilla por analista.
 //
-// VISIBILIDAD: todos ven todo. Lo que cambia por usuario es `sector.canWrite`, que
-// llega calculado del servidor — un sector ajeno se renderiza completo pero sin
-// checkbox, sin botón de agregar y con un candado en la cabecera.
+// PERMISOS: todo usuario ve y escribe todas las tareas de todos los sectores (ver
+// canWriteSector en lib/auth.ts). Los miembros que se muestran en la cabecera son
+// solo referencia de quién cubre el sector. Lo único de admin es la estructura.
 
 interface Props {
   /** Filtra por una celda del calendario macro (viene del contador de la grilla). */
@@ -145,7 +145,6 @@ export default function SectorGrid({ weeklyPlanId }: Props) {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   const totalOpen = tasks.filter((t) => t.status !== "done").length;
-  const myWritable = sectors.filter((s) => s.canWrite).length;
 
   return (
     <div>
@@ -155,11 +154,6 @@ export default function SectorGrid({ weeklyPlanId }: Props) {
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
         <span style={{ fontSize: 12, color: TEXT.label }}>
           {sectors.length} sector{sectors.length === 1 ? "" : "s"} · {totalOpen} open task{totalOpen === 1 ? "" : "s"}
-          {!isAdmin && (
-            <span style={{ color: TEXT.muted }}>
-              {" "}· you can edit {myWritable}
-            </span>
-          )}
         </span>
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
@@ -332,19 +326,6 @@ function SectorBox({
             }}>
               {sector.name}
             </span>
-            {!sector.canWrite && (
-              <span
-                title="You are not a member of this sector — read only"
-                style={{
-                  display: "inline-flex", alignItems: "center", gap: 3, flexShrink: 0,
-                  fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 5,
-                  background: "rgba(13,13,56,0.06)", color: TEXT.muted,
-                  border: `1px solid ${BORDER.base}`,
-                }}
-              >
-                <Lock size={9} /> read only
-              </span>
-            )}
           </div>
 
           <div style={{
@@ -451,18 +432,16 @@ function SectionBlock({
         }}>
           {open.length}
         </span>
-        {canWrite && (
-          <button
-            onClick={() => { setAdding(true); setTitle(""); }}
-            title={`New task in ${section.name}`}
-            style={{
-              marginLeft: "auto", background: "transparent", border: "none",
-              cursor: "pointer", color: TEXT.label, padding: 1, display: "flex",
-            }}
-          >
-            <Plus size={13} />
-          </button>
-        )}
+        <button
+          onClick={() => { setAdding(true); setTitle(""); }}
+          title={`New task in ${section.name}`}
+          style={{
+            marginLeft: "auto", background: "transparent", border: "none",
+            cursor: "pointer", color: TEXT.label, padding: 1, display: "flex",
+          }}
+        >
+          <Plus size={13} />
+        </button>
       </div>
 
       {adding && (

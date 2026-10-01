@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireAuth, getSessionUser, canWriteSector } from "@/lib/auth";
+import { requireAuth, getSessionUser } from "@/lib/auth";
 import { logAdminChanges, ENTITY } from "@/lib/adminLog";
 import { TASK_STATUSES, TASK_PRIORITIES, type TaskStatus, type TaskPriority } from "@/lib/planning";
 import { TASK_INCLUDE, toTaskDTO, type TasksPayload } from "@/lib/planningTasks";
+import { notify } from "@/lib/notify";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -14,9 +15,9 @@ export const runtime = "nodejs";
 // PERMISOS — la regla del módulo, distinta a la del resto de la app:
 //   · LEER    es abierto. Cualquier usuario autenticado ve TODAS las tareas de TODOS
 //             los sectores, incluida la Coordinación General. No hay aislamiento.
-//   · ESCRIBIR depende de la membresía al sector (sector_members), no de a quién esté
-//             asignada la tarea. Un admin escribe en todo; un `user` sólo dentro de
-//             los sectores donde es miembro. El chequeo vive en canWriteSector().
+//   · ESCRIBIR también es abierto: cualquier autenticado crea, edita, completa, mueve,
+//             comenta y borra tareas en cualquier sector. La membresía al sector es solo
+//             referencia, no permiso. El chequeo vive en canWriteSector() (lib/auth.ts).
 
 // ── GET — todas las tareas ────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
@@ -77,19 +78,12 @@ export async function POST(req: NextRequest) {
   if (!title) return NextResponse.json({ error: "El título es obligatorio" }, { status: 400 });
   if (!body.sectionId) return NextResponse.json({ error: "Falta la sub-sección" }, { status: 400 });
 
-  // La sección determina el sector, y el sector determina el permiso.
+  // Crear es abierto: cualquier autenticado agrega tareas en cualquier sector.
   const section = await prisma.sectorSection.findUnique({
     where:  { id: body.sectionId },
     select: { id: true, sectorId: true, sector: { select: { name: true } } },
   });
   if (!section) return NextResponse.json({ error: "La sub-sección no existe" }, { status: 404 });
-
-  if (!(await canWriteSector(section.sectorId))) {
-    return NextResponse.json(
-      { error: `No eres miembro de "${section.sector.name}": solo puedes verlo.` },
-      { status: 403 },
-    );
-  }
 
   const status   = (body.status   ?? "todo").trim();
   const priority = (body.priority ?? "medium").trim();
@@ -152,6 +146,23 @@ export async function POST(req: NextRequest) {
       }],
       self.email ?? null,
     );
+
+    // Aviso al grupo de tareas. Si ya nace como done se avisa como completada:
+    // un "nueva tarea" de algo que ya está hecho no le sirve a nadie.
+    const assignee = task.assignee?.name ?? task.assignee?.email ?? null;
+    const by       = self.name ?? self.email ?? null;
+    if (status === "done") {
+      notify({
+        kind: "task_done", taskId: task.id, title, sectorId: section.sectorId,
+        company: task.company, assignee, closedBy: by,
+      });
+    } else {
+      notify({
+        kind: "task_created", taskId: task.id, title, sectorId: section.sectorId,
+        description: task.description, priority: task.priority, dueDate: task.dueDate,
+        company: task.company, assignee, createdBy: by,
+      });
+    }
 
     return NextResponse.json({ task: toTaskDTO(task) }, { status: 201 });
   } catch (e) {

@@ -453,7 +453,7 @@ function CellGroup({
     <>
       {/* Date — el día que le toca a la región, no el lunes de la llave */}
       <td ref={dropDate.setNodeRef} style={{
-        padding: "6px 10px", textAlign: "right", whiteSpace: "nowrap",
+        padding: "4px 10px", textAlign: "right", whiteSpace: "nowrap",
         verticalAlign: "top", borderBottom: rowBorder,
         fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
         fontSize: 11, fontWeight: isToday ? 800 : 600,
@@ -497,17 +497,18 @@ function CellGroup({
             title={isAdmin ? (stacked ? "Add another activity this day" : "Add activity") : undefined}
             style={{
               display: "flex", alignItems: "center",
-              // Muda y fina cuando ya hay actividades: ocupa lo justo para poder
-              // pincharla sin agregar una línea de texto a cada día del calendario.
-              padding: stacked ? "0 11px" : "6px 11px",
-              minHeight: stacked ? 13 : 26,
+              // Con actividades queda casi cerrada (4px) para no dejar un hueco en
+              // blanco bajo cada día; se abre al pasar el mouse o al arrastrar, que
+              // es cuando sirve para agregar o soltar al final.
+              padding: stacked ? "0 11px" : "3px 11px",
+              minHeight: stacked ? (tailLabel || dragActive ? 16 : 4) : 22,
               cursor: isAdmin ? "pointer" : "default",
               background: tailDrop ? dropTint : "transparent",
               boxShadow: tailDrop ? `inset 0 0 0 2px ${PATRIA.kingBlue}` : "none",
               fontSize: stacked ? 10 : 11.5,
               fontWeight: tailDrop ? 700 : 500,
               color: tailDrop ? PATRIA.kingBlue : TEXT.disabled,
-              transition: "background 0.12s, box-shadow 0.12s, opacity 0.12s",
+              transition: "background 0.12s, box-shadow 0.12s, opacity 0.12s, min-height 0.12s",
               opacity: tailLabel ? 1 : 0,
             }}
           >
@@ -614,7 +615,7 @@ function TopicPill({
 }) {
   return (
     <div style={{
-      padding: "6px 11px", minHeight: 26,
+      padding: "4px 11px", minHeight: 22,
       display: "flex", alignItems: "center", gap: 7,
       background: s.bg, color: s.text,
       borderTop: `1px solid ${s.border}`,
