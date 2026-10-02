@@ -37,7 +37,7 @@ import WeeklyCellModal from "./WeeklyCellModal";
 // POST /api/planning/weekly/move lo confirma; si falla, se recarga y se revierte.
 
 const WEEKS_AHEAD = 16;   // ventana por defecto: ~4 meses hacia adelante
-const WEEKS_BACK  = 1;    // ...y sólo la semana pasada hacia atrás: la historia quita espacio
+const WEEKS_BACK  = 0;    // la semana del ancla es la PRIMERA fila: "Today" deja la semana actual arriba
 
 // Anchos fijos de las columnas de fecha y analistas. Con `tableLayout: fixed` las
 // dos columnas de tópico (sin ancho) se reparten el resto en partes iguales, así
@@ -67,9 +67,6 @@ export default function WeeklyCalendar({ onOpenTasks }: Props) {
   const isAdmin = useIsAdmin();
 
   const [anchor, setAnchor]     = useState(() => mondayOf(localToday()));
-  // Cada click en "Today" lo incrementa: el efecto de abajo lleva la fila de la
-  // semana actual a la vista, aunque el ancla ya estuviera en hoy.
-  const [scrollTick, setScrollTick] = useState(0);
   const [cells, setCells]       = useState<WeeklyCell[]>([]);
   const [analysts, setAnalysts] = useState<AnalystOption[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -149,14 +146,7 @@ export default function WeeklyCalendar({ onOpenTasks }: Props) {
 
   function goToday() {
     setAnchor(mondayOf(localToday()));
-    setScrollTick((n) => n + 1);
   }
-
-  // Tras "Today" (y una vez cargada la tabla) centra la fila de la semana actual.
-  useEffect(() => {
-    if (!scrollTick || loading) return;
-    document.getElementById(`wk-${thisMonday}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [scrollTick, loading, thisMonday]);
 
   function shift(deltaWeeks: number) {
     setAnchor((a) => {
@@ -342,7 +332,7 @@ export default function WeeklyCalendar({ onOpenTasks }: Props) {
                   {weeks.map((wk) => {
                     const isNow = wk === thisMonday;
                     return (
-                      <tr key={wk} id={`wk-${wk}`}>
+                      <tr key={wk}>
                         {regions.map((r) => (
                           <CellGroup
                             key={`${r}|${wk}`}
@@ -431,9 +421,6 @@ function CellGroup({
   onOpenTasks?: (cell: WeeklyCell) => void;
 }) {
   const rowBorder = `1px solid ${BORDER.subtle}`;
-  // La semana actual va enmarcada en king-blue arriba y abajo en todas sus casillas,
-  // así se lee como una franja a lo ancho de la tabla y no sólo en la fecha.
-  const nowFrame  = `2px solid ${PATRIA.kingBlue}`;
   // La casilla se marca si CUALQUIERA de sus actividades está destacada.
   const hl = cells.some((c) => c.highlighted);
   const slotKey = `${region}|${weekIso}`;
@@ -472,26 +459,16 @@ function CellGroup({
       {/* Date — el día que le toca a la región, no el lunes de la llave */}
       <td ref={dropDate.setNodeRef} style={{
         padding: "4px 10px", textAlign: "right", whiteSpace: "nowrap",
-        verticalAlign: "top",
-        borderTop:    isNow ? nowFrame : undefined,
-        borderBottom: isNow ? nowFrame : rowBorder,
+        verticalAlign: "top", borderBottom: rowBorder,
         fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
-        fontSize: 11, fontWeight: isToday || isNow ? 800 : 600,
-        color: isToday || isNow ? PATRIA.kingBlue : TEXT.label,
-        background: dateDrop ? dropTint : isNow ? "rgba(32,68,220,0.12)" : hl ? "rgba(255,187,141,0.20)" : "transparent",
+        fontSize: 11, fontWeight: isToday ? 800 : 600,
+        color: isToday ? PATRIA.kingBlue : TEXT.label,
+        background: dateDrop ? dropTint : hl ? "rgba(255,187,141,0.20)" : isNow ? "rgba(32,68,220,0.05)" : "transparent",
         borderLeft: dateDrop ? `2px solid ${PATRIA.kingBlue}`
-          : isNow ? `4px solid ${PATRIA.kingBlue}`
-          : hl ? `2px solid ${PATRIA.orange}` : "2px solid transparent",
+          : hl ? `2px solid ${PATRIA.orange}`
+          : isNow ? `2px solid ${PATRIA.kingBlue}` : "2px solid transparent",
       }}>
         {cellDateLabel(region, weekIso)}
-        {isNow && (
-          <div style={{
-            marginTop: 2, fontSize: 8, fontWeight: 800, letterSpacing: "0.08em",
-            textTransform: "uppercase", color: PATRIA.kingBlue,
-          }}>
-            This week
-          </div>
-        )}
       </td>
 
       {/* Actividades: una debajo de otra, la fila se estira sola */}
@@ -501,10 +478,7 @@ function CellGroup({
         onMouseLeave={() => setHover(false)}
         style={{
           padding: 0, verticalAlign: "top",
-          borderTop:    isNow ? nowFrame : undefined,
-          borderBottom: isNow ? nowFrame : rowBorder,
-          borderRight: "3px solid #FFFFFF",
-          background:   isNow ? "rgba(32,68,220,0.04)" : undefined,
+          borderBottom: rowBorder, borderRight: "3px solid #FFFFFF",
         }}
       >
         {cells.map((cell) => (
