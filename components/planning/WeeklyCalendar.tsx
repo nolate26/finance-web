@@ -12,7 +12,7 @@ import { FONT_SECONDARY, TEXT, BORDER, PATRIA } from "@/lib/patriaTheme";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import {
   PLAN_REGIONS, CATEGORY_STYLE, categoryStyle, regionLabel, regionDayName,
-  mondayOf, isoDate, displayDate, cellDateLabel, dateLabel, weekRange,
+  mondayOf, isoDate, displayDate, cellDateLabel, dateLabel, weekRange, localToday,
 } from "@/lib/planning";
 import type { WeeklyCell, WeeklyPayload } from "@/app/api/planning/weekly/route";
 import type { AnalystOption } from "@/app/api/planning/analysts/route";
@@ -66,7 +66,10 @@ interface Editing { region: string; weekIso: string; cell: WeeklyCell | null }
 export default function WeeklyCalendar({ onOpenTasks }: Props) {
   const isAdmin = useIsAdmin();
 
-  const [anchor, setAnchor]     = useState(() => mondayOf(new Date()));
+  const [anchor, setAnchor]     = useState(() => mondayOf(localToday()));
+  // Cada click en "Today" lo incrementa: el efecto de abajo lleva la fila de la
+  // semana actual a la vista, aunque el ancla ya estuviera en hoy.
+  const [scrollTick, setScrollTick] = useState(0);
   const [cells, setCells]       = useState<WeeklyCell[]>([]);
   const [analysts, setAnalysts] = useState<AnalystOption[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -141,8 +144,19 @@ export default function WeeklyCalendar({ onOpenTasks }: Props) {
     return m;
   }, [cells]);
 
-  const thisMonday = isoDate(mondayOf(new Date()));
-  const todayIso   = isoDate(new Date());
+  const thisMonday = isoDate(mondayOf(localToday()));
+  const todayIso   = isoDate(localToday());
+
+  function goToday() {
+    setAnchor(mondayOf(localToday()));
+    setScrollTick((n) => n + 1);
+  }
+
+  // Tras "Today" (y una vez cargada la tabla) centra la fila de la semana actual.
+  useEffect(() => {
+    if (!scrollTick || loading) return;
+    document.getElementById(`wk-${thisMonday}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [scrollTick, loading, thisMonday]);
 
   function shift(deltaWeeks: number) {
     setAnchor((a) => {
@@ -217,14 +231,15 @@ export default function WeeklyCalendar({ onOpenTasks }: Props) {
           display: "flex", alignItems: "center", gap: 2, padding: 3,
           borderRadius: 9, background: "rgba(13,13,56,0.04)", border: `1px solid ${BORDER.base}`,
         }}>
-          <button onClick={() => shift(-4)} title="Back 4 weeks" style={navBtn}><ChevronLeft size={14} /></button>
+          <button onClick={() => shift(-1)} title="Back 1 week" style={navBtn}><ChevronLeft size={14} /></button>
           <button
-            onClick={() => setAnchor(mondayOf(new Date()))}
+            onClick={goToday}
+            title="Go to the current week"
             style={{ ...navBtn, width: "auto", padding: "0 12px", fontSize: 11.5, fontWeight: 700 }}
           >
             Today
           </button>
-          <button onClick={() => shift(4)} title="Forward 4 weeks" style={navBtn}><ChevronRight size={14} /></button>
+          <button onClick={() => shift(1)} title="Forward 1 week" style={navBtn}><ChevronRight size={14} /></button>
         </div>
 
         <span style={{ fontSize: 11.5, color: TEXT.muted, fontFamily: FONT_SECONDARY }}>
@@ -327,7 +342,7 @@ export default function WeeklyCalendar({ onOpenTasks }: Props) {
                   {weeks.map((wk) => {
                     const isNow = wk === thisMonday;
                     return (
-                      <tr key={wk}>
+                      <tr key={wk} id={`wk-${wk}`}>
                         {regions.map((r) => (
                           <CellGroup
                             key={`${r}|${wk}`}
@@ -416,6 +431,9 @@ function CellGroup({
   onOpenTasks?: (cell: WeeklyCell) => void;
 }) {
   const rowBorder = `1px solid ${BORDER.subtle}`;
+  // La semana actual va enmarcada en king-blue arriba y abajo en todas sus casillas,
+  // así se lee como una franja a lo ancho de la tabla y no sólo en la fecha.
+  const nowFrame  = `2px solid ${PATRIA.kingBlue}`;
   // La casilla se marca si CUALQUIERA de sus actividades está destacada.
   const hl = cells.some((c) => c.highlighted);
   const slotKey = `${region}|${weekIso}`;
@@ -454,16 +472,26 @@ function CellGroup({
       {/* Date — el día que le toca a la región, no el lunes de la llave */}
       <td ref={dropDate.setNodeRef} style={{
         padding: "4px 10px", textAlign: "right", whiteSpace: "nowrap",
-        verticalAlign: "top", borderBottom: rowBorder,
+        verticalAlign: "top",
+        borderTop:    isNow ? nowFrame : undefined,
+        borderBottom: isNow ? nowFrame : rowBorder,
         fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
-        fontSize: 11, fontWeight: isToday ? 800 : 600,
-        color: isToday ? PATRIA.kingBlue : TEXT.label,
-        background: dateDrop ? dropTint : hl ? "rgba(255,187,141,0.20)" : isNow ? "rgba(32,68,220,0.05)" : "transparent",
+        fontSize: 11, fontWeight: isToday || isNow ? 800 : 600,
+        color: isToday || isNow ? PATRIA.kingBlue : TEXT.label,
+        background: dateDrop ? dropTint : isNow ? "rgba(32,68,220,0.12)" : hl ? "rgba(255,187,141,0.20)" : "transparent",
         borderLeft: dateDrop ? `2px solid ${PATRIA.kingBlue}`
-          : hl ? `2px solid ${PATRIA.orange}`
-          : isNow ? `2px solid ${PATRIA.kingBlue}` : "2px solid transparent",
+          : isNow ? `4px solid ${PATRIA.kingBlue}`
+          : hl ? `2px solid ${PATRIA.orange}` : "2px solid transparent",
       }}>
         {cellDateLabel(region, weekIso)}
+        {isNow && (
+          <div style={{
+            marginTop: 2, fontSize: 8, fontWeight: 800, letterSpacing: "0.08em",
+            textTransform: "uppercase", color: PATRIA.kingBlue,
+          }}>
+            This week
+          </div>
+        )}
       </td>
 
       {/* Actividades: una debajo de otra, la fila se estira sola */}
@@ -473,7 +501,10 @@ function CellGroup({
         onMouseLeave={() => setHover(false)}
         style={{
           padding: 0, verticalAlign: "top",
-          borderBottom: rowBorder, borderRight: "3px solid #FFFFFF",
+          borderTop:    isNow ? nowFrame : undefined,
+          borderBottom: isNow ? nowFrame : rowBorder,
+          borderRight: "3px solid #FFFFFF",
+          background:   isNow ? "rgba(32,68,220,0.04)" : undefined,
         }}
       >
         {cells.map((cell) => (

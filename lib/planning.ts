@@ -161,6 +161,17 @@ export function mondayOf(date: Date | string): Date {
   return utc;
 }
 
+/**
+ * Hoy según el reloj LOCAL del usuario, como medianoche UTC (el formato de todo este
+ * módulo). No usar `new Date()` directo con mondayOf/isoDate: esas leen la fecha en
+ * UTC, y en Chile desde las 20-21h UTC ya va en el día siguiente — un domingo en la
+ * noche el calendario saltaba a la semana que viene.
+ */
+export function localToday(): Date {
+  const now = new Date();
+  return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+}
+
 /** "2026-09-08" a partir de un Date, sin pasar por el huso local. */
 export function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);

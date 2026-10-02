@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { FONT_SECONDARY, TEXT, BORDER, PATRIA } from "@/lib/patriaTheme";
 import { useIsAdmin } from "@/lib/useIsAdmin";
-import { PRIORITY_STYLE, PRIORITY_RANK, STATUS_LABEL, isoDate, type TaskPriority } from "@/lib/planning";
+import { PRIORITY_STYLE, PRIORITY_RANK, STATUS_LABEL, isoDate, localToday, type TaskPriority } from "@/lib/planning";
 import type { TaskDTO, TasksPayload, SectorDTO, SectorsPayload, SectionDTO } from "@/lib/planningTasks";
 import type { AnalystOption } from "@/app/api/planning/analysts/route";
 import TaskDetailModal from "./TaskDetailModal";
@@ -523,7 +523,7 @@ function TaskRow({
   const done       = task.status === "done";
   const inProgress = task.status === "in_progress";
   const pr         = PRIORITY_STYLE[(task.priority as TaskPriority)] ?? PRIORITY_STYLE.medium;
-  const overdue    = !!task.dueDate && !done && task.dueDate < isoDate(new Date());
+  const overdue    = !!task.dueDate && !done && task.dueDate < isoDate(localToday());
 
   return (
     <div

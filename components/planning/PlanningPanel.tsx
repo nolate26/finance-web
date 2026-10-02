@@ -17,7 +17,7 @@ type View = "calendar" | "sectors";
 
 const VIEWS: { key: View; label: string; icon: typeof CalendarRange; sub: string }[] = [
   { key: "calendar", label: "Calendar",     icon: CalendarRange, sub: "Weekly research planning by region" },
-  { key: "sectors",  label: "Sectors",  icon: LayoutGrid,    sub: "Tasks by sector and sub-section · everyone can see, members can edit" },
+  { key: "sectors",  label: "Sectors",  icon: LayoutGrid,    sub: "Tasks by sector and sub-section · everyone can see and edit" },
 ];
 
 export default function PlanningPanel() {
