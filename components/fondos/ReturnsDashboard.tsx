@@ -12,6 +12,7 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  ReferenceLine,
 } from "recharts";
 
 interface RentabilidadRow {
@@ -223,10 +224,13 @@ function ChartTooltip({
   active,
   payload,
   label,
+  signed = false,
 }: {
   active?: boolean;
   payload?: Array<{ dataKey?: string; value?: number | null; color?: string }>;
   label?: string;
+  /** Alfa: muestra el signo (+1.2% / -0.8%) para leer de un vistazo quién le gana al benchmark. */
+  signed?: boolean;
 }) {
   if (!active || !payload?.length) return null;
   const visible = payload.filter(
@@ -256,7 +260,9 @@ function ChartTooltip({
         {sorted.map((p) => (
           <div key={p.dataKey} style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
             <span style={{ color: p.color ?? "rgba(13,13,56,0.62)", fontSize: 11 }}>{p.dataKey}</span>
-            <span style={{ fontWeight: 600, color: pctColor(p.value) }}>{fmtPct(p.value)}</span>
+            <span style={{ fontWeight: 600, color: pctColor(p.value) }}>
+              {signed && p.value > 0 ? "+" : ""}{fmtPct(p.value)}
+            </span>
           </div>
         ))}
       </div>
@@ -295,6 +301,10 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
   const [groupFilter, setGroupFilter] = useState("All");
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
 
+  // ── Chart mode: retornos YTD o alfa (fondo − benchmark) ─────────────────────
+  const [chartMode, setChartMode] = useState<"returns" | "alpha">("returns");
+  const [benchmark, setBenchmark] = useState("");   // "" = el índice por defecto
+
   useEffect(() => {
     setLoading(true);
     setError(null);
@@ -302,6 +312,8 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
     setSearchTerm("");
     setGroupFilter("All");
     setSortConfig(null);
+    setChartMode("returns");
+    setBenchmark("");
     fetch(`/api/rentabilidades?page=${pageNum}`)
       .then((r) => r.json())
       .then((d: ApiResponse) => {
@@ -427,6 +439,32 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
     return a.localeCompare(b);
   });
 
+  // ── Alfa ──────────────────────────────────────────────────────────────────────
+  // Alfa semanal = YTD del fondo − YTD del benchmark, ambos a la misma fecha. El
+  // benchmark por defecto es el (primer) índice del gráfico; si el fondo no trae un
+  // índice entre sus líneas, se puede elegir cualquiera de ellas.
+  const indexLines = orderedLineFunds.filter((f) => fundMeta[f]?.group === "Indices");
+  const benchmarkOptions = indexLines.length > 0 ? indexLines : orderedLineFunds;
+  const activeBenchmark = benchmarkOptions.includes(benchmark) ? benchmark : (benchmarkOptions[0] ?? "");
+  // Sólo fondos propios (Moneda / Other Moneda): los peers no se grafican en alfa.
+  const alphaFunds = orderedLineFunds.filter((f) => {
+    const g = fundMeta[f]?.group ?? "";
+    return f !== activeBenchmark && g !== "Indices" && !g.startsWith("Peer");
+  });
+  const alphaSeries: TimeseriesPoint[] = timeseries.map((p) => {
+    const b = p[activeBenchmark];
+    const point: TimeseriesPoint = { date: p.date };
+    for (const f of alphaFunds) {
+      const v = p[f];
+      point[f] = typeof v === "number" && typeof b === "number" ? v - b : null;
+    }
+    return point;
+  });
+  const canShowAlpha = !!activeBenchmark && alphaFunds.length > 0;
+  const showAlpha = chartMode === "alpha" && canShowAlpha;
+  const chartData  = showAlpha ? alphaSeries : timeseries;
+  const chartLines = showAlpha ? alphaFunds  : orderedLineFunds;
+
   const currency = rows[0]?.currency ?? "";
 
   // ── Sort toggle handler ───────────────────────────────────────────────────────
@@ -494,17 +532,62 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
           <div
             style={{
               padding: "8px 18px 4px",
-              fontSize: 10,
-              fontWeight: 600,
-              color: "rgba(13,13,56,0.45)",
-              letterSpacing: "0.06em",
+              display: "flex",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: 10,
             }}
           >
-            WEEKLY YTD EVOLUTION (CURRENT YEAR)
+            <span style={{ fontSize: 10, fontWeight: 600, color: "rgba(13,13,56,0.45)", letterSpacing: "0.06em" }}>
+              {showAlpha
+                ? `WEEKLY YTD ALPHA VS ${activeBenchmark.toUpperCase()} (FUND − BENCHMARK)`
+                : "WEEKLY YTD EVOLUTION (CURRENT YEAR)"}
+            </span>
+
+            {canShowAlpha && (
+              <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+                {showAlpha && benchmarkOptions.length > 1 && (
+                  <select
+                    value={activeBenchmark}
+                    onChange={(e) => setBenchmark(e.target.value)}
+                    title="Benchmark"
+                    style={{
+                      padding: "3px 6px", fontSize: 10.5, borderRadius: 5,
+                      border: "1px solid rgba(13,13,56,0.12)", background: "#fff",
+                      color: "#0D0D38", cursor: "pointer", outline: "none",
+                    }}
+                  >
+                    {benchmarkOptions.map((b) => <option key={b} value={b}>vs {b}</option>)}
+                  </select>
+                )}
+                <div style={{
+                  display: "inline-flex", padding: 2, borderRadius: 7,
+                  background: "rgba(13,13,56,0.04)", border: "1px solid rgba(13,13,56,0.08)",
+                }}>
+                  {([["returns", "Returns"], ["alpha", "Alpha"]] as const).map(([mode, label]) => {
+                    const on = (mode === "alpha") === showAlpha;
+                    return (
+                      <button
+                        key={mode}
+                        onClick={() => setChartMode(mode)}
+                        style={{
+                          padding: "3px 11px", fontSize: 10.5, fontWeight: on ? 700 : 600,
+                          borderRadius: 5, border: "none", cursor: "pointer",
+                          background: on ? PATRIA.kingBlue : "transparent",
+                          color: on ? "#fff" : "rgba(13,13,56,0.62)",
+                        }}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
           <div style={{ height: 300, padding: "0 8px 8px" }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={timeseries} margin={{ top: 8, right: 20, bottom: 8, left: 8 }}>
+              <LineChart data={chartData} margin={{ top: 8, right: 20, bottom: 8, left: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(13,13,56,0.10)" />
                 <XAxis
                   dataKey="date"
@@ -520,9 +603,11 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
                   axisLine={false}
                   tickLine={false}
                 />
-                <Tooltip content={<ChartTooltip />} />
+                <Tooltip content={<ChartTooltip signed={showAlpha} />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                {orderedLineFunds.map((fund) => {
+                {/* Alfa: la línea 0 es el benchmark; arriba le gana, abajo pierde. */}
+                {showAlpha && <ReferenceLine y={0} stroke={PATRIA.orange} strokeWidth={1.5} strokeDasharray="4 3" />}
+                {chartLines.map((fund) => {
                   const style = seriesStyle(fundMeta[fund]);
                   return (
                     <Line

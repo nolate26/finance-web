@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Play, Loader2, Rows3, Columns3 } from "lucide-react";
 import type { ExtractCompany } from "@/app/api/extract/universe/route";
 import type { ExtractModelsPayload, ExtractModelHeader } from "@/app/api/extract/models/route";
-import { METRICS, METRIC_BY_ID, SECTIONS, DEFAULT_METRIC_IDS, metricAppliesTo, type ModelKind, type MetricDef } from "@/lib/extractMetrics";
+import { METRICS, METRIC_BY_ID, SECTIONS, DERIVED_SECTIONS, DEFAULT_METRIC_IDS, metricAppliesTo, type ModelKind, type MetricDef, type MetricSection } from "@/lib/extractMetrics";
 import type { SheetDef } from "@/lib/exportExcel";
 import ExportButtons from "@/components/ExportButtons";
 import { countryName } from "@/lib/countryNames";
@@ -29,6 +29,7 @@ function fmtMetric(v: unknown, def: MetricDef | undefined): { text: string; colo
   switch (def?.format) {
     case "pct":   return { text: fmtPct(n * 100) };
     case "small": return { text: fmtSmall(n) };
+    case "mult":  return { text: `${n.toFixed(1)}x` };
     default:      return { text: fmtAbs(n) };
   }
 }
@@ -222,30 +223,63 @@ export default function ModelsExtractor() {
           </span>
         }
       >
-        <div className="g-stack-sm" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 12 }}>
-          {SECTIONS.map((sec) => {
-            const list = visibleMetrics.filter((m) => m.section === sec);
-            if (list.length === 0) return null;
-            return (
-              <div key={sec} style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: TEXT.label, marginBottom: 5, paddingBottom: 3, borderBottom: `1px solid ${BORDER.base}` }}>{sec}</div>
-                {list.map((m) => {
-                  const on = metricIds.has(m.id);
-                  const bankOnly = !m.company, companyOnly = !m.bank;
+        {/* Dos bloques: datos del modelo tal cual (columnas) y métricas calculadas
+            con las fórmulas del deep-dive (lib/modelDerived). */}
+        {([
+          { title: null,                  sections: SECTIONS.filter((s) => !DERIVED_SECTIONS.includes(s)) },
+          { title: "Calculated metrics", sections: DERIVED_SECTIONS },
+        ] as { title: string | null; sections: MetricSection[] }[]).map(({ title, sections }) => {
+          const blockMetrics = visibleMetrics.filter((m) => sections.includes(m.section));
+          if (blockMetrics.length === 0) return null;
+          const allOn = blockMetrics.every((m) => metricIds.has(m.id));
+          return (
+            <div key={title ?? "raw"} style={title ? { marginTop: 14, paddingTop: 12, borderTop: `1px dashed ${BORDER.base}` } : undefined}>
+              {title && (
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.07em", textTransform: "uppercase", color: PATRIA.blue }}>{title}</span>
+                  <span style={{ fontSize: 11, color: TEXT.muted }}>
+                    Same formulas as the deep-dive · estimated years at the live market price
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const n = new Set(metricIds);
+                      for (const m of blockMetrics) { if (allOn) n.delete(m.id); else n.add(m.id); }
+                      setMetricIds(n);
+                    }}
+                    style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: PATRIA.kingBlue, fontWeight: 600, fontSize: 11 }}
+                  >
+                    {allOn ? "none" : "all calculated"}
+                  </button>
+                </div>
+              )}
+              <div className="g-stack-sm" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 12 }}>
+                {sections.map((sec) => {
+                  const list = visibleMetrics.filter((m) => m.section === sec);
+                  if (list.length === 0) return null;
                   return (
-                    <label key={m.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "2px 0", cursor: "pointer", fontSize: 12, color: on ? TEXT.body : TEXT.label }}>
-                      <input type="checkbox" checked={on} onChange={() => setMetricIds(toggleIn(metricIds, m.id))} style={{ accentColor: PATRIA.kingBlue }} />
-                      <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.label}</span>
-                      {(bankOnly || companyOnly) && selectedKinds.size > 1 && (
-                        <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: "0.05em", color: bankOnly ? PATRIA.orange : PATRIA.kingBlue }}>{bankOnly ? "BANK" : "CO"}</span>
-                      )}
-                    </label>
+                    <div key={sec} style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: TEXT.label, marginBottom: 5, paddingBottom: 3, borderBottom: `1px solid ${BORDER.base}` }}>{sec}</div>
+                      {list.map((m) => {
+                        const on = metricIds.has(m.id);
+                        const bankOnly = !m.company, companyOnly = !m.bank;
+                        return (
+                          <label key={m.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "2px 0", cursor: "pointer", fontSize: 12, color: on ? TEXT.body : TEXT.label }}>
+                            <input type="checkbox" checked={on} onChange={() => setMetricIds(toggleIn(metricIds, m.id))} style={{ accentColor: PATRIA.kingBlue }} />
+                            <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.label}</span>
+                            {(bankOnly || companyOnly) && selectedKinds.size > 1 && (
+                              <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: "0.05em", color: bankOnly ? PATRIA.orange : PATRIA.kingBlue }}>{bankOnly ? "BANK" : "CO"}</span>
+                            )}
+                          </label>
+                        );
+                      })}
+                    </div>
                   );
                 })}
               </div>
-            );
-          })}
-        </div>
+            </div>
+          );
+        })}
       </FilterCard>
 
       {/* ── Años + acción ────────────────────────────────────────────────── */}
@@ -273,7 +307,10 @@ export default function ModelsExtractor() {
             <span style={{ fontSize: 12, color: TEXT.label, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
               {result.headers.length} compan{result.headers.length === 1 ? "y" : "ies"} · {result.metrics.length} metrics · {result.years.length ? `${result.years[0]}–${result.years[result.years.length - 1]}` : "no years"} · {table.rows.length} rows
             </span>
-            <span style={{ fontSize: 11, color: TEXT.muted }}>Values in each model&rsquo;s own currency / unit (CCY, Unit columns).</span>
+            <span style={{ fontSize: 11, color: TEXT.muted }}>
+              Values in each model&rsquo;s own currency / unit (CCY, Unit columns).
+              {result.metrics.some((id) => METRIC_BY_ID.get(id)?.derived) && " Calculated metrics use the live price in estimated years; % and multiples export as decimals (0.12 = 12%)."}
+            </span>
 
             <div style={{ marginLeft: "auto", display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
               <button type="button" onClick={() => setLayout("metrics")} style={{ ...GHOST_BTN, ...(layout === "metrics" ? { borderColor: PATRIA.kingBlue, color: PATRIA.blue, background: "rgba(32,68,220,0.08)" } : {}) }}>

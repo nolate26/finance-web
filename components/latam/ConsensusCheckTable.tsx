@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarDays, Eye, EyeOff } from "lucide-react";
+import { CalendarDays, Eye, EyeOff, Search, X } from "lucide-react";
 import type { ConsensusCheckPayload, ConsensusCheckRow } from "@/app/api/latam/consensus-check/route";
 import type { SheetDef } from "@/lib/exportExcel";
 import ExportButtons from "@/components/ExportButtons";
@@ -346,15 +346,33 @@ export default function ConsensusCheckTable() {
   const [notFoundMsg,   setNotFoundMsg]   = useState<string | null>(null);
   const [showConsensus, setShowConsensus] = useState(false);   // bloque Consensus oculto por defecto
 
+  // Buscador de compañías: filtra la tabla por nombre o ticker y, desde la lista de
+  // sugerencias, abre el modelo de la elegida. Los nombres salen de companies/list
+  // (nombre_latam), que ya se pide para validar tickers.
+  const [search,       setSearch]       = useState("");
+  const [searchOpen,   setSearchOpen]   = useState(false);
+  const [searchHover,  setSearchHover]  = useState(0);
+  const [nameByTicker, setNameByTicker] = useState<Map<string, string>>(new Map());
+  const searchRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) setSearchOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, []);
+
   useEffect(() => {
     Promise.all([
       fetch("/api/latam/consensus-check").then((r) => r.json()),
       fetch("/api/companies/list").then((r) => r.json()),
-    ]).then(([consensus, companies]: [ConsensusCheckPayload & { error?: string }, { companies?: { ticker: string }[] }]) => {
+    ]).then(([consensus, companies]: [ConsensusCheckPayload & { error?: string }, { companies?: { ticker: string; nombre: string }[] }]) => {
       if (consensus.error) { setError(true); } else { setData(consensus); }
       // companies/list entrega tickers en MAYÚSCULAS (empresas_industrias_v2) →
       // normalizamos el Set para comparar sin distinguir mayúsculas/minúsculas.
       setValidTickers(new Set((companies.companies ?? []).map((c) => c.ticker.toUpperCase())));
+      setNameByTicker(new Map((companies.companies ?? []).map((c) => [c.ticker.toUpperCase(), c.nombre])));
       setLoading(false);
     }).catch(() => { setError(true); setLoading(false); });
   }, []);
@@ -387,12 +405,30 @@ export default function ConsensusCheckTable() {
   const countries  = Array.from(new Set(rows.map((r) => r.country).filter(Boolean) as string[])).sort();
   const industries = Array.from(new Set(rows.map((r) => r.industry).filter(Boolean) as string[])).sort();
 
+  const nameOf = (ticker: string) => nameByTicker.get(ticker.trim().toUpperCase()) ?? "";
+  const q = search.trim().toLowerCase();
+  const matchesSearch = (r: ConsensusCheckRow) =>
+    !q || r.ticker.toLowerCase().includes(q) || nameOf(r.ticker).toLowerCase().includes(q);
+
   const sorted   = sortRows(rows, sortBy, sortDir);
   const filtered = sorted.filter((r) =>
+    matchesSearch(r) &&
     (!analystFilter  || r.analyst  === analystFilter)  &&
     (!countryFilter  || r.country  === countryFilter)  &&
     (!industryFilter || r.industry === industryFilter)
   );
+
+  // Sugerencias: las que EMPIEZAN con lo escrito primero, luego por nombre.
+  const suggestions = q
+    ? rows
+        .filter(matchesSearch)
+        .sort((a, b) => {
+          const sa = nameOf(a.ticker).toLowerCase().startsWith(q) || a.ticker.toLowerCase().startsWith(q) ? 0 : 1;
+          const sb = nameOf(b.ticker).toLowerCase().startsWith(q) || b.ticker.toLowerCase().startsWith(q) ? 0 : 1;
+          return sa - sb || (nameOf(a.ticker) || a.ticker).localeCompare(nameOf(b.ticker) || b.ticker);
+        })
+        .slice(0, 8)
+    : [];
 
   function handleSort(key: string) {
     const k = key as SortKey;
@@ -481,6 +517,76 @@ export default function ConsensusCheckTable() {
       {/* ── Toolbar: filtros + download ── */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          {/* Buscador de compañías — filtra la tabla; Enter o click abre el modelo */}
+          <div ref={searchRef} style={{ position: "relative", width: 280, maxWidth: "100%" }}>
+            <Search size={13} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: "#2044DC", pointerEvents: "none" }} />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setSearchOpen(true); setSearchHover(0); }}
+              onFocus={() => setSearchOpen(true)}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowDown") { e.preventDefault(); setSearchHover((h) => Math.min(h + 1, suggestions.length - 1)); }
+                if (e.key === "ArrowUp")   { e.preventDefault(); setSearchHover((h) => Math.max(h - 1, 0)); }
+                if (e.key === "Enter" && suggestions[searchHover]) { e.preventDefault(); handleTickerClick(suggestions[searchHover].ticker); }
+                if (e.key === "Escape") setSearchOpen(false);
+              }}
+              placeholder="Search company — name or ticker…"
+              style={{
+                width: "100%", boxSizing: "border-box", padding: "6px 28px 6px 28px",
+                borderRadius: 7, fontSize: 12, fontFamily: FONT_SECONDARY, outline: "none",
+                border: search ? "1px solid rgba(32,68,220,0.45)" : "1px solid rgba(32,68,220,0.30)",
+                background: "#FFFFFF", color: "#0D0D38",
+              }}
+            />
+            {search && (
+              <button
+                onClick={() => { setSearch(""); setSearchOpen(false); }}
+                title="Clear search"
+                style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", display: "flex", border: "none", background: "transparent", color: "rgba(13,13,56,0.45)", cursor: "pointer", padding: 2 }}
+              >
+                <X size={13} />
+              </button>
+            )}
+
+            {searchOpen && suggestions.length > 0 && (
+              <div style={{
+                position: "absolute", top: "calc(100% + 4px)", left: 0, minWidth: "100%", width: 340, zIndex: 50,
+                background: "#FFFFFF", borderRadius: 10, overflow: "hidden",
+                border: "1px solid rgba(13,13,56,0.10)", boxShadow: "0 12px 32px rgba(13,13,56,0.16)",
+              }}>
+                {suggestions.map((r, i) => (
+                  <button
+                    key={r.ticker}
+                    onClick={() => handleTickerClick(r.ticker)}
+                    onMouseEnter={() => setSearchHover(i)}
+                    title="Open the full model"
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left",
+                      padding: "7px 12px", border: "none", borderBottom: "1px solid rgba(13,13,56,0.05)",
+                      background: i === searchHover ? "rgba(32,68,220,0.06)" : "transparent", cursor: "pointer",
+                    }}
+                  >
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#0D0D38", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {nameOf(r.ticker) || shortTicker(r.ticker)}
+                      </span>
+                      <span style={{ display: "block", fontSize: 10, color: "rgba(13,13,56,0.62)", fontFamily: FONT_SECONDARY }}>
+                        {shortTicker(r.ticker)}{r.analyst ? ` · ${r.analyst}` : ""}
+                      </span>
+                    </span>
+                    {r.recc && (
+                      <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 800, letterSpacing: "0.04em", color: "#2044DC" }}>
+                        {r.recc.toUpperCase()}
+                      </span>
+                    )}
+                    <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: "#2044DC" }}>Model →</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* País */}
           <select value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)} style={selStyle(!!countryFilter)}>
             <option value="">All Countries</option>
@@ -516,7 +622,7 @@ export default function ConsensusCheckTable() {
             {showConsensus ? "Hide Consensus" : "Show Consensus"}
           </button>
 
-          {(analystFilter || countryFilter || industryFilter) && (
+          {(q || analystFilter || countryFilter || industryFilter) && (
             <span style={{ fontSize: 11, color: "rgba(13,13,56,0.62)", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
               {filtered.length} of {rows.length}
             </span>
@@ -694,6 +800,7 @@ export default function ConsensusCheckTable() {
                   }}>
                     <span
                       onClick={() => handleTickerClick(row.ticker)}
+                      title={nameOf(row.ticker) || undefined}
                       style={{ cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3 }}
                       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#001EAF"; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = ""; }}

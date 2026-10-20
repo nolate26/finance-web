@@ -13,6 +13,8 @@ import { companyEffMarketCapDetailed, companyEv, companyEvEbitda, companyPe, typ
 import ModelEstimateChart, { buildEstimateRows, buildRecommendationRows, type EstimateMetric, type EstimateRow } from "@/components/deep-dive/ModelEstimateChart";
 import LastFichaButton from "@/components/deep-dive/LastFichaButton";
 import { exportRowsToPdf } from "@/lib/exportPdf";
+import { webModelLink, isLocalModelLink } from "@/lib/modelLink";
+import LocalLinkNote from "@/components/deep-dive/LocalLinkNote";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { PATRIA, FONT_PRIMARY, FONT_SECONDARY, TEXT, BORDER } from "@/lib/patriaTheme";
 
@@ -850,8 +852,8 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                   ? <span style={{ color: C.TXT, fontStyle: "italic" }}>{header.thesis}</span>
                   : <span style={{ color: C.TXT2 }}>—</span> },
               { label: "Analyst",         value: <span style={{ color: C.TXT, fontWeight: 600 }}>{header.analyst ?? "—"}</span> },
-              { label: "Link to Model",   value: header.link
-                  ? <a href={header.link} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
+              { label: "Link to Model",   value: webModelLink(header.link)
+                  ? <a href={webModelLink(header.link)!} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
                       <span style={{
                         display: "inline-flex", alignItems: "center", gap: 5,
                         padding: "3px 12px", borderRadius: 5, cursor: "pointer",
@@ -864,6 +866,8 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                         View Model
                       </span>
                     </a>
+                  : isLocalModelLink(header.link)
+                  ? <LocalLinkNote path={header.link!} />
                   : <span style={{ color: C.TXT2 }}>—</span> },
             ].map(({ label, value }) => (
               <tr key={label}>
@@ -993,9 +997,14 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
 
       {/* ── TABLE ─────────────────────────────────────────────────────────── */}
       <div style={{ overflow: "clip", borderRadius: 10 }}>
+      {/* Scroll propio en los dos ejes: sin alto máximo el contenedor nunca scrollea en
+          vertical (scrollea la página) y el `sticky top` de la fila de años no tiene
+          contra qué pegarse. Así los años quedan fijos arriba y los indicadores a la
+          izquierda mientras se navega la tabla. */}
       <div style={{
         background: C.WHITE,
-        overflowX: "auto",
+        overflow: "auto",
+        maxHeight: "calc(100dvh - 120px)",
         padding: "0 12px 12px",
       }}>
         <table style={{ borderCollapse: "collapse", fontSize: 11, tableLayout: "fixed", width: "100%" }}>

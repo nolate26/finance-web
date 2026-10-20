@@ -247,7 +247,8 @@ function CompaniesPageContent() {
             const defaultItem = found ?? list.find((c) => c.ticker.toUpperCase() === "CCU CI EQUITY") ?? list[0];
             handleSelect(defaultItem);
           }
-          if (tabParam === "model" || tabParam === "consensus") {
+          if (tabParam === "model" || tabParam === "consensus" || tabParam === "research"
+              || tabParam === "scorecard" || tabParam === "reports") {
             setAnalysisTab(tabParam);
           }
         }

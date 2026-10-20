@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { METRIC_BY_ID, type ModelKind } from "@/lib/extractMetrics";
+import { DERIVED_FORMULAS, effectiveMarketCap } from "@/lib/modelDerived";
+import type { LiveQuote } from "@/lib/modelMultiples";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +14,10 @@ export const dynamic = "force-dynamic";
  * pedidas por año, en formato largo (una fila por ticker × año). El cliente pivotea
  * a la vista que prefiera (métricas como filas o años como filas). Los valores van
  * crudos, en la moneda/unidad que declara el header del modelo — no se convierten.
+ *
+ * Las métricas `derived` del catálogo (márgenes, crecimientos, retornos, múltiplos y
+ * yields) se calculan acá con lib/modelDerived — mismas fórmulas que el deep-dive, con
+ * el precio vivo de price_range_52w en los años estimados.
  */
 export interface ExtractModelsRequest {
   tickers:   string[];
@@ -62,7 +68,11 @@ export async function POST(request: Request) {
 
   const yearFrom = Number.isInteger(body.yearFrom) ? body.yearFrom! : undefined;
   const yearTo   = Number.isInteger(body.yearTo)   ? body.yearTo!   : undefined;
-  const yearWhere = yearFrom != null || yearTo != null ? { gte: yearFrom, lte: yearTo } : undefined;
+  // El rango de años se aplica DESPUÉS de calcular: las derivadas miran el año anterior
+  // (crecimientos, ROE sobre patrimonio inicial) y el siguiente (PEG), así que se leen
+  // todos los años del snapshot.
+  const inRange = (y: number) => (yearFrom == null || y >= yearFrom) && (yearTo == null || y <= yearTo);
+  const derivedIds = metrics.filter((m) => METRIC_BY_ID.get(m)!.derived);
 
   try {
     const wantedSet = new Set(wanted);
@@ -72,7 +82,7 @@ export async function POST(request: Request) {
     const [companyHeadersAll, bankHeadersAll, empresas] = await Promise.all([
       prisma.modelHeader.findMany({
         distinct: ["ticker"], orderBy: { updateDate: "desc" },
-        select: { ticker: true, updateDate: true, analyst: true, recc: true, tp: true, currency: true, unit: true },
+        select: { ticker: true, updateDate: true, analyst: true, recc: true, tp: true, currency: true, unit: true, hasSeries: true },
       }),
       prisma.bankHeader.findMany({
         distinct: ["ticker"], orderBy: { updateDate: "desc" },
@@ -92,22 +102,40 @@ export async function POST(request: Request) {
       if (e.tickerBloomberg) eiMap.set(normTicker(e.tickerBloomberg), { name: e.nombreLatam, country: e.countryRisk || null, industry: e.industriaGics || null });
     }
 
-    const [companyFin, bankFin] = await Promise.all([
+    const allHeaderTickers = [...companyHeaders, ...bankHeaders].map((h) => normTicker(h.ticker));
+
+    const [companyFin, bankFin, quotes] = await Promise.all([
       companyHeaders.length
         ? prisma.modelFinancials.findMany({
-            where: { OR: companyHeaders.map((h) => ({ ticker: h.ticker, updateDate: h.updateDate, year: yearWhere })) },
+            where: { OR: companyHeaders.map((h) => ({ ticker: h.ticker, updateDate: h.updateDate })) },
             orderBy: [{ ticker: "asc" }, { year: "asc" }],
           })
         : Promise.resolve([]),
       bankHeaders.length
         ? prisma.bankFinancials.findMany({
-            where: { OR: bankHeaders.map((h) => ({ ticker: h.ticker, updateDate: h.updateDate, year: yearWhere })) },
+            where: { OR: bankHeaders.map((h) => ({ ticker: h.ticker, updateDate: h.updateDate })) },
             orderBy: [{ ticker: "asc" }, { year: "asc" }],
+          })
+        : Promise.resolve([]),
+      // Último precio por ticker (sólo si se piden derivadas): el deep-dive marca los
+      // años estimados a este precio, y las derivadas tienen que dar lo mismo.
+      derivedIds.length && allHeaderTickers.length
+        ? prisma.priceRange52w.findMany({
+            where:    { ticker: { in: allHeaderTickers } },
+            distinct: ["ticker"],
+            orderBy:  [{ ticker: "asc" }, { date: "desc" }],
+            select:   { ticker: true, pxLast: true, marketCap: true },
           })
         : Promise.resolve([]),
     ]);
 
-    const toHeader = (h: typeof companyHeaders[number], kind: ModelKind): ExtractModelHeader => {
+    const liveByTicker = new Map<string, LiveQuote>();
+    for (const q of quotes) {
+      if (q.pxLast != null) liveByTicker.set(normTicker(q.ticker), { price: q.pxLast, marketCap: q.marketCap ?? null });
+    }
+    const hasSeriesByTicker = new Map(companyHeaders.map((h) => [normTicker(h.ticker), h.hasSeries]));
+
+    const toHeader = (h: typeof bankHeaders[number], kind: ModelKind): ExtractModelHeader => {
       const ei = eiMap.get(normTicker(h.ticker));
       return {
         ticker:     h.ticker,
@@ -130,20 +158,45 @@ export async function POST(request: Request) {
     ];
 
     // Proyección de una fila de financials a las métricas pedidas, según el tipo de modelo.
-    const project = (fin: Record<string, unknown>, kind: ModelKind): Record<string, number | null> => {
+    type Fin = Record<string, unknown>;
+    // Las derivadas reciben el año anterior y el siguiente DEL MISMO ticker (las filas ya
+    // vienen ordenadas por ticker, año).
+    const project = (fin: Fin, prev: Fin | null, next: Fin | null, kind: ModelKind): Record<string, number | null> => {
       const out: Record<string, number | null> = {};
+      const t = normTicker(String(fin.ticker));
+      const mcap = derivedIds.length
+        ? effectiveMarketCap(kind, fin, Number(fin.year), liveByTicker.get(t) ?? null, hasSeriesByTicker.get(t) ?? false)
+        : null;
       for (const id of metrics) {
-        const def   = METRIC_BY_ID.get(id)!;
-        const field = kind === "company" ? def.company : def.bank;
-        const v     = field ? fin[field] : null;
+        const def = METRIC_BY_ID.get(id)!;
+        if (!(kind === "company" ? def.company : def.bank)) { out[id] = null; continue; }
+        let v: unknown;
+        if (def.derived) {
+          v = DERIVED_FORMULAS[id]?.({ kind, cur: fin, prev, next, mcap }) ?? null;
+        } else {
+          v = fin[(kind === "company" ? def.company : def.bank)!];
+        }
         out[id] = typeof v === "number" && Number.isFinite(v) ? v : null;
       }
       return out;
     };
 
+    const shape = (list: Fin[], kind: ModelKind): ExtractModelRow[] => {
+      const out: ExtractModelRow[] = [];
+      list.forEach((f, i) => {
+        const year = Number(f.year);
+        if (!inRange(year)) return;
+        const prevRow = list[i - 1], nextRow = list[i + 1];
+        const prev = prevRow && prevRow.ticker === f.ticker && Number(prevRow.year) === year - 1 ? prevRow : null;
+        const next = nextRow && nextRow.ticker === f.ticker && Number(nextRow.year) === year + 1 ? nextRow : null;
+        out.push({ ticker: String(f.ticker), year, values: project(f, prev, next, kind) });
+      });
+      return out;
+    };
+
     const rows: ExtractModelRow[] = [
-      ...companyFin.map((f) => ({ ticker: f.ticker, year: f.year, values: project(f as unknown as Record<string, unknown>, "company") })),
-      ...bankFin.map((f)    => ({ ticker: f.ticker, year: f.year, values: project(f as unknown as Record<string, unknown>, "bank") })),
+      ...shape(companyFin as unknown as Fin[], "company"),
+      ...shape(bankFin    as unknown as Fin[], "bank"),
     ];
 
     const years = Array.from(new Set(rows.map((r) => r.year))).sort((a, b) => a - b);

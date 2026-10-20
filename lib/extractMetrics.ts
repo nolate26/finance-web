@@ -11,20 +11,30 @@
 
 export type ModelKind = "company" | "bank";
 
-export type MetricSection = "Income Statement" | "Balance Sheet" | "Cash Flow" | "Market";
+export type MetricSection =
+  | "Income Statement" | "Balance Sheet" | "Cash Flow" | "Market"
+  // Derivadas (lib/modelDerived.ts): se calculan, no vienen de una columna.
+  | "Growth & Margins" | "Bank Ratios" | "Returns" | "Multiples & Yields";
 
-export type MetricFormat = "abs" | "pct" | "small";
+export type MetricFormat = "abs" | "pct" | "small" | "mult";
 
 export interface MetricDef {
   id:       string;
   label:    string;
   section:  MetricSection;
-  /** Campo en ModelFinancials (empresas). Ausente = no aplica a empresas. */
+  /** Campo en ModelFinancials (empresas). Ausente = no aplica a empresas. En las
+   *  derivadas vale DERIVED: sólo marca que aplica, la fórmula vive en lib/modelDerived. */
   company?: string;
-  /** Campo en BankFinancials (bancos). Ausente = no aplica a bancos. */
+  /** Campo en BankFinancials (bancos). Ausente = no aplica a bancos. Igual que `company`. */
   bank?:    string;
   format:   MetricFormat;
+  /** true = calculada (márgenes, crecimientos, múltiplos…) en vez de leída de una columna. */
+  derived?: boolean;
 }
+
+/** Marca de aplicabilidad de una métrica derivada (no es un campo de Prisma). */
+export const DERIVED = "derived";
+const D = DERIVED;
 
 // Orden = orden de display en el selector y en la salida.
 export const METRICS: MetricDef[] = [
@@ -97,11 +107,58 @@ export const METRICS: MetricDef[] = [
   { id: "market_cap",       label: "Market Cap",             section: "Market",           company: "marketCap",     bank: "marketCap",            format: "abs" },
   { id: "fx_consensus",     label: "FX → Consensus",         section: "Market",           company: "fxConsensus",   bank: "fxConsensus",          format: "small" },
   { id: "fx_eop",           label: "FX EoP",                 section: "Market",           company: "fxEop",         bank: "fxEop",                format: "small" },
+
+  // ══ Derivadas — mismas fórmulas que el deep-dive (lib/modelDerived.ts) ═══════
+  // ── Growth & Margins ────────────────────────────────────────────────────────
+  { id: "rev_growth",       label: "Revenue Growth",         section: "Growth & Margins", company: D, bank: D, format: "pct",  derived: true },
+  { id: "ebitda_growth",    label: "EBITDA Growth",          section: "Growth & Margins", company: D,          format: "pct",  derived: true },
+  { id: "ni_growth",        label: "Net Income Growth",      section: "Growth & Margins", company: D, bank: D, format: "pct",  derived: true },
+  { id: "eps_growth",       label: "EPS Growth",             section: "Growth & Margins", company: D, bank: D, format: "pct",  derived: true },
+  { id: "ebit_margin",      label: "EBIT Margin",            section: "Growth & Margins", company: D,          format: "pct",  derived: true },
+  { id: "ebitda_margin",    label: "EBITDA Margin",          section: "Growth & Margins", company: D,          format: "pct",  derived: true },
+  { id: "net_margin",       label: "Net Margin",             section: "Growth & Margins", company: D, bank: D, format: "pct",  derived: true },
+  { id: "capex_revenue",    label: "Capex / Revenue",        section: "Growth & Margins", company: D,          format: "pct",  derived: true },
+  { id: "nd_ebitda",        label: "Net Debt / EBITDA",      section: "Growth & Margins", company: D,          format: "mult", derived: true },
+  { id: "wk_change",        label: "Working Capital Change", section: "Growth & Margins", company: D,          format: "abs",  derived: true },
+
+  // ── Bank Ratios ─────────────────────────────────────────────────────────────
+  { id: "nii_share",        label: "NII / Revenue",          section: "Bank Ratios",      bank: D,             format: "pct",  derived: true },
+  { id: "fee_share",        label: "Fee Income / Revenue",   section: "Bank Ratios",      bank: D,             format: "pct",  derived: true },
+  { id: "loans_deposits",   label: "Loans / Deposits",       section: "Bank Ratios",      bank: D,             format: "mult", derived: true },
+  { id: "deposits_funding", label: "Deposits / Funding",     section: "Bank Ratios",      bank: D,             format: "mult", derived: true },
+  { id: "assets_equity",    label: "Assets / Equity",        section: "Bank Ratios",      bank: D,             format: "mult", derived: true },
+
+  // ── Returns ─────────────────────────────────────────────────────────────────
+  { id: "roe",              label: "ROE (NI / Equity t-1)",  section: "Returns",          company: D, bank: D, format: "pct",  derived: true },
+  { id: "roe_tangible",     label: "ROTE (NI / Tang. Eq t-1)", section: "Returns",        company: D, bank: D, format: "pct",  derived: true },
+  { id: "roic",             label: "ROIC (NOPAT / ND+MI+Eq)", section: "Returns",         company: D,          format: "pct",  derived: true },
+  { id: "roic_operating",   label: "ROIC* (NOPAT / WK+PP&E)", section: "Returns",         company: D,          format: "pct",  derived: true },
+  { id: "payout_calc",      label: "Payout (Div / NI t-1)",  section: "Returns",          company: D,          format: "pct",  derived: true },
+
+  // ── Multiples & Yields (precio vivo en años estimados) ──────────────────────
+  { id: "eff_market_cap",   label: "Market Cap (live in E)", section: "Multiples & Yields", company: D, bank: D, format: "abs",  derived: true },
+  { id: "ev",               label: "EV",                     section: "Multiples & Yields", company: D,          format: "abs",  derived: true },
+  { id: "ev_ebitda",        label: "EV / EBITDA",            section: "Multiples & Yields", company: D,          format: "mult", derived: true },
+  { id: "pe",               label: "P/E",                    section: "Multiples & Yields", company: D, bank: D, format: "mult", derived: true },
+  { id: "pbv",              label: "P/BV",                   section: "Multiples & Yields", company: D, bank: D, format: "mult", derived: true },
+  { id: "ptbv",             label: "P/TBV",                  section: "Multiples & Yields", company: D, bank: D, format: "mult", derived: true },
+  { id: "peg",              label: "PEG (P/E / next-yr EPS g)", section: "Multiples & Yields", company: D, bank: D, format: "mult", derived: true },
+  { id: "fcf_yield",        label: "FCF Yield",              section: "Multiples & Yields", company: D,          format: "pct",  derived: true },
+  { id: "fcfe_yield",       label: "FCFE Yield",             section: "Multiples & Yields", company: D,          format: "pct",  derived: true },
+  { id: "div_yield",        label: "Dividend Yield",         section: "Multiples & Yields", company: D, bank: D, format: "pct",  derived: true },
+  { id: "bb_yield",         label: "Buyback Yield",          section: "Multiples & Yields", company: D, bank: D, format: "pct",  derived: true },
+  { id: "total_yield",      label: "Total Yield (Div + BB)", section: "Multiples & Yields", company: D, bank: D, format: "pct",  derived: true },
 ];
 
 export const METRIC_BY_ID: Map<string, MetricDef> = new Map(METRICS.map((m) => [m.id, m]));
 
-export const SECTIONS: MetricSection[] = ["Income Statement", "Balance Sheet", "Cash Flow", "Market"];
+export const SECTIONS: MetricSection[] = [
+  "Income Statement", "Balance Sheet", "Cash Flow", "Market",
+  "Growth & Margins", "Bank Ratios", "Returns", "Multiples & Yields",
+];
+
+/** Secciones de métricas calculadas: el selector las agrupa aparte de las crudas. */
+export const DERIVED_SECTIONS: MetricSection[] = ["Growth & Margins", "Bank Ratios", "Returns", "Multiples & Yields"];
 
 /** Selección inicial del exportador: lo que se pide 9 de cada 10 veces. */
 export const DEFAULT_METRIC_IDS = ["revenue", "ebitda", "net_income", "eps"];
