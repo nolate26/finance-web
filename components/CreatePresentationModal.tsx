@@ -409,12 +409,24 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
               <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Banco de Chile — Initiation of Coverage" disabled={isSubmitting} style={{ ...INPUT, opacity: isSubmitting ? 0.6 : 1 }} autoFocus />
             </div>
 
-            {/* ── Description ──────────────────────────────────────────────── */}
+            {/* ── Description / Quarter report ─────────────────────────────── */}
+            {/* En fichas el mismo campo (fichas.description) es el comentario del
+                trimestre: en la lista aparece como botón "Earnings comment" junto al PDF. */}
             <div>
               <label style={LABEL}>
-                Description <span style={{ color: "rgba(13,13,56,0.45)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(optional)</span>
+                {isFicha ? "Quarter report" : "Description"}{" "}
+                <span style={{ color: "rgba(13,13,56,0.45)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(optional)</span>
               </label>
-              <textarea value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Brief summary or source (e.g. JPMorgan, Quant Team…)" rows={2} disabled={isSubmitting} style={{ ...INPUT, resize: "vertical", lineHeight: 1.6, opacity: isSubmitting ? 0.6 : 1 }} />
+              <textarea
+                value={desc}
+                onChange={(e) => setDesc(e.target.value)}
+                placeholder={isFicha
+                  ? "Earnings comment for the quarter: results vs. estimates, key takeaways, changes to the thesis…"
+                  : "Brief summary or source (e.g. JPMorgan, Quant Team…)"}
+                rows={isFicha ? 6 : 2}
+                disabled={isSubmitting}
+                style={{ ...INPUT, resize: "vertical", lineHeight: 1.6, opacity: isSubmitting ? 0.6 : 1 }}
+              />
             </div>
 
             {/* ── Category + Is Sell Side ────────────────────────────────── */}

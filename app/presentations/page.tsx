@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { FileText, Download, Upload, Trash2, Search, ShieldAlert, Pencil } from "lucide-react";
+import { FileText, Download, Upload, Trash2, Search, ShieldAlert, Pencil, MessageSquareText, X } from "lucide-react";
 import CreatePresentationModal from "@/components/CreatePresentationModal";
 import ReviewCaseModal from "@/components/presentations/ReviewCaseModal";
 import { REVIEWABLE_CATEGORY, type Presentation } from "@/lib/presentationDto";
@@ -199,13 +199,103 @@ function FileRow({
   );
 }
 
+// ── Earnings comment ──────────────────────────────────────────────────────────
+// El "Quarter report" de la ficha (fichas.description) se lee en un panel propio:
+// es texto largo y no entra en la fila.
+
+function EarningsCommentButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all"
+      style={{ background: "rgba(255,107,6,0.08)", color: "#C25205", border: "1px solid rgba(255,107,6,0.28)", cursor: "pointer", whiteSpace: "nowrap" }}
+      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,107,6,0.14)")}
+      onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,107,6,0.08)")}
+    >
+      <MessageSquareText size={11} /> Earnings comment
+    </button>
+  );
+}
+
+function EarningsCommentModal({ ficha, onClose }: { ficha: Ficha; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      onClick={onClose}
+      className="modal-overlay"
+      style={{
+        position: "fixed", inset: 0, zIndex: 1000, background: "rgba(13,13,56,0.55)",
+        backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "32px 24px",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="modal-card"
+        style={{
+          background: "#fff", borderRadius: 16, width: "100%", maxWidth: 760, maxHeight: "88dvh",
+          display: "flex", flexDirection: "column", overflow: "hidden",
+          boxShadow: "0 32px 80px rgba(13,13,56,0.28), 0 0 0 1px rgba(13,13,56,0.06)",
+        }}
+      >
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "18px 22px 14px", borderBottom: "1px solid rgba(13,13,56,0.07)", background: "linear-gradient(to bottom, #F5F7FD, #fff)" }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="flex items-center gap-2 flex-wrap" style={{ marginBottom: 6 }}>
+              <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.10em", textTransform: "uppercase", color: "#C25205", background: "rgba(255,107,6,0.10)", border: "1px solid rgba(255,107,6,0.28)", borderRadius: 6, padding: "2px 8px" }}>
+                Earnings comment
+              </span>
+              <span className="font-secondary tabular-nums" style={{ fontSize: 11, fontWeight: 700, color: "#0D0D38", background: "rgba(13,13,56,0.06)", border: "1px solid rgba(13,13,56,0.14)", borderRadius: 6, padding: "2px 8px" }}>
+                {ficha.quarter_label}
+              </span>
+              <span className="font-secondary tabular-nums" style={{ fontSize: 11, color: "rgba(13,13,56,0.45)" }}>{ficha.ticker}</span>
+            </div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: "#0D0D38", lineHeight: 1.3 }}>{ficha.company_name}</div>
+            <div style={{ fontSize: 12, color: "rgba(13,13,56,0.62)", marginTop: 3 }}>{ficha.title}</div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            title="Close"
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, flexShrink: 0, background: "transparent", border: "1px solid rgba(13,13,56,0.10)", color: "rgba(13,13,56,0.62)", cursor: "pointer" }}
+          >
+            <X size={15} />
+          </button>
+        </div>
+
+        {/* Texto — se respetan los saltos de línea tal como se escribieron */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "20px 26px 26px" }}>
+          <p className="font-secondary" style={{ fontSize: 13.5, lineHeight: 1.75, color: "#0D0D38", whiteSpace: "pre-wrap", margin: 0 }}>
+            {ficha.description}
+          </p>
+        </div>
+
+        {/* Pie: atajo al PDF de la misma ficha */}
+        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10, padding: "12px 22px", borderTop: "1px solid rgba(13,13,56,0.07)", background: "#F5F7FD" }}>
+          <span className="font-secondary tabular-nums" style={{ fontSize: 11, color: "rgba(13,13,56,0.45)", marginRight: "auto" }}>
+            Uploaded {formatDate(ficha.created_at)}
+          </span>
+          <PdfLink href={ficha.file_url} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Ficha row ─────────────────────────────────────────────────────────────────
 
 function FichaRowView({
-  ficha, isAdmin, deleting, onDelete,
+  ficha, isAdmin, deleting, onDelete, onOpenComment,
 }: {
   ficha: Ficha; isAdmin: boolean; deleting: boolean; onDelete: (f: Ficha) => void;
+  onOpenComment: (f: Ficha) => void;
 }) {
+  const hasComment = !!ficha.description?.trim();
   return (
     <div
       className="flex items-center gap-4 px-5 py-4 border-b border-patria-dark-blue/[0.06] last:border-0 transition-colors"
@@ -218,9 +308,9 @@ function FichaRowView({
       {/* Company + title */}
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold truncate" style={{ color: "#0D0D38" }}>{ficha.company_name}</p>
+        {/* El quarter report ya no va en línea: es texto largo y tiene su propio botón */}
         <p className="text-xs mt-0.5 truncate" style={{ color: "rgba(13,13,56,0.62)" }}>
           {ficha.title}
-          {ficha.description && <span style={{ color: "rgba(13,13,56,0.40)" }}> · {ficha.description}</span>}
         </p>
       </div>
 
@@ -250,6 +340,7 @@ function FichaRowView({
         {formatDate(ficha.created_at)}
       </span>
 
+      {hasComment && <EarningsCommentButton onClick={() => onOpenComment(ficha)} />}
       <PdfLink href={ficha.file_url} />
 
       {/* Delete (admin) */}
@@ -298,6 +389,8 @@ export default function PresentationsPage() {
   const [presentationsError, setPresentationsError] = useState<string | null>(null);
   // Caso abierto en el panel de revisión del admin.
   const [reviewing,    setReviewing]    = useState<Presentation | null>(null);
+  // Ficha cuyo earnings comment se está leyendo.
+  const [commentFicha, setCommentFicha] = useState<Ficha | null>(null);
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
   // Un endpoint caído NO debe verse como "no hay documentos": son dos cosas distintas
@@ -531,6 +624,8 @@ export default function PresentationsPage() {
           onClose={() => setShowModal(false)}
         />
       )}
+
+      {commentFicha && <EarningsCommentModal ficha={commentFicha} onClose={() => setCommentFicha(null)} />}
 
       {/* Panel de revisión de un caso — sólo admin */}
       {reviewing && isAdmin && (
@@ -795,6 +890,7 @@ export default function PresentationsPage() {
                         isAdmin={isAdmin}
                         deleting={deletingId === f.id}
                         onDelete={handleDeleteFicha}
+                        onOpenComment={setCommentFicha}
                       />
                     ))}
                   </div>
