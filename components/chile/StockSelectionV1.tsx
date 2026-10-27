@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw, LayoutGrid, X, Check, Plus, Save, Search, Pencil, RotateCcw, Lock, FileSpreadsheet, Printer } from "lucide-react";
 import { useIsAdmin } from "@/lib/useIsAdmin";
-import SsV1AdminPanel from "./SsV1AdminPanel";
 import SsV1PrintView, { type PrintColGroup } from "./SsV1PrintView";
 import { EDIT_BG, EDIT_BORDER, GROUP_RULE, SECTION_RULE } from "./ssTokens";
 import StockSelectionFreshness from "./StockSelectionFreshness";
@@ -636,7 +635,7 @@ export default function StockSelectionV1() {
   const [showIndexEditor, setShowIndexEditor] = useState(false); // editor de membresía de índices (solo admin)
   const [membership, setMembership] = useState<IndexMembershipPayload | null>(null); // matriz índice↔empresa (para el sumaproducto)
   const [carteras, setCarteras] = useState<CarterasPayload | null>(null); // posiciones de los fondos propios
-  // Orden y secciones (Administración → Orden y secciones). Hasta que llegue se usa la
+  // Orden y secciones (Admin Issues → Stock Selection (Chile) →Orden y secciones). Hasta que llegue se usa la
   // semilla del código, que es el orden de siempre: la tabla nunca aparece desordenada.
   const [orden, setOrden] = useState<OrdenPayload | null>(null);
   const [editMode, setEditMode] = useState(false); // modo edición de valores (solo admin)
@@ -910,7 +909,7 @@ export default function StockSelectionV1() {
       { k: "Moneda", f: "USD → USD · CLP → ÷ TC", v: "todos los montos quedan en USD millones; el TC USD/CLP es editable arriba. Monedas no soportadas (p. ej. GBp) → “—”." },
       { k: "Períodos", v: `n = ${pN} (último trimestre cargado) · n-4 = ${pN4} (mismo trimestre, año previo) · LTM = suma de los últimos 4 trimestres (${ltmLbl}).` },
       { k: "Series A/B", v: "cada serie usa su propio precio y nº de acciones; las filas A/B prorratean los fundamentales por su % de acciones; la consolidada usa el fundamental completo contra el M.Cap total (Σ de las series)." },
-      { k: "Orden", v: "por defecto, el orden por sector que se define en Administración → Orden y secciones (los bordes separan secciones; las dobles van consolidada → A → B). Clic en una columna para reordenar; “Orden por sector” vuelve al fijo. Compañías fuera del listado → al final." },
+      { k: "Orden", v: "por defecto, el orden por sector que se define en Admin Issues → Stock Selection (Chile) →Orden y secciones (los bordes separan secciones; las dobles van consolidada → A → B). Clic en una columna para reordenar; “Orden por sector” vuelve al fijo. Compañías fuera del listado → al final." },
     ] },
     { title: "Precio (Yahoo, en vivo)", items: [
       { k: "Precio", v: "regularMarketPrice de Yahoo, en la moneda de cotización y con el ticker propio de cada serie. Se valida contra el último cierre: si difiere más de 15% se usa el cierre, porque en papeles sin volumen Yahoo devuelve ahí un precio indicativo irreal (AFP Capital informaba 310 contra un cierre de 247,5 tras 14 ruedas sin operar)." },
@@ -976,7 +975,7 @@ export default function StockSelectionV1() {
       { k: "TP", v: "precio objetivo, en la moneda de cotización (sin convertir por TC)." },
     ] },
     { title: "Fondos — sumaproducto por participación", wide: true, items: [
-      { k: "Ponderador", f: "acciones en cartera / acciones de la unidad", v: "las dos en millones. Es la fracción de la compañía que el fondo posee. Las posiciones salen de `carteras`, que se carga mes a mes desde el Excel en Administración → Carteras." },
+      { k: "Ponderador", f: "acciones en cartera / acciones de la unidad", v: "las dos en millones. Es la fracción de la compañía que el fondo posee. Las posiciones salen de `carteras`, que se carga mes a mes desde el Excel en Admin Issues → Stock Selection (Chile) →Carteras." },
       { k: "Series A/B", v: "se pondera la SERIE, no la compañía: la unidad de una serie ya viene prorrateada por su % de acciones, así que al multiplicarla por (acciones en cartera / acciones de la serie) el prorrateo se cancela y el M.Cap queda precio de la serie × acciones en cartera, que es el valor de mercado de la posición. Por eso el Excel trae ANDINAA CI y ANDINAB CI por separado, y NO la fila madre que las suma: duplicaría la posición." },
       { k: "Cruce", v: "exclusivamente por ticker Bloomberg contra el ticker de cada serie. Un ticker que no cruza se avisa en el preview de la carga, antes de escribir; si igual queda alguno cargado que después deje de resolver, la fila del fondo lo muestra como “−N” al lado del nombre." },
       { k: "M.Cap y fundamentales", f: "Σ (valor de la unidad × ponderador)", v: "mismo motor que los índices: se suman los primitivos aditivos y los múltiplos salen de esas sumas, no del promedio de los múltiplos de cada posición." },
@@ -1015,17 +1014,8 @@ export default function StockSelectionV1() {
           Bloomberg + Excel de proyecciones) no son las del resto de la plataforma. */}
       <StockSelectionFreshness />
 
-      {/* Panel de administración — homologación de tickers + bitácora de cambios.
-          Va arriba de todo porque lo que se toca acá (qué ticker se consulta) decide
-          qué muestra la tabla de abajo. */}
-      {isAdmin && (
-        <SsV1AdminPanel
-          onSourceChanged={() => { load(priced, selPeriod); loadCarteras(); loadOrden(); }}
-          // Trimestre activo: el alta de empresas guarda sus datos iniciales contra éste,
-          // que es el mismo período al que aplica cualquier otra edición manual.
-          periodo={data?.selFy ? { fy: data.selFy, q: data.selQ, label: data.periodN ?? `${data.selQ}Q ${data.selFy}` } : null}
-        />
-      )}
+      {/* El panel de administración (filas, tickers, orden, carteras, bitácora) se mudó
+          a Admin Issues → "Stock Selection (Chile)". */}
 
       {/* Header / controls */}
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>

@@ -19,9 +19,21 @@ const DISPLAY_NAMES: Record<string, string> = {
   Orange: "Orange",
   Glory: "Glory",
   Mercer: "Mercer",
+  Patria_Long_Biased_Master_FIM: "Patria Long Biased",
+  Patria_LO_Master_FIA: "Patria Long Only",
 };
 
 const CHILE_FUNDS = new Set(["Pionero", "Moneda_Renta_Variable", "Orange"]);
+// fund_name con que llegarán a fund_portfolio_weights (aún sin datos).
+const BRAZIL_FUNDS = new Set(["Patria_Long_Biased_Master_FIM", "Patria_LO_Master_FIA"]);
+
+type Region = "Chile" | "LATAM" | "Brazil";
+
+function regionOf(fundName: string): Region {
+  if (CHILE_FUNDS.has(fundName)) return "Chile";
+  if (BRAZIL_FUNDS.has(fundName)) return "Brazil";
+  return "LATAM";
+}
 
 
 // ── Types (kept for frontend contract) ───────────────────────────────────────
@@ -49,7 +61,7 @@ export interface FondoMeta {
   name: string;
   displayName: string;
   date: string;
-  region: "Chile" | "LATAM";
+  region: Region;
 }
 
 export interface FondoData extends FondoMeta {
@@ -235,8 +247,7 @@ export async function GET(request: Request) {
         const date = r.reportDate.toISOString().split("T")[0];
         const id = `${name}_${date}`;
         const displayName = DISPLAY_NAMES[name] ?? name.replace(/_/g, " ");
-        const region: "Chile" | "LATAM" = CHILE_FUNDS.has(name) ? "Chile" : "LATAM";
-        return { id, name, displayName, date, region };
+        return { id, name, displayName, date, region: regionOf(name) };
       });
 
       return NextResponse.json({ fondos });
@@ -265,7 +276,7 @@ export async function GET(request: Request) {
       name: fundName,
       displayName: DISPLAY_NAMES[fundName] ?? fundName.replace(/_/g, " "),
       date,
-      region: CHILE_FUNDS.has(fundName) ? "Chile" : "LATAM",
+      region: regionOf(fundName),
     };
 
     try {

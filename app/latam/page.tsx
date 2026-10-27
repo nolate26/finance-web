@@ -11,12 +11,13 @@ import MatrixAttributionPanel from "@/components/attribution/MatrixAttributionPa
 import QuantAnalysisPanel from "@/components/quant/QuantAnalysisPanel";
 import BetaExposurePanel from "@/components/latam/BetaExposurePanel";
 import TabSpacer from "@/components/TabSpacer";
+import AnalystLinks from "@/components/links/AnalystLinks";
 import { FONT_SECONDARY } from "@/lib/patriaTheme";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 // Top Picks salió de acá: vive en Analyst Estimates como "Top Picks LatAm/Brazil".
-type ActiveTab = "beta-exposure" | "attribution" | "quant-analysis" | "stock-selection";
+type ActiveTab = "beta-exposure" | "attribution" | "quant-analysis" | "stock-selection" | "links";
 type FundFilter = "all" | "MLE" | "MSC" | "others";
 
 // Planning salió de acá: es ruta de primer nivel (/planning, "Team Planning" en el navbar).
@@ -28,6 +29,7 @@ const TABS: { key: ActiveTab; label: string; spacerBefore?: boolean }[] = [
   { key: "attribution",     label: "Perf. Attribution" },
   { key: "quant-analysis",  label: "Quant Analysis"    },
   { key: "stock-selection", label: "Stock Selection", spacerBefore: true },
+  { key: "links",           label: "Useful Links",    spacerBefore: true },
 ];
 
 interface SortOption {
@@ -520,6 +522,9 @@ function LatAmContent() {
 
       {/* ── Quant Analysis ───────────────────────────────────────────────────── */}
       {activeTab === "quant-analysis" && <QuantAnalysisPanel />}
+
+      {/* ── Useful Links ─────────────────────────────────────────────────────── */}
+      {activeTab === "links" && <AnalystLinks region="LATAM" />}
     </div>
   );
 }

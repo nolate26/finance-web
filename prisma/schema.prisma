@@ -1533,3 +1533,33 @@ model StockSelectionHidden {
 
   @@map("stock_selection_hidden")
 }
+
+// Compañías de Analyst Estimates ocultas para los usuarios no-admin.
+//
+// Misma idea que stock_selection_hidden: los datos del modelo siguen cargándose y el admin
+// los sigue viendo (atenuados), pero /api/latam/consensus-check saca estas filas de la
+// respuesta para cualquier otro rol. La llave es el ticker del modelo en MAYÚSCULAS
+// (model_headers / bank_headers.ticker, ya canónico). Auditado en admin_change_log.
+model EstimatesHidden {
+  ticker   String   @id @db.VarChar(60)
+  reason   String?  @db.VarChar(300)
+  hiddenBy String?  @map("hidden_by") @db.VarChar(200)
+  hiddenAt DateTime @default(now()) @map("hidden_at")
+
+  @@map("estimates_hidden")
+}
+
+// Links a herramientas y ejercicios de los analistas, por región (pestaña "Useful Links"
+// de Chile y LatAm). Todos los leen; sólo el admin crea, edita y borra.
+model AnalystLink {
+  id          Int      @id @default(autoincrement())
+  region      String   @db.VarChar(10)   // "CHILE" | "LATAM"
+  name        String   @db.VarChar(120)
+  url         String   @db.VarChar(1000)
+  description String?  @db.VarChar(300)
+  createdBy   String?  @map("created_by") @db.VarChar(200)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([region])
+  @@map("analyst_links")
+}

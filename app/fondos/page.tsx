@@ -8,15 +8,37 @@ import ReturnsDashboard from "@/components/fondos/ReturnsDashboard";
 import PerformanceAttribution from "@/components/fondos/PerformanceAttribution";
 import { RefreshCw, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
 
-// ── Fund → rentabilidades page_num mapping ───────────────────────────────────
-const FUND_PAGE_MAP: Record<string, string> = {
-  Pionero: "1",
-  Moneda_Renta_Variable: "2",
-  Orange: "2",
-  "Moneda_Latin_America_Small_Cap_(LX)": "3",
-  "Moneda_Latin_America_Equities_(LX)": "4",
-  Glory: "4",
-  Mercer: "4",
+type Region = "Chile" | "LATAM" | "Brazil";
+
+const REGIONS: { key: Region; label: string }[] = [
+  { key: "Chile",  label: "Chile"  },
+  { key: "LATAM",  label: "LATAM"  },
+  { key: "Brazil", label: "Brazil" },
+];
+
+// ── Fund → /api/rentabilidades query ─────────────────────────────────────────
+// Chile/LATAM se identifican por page_num. Brasil por moneda (la página del PDF
+// puede moverse; ojo que el grupo "BRL Returns" de la página USD NO es Brasil) y
+// cada tabla por el fondo Patria que aparece en su dyn_1_label.
+const FUND_RETURNS_QUERY: Record<string, string> = {
+  Pionero: "page=1",
+  Moneda_Renta_Variable: "page=2",
+  Orange: "page=2",
+  "Moneda_Latin_America_Small_Cap_(LX)": "page=3",
+  "Moneda_Latin_America_Equities_(LX)": "page=4",
+  Glory: "page=4",
+  Mercer: "page=4",
+  Patria_Long_Biased_Master_FIM: "currency=BRL&dyn1=LONG%20BIAS",
+  Patria_LO_Master_FIA: "currency=BRL&dyn1=LONG%20ONLY",
+};
+
+// Brasil trae NAV, since-inception dinámicos, sigma, alpha y beta.
+const EXTENDED_RETURNS = new Set(["Patria_Long_Biased_Master_FIM", "Patria_LO_Master_FIA"]);
+
+// Nombre visible para fondos que aún no tienen cartera cargada (la API no los lista).
+const FALLBACK_DISPLAY: Record<string, string> = {
+  Patria_Long_Biased_Master_FIM: "Patria Long Biased",
+  Patria_LO_Master_FIA: "Patria Long Only",
 };
 
 // ── Fund → Performance Attribution fund identifier (matches FUND column in CSV)
@@ -28,12 +50,17 @@ const FUND_ATTR_MAP: Record<string, string> = {
   "Moneda_Latin_America_Equities_(LX)": "MLE",
   Glory: "GLORY",
   Mercer: "MERCER",
+  // Brasil: aún sin datos; ajustar al valor de la columna FUND cuando se suba.
+  Patria_Long_Biased_Master_FIM: "PATRIA LONG BIASED",
+  Patria_LO_Master_FIA: "PATRIA LONG ONLY",
 };
 
 // ── Business-ordered fund names per region ────────────────────────────────────
-const FUND_ORDER: Record<"Chile" | "LATAM", string[]> = {
+// Todos tienen returns configurados, así que se listan aunque no tengan cartera.
+const FUND_ORDER: Record<Region, string[]> = {
   Chile: ["Pionero", "Moneda_Renta_Variable", "Orange"],
   LATAM: ["Moneda_Latin_America_Equities_(LX)", "Moneda_Latin_America_Small_Cap_(LX)", "Glory", "Mercer"],
+  Brazil: ["Patria_Long_Biased_Master_FIM", "Patria_LO_Master_FIA"],
 };
 
 interface CarteraRow {
@@ -52,7 +79,7 @@ interface FondoMeta {
   name: string;
   displayName: string;
   date: string;
-  region: "Chile" | "LATAM";
+  region: Region;
 }
 
 interface SectorSummary {
@@ -76,13 +103,20 @@ function fmtDate(d: string) {
   return `${months[parseInt(m) - 1]} ${parseInt(day)}, ${y}`;
 }
 
+function latestSnapshotId(fondos: FondoMeta[], name: string): string {
+  return fondos.filter((f) => f.name === name).sort((a, b) => b.date.localeCompare(a.date))[0]?.id ?? "";
+}
+
 export default function FondosPage() {
   const [fondosList, setFondosList] = useState<FondoMeta[]>([]);
+  // El fondo se elige por nombre: puede tener returns sin tener cartera (Brasil).
+  const [selectedFundName, setSelectedFundName] = useState<string>(FUND_ORDER.Chile[0]);
+  // Snapshot de cartera del fondo elegido ("" si no tiene).
   const [selectedId, setSelectedId] = useState<string>("");
   const [fondoData, setFondoData] = useState<FondoData | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
-  const [region, setRegion] = useState<"Chile" | "LATAM">("Chile");
+  const [region, setRegion] = useState<Region>("Chile");
   const [activeTab, setActiveTab] = useState<"cartera" | "returns" | "attribution">("returns");
 
   useEffect(() => {
@@ -90,21 +124,18 @@ export default function FondosPage() {
       .then((r) => r.json())
       .then((d: { fondos: FondoMeta[] }) => {
         setFondosList(d.fondos);
-        // Select most recent snapshot of the first business-ordered Chile fund
-        const firstChileName = FUND_ORDER.Chile.find((n) =>
-          d.fondos.some((f) => f.region === "Chile" && f.name === n)
-        );
-        const latest = firstChileName
-          ? d.fondos.filter((f) => f.name === firstChileName).sort((a, b) => b.date.localeCompare(a.date))[0]
-          : d.fondos.filter((f) => f.region === "Chile").at(-1);
-        if (latest) setSelectedId(latest.id);
+        // Most recent snapshot of the first business-ordered Chile fund
+        setSelectedId(latestSnapshotId(d.fondos, FUND_ORDER.Chile[0]));
         setLoading(false);
       })
       .catch(() => setLoading(false));
   }, []);
 
   useEffect(() => {
-    if (!selectedId) return;
+    if (!selectedId) {
+      setFondoData(null);
+      return;
+    }
     setLoadingData(true);
     setFondoData(null);
     fetch(`/api/fondos?fondo=${encodeURIComponent(selectedId)}`)
@@ -131,11 +162,10 @@ export default function FondosPage() {
   }
 
   const selectedMeta = fondosList.find((f) => f.id === selectedId);
-  const regionFunds = fondosList.filter((f) => f.region === region);
-  // Business-ordered fund names: only include funds that actually exist in the API response
-  const availableNames = new Set(regionFunds.map((f) => f.name));
-  const uniqueNames = FUND_ORDER[region].filter((n) => availableNames.has(n));
-  const selectedFundName = selectedMeta?.name ?? "";
+  const uniqueNames = FUND_ORDER[region];
+  const displayNameOf = (name: string) =>
+    fondosList.find((f) => f.name === name)?.displayName ?? FALLBACK_DISPLAY[name] ?? name.replace(/_/g, " ");
+  const selectedDisplayName = displayNameOf(selectedFundName);
   const snapshots = fondosList
     .filter((f) => f.name === selectedFundName)
     .sort((a, b) => b.date.localeCompare(a.date));
@@ -156,22 +186,14 @@ export default function FondosPage() {
   }
 
   function selectFund(name: string) {
-    const latest = fondosList
-      .filter((f) => f.name === name)
-      .sort((a, b) => b.date.localeCompare(a.date))[0];
-    if (latest) setSelectedId(latest.id);
+    setSelectedFundName(name);
+    setSelectedId(latestSnapshotId(fondosList, name));
   }
 
-  function switchRegion(r: "Chile" | "LATAM") {
+  function switchRegion(r: Region) {
     setRegion(r);
-    // Select most recent snapshot of the first business-ordered fund in the new region
-    const firstName = FUND_ORDER[r].find((n) =>
-      fondosList.some((f) => f.region === r && f.name === n)
-    );
-    const latest = firstName
-      ? fondosList.filter((f) => f.name === firstName).sort((a, b) => b.date.localeCompare(a.date))[0]
-      : fondosList.filter((f) => f.region === r).at(-1);
-    if (latest) setSelectedId(latest.id);
+    // First business-ordered fund in the new region, at its most recent snapshot
+    selectFund(FUND_ORDER[r][0]);
   }
 
   return (
@@ -208,7 +230,7 @@ export default function FondosPage() {
           width: "fit-content",
         }}
       >
-        {(["Chile", "LATAM"] as const).map((r) => (
+        {REGIONS.map(({ key: r, label }) => (
           <button
             key={r}
             onClick={() => switchRegion(r)}
@@ -222,7 +244,7 @@ export default function FondosPage() {
               cursor: "pointer",
             }}
           >
-            {r}
+            {label}
           </button>
         ))}
       </div>
@@ -231,8 +253,8 @@ export default function FondosPage() {
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <span className="text-xs font-medium" style={{ color: "rgba(13,13,56,0.45)" }}>Fund:</span>
         {uniqueNames.map((name) => {
-          const displayName = fondosList.find((f) => f.name === name)?.displayName ?? name;
-          const isActive = selectedMeta?.name === name;
+          const displayName = displayNameOf(name);
+          const isActive = selectedFundName === name;
           return (
             <button
               key={name}
@@ -286,9 +308,10 @@ export default function FondosPage() {
       {/* ── Returns tab ───────────────────────────────────────────────────────── */}
       {activeTab === "returns" && (
         <ReturnsDashboard
-          pageNum={FUND_PAGE_MAP[selectedFundName] ?? "1"}
-          fundDisplayName={selectedMeta?.displayName ?? selectedFundName}
+          query={FUND_RETURNS_QUERY[selectedFundName] ?? "page=1"}
+          fundDisplayName={selectedDisplayName}
           fundKey={selectedFundName}
+          columns={EXTENDED_RETURNS.has(selectedFundName) ? "extended" : "standard"}
         />
       )}
 
@@ -317,7 +340,7 @@ export default function FondosPage() {
                   style={{ borderColor: "rgba(32,68,220,0.15)", borderTopColor: "#2044DC" }}
                 />
                 <p className="text-sm font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.62)" }}>
-                  Loading {selectedMeta?.displayName}...
+                  Loading {selectedDisplayName}...
                 </p>
               </div>
             </div>
@@ -413,7 +436,7 @@ export default function FondosPage() {
             </>
           )}
 
-          {fondoData && !loadingData && fondoData.cartera.length === 0 && !fondoData.error && (
+          {((fondoData && !loadingData && fondoData.cartera.length === 0 && !fondoData.error) || !selectedId) && (
             <div className="flex items-center justify-center h-64 card">
               <p style={{ color: "rgba(13,13,56,0.62)" }}>No portfolio data found for this fund</p>
             </div>
@@ -425,7 +448,7 @@ export default function FondosPage() {
       {activeTab === "attribution" && (
         <PerformanceAttribution
           fundId={FUND_ATTR_MAP[selectedFundName]}
-          displayName={selectedMeta?.displayName ?? selectedFundName}
+          displayName={selectedDisplayName}
         />
       )}
     </div>

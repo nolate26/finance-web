@@ -6,8 +6,9 @@ import { CalendarDays, Eye, EyeOff, Search, X } from "lucide-react";
 import type { ConsensusCheckPayload, ConsensusCheckRow } from "@/app/api/latam/consensus-check/route";
 import type { SheetDef } from "@/lib/exportExcel";
 import ExportButtons from "@/components/ExportButtons";
-import { FONT_SECONDARY } from "@/lib/patriaTheme";
+import { FONT_SECONDARY, PATRIA } from "@/lib/patriaTheme";
 import { countryName } from "@/lib/countryNames";
+import { useIsAdmin } from "@/lib/useIsAdmin";
 
 // ── Palette ────────────────────────────────────────────────────────────────────
 const C = {
@@ -346,6 +347,13 @@ export default function ConsensusCheckTable() {
   const [notFoundMsg,   setNotFoundMsg]   = useState<string | null>(null);
   const [showConsensus, setShowConsensus] = useState(false);   // bloque Consensus oculto por defecto
 
+  // Ocultar compañías a los no-admin. El servidor ya no les manda esas filas; el admin
+  // las recibe marcadas (`hidden`) y decide si verlas atenuadas o sacarlas de su vista.
+  const isAdmin = useIsAdmin();
+  const [showHidden,   setShowHidden]   = useState(true);
+  const [togglingHide, setTogglingHide] = useState<string | null>(null);
+  const [hideError,    setHideError]    = useState<string | null>(null);
+
   // Buscador de compañías: filtra la tabla por nombre o ticker y, desde la lista de
   // sugerencias, abre el modelo de la elegida. Los nombres salen de companies/list
   // (nombre_latam), que ya se pide para validar tickers.
@@ -410,8 +418,10 @@ export default function ConsensusCheckTable() {
   const matchesSearch = (r: ConsensusCheckRow) =>
     !q || r.ticker.toLowerCase().includes(q) || nameOf(r.ticker).toLowerCase().includes(q);
 
+  const hiddenCount = rows.filter((r) => r.hidden).length;
   const sorted   = sortRows(rows, sortBy, sortDir);
   const filtered = sorted.filter((r) =>
+    (showHidden || !r.hidden) &&
     matchesSearch(r) &&
     (!analystFilter  || r.analyst  === analystFilter)  &&
     (!countryFilter  || r.country  === countryFilter)  &&
@@ -442,6 +452,29 @@ export default function ConsensusCheckTable() {
     // un orden por una columna invisible no se puede leer ni deshacer desde el header.
     if (!next && COL_GROUPS[1].cols.includes(sortBy)) { setSortBy("updateDate"); setSortDir("desc"); }
     setShowConsensus(next);
+  }
+
+  async function toggleHidden(row: ConsensusCheckRow) {
+    const hidden = !row.hidden;
+    if (hidden && !window.confirm(`Hide ${shortTicker(row.ticker)} from non-admin users?\n\nThe model keeps loading and admins still see it (dimmed).`)) return;
+    setTogglingHide(row.ticker);
+    setHideError(null);
+    try {
+      const res = await fetch("/api/admin/estimates-hidden", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticker: row.ticker, hidden }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Could not save");
+      setData((prev) => prev && {
+        ...prev,
+        rows: prev.rows.map((r) => (r.ticker === row.ticker ? { ...r, hidden } : r)),
+      });
+    } catch (e) {
+      setHideError((e as Error).message);
+    } finally {
+      setTogglingHide(null);
+    }
   }
 
   function handleTickerClick(ticker: string) {
@@ -511,6 +544,12 @@ export default function ConsensusCheckTable() {
           >
             ×
           </button>
+        </div>
+      )}
+
+      {hideError && (
+        <div style={{ marginBottom: 10, padding: "8px 14px", borderRadius: 8, fontSize: 12, color: "#F8485E", background: "rgba(248,72,94,0.06)", border: "1px solid rgba(248,72,94,0.20)" }}>
+          {hideError}
         </div>
       )}
 
@@ -621,6 +660,25 @@ export default function ConsensusCheckTable() {
             {showConsensus ? <EyeOff size={12} /> : <Eye size={12} />}
             {showConsensus ? "Hide Consensus" : "Show Consensus"}
           </button>
+
+          {/* Admin: las ocultas se ven atenuadas; este toggle las saca también de su vista. */}
+          {isAdmin && hiddenCount > 0 && (
+            <button
+              onClick={() => setShowHidden((v) => !v)}
+              title="Hidden companies are never sent to non-admin users"
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 5,
+                padding: "6px 12px", borderRadius: 7, fontSize: 12, fontFamily: FONT_SECONDARY, fontWeight: 600,
+                border: `1px solid ${PATRIA.orange}66`,
+                background: showHidden ? "rgba(255,107,6,0.08)" : "#F5F7FD",
+                color: showHidden ? PATRIA.orange : "rgba(13,13,56,0.62)",
+                cursor: "pointer", outline: "none", whiteSpace: "nowrap",
+              }}
+            >
+              <EyeOff size={12} />
+              {showHidden ? `Showing ${hiddenCount} hidden` : `${hiddenCount} hidden (not shown)`}
+            </button>
+          )}
 
           {(q || analystFilter || countryFilter || industryFilter) && (
             <span style={{ fontSize: 11, color: "rgba(13,13,56,0.62)", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
@@ -772,7 +830,7 @@ export default function ConsensusCheckTable() {
               return (
                 <tr
                   key={row.ticker}
-                  style={{ background: rowBg }}
+                  style={{ background: rowBg, opacity: row.hidden ? 0.5 : 1 }}
                   onMouseEnter={(e) => {
                     const tr = e.currentTarget as HTMLTableRowElement;
                     tr.style.background = C.ROW_HOV;
@@ -807,6 +865,32 @@ export default function ConsensusCheckTable() {
                     >
                       {shortTicker(row.ticker)}
                     </span>
+                    {row.hidden && (
+                      <span
+                        title="Hidden from non-admin users"
+                        style={{ marginLeft: 6, fontSize: 8.5, fontWeight: 800, letterSpacing: "0.05em", color: PATRIA.orange, background: "rgba(255,107,6,0.10)", border: `1px solid ${PATRIA.orange}55`, borderRadius: 3, padding: "1px 4px", textDecoration: "none" }}
+                      >
+                        HIDDEN
+                      </span>
+                    )}
+                    {isAdmin && (
+                      <button
+                        onClick={() => toggleHidden(row)}
+                        disabled={togglingHide === row.ticker}
+                        title={row.hidden ? "Show to everyone" : "Hide from non-admin users"}
+                        style={{
+                          marginLeft: 6, verticalAlign: "middle",
+                          display: "inline-flex", alignItems: "center", justifyContent: "center",
+                          width: 20, height: 20, borderRadius: 4, padding: 0,
+                          border: `1px solid ${row.hidden ? `${PATRIA.orange}66` : "rgba(13,13,56,0.12)"}`,
+                          background: "#fff",
+                          color: row.hidden ? PATRIA.orange : "rgba(13,13,56,0.45)",
+                          cursor: togglingHide === row.ticker ? "default" : "pointer",
+                        }}
+                      >
+                        {row.hidden ? <Eye size={11} /> : <EyeOff size={11} />}
+                      </button>
+                    )}
                   </td>
 
                   {/* Update As Of */}

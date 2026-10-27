@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { isAdmin } from "@/lib/auth";
 import { bankEffMarketCap, bankPe, companyEffMarketCap, companyEvEbitda, companyPe, type LiveQuote } from "@/lib/modelMultiples";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +45,8 @@ export interface ConsensusCheckRow {
     pe1FY:       number | null;
     pe2FY:       number | null;
   };
+  // Sólo llega a true para el admin: el resto nunca recibe las filas ocultas.
+  hidden?:     boolean;
 }
 
 export interface ConsensusCheckPayload {
@@ -422,7 +425,17 @@ export async function GET() {
       };
     });
 
-    const rows = [...companyRows, ...bankRows];
+    // Ocultas por el admin (estimates_hidden). El filtro va acá y no en el cliente: un
+    // usuario no-admin no debe recibir los números, no basta con no pintarlos. Si la tabla
+    // todavía no existe (antes del db push) la vista sigue funcionando sin ocultar nada.
+    const [admin, hiddenRows] = await Promise.all([
+      isAdmin(),
+      prisma.estimatesHidden.findMany({ select: { ticker: true } }).catch(() => []),
+    ]);
+    const hiddenSet = new Set(hiddenRows.map((h) => normTicker(h.ticker)));
+    const rows = [...companyRows, ...bankRows]
+      .map((r) => ({ ...r, hidden: hiddenSet.has(normTicker(r.ticker)) }))
+      .filter((r) => admin || !r.hidden);
 
     return NextResponse.json({ rows, year1FY, year2FY, pricesAsOf } satisfies ConsensusCheckPayload);
   } catch (e) {

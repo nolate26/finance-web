@@ -5,9 +5,10 @@ import TabSpacer from "@/components/TabSpacer";
 import ActiveDecisions from "@/components/chile/ActiveDecisions";
 import StockSelectionV1 from "@/components/chile/StockSelectionV1";
 import ProjectionsPage from "@/app/projections/page";
+import AnalystLinks from "@/components/links/AnalystLinks";
 
 // Top Picks salió de acá: vive en Analyst Estimates como "Top Picks Chile".
-type ActiveTab = "stock-selection" | "projections" | "active-decisions";
+type ActiveTab = "stock-selection" | "projections" | "active-decisions" | "links";
 
 // `spacerBefore` abre un separador antes de la pestaña: agrupa Stock Selection y
 // Projections a la izquierda y despega Multiples Range del bloque principal.
@@ -15,6 +16,7 @@ const TABS: { key: ActiveTab; label: string; spacerBefore?: boolean }[] = [
   { key: "stock-selection",  label: "Stock Selection" },
   { key: "projections",      label: "Projections"     },
   { key: "active-decisions", label: "Multiples Range", spacerBefore: true },
+  { key: "links",            label: "Useful Links",    spacerBefore: true },
 ];
 
 export default function ChilePage() {
@@ -76,6 +78,9 @@ export default function ChilePage() {
 
       {/* ── Active Decisions ────────────────────────────────────────────────── */}
       {activeTab === "active-decisions" && <ActiveDecisions />}
+
+      {/* ── Useful Links ────────────────────────────────────────────────────── */}
+      {activeTab === "links" && <AnalystLinks region="CHILE" />}
     </div>
   );
 }

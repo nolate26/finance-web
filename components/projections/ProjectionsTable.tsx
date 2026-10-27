@@ -373,7 +373,7 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
   const { status } = useSession();
   const canEdit = status === "authenticated";
 
-  // Orden y secciones: la misma fuente que Stock Selection (Administración → Orden y
+  // Orden y secciones: la misma fuente que Stock Selection (Admin Issues → Stock Selection (Chile) → Orden y
   // secciones). Hasta que responda se usa la semilla del código, que es el orden de siempre.
   const [orden, setOrden] = useState<OrdenPayload | null>(null);
   useEffect(() => {

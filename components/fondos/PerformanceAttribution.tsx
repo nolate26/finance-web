@@ -371,6 +371,8 @@ export default function PerformanceAttribution({ fundId, displayName }: Props) {
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Fondo sin attribution cargada (la API responde 404 sin currentPeriod).
+  const [empty, setEmpty] = useState(false);
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"table" | "matrix">("table");
 
@@ -378,11 +380,14 @@ export default function PerformanceAttribution({ fundId, displayName }: Props) {
     if (!fundId) return;
     setLoading(true);
     setError(null);
+    setEmpty(false);
+    setData(null);
     setExpandedRow(null);
     fetch(`/api/fondos/attribution?fund=${encodeURIComponent(fundId)}`)
       .then((r) => r.json())
       .then((d: ApiResponse) => {
-        setData(d);
+        if (Array.isArray(d.currentPeriod)) setData(d);
+        else setEmpty(true);
         setLoading(false);
       })
       .catch(() => {
@@ -391,7 +396,7 @@ export default function PerformanceAttribution({ fundId, displayName }: Props) {
       });
   }, [fundId]);
 
-  if (!fundId) {
+  if (!fundId || empty) {
     return (
       <div className="card flex flex-col items-center justify-center gap-3" style={{ minHeight: 200 }}>
         <p style={{ color: "rgba(13,13,56,0.45)", fontSize: 13 }}>

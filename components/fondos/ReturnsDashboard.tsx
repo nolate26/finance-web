@@ -20,6 +20,7 @@ interface RentabilidadRow {
   manager: string;
   group: string;
   currency: string;
+  nav: number | null;
   mtd: number | null;
   ytd: number | null;
   oneYear: number | null;
@@ -30,6 +31,11 @@ interface RentabilidadRow {
   sharpe: number | null;
   mgmtFee: number | null;
   annSinceIncep: number | null;
+  dyn1: number | null;
+  dyn2: number | null;
+  sigma: number | null;
+  alpha: number | null;
+  beta: number | null;
   isMoneda: boolean;
 }
 
@@ -54,9 +60,12 @@ interface TimeseriesPoint {
 }
 
 interface Props {
-  pageNum: string;
+  /** Query string de /api/rentabilidades: "page=1" o "currency=BRL&dyn1=LONG BIAS". */
+  query: string;
   fundDisplayName: string;
   fundKey?: string;
+  /** "extended" agrega NAV, since-inception dinámicos y riesgo (página de Brasil). */
+  columns?: "standard" | "extended";
 }
 
 // Lines to show in the chart per fund (others hidden to reduce noise)
@@ -70,9 +79,22 @@ const CHART_LINES: Record<string, string[]> = {
   Mercer: ["Mercer", "Moneda All Caps A", "MSCI EM Latam IMI"],
 };
 
+// Índices (líneas naranjas) a graficar por fondo; sin entrada se grafican todos.
+// No afecta la tabla, sólo el gráfico y las opciones de benchmark del modo alfa.
+const CHART_INDICES: Record<string, string[]> = {
+  Patria_Long_Biased_Master_FIM: ["Ibovespa Index"],
+};
+
+// Benchmark por defecto del modo alfa. Sin entrada se usa el primer índice del gráfico.
+const DEFAULT_BENCHMARK: Record<string, string> = {
+  Patria_Long_Biased_Master_FIM: "Ibovespa Index",
+  Patria_LO_Master_FIA: "Ibovespa Index",
+};
+
 type SortableKey =
   | "fund"
   | "manager"
+  | "nav"
   | "aum"
   | "mtd"
   | "ytd"
@@ -81,7 +103,12 @@ type SortableKey =
   | "fiveYears"
   | "tenYears"
   | "annSinceIncep"
+  | "dyn1"
+  | "dyn2"
+  | "sigma"
   | "sharpe"
+  | "alpha"
+  | "beta"
   | "mgmtFee";
 
 interface SortConfig {
@@ -104,6 +131,11 @@ function fmtAum(v: number | null): string {
 function fmtSharpe(v: number | null): string {
   if (v === null) return "—";
   return v.toFixed(2);
+}
+
+function fmtNav(v: number | null): string {
+  if (v === null) return "—";
+  return v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 2 });
 }
 
 function fmtFee(v: number | null): string {
@@ -154,50 +186,68 @@ function pctColDef(
   };
 }
 
-const TABLE_COLS: ColDef[] = [
-  {
-    label: "MANAGER",
-    textValue: (r) => r.manager || "—",
-    color: (r) => (r.manager ? "rgba(13,13,56,0.62)" : "rgba(13,13,56,0.28)"),
-    right: false,
-    mono: false,
-    sortKey: "manager",
-  },
-  {
-    label: "AUM ($MM)",
-    textValue: (r) => fmtAum(r.aum),
-    color: (r) => (r.aum === null ? "rgba(13,13,56,0.28)" : "rgba(13,13,56,0.62)"),
+/** Columna numérica neutra (sin color por signo): AUM, NAV, Sharpe, Beta, Fee. */
+function plainColDef(
+  label: string,
+  getValue: (r: NRow) => number | null,
+  fmt: (v: number | null) => string,
+  sortKey: SortableKey
+): ColDef {
+  return {
+    label,
+    textValue: (r) => fmt(getValue(r)),
+    color: (r) => (getValue(r) === null ? "rgba(13,13,56,0.28)" : "rgba(13,13,56,0.62)"),
     right: true,
     mono: true,
-    sortKey: "aum",
-  },
+    sortKey,
+  };
+}
+
+const MANAGER_COL: ColDef = {
+  label: "MANAGER",
+  textValue: (r) => r.manager || "—",
+  color: (r) => (r.manager ? "rgba(13,13,56,0.62)" : "rgba(13,13,56,0.28)"),
+  right: false,
+  mono: false,
+  sortKey: "manager",
+};
+
+const PERIOD_COLS: ColDef[] = [
   pctColDef("MTD", (r) => r.mtd, "mtd"),
   pctColDef("YTD", (r) => r.ytd, "ytd"),
   pctColDef("1 YEAR", (r) => r.oneYear, "oneYear"),
   pctColDef("3 YEARS", (r) => r.threeYears, "threeYears"),
   pctColDef("5 YEARS", (r) => r.fiveYears, "fiveYears"),
   pctColDef("10 YEARS", (r) => r.tenYears, "tenYears"),
-  pctColDef("SINCE INCEP.", (r) => r.annSinceIncep, "annSinceIncep"),
-  {
-    label: "SHARPE",
-    textValue: (r) => fmtSharpe(r.sharpe),
-    color: (r) => (r.sharpe === null ? "rgba(13,13,56,0.28)" : "rgba(13,13,56,0.62)"),
-    right: true,
-    mono: true,
-    sortKey: "sharpe",
-  },
-  {
-    label: "MGMT FEE",
-    textValue: (r) => fmtFee(r.mgmtFee),
-    color: (r) => (r.mgmtFee === null ? "rgba(13,13,56,0.28)" : "rgba(13,13,56,0.62)"),
-    right: true,
-    mono: true,
-    sortKey: "mgmtFee",
-  },
 ];
 
-// Total column count = 1 (FUND) + TABLE_COLS.length = 12
-const TOTAL_COLS = 1 + TABLE_COLS.length;
+const AUM_COL = plainColDef("AUM ($MM)", (r) => r.aum, fmtAum, "aum");
+const SHARPE_COL = plainColDef("SHARPE", (r) => r.sharpe, fmtSharpe, "sharpe");
+const FEE_COL = plainColDef("MGMT FEE", (r) => r.mgmtFee, fmtFee, "mgmtFee");
+
+const STANDARD_COLS: ColDef[] = [
+  MANAGER_COL,
+  AUM_COL,
+  ...PERIOD_COLS,
+  pctColDef("SINCE INCEP.", (r) => r.annSinceIncep, "annSinceIncep"),
+  SHARPE_COL,
+  FEE_COL,
+];
+
+// Brasil: dyn_1 = acumulado desde el inicio del fondo Patria de la tabla, dyn_2 = anualizado.
+const EXTENDED_COLS: ColDef[] = [
+  MANAGER_COL,
+  plainColDef("NAV", (r) => r.nav, fmtNav, "nav"),
+  AUM_COL,
+  ...PERIOD_COLS,
+  pctColDef("CUM. S. INCEP.", (r) => r.dyn1, "dyn1"),
+  pctColDef("ANN. S. INCEP.", (r) => r.dyn2, "dyn2"),
+  plainColDef("SIGMA", (r) => r.sigma, (v) => fmtPct(v), "sigma"),
+  SHARPE_COL,
+  pctColDef("ALPHA", (r) => r.alpha, "alpha"),
+  plainColDef("BETA", (r) => r.beta, fmtSharpe, "beta"),
+  FEE_COL,
+];
 
 // ── Chart helpers ─────────────────────────────────────────────────────────────
 
@@ -288,7 +338,10 @@ function compareRows(a: NRow, b: NRow, cfg: SortConfig): number {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: Props) {
+export default function ReturnsDashboard({ query, fundDisplayName, fundKey, columns = "standard" }: Props) {
+  const TABLE_COLS = columns === "extended" ? EXTENDED_COLS : STANDARD_COLS;
+  const TOTAL_COLS = 1 + TABLE_COLS.length;
+
   const [rows, setRows] = useState<RentabilidadRow[]>([]);
   const [timeseries, setTimeseries] = useState<TimeseriesPoint[]>([]);
   const [fundMeta, setFundMeta] = useState<Record<string, FundMeta>>({});
@@ -314,7 +367,7 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
     setSortConfig(null);
     setChartMode("returns");
     setBenchmark("");
-    fetch(`/api/rentabilidades?page=${pageNum}`)
+    fetch(`/api/rentabilidades?${query}`)
       .then((r) => r.json())
       .then((d: ApiResponse) => {
         setRows(d.rows ?? []);
@@ -327,7 +380,7 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
         setError("Could not load returns data");
         setLoading(false);
       });
-  }, [pageNum]);
+  }, [query]);
 
   // ── Derived data (memoized) — must be above early returns ────────────────────
 
@@ -427,9 +480,12 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
 
   // ── Chart series ──────────────────────────────────────────────────────────────
   const allowedChartLines = fundKey ? CHART_LINES[fundKey] : undefined;
-  const lineFundNames = Object.keys(fundMeta).filter((f) =>
-    allowedChartLines ? allowedChartLines.includes(f) : true
-  );
+  const allowedIndices = fundKey ? CHART_INDICES[fundKey] : undefined;
+  const lineFundNames = Object.keys(fundMeta).filter((f) => {
+    if (allowedChartLines && !allowedChartLines.includes(f)) return false;
+    if (allowedIndices && fundMeta[f]?.group === "Indices" && !allowedIndices.includes(f)) return false;
+    return true;
+  });
   const orderedLineFunds = lineFundNames.sort((a, b) => {
     const ma = fundMeta[a];
     const mb = fundMeta[b];
@@ -445,7 +501,10 @@ export default function ReturnsDashboard({ pageNum, fundDisplayName, fundKey }: 
   // índice entre sus líneas, se puede elegir cualquiera de ellas.
   const indexLines = orderedLineFunds.filter((f) => fundMeta[f]?.group === "Indices");
   const benchmarkOptions = indexLines.length > 0 ? indexLines : orderedLineFunds;
-  const activeBenchmark = benchmarkOptions.includes(benchmark) ? benchmark : (benchmarkOptions[0] ?? "");
+  const preferredBenchmark = benchmark || (fundKey ? DEFAULT_BENCHMARK[fundKey] : "") || "";
+  const activeBenchmark = benchmarkOptions.includes(preferredBenchmark)
+    ? preferredBenchmark
+    : (benchmarkOptions[0] ?? "");
   // Sólo fondos propios (Moneda / Other Moneda): los peers no se grafican en alfa.
   const alphaFunds = orderedLineFunds.filter((f) => {
     const g = fundMeta[f]?.group ?? "";

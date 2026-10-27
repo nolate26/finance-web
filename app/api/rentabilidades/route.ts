@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export interface RentabilidadRow {
@@ -6,6 +7,7 @@ export interface RentabilidadRow {
   manager: string;
   group: string;
   currency: string;
+  nav: number | null;
   mtd: number | null;
   ytd: number | null;
   oneYear: number | null;
@@ -16,6 +18,12 @@ export interface RentabilidadRow {
   sharpe: number | null;
   mgmtFee: number | null;
   annSinceIncep: number | null;
+  // Columnas dinámicas (dyn_1/dyn_2) y de riesgo: sólo las trae la página de Brasil.
+  dyn1: number | null;
+  dyn2: number | null;
+  sigma: number | null;
+  alpha: number | null;
+  beta: number | null;
   isMoneda: boolean;
 }
 
@@ -70,12 +78,27 @@ function isMonedaFund(fundGroup: string | null): boolean {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const pageFilter = searchParams.get("page");
+  // Brasil se identifica por moneda (la página del PDF puede moverse) y, dentro de
+  // ella, cada tabla por su dyn_1_label. El label no es estable entre reportes
+  // ("CUMULATIVE S. INCEP. PATRIA LONG BIAS" vs "S. INCEP. PATRIA LONG BIAS"), así
+  // que se matchea por substring ("LONG BIAS" / "LONG ONLY").
+  const currencyFilter = searchParams.get("currency");
+  const dyn1Filter = searchParams.get("dyn1");
+
+  const scope: Prisma.MonedaFundReturnWhereInput = currencyFilter
+    ? {
+        currency: currencyFilter,
+        ...(dyn1Filter ? { dyn1Label: { contains: dyn1Filter, mode: "insensitive" } } : {}),
+      }
+    : pageFilter
+      ? { pageNum: parseInt(pageFilter, 10) }
+      : {};
 
   // ── Find the most recent report_date ──────────────────────────────────────
   // Can't rely on DB ORDER BY because "D/MMM/YYYY" strings sort lexicographically,
   // not chronologically. Fetch all distinct dates, parse to ISO, then sort in JS.
   const allDateRecords = await prisma.monedaFundReturn.findMany({
-    where: pageFilter ? { pageNum: parseInt(pageFilter, 10) } : {},
+    where: scope,
     select: { reportDate: true },
     distinct: ["reportDate"],
   });
@@ -94,12 +117,11 @@ export async function GET(request: Request) {
   const reportDate = latestDateISO;
 
   // ── Query latest snapshot rows ────────────────────────────────────────────
-  const where: { reportDate: string; pageNum?: number } = { reportDate: latestDateRaw };
-  if (pageFilter) where.pageNum = parseInt(pageFilter, 10);
+  const dbRows = await prisma.monedaFundReturn.findMany({
+    where: { ...scope, reportDate: latestDateRaw },
+  });
 
-  const dbRows = await prisma.monedaFundReturn.findMany({ where });
-
-  if (!pageFilter) {
+  if (!pageFilter && !currencyFilter) {
     return NextResponse.json({ reportDate, pages: {} });
   }
 
@@ -112,6 +134,7 @@ export async function GET(request: Request) {
       manager: r.manager ?? "",
       group,
       currency: r.currency ?? "",
+      nav: r.nav ?? null,
       mtd: toDec(r.mtd),
       ytd: toDec(r.ytd),
       oneYear: toDec(r.ret1y),
@@ -122,6 +145,11 @@ export async function GET(request: Request) {
       sharpe: r.sharpe ?? null,
       mgmtFee: parseMgmtFee(r.mgmtFee),
       annSinceIncep: toDec(r.incep),
+      dyn1: toDec(r.dyn1),
+      dyn2: toDec(r.dyn2),
+      sigma: toDec(r.sigma),
+      alpha: toDec(r.alpha),
+      beta: r.beta ?? null,
       isMoneda: isMonedaFund(group),
     };
   }
@@ -172,12 +200,12 @@ export async function GET(request: Request) {
   const year = latestDateISO.substring(0, 4);
 
   // For MRV (page 2): fetch by fund name set (includes IPSA from any page).
-  // For all other pages: keep the pageNum filter as before.
+  // For all other pages (and Brasil): same scope as the snapshot.
   const yearRows = await prisma.monedaFundReturn.findMany({
     where:
-      pageFilter === "2"
+      pageFilter === "2" && !currencyFilter
         ? { reportDate: { endsWith: `/${year}` }, fund: { in: [...fundSet] } }
-        : { reportDate: { endsWith: `/${year}` }, pageNum: parseInt(pageFilter, 10) },
+        : { ...scope, reportDate: { endsWith: `/${year}` } },
     select: { reportDate: true, fund: true, ytd: true },
   });
 

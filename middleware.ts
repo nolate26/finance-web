@@ -29,6 +29,7 @@ export const config = {
     "/projections/:path*",
     "/macro/:path*",
     "/admin/:path*",
+    "/admin-issues/:path*",
 
     // Private API routes
     "/api/companies/:path*",
@@ -44,5 +45,6 @@ export const config = {
     "/api/fichas/:path*",
     "/api/upload/:path*",
     "/api/planning/:path*",
+    "/api/links/:path*",
   ],
 };

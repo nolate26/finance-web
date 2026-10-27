@@ -11,10 +11,13 @@ import {
   BarChart3, TrendingUp, Building2, Globe2,
   FileText, BookOpen, Sigma, Newspaper,
   ShieldCheck, LogOut, ChevronDown, CalendarRange,
-  Menu, X, DatabaseZap,
+  Menu, X, DatabaseZap, Wrench,
 } from "lucide-react";
+import { useIsAdmin } from "@/lib/useIsAdmin";
 
-type Tab = { href: string; label: string; icon: typeof Sigma };
+// `adminOnly`: la pestaña no se muestra a usuarios sin rol admin (la página y sus APIs
+// además exigen el rol por su cuenta).
+type Tab = { href: string; label: string; icon: typeof Sigma; adminOnly?: boolean };
 
 // La navegación son TRES píldoras independientes, no una sola corrida de botones.
 // El agrupamiento es semántico, no alfabético:
@@ -48,6 +51,7 @@ const NAV_GROUPS: { title: string; tabs: Tab[] }[] = [
   {
     title: "Internal",
     tabs: [
+      { href: "/admin-issues",  label: "Admin Issues",          icon: Wrench, adminOnly: true },
       { href: "/planning",      label: "Team Planning",         icon: CalendarRange },
     ],
   },
@@ -289,7 +293,7 @@ function MobileDrawer({
               }}>
                 {title}
               </div>
-              {tabs.map(({ href, label, icon: Icon }) => {
+              {tabs.filter((t) => !t.adminOnly || isAdmin).map(({ href, label, icon: Icon }) => {
                 const active = pathname === href || pathname.startsWith(href + "/");
                 return (
                   <button
@@ -470,6 +474,8 @@ export default function Navbar() {
     );
   }, []);
 
+  const isAdmin = useIsAdmin();
+  const visible = (tabs: Tab[]) => tabs.filter((t) => !t.adminOnly || isAdmin);
   const [g1, g2, g3] = NAV_GROUPS;
   const current = activeTabOf(pathname);
 
@@ -557,7 +563,7 @@ export default function Navbar() {
 
       {/* RIGHT — bloque 3 (Team Planning) + metadatos de sesión */}
       <div className="hidden min-[1280px]:flex items-center gap-3 flex-shrink-0">
-        <NavGroup tabs={g3.tabs} pathname={pathname} onNavigate={router.push} />
+        <NavGroup tabs={visible(g3.tabs)} pathname={pathname} onNavigate={router.push} />
 
         {/* Thin divider */}
         <div style={{ width: 1, height: 20, background: "rgba(13,13,56,0.09)" }} />

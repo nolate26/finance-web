@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Shield, Search, Save, RotateCcw, Activity, Link2, ChevronDown, ChevronRight, Zap, AlertTriangle, Check, RefreshCw, Rows3, Trash2, Wallet, ListOrdered, Copy } from "lucide-react";
+import { Shield, Search, Save, RotateCcw, Activity, Link2, Zap, AlertTriangle, Check, RefreshCw, Rows3, Trash2, Wallet, ListOrdered, Copy } from "lucide-react";
 import { PATRIA, FONT_SECONDARY, TEXT } from "@/lib/patriaTheme";
 import type { EmpresaAdminRow } from "@/app/api/admin/empresas/route";
 import type { VerifyResult } from "@/app/api/admin/empresas/verify/route";
@@ -11,7 +11,8 @@ import SsV1CarterasTab from "./SsV1CarterasTab";
 import SsV1OrdenTab from "./SsV1OrdenTab";
 
 // ── Panel de administración de Stock Selection ──────────────────────────────────
-// Sección sólo-admin que va arriba de la tabla. Cuatro pestañas:
+// Vive en Admin Issues → "Stock Selection (Chile)" (antes iba plegado arriba de la tabla
+// de Stock Selection). Pestañas:
 //   · Homologación — editar los tickers de empresas_industrias_v2, que es la tabla que
 //     decide qué empresas entran a la vista y con qué símbolo se les pide precio a Yahoo.
 //     Todo símbolo se puede PROBAR contra Yahoo antes de guardarlo.
@@ -54,7 +55,11 @@ const ENTITY_LABEL: Record<string, string> = {
   empresas_industrias_v2: "Homologación",
   stock_selection_override: "Valor (override)",
   index_membership: "Índices",
+  estimates_hidden: "Estimates ocultas",
+  analyst_links: "Useful Links",
 };
+// Ediciones del editor genérico de Admin Issues: entity = "db:<tabla>".
+const entityLabel = (e: string) => ENTITY_LABEL[e] ?? (e.startsWith("db:") ? `Tabla ${e.slice(3)}` : e);
 const FIELD_LABEL: Record<string, string> = {
   yahooFinanceTicker: "Ticker Yahoo",
   tickerBloomberg: "Ticker Bloomberg",
@@ -64,40 +69,27 @@ type Tab = "filas" | "homologacion" | "orden" | "carteras" | "bitacora";
 interface Draft { yahooFinanceTicker: string; tickerBloomberg: string }
 
 export default function SsV1AdminPanel({ onSourceChanged, periodo }: { onSourceChanged: () => void; periodo: PeriodoActivo | null }) {
-  const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("filas");
   return (
-    <div style={{ border: `1px solid ${open ? "rgba(13,13,56,0.22)" : BORDER}`, borderRadius: 8, marginBottom: 12, background: "#fff", overflow: "hidden" }}>
-      {/* Barra: sólo esto se ve con el panel cerrado */}
-      <div onClick={() => setOpen((o) => !o)} role="button" tabIndex={0}
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen((o) => !o); } }}
-        style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 12px", background: NAVY, color: "#fff", cursor: "pointer", userSelect: "none" }}>
-        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+    <div style={{ border: `1px solid ${BORDER}`, borderRadius: 8, marginBottom: 12, background: "#fff", overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 12px", background: NAVY, color: "#fff", flexWrap: "wrap" }}>
         <Shield size={14} />
-        <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: "0.02em" }}>Administración</span>
-        <span style={{ fontSize: 10.5, opacity: 0.7 }}>filas visibles · tickers · carteras · bitácora de cambios</span>
-        <div style={{ flex: 1 }} />
-        <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", background: "rgba(255,255,255,0.14)", borderRadius: 3, padding: "2px 6px" }}>
-          sólo admin
-        </span>
+        <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: "0.02em" }}>Stock Selection (Chile)</span>
+        <span style={{ fontSize: 10.5, opacity: 0.7 }}>filas visibles · tickers · orden · carteras · bitácora de cambios</span>
       </div>
 
-      {open && (
-        <>
-          <div style={{ display: "flex", gap: 0, borderBottom: `1px solid ${BORDER}`, background: SURFACE }}>
-            <TabBtn active={tab === "filas"} onClick={() => setTab("filas")} icon={<Rows3 size={13} />} label="Filas del Stock Selection" />
-            <TabBtn active={tab === "homologacion"} onClick={() => setTab("homologacion")} icon={<Link2 size={13} />} label="Homologación / Tickers" />
-            <TabBtn active={tab === "orden"} onClick={() => setTab("orden")} icon={<ListOrdered size={13} />} label="Orden y secciones" />
-            <TabBtn active={tab === "carteras"} onClick={() => setTab("carteras")} icon={<Wallet size={13} />} label="Carteras" />
-            <TabBtn active={tab === "bitacora"} onClick={() => setTab("bitacora")} icon={<Activity size={13} />} label="Registro de cambios" />
-          </div>
-          {tab === "filas" ? <SsV1FilasTab onSourceChanged={onSourceChanged} periodo={periodo} />
-            : tab === "homologacion" ? <HomologacionTab onSourceChanged={onSourceChanged} />
-            : tab === "orden" ? <SsV1OrdenTab onSourceChanged={onSourceChanged} />
-            : tab === "carteras" ? <SsV1CarterasTab onSourceChanged={onSourceChanged} />
-            : <BitacoraTab onSourceChanged={onSourceChanged} />}
-        </>
-      )}
+      <div className="tab-rail" style={{ display: "flex", gap: 0, borderBottom: `1px solid ${BORDER}`, background: SURFACE }}>
+        <TabBtn active={tab === "filas"} onClick={() => setTab("filas")} icon={<Rows3 size={13} />} label="Filas del Stock Selection" />
+        <TabBtn active={tab === "homologacion"} onClick={() => setTab("homologacion")} icon={<Link2 size={13} />} label="Homologación / Tickers" />
+        <TabBtn active={tab === "orden"} onClick={() => setTab("orden")} icon={<ListOrdered size={13} />} label="Orden y secciones" />
+        <TabBtn active={tab === "carteras"} onClick={() => setTab("carteras")} icon={<Wallet size={13} />} label="Carteras" />
+        <TabBtn active={tab === "bitacora"} onClick={() => setTab("bitacora")} icon={<Activity size={13} />} label="Registro de cambios" />
+      </div>
+      {tab === "filas" ? <SsV1FilasTab onSourceChanged={onSourceChanged} periodo={periodo} />
+        : tab === "homologacion" ? <HomologacionTab onSourceChanged={onSourceChanged} />
+        : tab === "orden" ? <SsV1OrdenTab onSourceChanged={onSourceChanged} />
+        : tab === "carteras" ? <SsV1CarterasTab onSourceChanged={onSourceChanged} />
+        : <BitacoraTab onSourceChanged={onSourceChanged} />}
     </div>
   );
 }
@@ -514,6 +506,9 @@ function BitacoraTab({ onSourceChanged }: { onSourceChanged: () => void }) {
           <option value="">Todos los cambios</option>
           <option value="empresas_industrias_v2">Homologación / tickers</option>
           <option value="stock_selection_override">Valores (overrides)</option>
+          <option value="db:empresas_industrias_v2">Editor de tablas · empresas_industrias_v2</option>
+          <option value="estimates_hidden">Estimates ocultas</option>
+          <option value="analyst_links">Useful Links</option>
         </select>
         <div style={{ flex: 1 }} />
         {error && <span style={{ fontSize: 12, color: NEG, fontWeight: 600 }}>{error}</span>}
@@ -550,7 +545,7 @@ function BitacoraTab({ onSourceChanged }: { onSourceChanged: () => void }) {
                 <td style={{ ...td, fontSize: 10, color: TEXT2, whiteSpace: "nowrap" }}>{r.editedBy ?? "—"}</td>
                 <td style={{ ...td, fontSize: 10, whiteSpace: "nowrap" }}>
                   <span style={{ fontWeight: 700, color: r.entity === "empresas_industrias_v2" ? INK : WARN }}>
-                    {ENTITY_LABEL[r.entity] ?? r.entity}
+                    {entityLabel(r.entity)}
                   </span>
                 </td>
                 <td style={{ ...td, maxWidth: 190 }}>
