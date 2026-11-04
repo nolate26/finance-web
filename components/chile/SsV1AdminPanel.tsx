@@ -57,6 +57,7 @@ const ENTITY_LABEL: Record<string, string> = {
   index_membership: "Índices",
   estimates_hidden: "Estimates ocultas",
   analyst_links: "Useful Links",
+  link_sections: "Secciones de Useful Links",
 };
 // Ediciones del editor genérico de Admin Issues: entity = "db:<tabla>".
 const entityLabel = (e: string) => ENTITY_LABEL[e] ?? (e.startsWith("db:") ? `Tabla ${e.slice(3)}` : e);
@@ -509,6 +510,7 @@ function BitacoraTab({ onSourceChanged }: { onSourceChanged: () => void }) {
           <option value="db:empresas_industrias_v2">Editor de tablas · empresas_industrias_v2</option>
           <option value="estimates_hidden">Estimates ocultas</option>
           <option value="analyst_links">Useful Links</option>
+          <option value="link_sections">Secciones de Useful Links</option>
         </select>
         <div style={{ flex: 1 }} />
         {error && <span style={{ fontSize: 12, color: NEG, fontWeight: 600 }}>{error}</span>}

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 //   · "model"        → TELEGRAM_CHAT_MODELS: entra un modelo nuevo por /api/ingest (compañía o banco).
 //   · "task_created" → TELEGRAM_CHAT_TASKS:  se crea una tarea en Planning (🟦).
 //   · "task_done"    → TELEGRAM_CHAT_TASKS:  una tarea de Planning pasa a done (🟩).
+//   · "calendar_updated" → TELEGRAM_CHAT_TASKS: el admin guarda cambios del calendario (🟧).
 // Telegram no permite colorear texto: creada vs completada se distinguen por el
 // cuadrado de color y el emoji del encabezado.
 // Quién recibe cada aviso = quién está en cada grupo; se administra en Telegram, no en la app.
@@ -14,7 +15,21 @@ import { prisma } from "@/lib/prisma";
 // y la API principal sigue su camino. Va por HTTPS (api.telegram.org), así que funciona
 // en Railway Hobby, que bloquea SMTP.
 
+/** Una línea del aviso del calendario. `where` y `details` ya vienen en texto plano. */
+export interface CalendarChange {
+  action:  "created" | "updated" | "deleted";
+  topic:   string | null;
+  where:   string;
+  details: string[];
+}
+
 export type NotifyEvent =
+  | {
+      kind:     "calendar_updated";
+      /** Vacío = sólo se reordenaron actividades dentro de un día. */
+      changes:  CalendarChange[];
+      editedBy: string | null;
+    }
   | {
       kind:       "model";
       modelType:  "company" | "bank";
@@ -49,6 +64,7 @@ export type NotifyEvent =
     };
 
 const THESIS_MAX = 700;   // Telegram corta en 4096 caracteres; la tesis es lo único largo
+const CALENDAR_MAX = 3500;   // ídem: lugar para los cambios, el resto queda en "y N más"
 
 export function notify(event: NotifyEvent): void {
   const job = () => send(event).catch((e) => console.error("[notify]", e));
@@ -68,9 +84,10 @@ async function send(event: NotifyEvent): Promise<void> {
     return;
   }
 
-  const text = event.kind === "model"        ? await modelMessage(event)
-             : event.kind === "task_created" ? await taskCreatedMessage(event)
-             :                                 await taskMessage(event);
+  const text = event.kind === "model"            ? await modelMessage(event)
+             : event.kind === "task_created"     ? await taskCreatedMessage(event)
+             : event.kind === "calendar_updated" ? calendarMessage(event)
+             :                                     await taskMessage(event);
 
   const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method:  "POST",
@@ -97,11 +114,12 @@ async function send(event: NotifyEvent): Promise<void> {
 type ModelEvent = Extract<NotifyEvent, { kind: "model" }>;
 type TaskEvent  = Extract<NotifyEvent, { kind: "task_done" }>;
 type TaskCreatedEvent = Extract<NotifyEvent, { kind: "task_created" }>;
+type CalendarEvent = Extract<NotifyEvent, { kind: "calendar_updated" }>;
 
 const PRIORITY_LABEL: Record<string, string> = {
-  high:   "🔴 Alta",
-  medium: "🟠 Media",
-  low:    "⚪ Baja",
+  high:   "🔴 High",
+  medium: "🟠 Medium",
+  low:    "⚪ Low",
 };
 
 async function modelMessage(e: ModelEvent): Promise<string> {
@@ -111,23 +129,23 @@ async function modelMessage(e: ModelEvent): Promise<string> {
     select: { nombreLatam: true },
   });
   const name   = company?.nombreLatam ?? e.ticker;
-  const kind   = e.modelType === "bank" ? "banco" : "compañía";
+  const kind   = e.modelType === "bank" ? "bank" : "company";
   const thesis = e.thesis && e.thesis.length > THESIS_MAX ? e.thesis.slice(0, THESIS_MAX) + "…" : e.thesis;
 
   const app   = appUrl(`/companies?ticker=${encodeURIComponent(e.ticker)}&tab=model`);
   const links = [
-    app    ? `<a href="${esc(app)}">Ver en Research Hub</a>` : null,
-    e.link ? `<a href="${esc(e.link)}">Planilla del analista</a>` : null,
+    app    ? `<a href="${esc(app)}">View in Research Hub</a>` : null,
+    e.link ? `<a href="${esc(e.link)}">Analyst spreadsheet</a>` : null,
   ].filter(Boolean).join("  ·  ");
 
   return [
-    `📊 <b>Nuevo modelo de ${kind}</b>`,
+    `📊 <b>New ${kind} model</b>`,
     `<b>${esc(name)}</b>  <code>${esc(e.ticker)}</code>`,
     "",
-    field("Recomendación", e.recc?.toUpperCase()),
+    field("Recommendation", e.recc?.toUpperCase()),
     field("Target price",  e.tp != null ? fmtNum(e.tp) : null),
-    field("Analista",      e.analyst),
-    field("Fecha modelo",  e.updateDate.toISOString().slice(0, 10)),
+    field("Analyst",       e.analyst),
+    field("Model date",    e.updateDate.toISOString().slice(0, 10)),
     thesis ? `\n<i>${esc(thesis)}</i>` : null,
     links  ? `\n${links}` : null,
   ].filter((l) => l !== null).join("\n");
@@ -138,14 +156,14 @@ async function taskMessage(e: TaskEvent): Promise<string> {
   const app    = appUrl("/planning");
 
   return [
-    `🟩 ✅ <b>TAREA COMPLETADA</b>`,
+    `🟩 ✅ <b>TASK COMPLETED</b>`,
     `<b>${esc(e.title)}</b>`,
     "",
-    field("Completada por", e.closedBy),
-    field("Sector",         sector?.name),
-    field("Empresa",        e.company),
-    field("Asignada a",     e.assignee),
-    app ? `\n<a href="${esc(app)}">Ver en Planning</a>` : null,
+    field("Completed by", e.closedBy),
+    field("Sector",       sector?.name),
+    field("Company",      e.company),
+    field("Assigned to",  e.assignee),
+    app ? `\n<a href="${esc(app)}">View in Planning</a>` : null,
   ].filter((l) => l !== null).join("\n");
 }
 
@@ -157,17 +175,49 @@ async function taskCreatedMessage(e: TaskCreatedEvent): Promise<string> {
     : e.description;
 
   return [
-    `🟦 🆕 <b>NUEVA TAREA</b>`,
+    `🟦 🆕 <b>NEW TASK</b>`,
     `<b>${esc(e.title)}</b>`,
     "",
-    field("Creada por",  e.createdBy),
+    field("Created by",  e.createdBy),
     field("Sector",      sector?.name),
-    field("Empresa",     e.company),
-    field("Asignada a",  e.assignee),
-    e.priority ? `Prioridad: ${PRIORITY_LABEL[e.priority] ?? esc(e.priority)}` : null,
-    field("Vence",       e.dueDate ? e.dueDate.toISOString().slice(0, 10) : null),
+    field("Company",     e.company),
+    field("Assigned to", e.assignee),
+    e.priority ? `Priority: ${PRIORITY_LABEL[e.priority] ?? esc(e.priority)}` : null,
+    field("Due",         e.dueDate ? e.dueDate.toISOString().slice(0, 10) : null),
     desc ? `\n<i>${esc(desc)}</i>` : null,
-    app  ? `\n<a href="${esc(app)}">Ver en Planning</a>` : null,
+    app  ? `\n<a href="${esc(app)}">View in Planning</a>` : null,
+  ].filter((l) => l !== null).join("\n");
+}
+
+const CALENDAR_ICON: Record<CalendarChange["action"], string> = {
+  created: "🆕",
+  updated: "✏️",
+  deleted: "🗑️",
+};
+
+function calendarMessage(e: CalendarEvent): string {
+  const app = appUrl("/planning");
+
+  const blocks: string[] = [];
+  let used = 0;
+  for (const c of e.changes) {
+    const block = [
+      `${CALENDAR_ICON[c.action]} <b>${esc(c.topic ?? "(no topic)")}</b> · ${esc(c.where)}`,
+      ...c.details.map((d) => `    ${esc(d)}`),
+    ].join("\n");
+    if (used + block.length > CALENDAR_MAX) break;
+    blocks.push(block);
+    used += block.length;
+  }
+  const rest = e.changes.length - blocks.length;
+
+  return [
+    `🟧 📅 <b>CALENDAR UPDATED</b>`,
+    field("Changed by", e.editedBy),
+    "",
+    e.changes.length ? blocks.join("\n") : "Activities were reordered within a day.",
+    rest > 0 ? `\n…and ${rest} more change${rest === 1 ? "" : "s"}` : null,
+    app ? `\n<a href="${esc(app)}">View calendar</a>` : null,
   ].filter((l) => l !== null).join("\n");
 }
 
@@ -183,7 +233,7 @@ function appUrl(path: string): string | null {
 }
 
 function fmtNum(v: number): string {
-  return v.toLocaleString("es-CL", { maximumFractionDigits: Math.abs(v) < 100 ? 2 : 0 });
+  return v.toLocaleString("en-US", { maximumFractionDigits: Math.abs(v) < 100 ? 2 : 0 });
 }
 
 function esc(s: string): string {

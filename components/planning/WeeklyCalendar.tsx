@@ -7,16 +7,17 @@ import {
   useDraggable, useDroppable, pointerWithin,
   type DragStartEvent, type DragEndEvent,
 } from "@dnd-kit/core";
-import { ChevronLeft, ChevronRight, GripVertical, ListChecks } from "lucide-react";
+import { ChevronLeft, ChevronRight, GripVertical, ListChecks, Loader2, Send } from "lucide-react";
 import { FONT_SECONDARY, TEXT, BORDER, PATRIA } from "@/lib/patriaTheme";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import {
   PLAN_REGIONS, CATEGORY_STYLE, categoryStyle, regionLabel, regionDayName,
-  mondayOf, isoDate, displayDate, cellDateLabel, dateLabel, weekRange, localToday,
+  mondayOf, isoDate, displayDate, cellDateLabel, dateLabel, weekRange, localToday, orderWithInserted,
 } from "@/lib/planning";
 import type { WeeklyCell, WeeklyPayload } from "@/app/api/planning/weekly/route";
+import type { PublishBody } from "@/app/api/planning/weekly/publish/route";
 import type { AnalystOption } from "@/app/api/planning/analysts/route";
-import WeeklyCellModal from "./WeeklyCellModal";
+import WeeklyCellModal, { type CellFields } from "./WeeklyCellModal";
 
 // Vista macro: la grilla semanal del Excel. Una columna por región, una fila por
 // semana. El admin edita una celda con click y la mueve arrastrándola; el resto
@@ -33,8 +34,16 @@ import WeeklyCellModal from "./WeeklyCellModal";
 // DRAG & DROP: cada actividad es un draggable (id = weekly_plan.id). Soltar sobre una
 // casilla la suma al final; soltar SOBRE otra actividad la inserta delante de ella,
 // que es como se reordena un día con dos. Ya no hay intercambio: existía porque no
-// cabían dos en el mismo lugar y ahora sí caben. El cambio se pinta al soltar y
-// POST /api/planning/weekly/move lo confirma; si falla, se recarga y se revierte.
+// cabían dos en el mismo lugar y ahora sí caben.
+//
+// BORRADOR: editar y arrastrar sólo cambia este navegador. `edits` y `deletedIds` van
+// encima de lo que trajo el servidor; el botón de abajo los manda juntos a
+// POST /api/planning/weekly/publish, que los guarda y avisa por Telegram. El borrador
+// vive en sessionStorage para sobrevivir a cambiar de pestaña o de página: la vista se
+// desmonta y, sin eso, un click en el navbar perdía el trabajo sin avisar.
+
+const DRAFT_KEY  = "planning-calendar-draft";
+const NEW_PREFIX = "new:";   // id provisional de una actividad que todavía no está en la base
 
 const WEEKS_AHEAD = 16;   // ventana por defecto: ~4 meses hacia adelante
 const WEEKS_BACK  = 0;    // la semana del ancla es la PRIMERA fila: "Today" deja la semana actual arriba
@@ -63,20 +72,52 @@ function initialsOf(cell: WeeklyCell | undefined): string {
 /** Qué celda se está editando: una existente, o una nueva en esa casilla. */
 interface Editing { region: string; weekIso: string; cell: WeeklyCell | null }
 
+const analystKey = (c: WeeklyCell) => c.analysts.map((a) => a.id).sort().join();
+
+/** Una edición puede dejar la celda como estaba, p. ej. arrastrarla y devolverla. */
+function sameCell(a: WeeklyCell, b: WeeklyCell): boolean {
+  return a.region === b.region && a.weekStart === b.weekStart && a.sortOrder === b.sortOrder
+    && a.topic === b.topic && a.category === b.category && a.notes === b.notes
+    && a.allAnalysts === b.allAnalysts && a.highlighted === b.highlighted
+    && analystKey(a) === analystKey(b);
+}
+
 export default function WeeklyCalendar({ onOpenTasks }: Props) {
   const isAdmin = useIsAdmin();
 
   const [anchor, setAnchor]     = useState(() => mondayOf(localToday()));
-  const [cells, setCells]       = useState<WeeklyCell[]>([]);
+  const [serverCells, setServerCells] = useState<WeeklyCell[]>([]);
+  const [edits, setEdits]             = useState<Record<string, WeeklyCell>>({});   // borrador, por id
+  const [deletedIds, setDeletedIds]   = useState<string[]>([]);                     // borrador
   const [analysts, setAnalysts] = useState<AnalystOption[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
   const [editing, setEditing]   = useState<Editing | null>(null);
   const [dragging, setDragging] = useState<WeeklyCell | null>(null);   // celda en el aire
-  const [moving, setMoving]     = useState(false);                     // POST /move en vuelo
+  const [publishing, setPublishing] = useState(false);                 // POST /publish en vuelo
   const [portalEl, setPortalEl] = useState<HTMLElement | null>(null);
 
   useEffect(() => { setPortalEl(document.body); }, []);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw) as { edits?: Record<string, WeeklyCell>; deletedIds?: string[] };
+      setEdits(d.edits ?? {});
+      setDeletedIds(d.deletedIds ?? []);
+    } catch { /* sin storage el borrador dura lo que dure la vista */ }
+  }, []);
+
+  useEffect(() => {
+    try {
+      if (Object.keys(edits).length || deletedIds.length) {
+        sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ edits, deletedIds }));
+      } else {
+        sessionStorage.removeItem(DRAFT_KEY);
+      }
+    } catch { /* ídem */ }
+  }, [edits, deletedIds]);
 
   // El click tiene que seguir siendo click (abre el editor): con el mouse sólo se
   // arrastra tras mover 6px. En táctil se arrastra con toque sostenido; deslizar
@@ -105,7 +146,7 @@ export default function WeeklyCalendar({ onOpenTasks }: Props) {
       ]);
       if (!wRes.ok) throw new Error("Could not load the calendar");
       const w: WeeklyPayload = await wRes.json();
-      setCells(w.cells);
+      setServerCells(w.cells);
       if (aRes.ok) setAnalysts((await aRes.json()).analysts ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Load error");
@@ -115,6 +156,23 @@ export default function WeeklyCalendar({ onOpenTasks }: Props) {
   }, [weeks]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Lo que se pinta: el servidor con el borrador encima. Una actividad editada que cae
+  // fuera de las semanas visibles entra igual, sólo que ninguna fila la muestra.
+  const cells = useMemo(() => [
+    ...serverCells.filter((c) => !edits[c.id] && !deletedIds.includes(c.id)),
+    ...Object.values(edits),
+  ], [serverCells, edits, deletedIds]);
+
+  // Lo que de verdad cambió. Un borrador que volvió a su estado original no cuenta.
+  const saves = useMemo(() => {
+    const server = new Map(serverCells.map((c) => [c.id, c]));
+    return Object.values(edits).filter((c) => {
+      const s = server.get(c.id);
+      return !s || !sameCell(s, c);
+    });
+  }, [serverCells, edits]);
+  const dirty = saves.length > 0 || deletedIds.length > 0;
 
   // Las regiones fijas siempre se muestran (aunque estén vacías); las que aparezcan
   // sólo en la DB se agregan al final para no esconder datos que alguien cargó.
@@ -134,9 +192,7 @@ export default function WeeklyCalendar({ onOpenTasks }: Props) {
       if (list) list.push(c);
       else m.set(k, [c]);
     }
-    // El servidor ya las manda ordenadas, pero el estado optimista de un arrastre
-    // mete un sortOrder fraccionario: sin reordenar acá, la actividad movida se
-    // vería en su posición vieja hasta que llegara el refetch.
+    // El servidor ya las manda ordenadas, pero las del borrador van al final de `cells`.
     for (const list of m.values()) list.sort((a, b) => a.sortOrder - b.sortOrder);
     return m;
   }, [cells]);
@@ -161,7 +217,11 @@ export default function WeeklyCalendar({ onOpenTasks }: Props) {
     setDragging(data?.cell ?? null);
   }
 
-  async function handleDragEnd(e: DragEndEvent) {
+  function stage(changed: WeeklyCell[]) {
+    setEdits((prev) => ({ ...prev, ...Object.fromEntries(changed.map((c) => [c.id, c])) }));
+  }
+
+  function handleDragEnd(e: DragEndEvent) {
     setDragging(null);
     const src = e.active.data.current as DragData | undefined;
     const dst = e.over?.data.current as DropData | undefined;
@@ -172,43 +232,73 @@ export default function WeeklyCalendar({ onOpenTasks }: Props) {
     const sameSlot = src.region === dst.region && src.weekIso === dst.weekIso;
     if (sameSlot && !dst.beforeId) return;   // al final de su propia casilla: nada que hacer
 
-    const targetList = byKey.get(`${dst.region}|${dst.weekIso}`) ?? [];
-    const anchor = dst.beforeId ? targetList.find((c) => c.id === dst.beforeId) : null;
+    // Se renumera la casilla destino entera: la que entra y las que corre de lugar.
+    const target  = byKey.get(`${dst.region}|${dst.weekIso}`) ?? [];
+    const ordered = orderWithInserted(target.map((c) => c.id), src.cell.id, dst.beforeId);
+    stage(ordered.map((id, sortOrder) => ({
+      ...(target.find((c) => c.id === id) ?? src.cell),
+      region: dst.region, weekStart: dst.weekIso, sortOrder,
+    })));
+  }
 
-    // Optimista: la actividad salta a la casilla destino al soltar. El sortOrder
-    // provisional es fraccionario a propósito —medio punto antes del ancla, o uno
-    // más que el último—: sólo tiene que ordenar bien hasta que el refetch de abajo
-    // traiga la numeración entera que dejó el servidor.
-    const provisional = anchor
-      ? anchor.sortOrder - 0.5
-      : (targetList.filter((c) => c.id !== src.cell.id).at(-1)?.sortOrder ?? -1) + 1;
+  function applyEdit(fields: CellFields) {
+    if (!editing) return;
+    const { region, weekIso, cell } = editing;
+    if (cell) {
+      stage([{ ...cell, ...fields }]);
+    } else {
+      const last = byKey.get(`${region}|${weekIso}`)?.at(-1);
+      stage([{
+        ...fields, id: `${NEW_PREFIX}${Date.now()}`, region, weekStart: weekIso,
+        sortOrder: (last?.sortOrder ?? -1) + 1, taskCount: 0, updatedBy: null, updatedAt: "",
+      }]);
+    }
+    setEditing(null);
+  }
 
-    setCells((prev) => prev.map((c) => (
-      c.id === src.cell.id
-        ? { ...c, region: dst.region, weekStart: dst.weekIso, sortOrder: provisional }
-        : c
-    )));
+  function removeCell(cell: WeeklyCell) {
+    setEdits((prev) => {
+      const next = { ...prev };
+      delete next[cell.id];
+      return next;
+    });
+    if (!cell.id.startsWith(NEW_PREFIX)) setDeletedIds((prev) => [...prev, cell.id]);
+    setEditing(null);
+  }
 
-    setMoving(true);
-    let failure: string | null = null;
+  function discard() {
+    if (!window.confirm("Discard all unsaved calendar changes?")) return;
+    setEdits({});
+    setDeletedIds([]);
+  }
+
+  async function publish() {
+    setPublishing(true);
+    setError(null);
     try {
-      const res = await fetch("/api/planning/weekly/move", {
+      const body: PublishBody = {
+        deletes: deletedIds,
+        saves:   saves.map(({ id, analysts: team, ...c }) => ({
+          ...c,
+          id: id.startsWith(NEW_PREFIX) ? undefined : id,
+          analystIds: team.map((a) => a.id),
+        })),
+      };
+      const res = await fetch("/api/planning/weekly/publish", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
-          id:       src.cell.id,
-          to:       { region: dst.region, weekStart: dst.weekIso },
-          beforeId: dst.beforeId,
-        }),
+        body:    JSON.stringify(body),
       });
       const d = await res.json();
-      if (!res.ok) throw new Error(d.error ?? "Could not move the activity");
+      if (!res.ok) throw new Error(d.error ?? "Could not save the calendar");
+      setEdits({});
+      setDeletedIds([]);
+      await fetchData({ silent: true });
     } catch (err) {
-      failure = err instanceof Error ? err.message : "Could not move the activity";
+      setError(err instanceof Error ? err.message : "Could not save the calendar");
+    } finally {
+      setPublishing(false);
     }
-    await fetchData({ silent: true });
-    if (failure) setError(failure);
-    setMoving(false);
   }
 
   return (
@@ -343,8 +433,8 @@ export default function WeeklyCalendar({ onOpenTasks }: Props) {
                             cells={byKey.get(`${r}|${wk}`) ?? []}
                             isAdmin={isAdmin}
                             draggingId={dragging?.id ?? null}
-                            dragDisabled={moving}
-                            onEdit={(cell) => isAdmin && setEditing({ region: r, weekIso: wk, cell })}
+                            dragDisabled={publishing}
+                            onEdit={(cell) => isAdmin && !publishing && setEditing({ region: r, weekIso: wk, cell })}
                             onOpenTasks={onOpenTasks}
                           />
                         ))}
@@ -376,6 +466,47 @@ export default function WeeklyCalendar({ onOpenTasks }: Props) {
         )}
       </DndContext>
 
+      {/* Sticky abajo: con 17 semanas en pantalla, un botón en la barra de arriba
+          quedaría fuera de vista justo después de editar. */}
+      {isAdmin && dirty && (
+        <div style={{
+          position: "sticky", bottom: 12, zIndex: 20, marginTop: 12,
+          display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+          padding: "10px 14px", borderRadius: 10, background: PATRIA.darkBlue,
+          boxShadow: "0 6px 20px rgba(13,13,56,0.28)",
+        }}>
+          <span style={{ flex: "1 1 200px", fontSize: 12.5, fontWeight: 600, color: "#FFFFFF" }}>
+            Unsaved changes — the team won&rsquo;t see them until you save.
+          </span>
+          <button
+            onClick={discard}
+            disabled={publishing}
+            style={{
+              padding: "7px 14px", borderRadius: 8, fontSize: 12.5, fontWeight: 600,
+              background: "transparent", color: "#FFFFFF",
+              border: "1px solid rgba(255,255,255,0.35)", cursor: publishing ? "default" : "pointer",
+            }}
+          >
+            Discard
+          </button>
+          <button
+            onClick={publish}
+            disabled={publishing}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "7px 16px", borderRadius: 8, fontSize: 12.5, fontWeight: 700,
+              background: "#FFFFFF", color: PATRIA.kingBlue, border: "none",
+              cursor: publishing ? "default" : "pointer", opacity: publishing ? 0.7 : 1,
+            }}
+          >
+            {publishing
+              ? <Loader2 size={13} style={{ animation: "spin 0.8s linear infinite" }} />
+              : <Send size={13} />}
+            Save &amp; notify team
+          </button>
+        </div>
+      )}
+
       {!isAdmin && !loading && (
         <p style={{ fontSize: 11, color: TEXT.muted, marginTop: 10, fontStyle: "italic" }}>
           Only an administrator can edit the calendar.
@@ -389,7 +520,8 @@ export default function WeeklyCalendar({ onOpenTasks }: Props) {
           cell={editing.cell}
           analysts={analysts}
           onClose={() => setEditing(null)}
-          onSaved={fetchData}
+          onApply={applyEdit}
+          onDelete={removeCell}
         />
       )}
     </div>

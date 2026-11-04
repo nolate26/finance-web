@@ -11,7 +11,7 @@ import {
   BarChart3, TrendingUp, Building2, Globe2,
   FileText, BookOpen, Sigma, Newspaper,
   ShieldCheck, LogOut, ChevronDown, CalendarRange,
-  Menu, X, DatabaseZap, Wrench,
+  Menu, X, DatabaseZap, Wrench, Link2,
 } from "lucide-react";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 
@@ -44,6 +44,7 @@ const NAV_GROUPS: { title: string; tabs: Tab[] }[] = [
       { href: "/economia",      label: "Market Data",           icon: TrendingUp },
       { href: "/chile",         label: "Chile",                 icon: Building2  },
       { href: "/latam",         label: "LatAm / Brazil",        icon: Globe2     },
+      { href: "/links",         label: "Useful Links",          icon: Link2      },
       { href: "/companies",     label: "Company Info",          icon: BookOpen   },
       { href: "/extract",       label: "Extract Data",          icon: DatabaseZap },
     ],

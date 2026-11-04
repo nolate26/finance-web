@@ -1,81 +1,22 @@
 "use client";
 
-import { Fragment, Suspense, useEffect, useState, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
-import { RefreshCw } from "lucide-react";
-import ExportButtons from "@/components/ExportButtons";
-import LatamTable, { type LatamCompany } from "@/components/latam/LatamTable";
+import { useState } from "react";
 import FlatAttributionPanel from "@/components/attribution/FlatAttributionPanel";
 import SectorAttributionPanel from "@/components/attribution/SectorAttributionPanel";
 import MatrixAttributionPanel from "@/components/attribution/MatrixAttributionPanel";
-import QuantAnalysisPanel from "@/components/quant/QuantAnalysisPanel";
 import BetaExposurePanel from "@/components/latam/BetaExposurePanel";
-import TabSpacer from "@/components/TabSpacer";
-import AnalystLinks from "@/components/links/AnalystLinks";
 import { FONT_SECONDARY } from "@/lib/patriaTheme";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 // Top Picks salió de acá: vive en Analyst Estimates como "Top Picks LatAm/Brazil".
-type ActiveTab = "beta-exposure" | "attribution" | "quant-analysis" | "stock-selection" | "links";
-type FundFilter = "all" | "MLE" | "MSC" | "others";
+type ActiveTab = "beta-exposure" | "attribution";
 
 // Planning salió de acá: es ruta de primer nivel (/planning, "Team Planning" en el navbar).
-//
-// `spacerBefore` agrupa el bloque analítico a la izquierda —beta, atribución y quant—
-// y despega Stock Selection, que es una herramienta de otra naturaleza.
-const TABS: { key: ActiveTab; label: string; spacerBefore?: boolean }[] = [
-  { key: "beta-exposure",   label: "Beta Exposure"     },
-  { key: "attribution",     label: "Perf. Attribution" },
-  { key: "quant-analysis",  label: "Quant Analysis"    },
-  { key: "stock-selection", label: "Stock Selection", spacerBefore: true },
-  { key: "links",           label: "Useful Links",    spacerBefore: true },
+const TABS: { key: ActiveTab; label: string }[] = [
+  { key: "beta-exposure", label: "Beta Exposure"     },
+  { key: "attribution",   label: "Perf. Attribution" },
 ];
-
-interface SortOption {
-  value:  string;
-  label:  string;
-  key:    string;
-  order:  "asc" | "desc";
-}
-
-// ── Sort options ──────────────────────────────────────────────────────────────
-
-const SORT_OPTIONS: SortOption[] = [
-  { value: "mktCapUsd_desc",      label: "Mkt Cap ↓",          key: "mktCapUsd",      order: "desc" },
-  { value: "retYtd_desc",         label: "YTD Return ↓",       key: "retYtd",         order: "desc" },
-  { value: "ret1W_desc",          label: "1W Return ↓",        key: "ret1W",          order: "desc" },
-  { value: "ret1Y_desc",          label: "1Y Return ↓",        key: "ret1Y",          order: "desc" },
-  { value: "tpUpside_desc",       label: "TP Upside ↓",        key: "tpUpside",       order: "desc" },
-  { value: "peCurYr_asc",         label: "P/E 2026e ↑",        key: "peCurYr",        order: "asc"  },
-  { value: "evEbitdaCurYr_asc",   label: "EV/EBITDA 2026e ↑",  key: "evEbitdaCurYr",  order: "asc"  },
-  { value: "divYield_desc",       label: "Div Yield ↓",        key: "divYield",       order: "desc" },
-  { value: "leverage_asc",        label: "Leverage ↑",         key: "leverage",       order: "asc"  },
-  { value: "epsRev1W_desc",       label: "EPS Rev 1W ↓",       key: "epsRev1W",       order: "desc" },
-];
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function sortCompanies(
-  list: LatamCompany[],
-  key: string,
-  order: "asc" | "desc"
-): LatamCompany[] {
-  return [...list].sort((a, b) => {
-    const av = (a as unknown as Record<string, unknown>)[key];
-    const bv = (b as unknown as Record<string, unknown>)[key];
-    if (av === null && bv === null) return 0;
-    if (av === null) return 1;
-    if (bv === null) return -1;
-    const diff =
-      typeof av === "number" && typeof bv === "number"
-        ? av - bv
-        : String(av).localeCompare(String(bv));
-    return order === "asc" ? diff : -diff;
-  });
-}
-
-// ── Page ──────────────────────────────────────────────────────────────────────
 
 // ── Attribution section with sub-tabs ────────────────────────────────────────
 type AttrMode = "flat" | "sector" | "matrix";
@@ -130,153 +71,11 @@ function AttributionSection() {
   );
 }
 
-function LatAmContent() {
-  const searchParams = useSearchParams();
+// ── Page ──────────────────────────────────────────────────────────────────────
+
+export default function LatAmPage() {
   // Arranca en la primera pestaña del array (Beta Exposure).
   const [activeTab, setActiveTab] = useState<ActiveTab>(TABS[0].key);
-
-  // Honor ?tab=quant-analysis (e.g. coming from the company scorecard cards)
-  useEffect(() => {
-    const t = searchParams.get("tab");
-    if (t && TABS.some((x) => x.key === t)) setActiveTab(t as ActiveTab);
-  }, [searchParams]);
-
-  // data
-  const [allCompanies, setAllCompanies] = useState<LatamCompany[]>([]);
-  const [metadata, setMetadata]         = useState<{ snapshotDate: string } | null>(null);
-  const [loading, setLoading]           = useState(true);
-  const [error, setError]               = useState(false);
-
-  // filters
-  const [search, setSearch]               = useState("");
-  const [selectedSector, setSelectedSector] = useState<string | null>(null);
-  const [fundFilter, setFundFilter]       = useState<FundFilter>("all");
-  const [sortBy, setSortBy]               = useState("mktCapUsd");
-  const [sortOrder, setSortOrder]         = useState<"asc" | "desc">("desc");
-
-  // ── Fetch ────────────────────────────────────────────────────────────────
-
-  const fetchData = useCallback(() => {
-    setLoading(true);
-    setError(false);
-    fetch("/api/latam/stock-selection")
-      .then((r) => r.json())
-      .then((d: { companies?: LatamCompany[]; metadata?: { snapshotDate: string }; error?: string }) => {
-        if (d.error) {
-          setError(true);
-        } else {
-          setAllCompanies(d.companies ?? []);
-          setMetadata(d.metadata ?? null);
-        }
-        setLoading(false);
-      })
-      .catch(() => {
-        setError(true);
-        setLoading(false);
-      });
-  }, []);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
-
-  // ── Derived state ─────────────────────────────────────────────────────────
-
-  const uniqueSectors = Array.from(
-    new Set(allCompanies.map((c) => c.sector).filter((s): s is string => !!s))
-  ).sort();
-
-  const filtered: LatamCompany[] = (() => {
-    let list = allCompanies;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter((c) =>
-        c.company.toLowerCase().includes(q) || c.ticker.toLowerCase().includes(q)
-      );
-    }
-    if (selectedSector) {
-      list = list.filter((c) => c.sector === selectedSector);
-    }
-    if (fundFilter === "MLE") {
-      list = list.filter((c) => c.funds.includes("MLE"));
-    } else if (fundFilter === "MSC") {
-      list = list.filter((c) => c.funds.includes("MSC"));
-    } else if (fundFilter === "others") {
-      list = list.filter((c) => c.funds.length === 0);
-    }
-    return sortCompanies(list, sortBy, sortOrder);
-  })();
-
-  const activeSortOption =
-    SORT_OPTIONS.find((o) => o.key === sortBy && o.order === sortOrder) ?? SORT_OPTIONS[0];
-
-  // ── Design tokens ─────────────────────────────────────────────────────────
-
-  const CONTROL_STYLE: React.CSSProperties = {
-    padding:     "7px 11px",
-    borderRadius: 7,
-    background:  "#F5F7FD",
-    border:      "1px solid rgba(13,13,56,0.10)",
-    color:       "#0D0D38",
-    fontSize:    13,
-    cursor:      "pointer",
-    outline:     "none",
-    fontFamily:  FONT_SECONDARY,
-  };
-
-  // ── Loading state ─────────────────────────────────────────────────────────
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-[80dvh]">
-        <div className="flex flex-col items-center gap-4">
-          <div
-            className="w-10 h-10 rounded-full border-2 animate-spin"
-            style={{ borderColor: "rgba(32,68,220,0.15)", borderTopColor: "#2044DC" }}
-          />
-          <p className="text-sm font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.62)" }}>
-            Loading LatAm universe...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Error state ───────────────────────────────────────────────────────────
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center h-[80dvh]">
-        <div
-          style={{
-            background:   "rgba(248,72,94,0.06)",
-            border:       "1px solid rgba(248,72,94,0.15)",
-            borderRadius: 10,
-            padding:      "24px 36px",
-            textAlign:    "center",
-          }}
-        >
-          <p style={{ color: "#F8485E", marginBottom: 12, fontSize: 14 }}>
-            Failed to load LatAm data
-          </p>
-          <button
-            onClick={fetchData}
-            style={{
-              padding:     "6px 18px",
-              borderRadius: 6,
-              background:  "rgba(32,68,220,0.08)",
-              border:      "1px solid rgba(32,68,220,0.20)",
-              color:       "#2044DC",
-              cursor:      "pointer",
-              fontSize:    13,
-            }}
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="max-w-[1800px] mx-auto page-shell">
@@ -291,17 +90,6 @@ function LatAmContent() {
             Latin American equity universe · AGF coverage
           </p>
         </div>
-
-        <button
-          onClick={fetchData}
-          className="source-pill"
-          style={{ cursor: "pointer", background: "rgba(13,13,56,0.04)", border: "1px solid rgba(13,13,56,0.09)" }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(32,68,220,0.25)"; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(13,13,56,0.09)"; }}
-        >
-          <RefreshCw size={10} />
-          Refresh
-        </button>
       </div>
 
       {/* ── Sub-navigation tabs ──────────────────────────────────────────────── */}
@@ -314,10 +102,9 @@ function LatAmContent() {
           width:      "fit-content",
         }}
       >
-        {TABS.map(({ key, label, spacerBefore }) => (
-          <Fragment key={key}>
-          {spacerBefore && <TabSpacer />}
+        {TABS.map(({ key, label }) => (
           <button
+            key={key}
             onClick={() => setActiveTab(key)}
             className="px-5 py-1.5 rounded-lg text-sm transition-all"
             style={{
@@ -331,181 +118,8 @@ function LatAmContent() {
           >
             {label}
           </button>
-          </Fragment>
         ))}
       </div>
-
-      {/* ── Stock Selection ──────────────────────────────────────────────────── */}
-      {activeTab === "stock-selection" && (
-        <>
-          {/* Metadata bar */}
-          {metadata && (
-            <p
-              className="text-xs mb-3"
-              style={{ color: "rgba(13,13,56,0.45)", fontFamily: FONT_SECONDARY }}
-            >
-              Data as of ·{" "}
-              <span style={{ color: "rgba(13,13,56,0.62)" }}>{metadata.snapshotDate}</span>
-              {" "}·{" "}
-              <span style={{ color: "rgba(13,13,56,0.62)" }}>{allCompanies.length} companies</span>
-            </p>
-          )}
-
-          {/* Filter / Sort bar */}
-          <div
-            className="card"
-            style={{
-              padding:     "12px 16px",
-              marginBottom: 14,
-              display:     "flex",
-              gap:         10,
-              flexWrap:    "wrap",
-              alignItems:  "center",
-            }}
-          >
-            {/* Search */}
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search company or ticker..."
-              style={{
-                ...CONTROL_STYLE,
-                flex:     "1 1 200px",
-                minWidth: 180,
-                color:    search ? "#0D0D38" : "rgba(13,13,56,0.45)",
-              }}
-              onFocus={(e) => {
-                (e.currentTarget as HTMLElement).style.borderColor = "rgba(32,68,220,0.35)";
-                (e.currentTarget as HTMLElement).style.color       = "#0D0D38";
-              }}
-              onBlur={(e) => {
-                (e.currentTarget as HTMLElement).style.borderColor = "rgba(13,13,56,0.10)";
-              }}
-            />
-
-            {/* Sector filter */}
-            <select
-              value={selectedSector ?? ""}
-              onChange={(e) => setSelectedSector(e.target.value || null)}
-              style={{
-                ...CONTROL_STYLE,
-                minWidth: 170,
-                color:    selectedSector ? "#0D0D38" : "rgba(13,13,56,0.62)",
-              }}
-            >
-              <option value="">All Sectors</option>
-              {uniqueSectors.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-
-            {/* Fund filter */}
-            <div
-              style={{
-                display:      "flex",
-                alignItems:   "center",
-                gap:          2,
-                padding:      "3px",
-                borderRadius: 8,
-                background:   "rgba(13,13,56,0.04)",
-                border:       "1px solid rgba(13,13,56,0.08)",
-              }}
-            >
-              {(["all", "MLE", "MSC", "others"] as FundFilter[]).map((f) => {
-                const active = fundFilter === f;
-                const labels: Record<FundFilter, string> = {
-                  all: "All", MLE: "MLE", MSC: "MSC", others: "Others",
-                };
-                const colors: Record<FundFilter, { text: string; bg: string; border: string }> = {
-                  all:    { text: "rgba(13,13,56,0.62)", bg: "rgba(32,68,220,0.10)",  border: "rgba(32,68,220,0.25)"  },
-                  MLE:    { text: "#001EAF", bg: "rgba(32,68,220,0.12)",  border: "rgba(32,68,220,0.30)"  },
-                  MSC:    { text: "#001EAF", bg: "rgba(0,30,175,0.12)",  border: "rgba(0,30,175,0.30)"  },
-                  others: { text: "rgba(13,13,56,0.62)", bg: "rgba(13,13,56,0.12)", border: "rgba(13,13,56,0.25)" },
-                };
-                const c = colors[f];
-                return (
-                  <button
-                    key={f}
-                    onClick={() => setFundFilter(f)}
-                    style={{
-                      padding:      "4px 12px",
-                      borderRadius: 6,
-                      fontSize:     12,
-                      fontWeight:   600,
-                      fontFamily:   FONT_SECONDARY,
-                      cursor:       "pointer",
-                      transition:   "all 0.12s",
-                      background:   active ? c.bg      : "transparent",
-                      color:        active ? c.text    : "rgba(13,13,56,0.45)",
-                      border:       active ? `1px solid ${c.border}` : "1px solid transparent",
-                    }}
-                  >
-                    {labels[f]}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Sort */}
-            <select
-              value={activeSortOption.value}
-              onChange={(e) => {
-                const opt = SORT_OPTIONS.find((o) => o.value === e.target.value);
-                if (opt) { setSortBy(opt.key); setSortOrder(opt.order); }
-              }}
-              style={{ ...CONTROL_STYLE, minWidth: 170 }}
-            >
-              {SORT_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-
-            {/* Result count */}
-            {(search || selectedSector) && (
-              <span
-                style={{
-                  marginLeft: "auto",
-                  fontSize:   12,
-                  color:      "rgba(13,13,56,0.62)",
-                  fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
-                }}
-              >
-                {filtered.length} result{filtered.length !== 1 ? "s" : ""}
-                {selectedSector && (
-                  <span style={{ color: "#2044DC" }}> in {selectedSector}</span>
-                )}
-                {search && (
-                  <span> matching &ldquo;{search}&rdquo;</span>
-                )}
-              </span>
-            )}
-          </div>
-
-          {/* Download Excel / PDF */}
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
-            <ExportButtons
-              sheets={() => {
-                const headers = ["Ticker", "Company", "Sector", "Funds", "Price USD", "Mkt Cap (USD M)", "Ret 1W", "Ret 1M", "Ret YTD", "Ret 1Y", "Ret 5Y", "PE Cur Yr", "PE Nxt Yr", "EV/EBITDA Cur", "EV/EBITDA Nxt", "P/BV", "Leverage", "ROE Est", "Div Yield", "Target Price", "TP Upside"];
-                const rows = filtered.map((c) => [c.ticker, c.company, c.sector ?? "", c.funds.join(", "), c.priceUsd, c.mktCapUsd, c.ret1W, c.ret1M, c.retYtd, c.ret1Y, c.ret5Y, c.peCurYr, c.peNxtYr, c.evEbitdaCurYr, c.evEbitdaNxtYr, c.pBv, c.leverage, c.roeEst, c.divYield, c.targetPrice, c.tpUpside]);
-                return [{ name: "Stock Selection", headers, rows }];
-              }}
-              filename="latam_stock_selection"
-              count={filtered.length}
-              pdf={{ title: "LatAm Stock Selection", subtitle: `${filtered.length} companies${selectedSector ? ` · ${selectedSector}` : ""}` }}
-            />
-          </div>
-
-          {/* Bloomberg-style table */}
-          <LatamTable
-            companies={filtered}
-            sortBy={sortBy}
-            setSortBy={(key) => { setSortBy(key); }}
-            sortOrder={sortOrder}
-            setSortOrder={setSortOrder}
-          />
-        </>
-      )}
 
       {/* ── Performance Attribution ──────────────────────────────────────────── */}
       {activeTab === "attribution" && <AttributionSection />}
@@ -519,20 +133,6 @@ function LatAmContent() {
           <BetaExposurePanel />
         </div>
       )}
-
-      {/* ── Quant Analysis ───────────────────────────────────────────────────── */}
-      {activeTab === "quant-analysis" && <QuantAnalysisPanel />}
-
-      {/* ── Useful Links ─────────────────────────────────────────────────────── */}
-      {activeTab === "links" && <AnalystLinks region="LATAM" />}
     </div>
-  );
-}
-
-export default function LatAmPage() {
-  return (
-    <Suspense>
-      <LatAmContent />
-    </Suspense>
   );
 }

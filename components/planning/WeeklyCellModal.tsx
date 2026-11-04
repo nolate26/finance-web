@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, Trash2, Loader2 } from "lucide-react";
+import { X, Trash2 } from "lucide-react";
 import { FONT_SECONDARY, TEXT, BORDER, PATRIA } from "@/lib/patriaTheme";
 import {
   PLAN_CATEGORIES, CATEGORY_STYLE, cellDateLabel, displayDate, regionLabel, regionDayName,
@@ -11,12 +11,16 @@ import type { WeeklyCell } from "@/app/api/planning/weekly/route";
 import type { AnalystOption } from "@/app/api/planning/analysts/route";
 
 // Editor de UNA actividad del calendario. Sólo lo monta el admin.
-// `cell` null = actividad nueva en esa casilla, y el PUT la crea. Como un día puede
-// tener varias, "nueva" ya no significa "la casilla está vacía": también se llega acá
-// desde "+ add another" sobre una casilla que ya tiene una.
+// `cell` null = actividad nueva en esa casilla. Como un día puede tener varias, "nueva"
+// ya no significa "la casilla está vacía": también se llega acá desde "+ add another"
+// sobre una casilla que ya tiene una.
 //
-// El header muestra la fecha que le TOCA a la región (Chile martes, LatAm jueves),
-// pero lo que se manda al PUT sigue siendo el lunes: así se indexan las semanas.
+// No escribe en la base: entrega el resultado al borrador de WeeklyCalendar, que se
+// guarda con su botón. Por eso el botón de acá dice "Apply" y no "Save".
+//
+// El header muestra la fecha que le TOCA a la región (Chile martes, LatAm jueves).
+
+export type CellFields = Pick<WeeklyCell, "topic" | "category" | "allAnalysts" | "highlighted" | "notes" | "analysts">;
 
 interface Props {
   region:   string;
@@ -24,7 +28,8 @@ interface Props {
   cell:     WeeklyCell | null;
   analysts: AnalystOption[];
   onClose:  () => void;
-  onSaved:  () => void;
+  onApply:  (fields: CellFields) => void;
+  onDelete: (cell: WeeklyCell) => void;
 }
 
 const inputStyle: React.CSSProperties = {
@@ -39,62 +44,30 @@ const labelStyle: React.CSSProperties = {
   textTransform: "uppercase", color: TEXT.muted, marginBottom: 6,
 };
 
-export default function WeeklyCellModal({ region, weekIso, cell, analysts, onClose, onSaved }: Props) {
+export default function WeeklyCellModal({ region, weekIso, cell, analysts, onClose, onApply, onDelete }: Props) {
   const [topic, setTopic]             = useState(cell?.topic ?? "");
   const [category, setCategory]       = useState<PlanCategory>((cell?.category as PlanCategory) ?? "update");
   const [allAnalysts, setAllAnalysts] = useState(cell?.allAnalysts ?? false);
   const [highlighted, setHighlighted] = useState(cell?.highlighted ?? false);
   const [notes, setNotes]             = useState(cell?.notes ?? "");
   const [selected, setSelected]       = useState<string[]>(cell?.analysts.map((a) => a.id) ?? []);
-  const [saving, setSaving]           = useState(false);
-  const [error, setError]             = useState<string | null>(null);
 
   function toggle(id: string) {
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
   }
 
-  async function save() {
-    setSaving(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/planning/weekly", {
-        method:  "PUT",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
-          // Sin id el servidor CREA otra actividad en la casilla; con id edita ésa.
-          id: cell?.id,
-          region, weekStart: weekIso, topic, category,
-          allAnalysts, highlighted, notes,
-          analystIds: allAnalysts ? [] : selected,
-        }),
-      });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error ?? "Could not save");
-      onSaved();
-      onClose();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function remove() {
-    if (!cell) return;
-    setSaving(true);
-    setError(null);
-    try {
-      // Por id: en un día con dos actividades, la región y la semana no dicen cuál.
-      const res = await fetch(`/api/planning/weekly?id=${encodeURIComponent(cell.id)}`, { method: "DELETE" });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error ?? "Could not delete the activity");
-      onSaved();
-      onClose();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not delete the activity");
-    } finally {
-      setSaving(false);
-    }
+  function apply() {
+    // Primero los de la celda: un analista asignado puede no venir ya en las opciones.
+    const known = [...(cell?.analysts ?? []), ...analysts];
+    onApply({
+      topic: topic.trim() || null,
+      category, allAnalysts, highlighted,
+      notes: notes.trim() || null,
+      analysts: allAnalysts ? [] : selected.flatMap((id) => {
+        const a = known.find((x) => x.id === id);
+        return a ? [{ id: a.id, initials: a.initials, name: a.name }] : [];
+      }),
+    });
   }
 
   return (
@@ -255,15 +228,6 @@ export default function WeeklyCellModal({ region, weekIso, cell, analysts, onClo
             />
             Highlight this week
           </label>
-
-          {error && (
-            <div style={{
-              fontSize: 12, color: "#B01029", background: "rgba(248,72,94,0.08)",
-              border: "1px solid rgba(248,72,94,0.24)", borderRadius: 8, padding: "8px 11px",
-            }}>
-              {error}
-            </div>
-          )}
         </div>
 
         {/* Footer */}
@@ -273,13 +237,12 @@ export default function WeeklyCellModal({ region, weekIso, cell, analysts, onClo
         }}>
           {cell ? (
             <button
-              onClick={remove}
-              disabled={saving}
+              onClick={() => onDelete(cell)}
               style={{
                 display: "inline-flex", alignItems: "center", gap: 5,
                 fontSize: 12, fontWeight: 600, color: PATRIA.pink,
                 background: "transparent", border: "none",
-                cursor: saving ? "default" : "pointer", padding: "6px 2px",
+                cursor: "pointer", padding: "6px 2px",
               }}
             >
               <Trash2 size={13} /> Delete activity
@@ -289,7 +252,6 @@ export default function WeeklyCellModal({ region, weekIso, cell, analysts, onClo
           <div style={{ display: "flex", gap: 8 }}>
             <button
               onClick={onClose}
-              disabled={saving}
               style={{
                 padding: "7px 16px", borderRadius: 8, fontSize: 12.5, fontWeight: 600,
                 background: "#FFFFFF", color: TEXT.label,
@@ -299,17 +261,13 @@ export default function WeeklyCellModal({ region, weekIso, cell, analysts, onClo
               Cancel
             </button>
             <button
-              onClick={save}
-              disabled={saving}
+              onClick={apply}
               style={{
-                display: "inline-flex", alignItems: "center", gap: 6,
                 padding: "7px 18px", borderRadius: 8, fontSize: 12.5, fontWeight: 700,
-                background: PATRIA.blue, color: "#FFFFFF", border: "none",
-                cursor: saving ? "default" : "pointer", opacity: saving ? 0.7 : 1,
+                background: PATRIA.blue, color: "#FFFFFF", border: "none", cursor: "pointer",
               }}
             >
-              {saving && <Loader2 size={13} style={{ animation: "spin 0.8s linear infinite" }} />}
-              Save
+              Apply
             </button>
           </div>
         </div>

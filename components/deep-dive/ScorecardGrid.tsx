@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import type { DeepDivePayload } from "@/app/api/companies/[ticker]/route";
 import type { TickerSignalPayload, TickerSignalData, TickerMomentumData } from "@/app/api/quant/ticker-signal/route";
 import { PATRIA, FONT_PRIMARY, FONT_SECONDARY } from "@/lib/patriaTheme";
@@ -78,37 +77,16 @@ interface CardShellProps {
   score:    number | null;
   children: React.ReactNode;
   accent?:  string;
-  onClick?: () => void;
 }
 
-function CardShell({ title, score, children, accent = PATRIA.skyBlue, onClick }: CardShellProps) {
+function CardShell({ title, score, children, accent = PATRIA.skyBlue }: CardShellProps) {
   const theme = scoreTheme(score);
-  const clickable = onClick != null;
   return (
     <div
-      onClick={onClick}
-      role={clickable ? "button" : undefined}
-      tabIndex={clickable ? 0 : undefined}
-      onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick!(); } } : undefined}
-      onMouseEnter={clickable ? (e) => {
-        const el = e.currentTarget as HTMLElement;
-        el.style.boxShadow = `0 6px 20px ${accent}26`;
-        el.style.transform = "translateY(-2px)";
-        el.style.borderColor = `${accent}55`;
-      } : undefined}
-      onMouseLeave={clickable ? (e) => {
-        const el = e.currentTarget as HTMLElement;
-        el.style.boxShadow = "0 1px 4px rgba(13,13,56,0.06)";
-        el.style.transform = "translateY(0)";
-        el.style.borderColor = BORDER;
-      } : undefined}
       style={{
         background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12,
         boxShadow: "0 1px 4px rgba(13,13,56,0.06)", display: "flex",
         flexDirection: "column", overflow: "hidden",
-        cursor: clickable ? "pointer" : "default",
-        transition: "box-shadow 0.16s, transform 0.16s, border-color 0.16s",
-        outline: "none",
       }}
     >
       <div style={{ height: 4, background: accent }} />
@@ -131,11 +109,6 @@ function CardShell({ title, score, children, accent = PATRIA.skyBlue, onClick }:
               }}>
                 {score}/5
               </span>
-            )}
-            {clickable && (
-              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" style={{ color: accent, opacity: 0.7 }}>
-                <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
             )}
           </div>
       </div>
@@ -182,10 +155,10 @@ function FactorGauge({ value }: { value: number | null }) {
 // INDIVIDUAL FACTOR CARDS
 // ─────────────────────────────────────────────────────────────────────────────
 
-function ValueCard({ data, onClick }: { data: TickerSignalData | null; onClick?: () => void }) {
+function ValueCard({ data }: { data: TickerSignalData | null }) {
   const score = factorTo5(data?.value ?? null);
   return (
-    <CardShell title="Value Factor" score={score} accent={PATRIA.skyBlue} onClick={onClick}>
+    <CardShell title="Value Factor" score={score} accent={PATRIA.skyBlue}>
       {data ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <FactorGauge value={data.value} />
@@ -217,7 +190,7 @@ function ValueCard({ data, onClick }: { data: TickerSignalData | null; onClick?:
   );
 }
 
-function QualityCard({ data, onClick }: { data: TickerSignalData | null; onClick?: () => void }) {
+function QualityCard({ data }: { data: TickerSignalData | null }) {
   const score = factorTo5(data?.quality ?? null);
 
   function fmtPctRaw(v: number | null): string {
@@ -227,7 +200,7 @@ function QualityCard({ data, onClick }: { data: TickerSignalData | null; onClick
   }
 
   return (
-    <CardShell title="Quality Factor" score={score} accent={PATRIA.turquoise} onClick={onClick}>
+    <CardShell title="Quality Factor" score={score} accent={PATRIA.turquoise}>
       {data ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <FactorGauge value={data.quality} />
@@ -272,14 +245,14 @@ function momZTheme(z: number | null): { text: string; bg: string; border: string
   return          { text: T2,             bg: "rgba(13,13,56,0.08)", border: "rgba(13,13,56,0.18)", label: null };
 }
 
-function PricingMomentumCard({ data, onClick }: { data: TickerMomentumData | null; onClick?: () => void }) {
+function PricingMomentumCard({ data }: { data: TickerMomentumData | null }) {
   const score  = pctScoreTo5(data?.score ?? null);
   const pct    = data?.score != null ? Math.max(0, Math.min(100, data.score)) : null;
   const col    = pct == null ? T3 : pct > 70 ? "#001EAF" : pct > 40 ? "#001EAF" : "#B6FFE3";
   const zt     = momZTheme(data?.zscore ?? null);
 
   return (
-    <CardShell title="Pricing Momentum" score={score} accent={PATRIA.lightOrange} onClick={onClick}>
+    <CardShell title="Pricing Momentum" score={score} accent={PATRIA.lightOrange}>
       {data ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {/* Big score number — same % format as the other factor gauges */}
@@ -370,7 +343,6 @@ interface Props {
 }
 
 export default function ScorecardGrid({ deepDive, latestPrice: _latestPrice, onViewDetail }: Props) {
-  const router = useRouter();
   const [signalData, setSignalData] = useState<TickerSignalPayload | null>(null);
 
   useEffect(() => {
@@ -454,9 +426,9 @@ export default function ScorecardGrid({ deepDive, latestPrice: _latestPrice, onV
 
       {/* ── 3-Card Grid ───────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 w-full items-stretch">
-        <ValueCard   data={qData} onClick={() => router.push("/latam?tab=quant-analysis&view=model")} />
-        <QualityCard data={qData} onClick={() => router.push("/latam?tab=quant-analysis&view=model")} />
-        <PricingMomentumCard data={mData} onClick={() => router.push("/latam?tab=quant-analysis&view=momentum")} />
+        <ValueCard   data={qData} />
+        <QualityCard data={qData} />
+        <PricingMomentumCard data={mData} />
       </div>
 
       {/* ── CTA ───────────────────────────────────────────────────────────────── */}

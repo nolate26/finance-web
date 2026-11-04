@@ -505,17 +505,6 @@ export async function POST(request: Request) {
         });
         break;
         
-      case 'BenchmarkMxla':
-        const benchRows = rows.map((r: any) => ({
-          date: new Date(r.date),
-          pxClose: r.pxClose ?? r.px_close ?? null,
-        }));
-        await prisma.benchmarkMxla.createMany({ 
-          data: benchRows, 
-          skipDuplicates: true 
-        });
-        break;
-
       case 'StockSelectionV1':
         const ssRows = rows.map((r: any) => ({
           company:     r.company,

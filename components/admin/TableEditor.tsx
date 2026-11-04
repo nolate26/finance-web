@@ -24,7 +24,8 @@ const KEY_TABLES: { name: string; note: string }[] = [
   { name: "top_picks",              note: "Top Picks por período" },
   { name: "ticker_return_snapshot", note: "Retornos Bloomberg del Stock Selection" },
   { name: "estimates_hidden",       note: "Compañías ocultas en Analyst Estimates" },
-  { name: "analyst_links",          note: "Useful Links de Chile y LatAm" },
+  { name: "analyst_links",          note: "Links de la vista Useful Links" },
+  { name: "link_sections",          note: "Secciones de la vista Useful Links" },
 ];
 
 const PAGE = 100;

@@ -23,6 +23,7 @@ export const config = {
     "/extract/:path*",
     "/chile/:path*",
     "/latam/:path*",
+    "/links/:path*",
     "/economia/:path*",
     "/fondos/:path*",
     "/presentations/:path*",
