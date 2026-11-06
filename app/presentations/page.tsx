@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { Fragment, useEffect, useState, useCallback, useMemo } from "react";
 import { FileText, Download, Upload, Trash2, Search, ShieldAlert, Pencil, MessageSquareText, X } from "lucide-react";
 import CreatePresentationModal from "@/components/CreatePresentationModal";
 import ReviewCaseModal from "@/components/presentations/ReviewCaseModal";
@@ -13,13 +13,15 @@ import { quarterKey } from "@/lib/quarters";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-type MainCategory = "investment_cases" | "fichas" | "client_presentations" | "sell_side";
+type MainCategory = "fichas" | "sectorial_updates" | "sell_side" | "investment_cases" | "client_presentations";
 
-const MAIN_TABS: { key: MainCategory; label: string }[] = [
-  { key: "investment_cases",     label: "Investment Cases"     },
+// `separated` dibuja una línea antes de la pestaña: research a un lado, casos y clientes al otro.
+const MAIN_TABS: { key: MainCategory; label: string; separated?: boolean }[] = [
   { key: "fichas",               label: "Fichas"               },
-  { key: "client_presentations", label: "Client Presentations" },
+  { key: "sectorial_updates",    label: "Sectorial Updates"    },
   { key: "sell_side",            label: "Sell Side"            },
+  { key: "investment_cases",     label: "Investment Cases",    separated: true },
+  { key: "client_presentations", label: "Client Presentations" },
 ];
 
 // Fund options for "client_presentations" sub-filter
@@ -373,9 +375,9 @@ export default function PresentationsPage() {
   const isAdmin   = useIsAdmin();
   const canUpload = useIsSignedIn();
 
-  const [mainCategory, setMainCategory] = useState<MainCategory>("investment_cases");
-  // For investment_cases / sell_side
-  const [subFilter,    setSubFilter]    = useState<string>("chile");
+  const [mainCategory, setMainCategory] = useState<MainCategory>("fichas");
+  // For sectorial_updates / sell_side / investment_cases
+  const [subFilter,   setSubFilter]    = useState<string>("chile");
   // For client_presentations — two-level: region → fund
   const [cpRegion,     setCpRegion]     = useState<"chile" | "latam">("chile");
   const [cpFund,       setCpFund]       = useState<string>("All");
@@ -432,7 +434,7 @@ export default function PresentationsPage() {
   // ── Tab switch ────────────────────────────────────────────────────────────
   function handleMainCategory(cat: MainCategory) {
     setMainCategory(cat);
-    setSubFilter("chile");   // for investment_cases / sell_side
+    setSubFilter("chile");   // for sectorial_updates / sell_side / investment_cases
     setCpRegion("chile");    // for client_presentations
     setCpFund("All");
     setFichaCountry("All");
@@ -643,7 +645,7 @@ export default function PresentationsPage() {
         <div className="flex items-start justify-between mb-6">
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0D0D38", letterSpacing: "-0.035em", lineHeight: 1.15, margin: 0 }}>Presentations</h1>
-            <p style={{ fontSize: 12, marginTop: 5, color: "rgba(13,13,56,0.62)", fontWeight: 500, letterSpacing: "0.01em" }}>Research reports · Company fichas · Investor presentations</p>
+            <p style={{ fontSize: 12, marginTop: 5, color: "rgba(13,13,56,0.62)", fontWeight: 500, letterSpacing: "0.01em" }}>Company fichas · Sectorial updates · Research reports · Investor presentations</p>
           </div>
           <div className="flex items-center gap-3">
             {canUpload && (
@@ -701,25 +703,29 @@ export default function PresentationsPage() {
 
         {/* ── Level 1: Category tabs ──────────────────────────────────── */}
         <div className="tab-rail flex items-center mb-4" style={{ gap: 2, padding: "3px", borderRadius: 10, background: "rgba(13,13,56,0.04)", border: "1px solid rgba(13,13,56,0.08)", width: "fit-content" }}>
-          {MAIN_TABS.map(({ key, label }) => {
+          {MAIN_TABS.map(({ key, label, separated }) => {
             const active = mainCategory === key;
             return (
-              <button
-                key={key}
-                onClick={() => handleMainCategory(key)}
-                className="px-5 py-1.5 rounded-lg text-sm transition-all"
-                style={{
-                  background: active ? "#FFFFFF"  : "transparent",
-                  color:      active ? "#0D0D38"  : "rgba(13,13,56,0.62)",
-                  border:     active ? "1px solid rgba(13,13,56,0.11)" : "1px solid transparent",
-                  boxShadow:  active ? "0 1px 3px rgba(13,13,56,0.09)" : "none",
-                  fontWeight: active ? 700 : 500,
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {label}
-              </button>
+              <Fragment key={key}>
+                {separated && (
+                  <span aria-hidden style={{ width: 1, height: 20, margin: "0 6px", flexShrink: 0, background: "rgba(13,13,56,0.16)" }} />
+                )}
+                <button
+                  onClick={() => handleMainCategory(key)}
+                  className="px-5 py-1.5 rounded-lg text-sm transition-all"
+                  style={{
+                    background: active ? "#FFFFFF"  : "transparent",
+                    color:      active ? "#0D0D38"  : "rgba(13,13,56,0.62)",
+                    border:     active ? "1px solid rgba(13,13,56,0.11)" : "1px solid transparent",
+                    boxShadow:  active ? "0 1px 3px rgba(13,13,56,0.09)" : "none",
+                    fontWeight: active ? 700 : 500,
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {label}
+                </button>
+              </Fragment>
             );
           })}
         </div>
@@ -769,8 +775,8 @@ export default function PresentationsPage() {
             </>
           )}
 
-          {/* Investment Cases & Sell Side → Chile / LatAm */}
-          {(mainCategory === "investment_cases" || mainCategory === "sell_side") && (
+          {/* Sectorial Updates, Sell Side & Investment Cases → Chile / LatAm */}
+          {(mainCategory === "sectorial_updates" || mainCategory === "sell_side" || mainCategory === "investment_cases") && (
             <div className="flex items-center gap-1 p-0.5 rounded-md" style={PILL_WRAP}>
               {[{ value: "chile", label: "Chile" }, { value: "latam", label: "LatAm" }].map((r) => (
                 <button

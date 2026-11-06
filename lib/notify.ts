@@ -128,8 +128,7 @@ async function modelMessage(e: ModelEvent): Promise<string> {
     where:  { tickerBloomberg: e.ticker },
     select: { nombreLatam: true },
   });
-  const name   = company?.nombreLatam ?? e.ticker;
-  const kind   = e.modelType === "bank" ? "bank" : "company";
+  const ticker = e.ticker.replace(/ EQUITY$/i, "");
   const thesis = e.thesis && e.thesis.length > THESIS_MAX ? e.thesis.slice(0, THESIS_MAX) + "…" : e.thesis;
 
   const app   = appUrl(`/companies?ticker=${encodeURIComponent(e.ticker)}&tab=model`);
@@ -139,10 +138,10 @@ async function modelMessage(e: ModelEvent): Promise<string> {
   ].filter(Boolean).join("  ·  ");
 
   return [
-    `📊 <b>New ${kind} model</b>`,
-    `<b>${esc(name)}</b>  <code>${esc(e.ticker)}</code>`,
+    `📊 <b>${headline("MODEL UPDATE", ticker, e.recc?.toUpperCase())}</b>`,
+    company?.nombreLatam ? esc(company.nombreLatam) : null,
     "",
-    field("Recommendation", e.recc?.toUpperCase()),
+    field("Type",          e.modelType === "bank" ? "Bank" : "Company"),
     field("Target price",  e.tp != null ? fmtNum(e.tp) : null),
     field("Analyst",       e.analyst),
     field("Model date",    e.updateDate.toISOString().slice(0, 10)),
@@ -156,13 +155,11 @@ async function taskMessage(e: TaskEvent): Promise<string> {
   const app    = appUrl("/planning");
 
   return [
-    `🟩 ✅ <b>TASK COMPLETED</b>`,
-    `<b>${esc(e.title)}</b>`,
+    `🟩 ✅ <b>${headline("TASK COMPLETED", e.closedBy)}</b>`,
+    headline(e.title, sector?.name),
     "",
-    field("Completed by", e.closedBy),
-    field("Sector",       sector?.name),
-    field("Company",      e.company),
-    field("Assigned to",  e.assignee),
+    field("Company",     e.company),
+    field("Assigned to", e.assignee),
     app ? `\n<a href="${esc(app)}">View in Planning</a>` : null,
   ].filter((l) => l !== null).join("\n");
 }
@@ -175,11 +172,9 @@ async function taskCreatedMessage(e: TaskCreatedEvent): Promise<string> {
     : e.description;
 
   return [
-    `🟦 🆕 <b>NEW TASK</b>`,
-    `<b>${esc(e.title)}</b>`,
+    `🟦 🆕 <b>${headline("NEW TASK", e.createdBy)}</b>`,
+    headline(e.title, sector?.name),
     "",
-    field("Created by",  e.createdBy),
-    field("Sector",      sector?.name),
     field("Company",     e.company),
     field("Assigned to", e.assignee),
     e.priority ? `Priority: ${PRIORITY_LABEL[e.priority] ?? esc(e.priority)}` : null,
@@ -219,6 +214,12 @@ function calendarMessage(e: CalendarEvent): string {
     rest > 0 ? `\n…and ${rest} more change${rest === 1 ? "" : "s"}` : null,
     app ? `\n<a href="${esc(app)}">View calendar</a>` : null,
   ].filter((l) => l !== null).join("\n");
+}
+
+// Las dos primeras líneas son lo que se ve en la notificación del teléfono. Un dato
+// vacío se salta, para no dejar "MODEL UPDATE - CCU CI - ".
+function headline(...parts: (string | null | undefined)[]): string {
+  return parts.filter((p): p is string => !!p).map(esc).join(" - ");
 }
 
 function field(label: string, value: string | null | undefined): string | null {

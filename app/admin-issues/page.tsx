@@ -34,7 +34,7 @@ export default function AdminIssuesPage() {
     if (!isAdmin) router.replace("/");
   }, [status, isAdmin, router]);
 
-  // El alta de empresas del panel de Stock Selection guarda sus datos iniciales contra el
+  // "Sumar compañía" del panel de Stock Selection guarda sus datos iniciales contra el
   // trimestre activo de esa vista: se pide sólo cuando se abre la pestaña.
   useEffect(() => {
     if (view !== "stock-selection" || periodo) return;

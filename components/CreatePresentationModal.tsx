@@ -36,7 +36,7 @@ type Phase = "idle" | "requesting" | "uploading" | "saving";
 // Un solo modal para todo el uploader. "fichas" no va a `presentations` sino a la
 // tabla `fichas` (ticker obligatorio, sólo PDF, sin origen ni región): el formulario
 // cambia de forma según la categoría y el submit elige el endpoint.
-type Category = "investment_cases" | "fichas" | "client_presentations" | "sell_side";
+type Category = "fichas" | "sectorial_updates" | "sell_side" | "investment_cases" | "client_presentations";
 
 const MIME_MAP: Record<string, string> = {
   pdf:  "application/pdf",
@@ -435,10 +435,11 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
               <div>
                 <label style={LABEL}>Category</label>
                 <select value={category} onChange={(e) => handleCategoryChange(e.target.value as Category)} disabled={isSubmitting} style={{ ...INPUT, opacity: isSubmitting ? 0.6 : 1 }}>
-                  <option value="investment_cases">Investment Cases</option>
                   <option value="fichas">Fichas</option>
-                  <option value="client_presentations">Client Presentations</option>
+                  <option value="sectorial_updates">Sectorial Updates</option>
                   <option value="sell_side">Sell Side</option>
+                  <option value="investment_cases">Investment Cases</option>
+                  <option value="client_presentations">Client Presentations</option>
                 </select>
               </div>
 

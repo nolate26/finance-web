@@ -17,7 +17,8 @@ import SsV1OrdenTab from "./SsV1OrdenTab";
 //     decide qué empresas entran a la vista y con qué símbolo se les pide precio a Yahoo.
 //     Todo símbolo se puede PROBAR contra Yahoo antes de guardarlo.
 //   · Filas — qué compañías se ven en la tabla y por qué las que no se ven no se ven.
-//     Ocultar/mostrar, y crear la homologación que le falta a las que se caen en silencio.
+//     Ocultar/mostrar y sumar a la vista empresas que ya existen en la maestra. Crearlas
+//     se hace en Database Tables.
 //   · Carteras — carga del Excel mensual de posiciones de los fondos, con preview previo:
 //     el cruce es por ticker, así que un ticker mal escrito no falla ruidosamente y hay
 //     que poder verlo ANTES de escribir.
@@ -377,9 +378,8 @@ Para solo sacarla de la tabla, usa Ocultar en la pestana Filas.`)) return;
 }
 
 // ── Clonar historial hacia una empresa ya homologada ────────────────────────────
-// El alta de empresa ofrece clonar al crearla, pero una empresa creada antes (o creada sin
-// clonar) quedaba sin ninguna forma de conseguir historia: no aparece en la pestaña Filas
-// justamente porque no tiene filas en stock_selection_v1. Este diálogo cierra ese circuito.
+// Atajo desde Homologación al mismo clonado que ofrece "Sumar compañía" en la pestaña
+// Filas: una empresa sin filas en stock_selection_v1 no aparece en esa lista.
 function ClonarHistorial({ destino, onClose, onDone }: {
   destino: EmpresaAdminRow; onClose: () => void; onDone: () => void;
 }) {
