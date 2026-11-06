@@ -81,3 +81,6 @@ export function toPresentationDTO(p: PresentationRow): Presentation {
 
 /** Sólo los investment cases pasan por revisión del admin. */
 export const REVIEWABLE_CATEGORY = "investment_cases";
+
+/** Sus empresas van sin TP ni rating y su `description` es texto largo, como en las fichas. */
+export const SECTOR_CATEGORY = "sectorial_updates";

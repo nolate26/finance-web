@@ -12,6 +12,9 @@ import { FONT_SECONDARY, PATRIA, TEXT, BORDER } from "@/lib/patriaTheme";
  * Lo usan el uploader (al subir el caso) y el panel de revisión del admin, así que
  * la edición es idéntica en los dos lados. El TP y la recomendación son POR ACCIÓN:
  * un caso sobre CCU y Andina lleva un precio objetivo para cada una.
+ *
+ * Con `withTargets={false}` queda sólo la lista de empresas: un sectorial update las
+ * menciona, pero no les pone precio ni rating.
  */
 
 export interface CaseTicker {
@@ -30,11 +33,12 @@ const INPUT: React.CSSProperties = {
 };
 
 export default function CaseTickersEditor({
-  value, onChange, disabled = false,
+  value, onChange, disabled = false, withTargets = true,
 }: {
   value:    CaseTicker[];
   onChange: (next: CaseTicker[]) => void;
   disabled?: boolean;
+  withTargets?: boolean;
 }) {
   // El combobox se remonta al agregar (cambia la key) para que se limpie solo:
   // mantiene su propio texto interno y no se vacía con un value controlado.
@@ -71,14 +75,16 @@ export default function CaseTickersEditor({
             onChange={add}
             disabled={disabled}
             includeUniverse
-            placeholder={value.length ? "Add another company…" : "Search the company this case covers…"}
+            placeholder={value.length ? "Add another company…" : withTargets ? "Search the company this case covers…" : "Search a company in this update…"}
           />
         </div>
       </div>
 
       {value.length === 0 && (
         <p style={{ fontSize: 11, color: TEXT.muted, margin: 0, fontStyle: "italic" }}>
-          Pick at least one company. Each one gets its own target price and rating.
+          {withTargets
+            ? "Pick at least one company. Each one gets its own target price and rating."
+            : "Add every company this update covers. It will also show in their profiles."}
         </p>
       )}
 
@@ -103,7 +109,7 @@ export default function CaseTickersEditor({
             </div>
 
             {/* Target price */}
-            <label style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
+            {withTargets && <label style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
               <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: TEXT.label }}>TP</span>
               <input
                 value={t.target_price ?? ""}
@@ -117,10 +123,10 @@ export default function CaseTickersEditor({
                 disabled={disabled}
                 style={{ ...INPUT, width: 84, textAlign: "right" }}
               />
-            </label>
+            </label>}
 
             {/* Recomendación */}
-            <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+            {withTargets && <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
               {RECOMMENDATIONS.map((r) => {
                 const on = t.recommendation === r;
                 const rc = recommendationColors(r);
@@ -143,7 +149,7 @@ export default function CaseTickersEditor({
                   </button>
                 );
               })}
-            </div>
+            </div>}
 
             {/* Quitar */}
             {!disabled && (
@@ -158,7 +164,7 @@ export default function CaseTickersEditor({
             )}
 
             {/* Franja de color de la recomendación elegida */}
-            <span aria-hidden style={{ width: "100%", height: 2, borderRadius: 2, background: t.recommendation ? c.border : "transparent" }} />
+            {withTargets && <span aria-hidden style={{ width: "100%", height: 2, borderRadius: 2, background: t.recommendation ? c.border : "transparent" }} />}
           </div>
         );
       })}

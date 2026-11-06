@@ -1,10 +1,10 @@
 "use client";
 
-import { Fragment, useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { FileText, Download, Upload, Trash2, Search, ShieldAlert, Pencil, MessageSquareText, X } from "lucide-react";
 import CreatePresentationModal from "@/components/CreatePresentationModal";
 import ReviewCaseModal from "@/components/presentations/ReviewCaseModal";
-import { REVIEWABLE_CATEGORY, type Presentation } from "@/lib/presentationDto";
+import { REVIEWABLE_CATEGORY, SECTOR_CATEGORY, type Presentation } from "@/lib/presentationDto";
 import { recommendationColors, formatTargetPrice } from "@/lib/recommendations";
 import type { FichaRow as Ficha } from "@/app/api/fichas/route";
 import { useIsAdmin, useIsSignedIn } from "@/lib/useIsAdmin";
@@ -15,13 +15,15 @@ import { quarterKey } from "@/lib/quarters";
 
 type MainCategory = "fichas" | "sectorial_updates" | "sell_side" | "investment_cases" | "client_presentations";
 
-// `separated` dibuja una línea antes de la pestaña: research a un lado, casos y clientes al otro.
-const MAIN_TABS: { key: MainCategory; label: string; separated?: boolean }[] = [
-  { key: "fichas",               label: "Fichas"               },
-  { key: "sectorial_updates",    label: "Sectorial Updates"    },
-  { key: "sell_side",            label: "Sell Side"            },
-  { key: "investment_cases",     label: "Investment Cases",    separated: true },
-  { key: "client_presentations", label: "Client Presentations" },
+// Cada grupo es una barra aparte: el research junto, y casos y clientes cada uno por su lado.
+const MAIN_TAB_GROUPS: { key: MainCategory; label: string }[][] = [
+  [
+    { key: "fichas",            label: "Fichas"            },
+    { key: "sectorial_updates", label: "Sectorial Updates" },
+    { key: "sell_side",         label: "Sell Side"         },
+  ],
+  [{ key: "investment_cases",     label: "Investment Cases"     }],
+  [{ key: "client_presentations", label: "Client Presentations" }],
 ];
 
 // Fund options for "client_presentations" sub-filter
@@ -101,12 +103,15 @@ function TickerChip({ t }: { t: Presentation["tickers"][number] }) {
 }
 
 function FileRow({
-  pres, isAdmin, deleting, onReview, onDelete,
+  pres, isAdmin, deleting, onReview, onDelete, onOpenComment,
 }: {
   pres: Presentation; isAdmin: boolean; deleting: boolean;
   onReview: (p: Presentation) => void; onDelete: (p: Presentation) => void;
+  onOpenComment: (p: Presentation) => void;
 }) {
   const pending = pres.review_status === "pending";
+  // En un sectorial update la descripción es texto largo: se lee en su panel, como en fichas.
+  const isSector = pres.category === SECTOR_CATEGORY;
   return (
     <div
       className="flex items-center gap-4 px-5 py-4 border-b border-patria-dark-blue/[0.06] last:border-0 transition-colors"
@@ -129,7 +134,7 @@ function FileRow({
             </span>
           )}
         </div>
-        {pres.description && (
+        {pres.description && !isSector && (
           <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "rgba(13,13,56,0.62)" }}>{pres.description}</p>
         )}
         {pres.tickers.length > 0 && (
@@ -180,6 +185,7 @@ function FileRow({
         </button>
       )}
 
+      {isSector && pres.description?.trim() && <CommentButton label="Sector comment" onClick={() => onOpenComment(pres)} />}
       <PdfLink href={pres.file_url} />
 
       {/* Eliminar — sólo admin, igual que en fichas */}
@@ -201,11 +207,32 @@ function FileRow({
   );
 }
 
-// ── Earnings comment ──────────────────────────────────────────────────────────
-// El "Quarter report" de la ficha (fichas.description) se lee en un panel propio:
-// es texto largo y no entra en la fila.
+// ── Comentarios ───────────────────────────────────────────────────────────────
+// El "Quarter report" de la ficha y el comentario de un sectorial update se leen en un
+// panel propio: son texto largo y no entran en la fila.
 
-function EarningsCommentButton({ onClick }: { onClick: () => void }) {
+interface CommentDoc {
+  badge:     string;
+  tag?:      string;   // quarter de la ficha
+  tickers:   string;
+  heading:   string;
+  subtitle?: string;
+  text:      string;
+  createdAt: string;
+  fileUrl:   string;
+}
+
+const fichaComment = (f: Ficha): CommentDoc => ({
+  badge: "Earnings comment", tag: f.quarter_label, tickers: f.ticker, heading: f.company_name,
+  subtitle: f.title, text: f.description ?? "", createdAt: f.created_at, fileUrl: f.file_url,
+});
+
+const sectorComment = (p: Presentation): CommentDoc => ({
+  badge: "Sector comment", tickers: p.tickers.map((t) => t.ticker.replace(/ EQUITY$/i, "")).join(" · "),
+  heading: p.title, text: p.description ?? "", createdAt: p.created_at, fileUrl: p.file_url,
+});
+
+function CommentButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button
       type="button"
@@ -215,12 +242,12 @@ function EarningsCommentButton({ onClick }: { onClick: () => void }) {
       onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,107,6,0.14)")}
       onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,107,6,0.08)")}
     >
-      <MessageSquareText size={11} /> Earnings comment
+      <MessageSquareText size={11} /> {label}
     </button>
   );
 }
 
-function EarningsCommentModal({ ficha, onClose }: { ficha: Ficha; onClose: () => void }) {
+function CommentModal({ doc, onClose }: { doc: CommentDoc; onClose: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
@@ -250,15 +277,17 @@ function EarningsCommentModal({ ficha, onClose }: { ficha: Ficha; onClose: () =>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="flex items-center gap-2 flex-wrap" style={{ marginBottom: 6 }}>
               <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.10em", textTransform: "uppercase", color: "#C25205", background: "rgba(255,107,6,0.10)", border: "1px solid rgba(255,107,6,0.28)", borderRadius: 6, padding: "2px 8px" }}>
-                Earnings comment
+                {doc.badge}
               </span>
-              <span className="font-secondary tabular-nums" style={{ fontSize: 11, fontWeight: 700, color: "#0D0D38", background: "rgba(13,13,56,0.06)", border: "1px solid rgba(13,13,56,0.14)", borderRadius: 6, padding: "2px 8px" }}>
-                {ficha.quarter_label}
-              </span>
-              <span className="font-secondary tabular-nums" style={{ fontSize: 11, color: "rgba(13,13,56,0.45)" }}>{ficha.ticker}</span>
+              {doc.tag && (
+                <span className="font-secondary tabular-nums" style={{ fontSize: 11, fontWeight: 700, color: "#0D0D38", background: "rgba(13,13,56,0.06)", border: "1px solid rgba(13,13,56,0.14)", borderRadius: 6, padding: "2px 8px" }}>
+                  {doc.tag}
+                </span>
+              )}
+              <span className="font-secondary tabular-nums" style={{ fontSize: 11, color: "rgba(13,13,56,0.45)" }}>{doc.tickers}</span>
             </div>
-            <div style={{ fontSize: 17, fontWeight: 800, color: "#0D0D38", lineHeight: 1.3 }}>{ficha.company_name}</div>
-            <div style={{ fontSize: 12, color: "rgba(13,13,56,0.62)", marginTop: 3 }}>{ficha.title}</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: "#0D0D38", lineHeight: 1.3 }}>{doc.heading}</div>
+            {doc.subtitle && <div style={{ fontSize: 12, color: "rgba(13,13,56,0.62)", marginTop: 3 }}>{doc.subtitle}</div>}
           </div>
           <button
             type="button"
@@ -273,16 +302,16 @@ function EarningsCommentModal({ ficha, onClose }: { ficha: Ficha; onClose: () =>
         {/* Texto — se respetan los saltos de línea tal como se escribieron */}
         <div style={{ flex: 1, overflowY: "auto", padding: "20px 26px 26px" }}>
           <p className="font-secondary" style={{ fontSize: 13.5, lineHeight: 1.75, color: "#0D0D38", whiteSpace: "pre-wrap", margin: 0 }}>
-            {ficha.description}
+            {doc.text}
           </p>
         </div>
 
-        {/* Pie: atajo al PDF de la misma ficha */}
+        {/* Pie: atajo al PDF del mismo documento */}
         <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10, padding: "12px 22px", borderTop: "1px solid rgba(13,13,56,0.07)", background: "#F5F7FD" }}>
           <span className="font-secondary tabular-nums" style={{ fontSize: 11, color: "rgba(13,13,56,0.45)", marginRight: "auto" }}>
-            Uploaded {formatDate(ficha.created_at)}
+            Uploaded {formatDate(doc.createdAt)}
           </span>
-          <PdfLink href={ficha.file_url} />
+          <PdfLink href={doc.fileUrl} />
         </div>
       </div>
     </div>
@@ -342,7 +371,7 @@ function FichaRowView({
         {formatDate(ficha.created_at)}
       </span>
 
-      {hasComment && <EarningsCommentButton onClick={() => onOpenComment(ficha)} />}
+      {hasComment && <CommentButton label="Earnings comment" onClick={() => onOpenComment(ficha)} />}
       <PdfLink href={ficha.file_url} />
 
       {/* Delete (admin) */}
@@ -391,8 +420,8 @@ export default function PresentationsPage() {
   const [presentationsError, setPresentationsError] = useState<string | null>(null);
   // Caso abierto en el panel de revisión del admin.
   const [reviewing,    setReviewing]    = useState<Presentation | null>(null);
-  // Ficha cuyo earnings comment se está leyendo.
-  const [commentFicha, setCommentFicha] = useState<Ficha | null>(null);
+  // Comentario abierto en el panel de lectura.
+  const [comment,      setComment]      = useState<CommentDoc | null>(null);
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
   // Un endpoint caído NO debe verse como "no hay documentos": son dos cosas distintas
@@ -627,7 +656,7 @@ export default function PresentationsPage() {
         />
       )}
 
-      {commentFicha && <EarningsCommentModal ficha={commentFicha} onClose={() => setCommentFicha(null)} />}
+      {comment && <CommentModal doc={comment} onClose={() => setComment(null)} />}
 
       {/* Panel de revisión de un caso — sólo admin */}
       {reviewing && isAdmin && (
@@ -702,32 +731,32 @@ export default function PresentationsPage() {
         )}
 
         {/* ── Level 1: Category tabs ──────────────────────────────────── */}
-        <div className="tab-rail flex items-center mb-4" style={{ gap: 2, padding: "3px", borderRadius: 10, background: "rgba(13,13,56,0.04)", border: "1px solid rgba(13,13,56,0.08)", width: "fit-content" }}>
-          {MAIN_TABS.map(({ key, label, separated }) => {
-            const active = mainCategory === key;
-            return (
-              <Fragment key={key}>
-                {separated && (
-                  <span aria-hidden style={{ width: 1, height: 20, margin: "0 6px", flexShrink: 0, background: "rgba(13,13,56,0.16)" }} />
-                )}
-                <button
-                  onClick={() => handleMainCategory(key)}
-                  className="px-5 py-1.5 rounded-lg text-sm transition-all"
-                  style={{
-                    background: active ? "#FFFFFF"  : "transparent",
-                    color:      active ? "#0D0D38"  : "rgba(13,13,56,0.62)",
-                    border:     active ? "1px solid rgba(13,13,56,0.11)" : "1px solid transparent",
-                    boxShadow:  active ? "0 1px 3px rgba(13,13,56,0.09)" : "none",
-                    fontWeight: active ? 700 : 500,
-                    cursor: "pointer",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {label}
-                </button>
-              </Fragment>
-            );
-          })}
+        <div className="flex flex-wrap items-center mb-4" style={{ gap: "8px 18px" }}>
+          {MAIN_TAB_GROUPS.map((group) => (
+            <div key={group[0].key} className="tab-rail flex items-center" style={{ gap: 2, padding: "3px", borderRadius: 10, background: "rgba(13,13,56,0.04)", border: "1px solid rgba(13,13,56,0.08)", width: "fit-content", maxWidth: "100%" }}>
+              {group.map(({ key, label }) => {
+                const active = mainCategory === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => handleMainCategory(key)}
+                    className="px-5 py-1.5 rounded-lg text-sm transition-all"
+                    style={{
+                      background: active ? "#FFFFFF"  : "transparent",
+                      color:      active ? "#0D0D38"  : "rgba(13,13,56,0.62)",
+                      border:     active ? "1px solid rgba(13,13,56,0.11)" : "1px solid transparent",
+                      boxShadow:  active ? "0 1px 3px rgba(13,13,56,0.09)" : "none",
+                      fontWeight: active ? 700 : 500,
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </div>
 
         {/* ── Level 2: Sub-filter ─────────────────────────────────────── */}
@@ -896,7 +925,7 @@ export default function PresentationsPage() {
                         isAdmin={isAdmin}
                         deleting={deletingId === f.id}
                         onDelete={handleDeleteFicha}
-                        onOpenComment={setCommentFicha}
+                        onOpenComment={(f) => setComment(fichaComment(f))}
                       />
                     ))}
                   </div>
@@ -925,6 +954,7 @@ export default function PresentationsPage() {
                 deleting={deletingId === pres.id}
                 onReview={setReviewing}
                 onDelete={handleDeletePresentation}
+                onOpenComment={(p) => setComment(sectorComment(p))}
               />
             ))}
           </div>

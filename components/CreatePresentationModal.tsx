@@ -13,7 +13,7 @@ import { currentQuarter, quarterKey, quarterLabel, quarterOptions, parseQuarterL
 // El tipo canónico vive en lib/presentationDto (lo comparten API y UI); se re-exporta
 // acá porque media app ya lo importaba desde este módulo.
 export type { Presentation } from "@/lib/presentationDto";
-import type { Presentation } from "@/lib/presentationDto";
+import { SECTOR_CATEGORY, type Presentation } from "@/lib/presentationDto";
 
 interface Props {
   defaultCategory: string;
@@ -155,6 +155,7 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
 
   const isFicha = category === "fichas";
   const isCase  = category === "investment_cases";
+  const isSector = category === SECTOR_CATEGORY;
 
   // Quarter elegido, ya parseado. El selector sólo ofrece etiquetas válidas.
   const quarter = parseQuarterLabel(quarterSel);
@@ -301,11 +302,14 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
           region,
           company_name: companyTicker || null,
           is_sell_side: isSellSide,
-          // Sólo los investment cases llevan empresas cubiertas y fecha del caso.
-          ...(isCase ? {
+          // Casos y sectorial updates llevan empresas y fecha del informe. TP y rating son
+          // sólo de los casos: si se cambió de categoría a mitad de camino, no se arrastran.
+          ...(isCase || isSector ? {
             case_date: caseDate || null,
             tickers: caseTickers.map((t) => ({
-              ticker: t.ticker, target_price: t.target_price, recommendation: t.recommendation,
+              ticker: t.ticker,
+              target_price:   isCase ? t.target_price : null,
+              recommendation: isCase ? t.recommendation : null,
             })),
           } : {}),
         }),
@@ -346,7 +350,9 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
             <div>
               <p style={{ fontSize: 15, fontWeight: 700, color: "#0D0D38", margin: 0 }}>Upload document</p>
               <p style={{ fontSize: 11, color: "rgba(13,13,56,0.45)", margin: "3px 0 0", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
-                {isFicha ? "One PDF, linked to a Bloomberg ticker" : "Select a file, fill in the details, then upload"}
+                {isFicha ? "One PDF, linked to a Bloomberg ticker"
+                  : isSector ? "A file, your sector comment and the companies it covers"
+                  : "Select a file, fill in the details, then upload"}
               </p>
             </div>
             <button onClick={onClose} disabled={isSubmitting} style={{ background: "none", border: "none", cursor: isSubmitting ? "not-allowed" : "pointer", color: isSubmitting ? "rgba(13,13,56,0.28)" : "rgba(13,13,56,0.45)", padding: 4, borderRadius: 6 }}>
@@ -411,10 +417,11 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
 
             {/* ── Description / Quarter report ─────────────────────────────── */}
             {/* En fichas el mismo campo (fichas.description) es el comentario del
-                trimestre: en la lista aparece como botón "Earnings comment" junto al PDF. */}
+                trimestre: en la lista aparece como botón "Earnings comment" junto al PDF.
+                Los sectorial updates funcionan igual, con "Sector comment". */}
             <div>
               <label style={LABEL}>
-                {isFicha ? "Quarter report" : "Description"}{" "}
+                {isFicha ? "Quarter report" : isSector ? "Sector comment" : "Description"}{" "}
                 <span style={{ color: "rgba(13,13,56,0.45)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(optional)</span>
               </label>
               <textarea
@@ -422,8 +429,10 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
                 onChange={(e) => setDesc(e.target.value)}
                 placeholder={isFicha
                   ? "Earnings comment for the quarter: results vs. estimates, key takeaways, changes to the thesis…"
-                  : "Brief summary or source (e.g. JPMorgan, Quant Team…)"}
-                rows={isFicha ? 6 : 2}
+                  : isSector
+                    ? "What changed in the sector: main takeaways, companies most affected, what to watch next…"
+                    : "Brief summary or source (e.g. JPMorgan, Quant Team…)"}
+                rows={isFicha || isSector ? 6 : 2}
                 disabled={isSubmitting}
                 style={{ ...INPUT, resize: "vertical", lineHeight: 1.6, opacity: isSubmitting ? 0.6 : 1 }}
               />
@@ -436,7 +445,7 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
                 <label style={LABEL}>Category</label>
                 <select value={category} onChange={(e) => handleCategoryChange(e.target.value as Category)} disabled={isSubmitting} style={{ ...INPUT, opacity: isSubmitting ? 0.6 : 1 }}>
                   <option value="fichas">Fichas</option>
-                  <option value="sectorial_updates">Sectorial Updates</option>
+                  <option value={SECTOR_CATEGORY}>Sectorial Updates</option>
                   <option value="sell_side">Sell Side</option>
                   <option value="investment_cases">Investment Cases</option>
                   <option value="client_presentations">Client Presentations</option>
@@ -544,19 +553,22 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
             )}
 
             {/* ── Company autocomplete ──────────────────────────────────── */}
-            {/* Investment cases: varias empresas, cada una con su TP y rating.
-                El resto de las categorías sigue con el ticker suelto opcional. */}
-            {isCase ? (
+            {/* Investment cases: varias empresas, cada una con su TP y rating. Sectorial
+                updates: varias empresas, sin precio. El resto sigue con el ticker suelto. */}
+            {isCase || isSector ? (
               <>
                 <div>
                   <label style={LABEL}>
-                    Companies covered <span style={{ color: "#F8485E" }}>*</span>
+                    Companies covered{" "}
+                    {isCase
+                      ? <span style={{ color: "#F8485E" }}>*</span>
+                      : <span style={{ color: "rgba(13,13,56,0.45)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(optional)</span>}
                   </label>
-                  <CaseTickersEditor value={caseTickers} onChange={setCaseTickers} disabled={isSubmitting} />
+                  <CaseTickersEditor value={caseTickers} onChange={setCaseTickers} disabled={isSubmitting} withTargets={isCase} />
                 </div>
 
                 <div>
-                  <label style={LABEL}>Case date</label>
+                  <label style={LABEL}>{isCase ? "Case date" : "Update date"}</label>
                   <input
                     type="date"
                     value={caseDate}
