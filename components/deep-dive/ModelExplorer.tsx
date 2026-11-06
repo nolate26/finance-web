@@ -11,7 +11,7 @@ import { consensusScaleFactor } from "@/lib/consensusScale";
 import { ccySuffix } from "@/lib/ccySuffix";
 import { companyEffMarketCapDetailed, companyEv, companyEvEbitda, companyPe, type LiveQuote } from "@/lib/modelMultiples";
 import ModelEstimateChart, { buildEstimateRows, buildRecommendationRows, type EstimateMetric, type EstimateRow } from "@/components/deep-dive/ModelEstimateChart";
-import LastFichaButton from "@/components/deep-dive/LastFichaButton";
+import ModelActionBar from "@/components/deep-dive/ModelActionBar";
 import { exportRowsToPdf } from "@/lib/exportPdf";
 import { webModelLink, isLocalModelLink } from "@/lib/modelLink";
 import LocalLinkNote from "@/components/deep-dive/LocalLinkNote";
@@ -892,108 +892,22 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
         </div>
       </div>
 
-      {/* ── Actions: export + version (top-right, between panel and table) ── */}
-      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-
-        {!isLatest && (
-          <button
-            onClick={() => setSelectedDate(snapshots[0].header.updateDate)}
-            style={{
-              padding: "5px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer",
-              background: C.BLUE, color: C.WHITE, border: "none", borderRadius: 5, outline: "none",
-            }}
-          >
-            ← Latest
-          </button>
-        )}
-
-        {/* Live price date — precio de mercado usado en los años proyectados */}
-        {livePrice && (
-          <span style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "5px 12px", borderRadius: 5,
-            background: C.LIVE_BG, color: C.LIVE_TXT,
-            fontWeight: 700, fontSize: 11, letterSpacing: "0.02em",
-            border: `1px solid ${C.LIVE_ACC}`,
-          }}>
-            <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.LIVE_ACC, flexShrink: 0 }} />
-            Price {fmtSmall(livePrice.value)} @ {fmtDate(livePrice.date)}
-            {/* Dual-class: el market cap proyectado sale de Bloomberg, no de precio × acciones. */}
-            {header.hasSeries && livePrice.marketCap != null && " · Mkt cap BBG (series)"}
-          </span>
-        )}
-
-        {/* Última ficha de la compañía — sólo aparece si tiene alguna */}
-        <LastFichaButton ticker={ticker} />
-
-        {/* Excel / PDF export buttons — misma grilla, distinto escritor */}
-        {([["xlsx", "Export Excel"], ["pdf", "PDF"]] as const).map(([fmt, label]) => (
-          <button
-            key={fmt}
-            onClick={() => exportToExcel(fmt)}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 5,
-              padding: "5px 12px", borderRadius: 5, cursor: "pointer",
-              background: "#001EAF", color: C.WHITE,
-              fontWeight: 700, fontSize: 11, letterSpacing: "0.02em",
-              border: "none", outline: "none",
-            }}
-          >
-            <svg width="12" height="12" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
-              <rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.3"/>
-              <path d="M4 7l3 3 3-3M7 4v6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            {label}
-          </button>
-        ))}
-
-        {/* Version selector */}
-        <div style={{ display: "flex", alignItems: "center", gap: 0, border: `2px solid ${C.TXT}`, borderRadius: 6, overflow: "hidden" }}>
-          <span style={{
-            padding: "5px 14px", background: C.HDR, color: C.WHITE,
-            fontWeight: 800, fontSize: 12, letterSpacing: "0.06em",
-            textTransform: "uppercase",
-          }}>
-            Update
-          </span>
-          <select
-            value={selectedDate}
-            onChange={e => setSelectedDate(e.target.value)}
-            style={{
-              border: "none", padding: "5px 10px",
-              fontSize: 13, ...MONO, background: C.WHITE, color: C.TXT,
-              fontWeight: 700, cursor: "pointer", outline: "none",
-              minWidth: 110,
-            }}
-          >
-            {snapshots.map(s => (
-              <option key={s.header.updateDate} value={s.header.updateDate}>
-                {fmtDate(s.header.updateDate)}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Delete this version — admins only */}
-        {isAdmin && (
-          <button
-            onClick={handleDeleteVersion}
-            disabled={deleting}
-            title="Delete this model version"
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 5,
-              padding: "5px 12px", borderRadius: 5, cursor: deleting ? "not-allowed" : "pointer",
-              background: "transparent", border: "1px solid rgba(248,72,94,0.35)",
-              color: C.RED, fontWeight: 700, fontSize: 11, letterSpacing: "0.02em", outline: "none",
-            }}
-          >
-            <svg width="12" height="12" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
-              <path d="M2 3.5h10M5.5 3.5V2.2c0-.4.3-.7.7-.7h1.6c.4 0 .7.3.7.7v1.3M3.2 3.5l.5 8c0 .5.4.9.9.9h4.8c.5 0 .9-.4.9-.9l.5-8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            {deleting ? "Deleting…" : "Delete version"}
-          </button>
-        )}
-      </div>
+      {/* ── Actions: precio, ficha, versión y export ── */}
+      <ModelActionBar
+        ticker={ticker}
+        price={livePrice && {
+          value: fmtSmall(livePrice.value),
+          date:  fmtDate(livePrice.date),
+          // Dual-class: el market cap proyectado sale de Bloomberg, no de precio × acciones.
+          note:  header.hasSeries && livePrice.marketCap != null ? "Mkt cap BBG (series)" : undefined,
+        }}
+        versions={snapshots.map(s => ({ value: s.header.updateDate, label: fmtDate(s.header.updateDate) }))}
+        selectedVersion={selectedDate}
+        onSelectVersion={setSelectedDate}
+        onExport={exportToExcel}
+        onDelete={isAdmin ? handleDeleteVersion : undefined}
+        deleting={deleting}
+      />
 
       {/* ── TABLE ─────────────────────────────────────────────────────────── */}
       <div style={{ overflow: "clip", borderRadius: 10 }}>
