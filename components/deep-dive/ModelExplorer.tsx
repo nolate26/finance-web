@@ -17,6 +17,10 @@ import { webModelLink, isLocalModelLink } from "@/lib/modelLink";
 import LocalLinkNote from "@/components/deep-dive/LocalLinkNote";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { PATRIA, FONT_PRIMARY, FONT_SECONDARY, TEXT, BORDER } from "@/lib/patriaTheme";
+import { computeBands } from "@/lib/stats";
+import { computeModelIrr, irrYears } from "@/lib/modelIrr";
+import ModelIrrPanel, { type IrrInputs, type IrrDefaults } from "@/components/deep-dive/ModelIrrPanel";
+import type { ValuationPoint } from "@/app/api/companies/[ticker]/route";
 
 // ── Estimate-evolution chart metrics (Recommendation por defecto) ───────────────
 // Orden de priorización del manual sobre fondo claro: dark-blue → blue → king-blue.
@@ -123,6 +127,11 @@ export interface ConsensusPoint {
 // ── Row types ──────────────────────────────────────────────────────────────────
 type Fmt = "abs" | "pct" | "pct_plain" | "mult" | "small";
 type RowKind = "input" | "derived" | "consensus" | "vs_consensus";
+// Peso visual de la fila (independiente de si el dato es input o derivado):
+//   main  → concepto principal, negrita king-blue
+//   sub   → ratio auxiliar, itálica gris sobre fondo tenue (márgenes, Var %, payout…)
+//   plain → dato de referencia sin énfasis (precio, market cap, múltiplos)
+type Look = "main" | "sub" | "plain";
 
 interface RowSpec {
   key:       string;
@@ -131,9 +140,16 @@ interface RowSpec {
   fmt:       Fmt;
   colorize?: boolean;
   indent?:   number;     // 0 = normal, 1 = one indent, 2 = double
+  look?:     Look;       // default: derived → sub, resto → main
+  detail?:   boolean;    // sólo visible con "Ver detalle"
   fn?:       (d: YearData, p: YearData | null) => number | null;
   bbgKeys?:  string[];
   modelFn?:  (d: YearData) => number | null;  // for vs_consensus: computes model side
+}
+
+function lookOf(row: RowSpec): Look | "vs" {
+  if (row.kind === "vs_consensus") return "vs";
+  return row.look ?? (row.kind === "derived" ? "sub" : "main");
 }
 
 interface Section {
@@ -148,30 +164,32 @@ const EBITDA_KEYS = ["ebitda"];
 const NI_KEYS     = ["ni", "net income", "net profit", "netincome", "controlling"];
 
 // ── Section definitions ────────────────────────────────────────────────────────
+// Orden y nombres según la ficha del modelo. Las filas `detail` no forman parte de la
+// ficha resumida: aparecen intercaladas en su lugar lógico al activar "Ver detalle".
 const SECTIONS: Section[] = [
   // 1. INCOME STATEMENT
   {
     key: "is", title: "Income Statement",
     rows: [
       { key: "rev",      label: "Revenue ($)",              kind: "input",   fmt: "abs",       fn: d => d.revenue },
-      { key: "rev_g",    label: "Var %",                    kind: "derived", fmt: "pct",       colorize: true, indent: 1,
-        fn: (d,p) => sgrow(d.revenue, p?.revenue ?? null) },
-      { key: "ebit",     label: "EBIT ($)",                 kind: "input",   fmt: "abs",       fn: d => d.ebit },
-      { key: "ebit_mg",  label: "EBIT Mg",                  kind: "derived", fmt: "pct_plain", indent: 1,
+      { key: "ebit",     label: "EBIT ($)",                 kind: "input",   fmt: "abs",       detail: true, fn: d => d.ebit },
+      { key: "ebit_mg",  label: "EBIT Mg",                  kind: "derived", fmt: "pct_plain", detail: true, indent: 1,
         fn: d => sdiv(d.ebit, d.revenue) },
-      { key: "da",       label: "D&A ($)",                  kind: "input",   fmt: "abs",       fn: d => d.da },
+      { key: "da",       label: "Depreciation & Amortization ($)",                  kind: "input",   fmt: "abs",       detail: true, fn: d => d.da },
       { key: "ebitda",   label: "EBITDA ($)",               kind: "input",   fmt: "abs",       fn: d => d.ebitda },
-      { key: "ebitda_g", label: "Var %",                    kind: "derived", fmt: "pct",       colorize: true, indent: 1,
-        fn: (d,p) => sgrow(d.ebitda, p?.ebitda ?? null) },
       { key: "ebitda_mg",label: "EBITDAMg",                 kind: "derived", fmt: "pct_plain", indent: 1,
         fn: d => sdiv(d.ebitda, d.revenue) },
-      { key: "nfe",      label: "Net Fin. Expenses ($)",    kind: "input",   fmt: "abs",       fn: d => d.netFinExp },
-      { key: "taxes",    label: "Taxes ($)",                kind: "input",   fmt: "abs",       fn: d => d.taxes },
+      { key: "nfe",      label: "Net Fin. Expenses ($)",    kind: "input",   fmt: "abs",       look: "plain", fn: d => d.netFinExp },
+      { key: "taxes",    label: "Taxes ($)",                kind: "input",   fmt: "abs",       detail: true, look: "plain", fn: d => d.taxes },
       { key: "ctrl_ni",  label: "Controlling Net Income ($)",kind: "input",  fmt: "abs",       fn: d => d.netIncome },
-      { key: "ni_g",     label: "Var %",                    kind: "derived", fmt: "pct",       colorize: true, indent: 1,
+      { key: "eps",      label: "Earnings per Share ($)",                  kind: "input",   fmt: "small",     detail: true, look: "plain", fn: d => d.eps },
+      { key: "shares",   label: "Shares Outstanding (mm)",            kind: "input",   fmt: "abs",       detail: true, look: "plain", fn: d => d.sharesOut },
+      { key: "rev_g",    label: "Var % Revenues",           kind: "derived", fmt: "pct",       colorize: true,
+        fn: (d,p) => sgrow(d.revenue, p?.revenue ?? null) },
+      { key: "ebitda_g", label: "Var % EBITDA",             kind: "derived", fmt: "pct",       colorize: true,
+        fn: (d,p) => sgrow(d.ebitda, p?.ebitda ?? null) },
+      { key: "ni_g",     label: "Var % Net Income",         kind: "derived", fmt: "pct",       colorize: true,
         fn: (d,p) => sgrow(d.netIncome, p?.netIncome ?? null) },
-      { key: "eps",      label: "EPS ($)",                  kind: "input",   fmt: "small",     fn: d => d.eps },
-      { key: "shares",   label: "# Shares (mm)",            kind: "input",   fmt: "abs",       fn: d => d.sharesOut },
     ],
   },
 
@@ -179,19 +197,19 @@ const SECTIONS: Section[] = [
   {
     key: "bbg", title: "Bloomberg Consensus",
     rows: [
-      { key: "bbg_rev",     label: "Revenue ($)",                    kind: "consensus",    fmt: "abs",
+      { key: "bbg_rev",     label: "Revenue ($) - Consensus",                kind: "consensus",    fmt: "abs",
         bbgKeys: REV_KEYS },
-      { key: "bbg_rev_vs",  label: "vs Consensus (%)",               kind: "vs_consensus", fmt: "pct", indent: 1,
+      { key: "bbg_rev_vs",  label: "vs Consensus (%)",                       kind: "vs_consensus", fmt: "pct", indent: 1, detail: true,
         bbgKeys: REV_KEYS,
         modelFn: d => d.revenue },
-      { key: "bbg_ebitda",  label: "EBITDA ($)",                     kind: "consensus",    fmt: "abs",
+      { key: "bbg_ebitda",  label: "EBITDA ($) - Consensus",                 kind: "consensus",    fmt: "abs",
         bbgKeys: EBITDA_KEYS },
-      { key: "bbg_eb_vs",   label: "vs Consensus (%)",               kind: "vs_consensus", fmt: "pct", indent: 1,
+      { key: "bbg_eb_vs",   label: "vs Consensus (%)",                       kind: "vs_consensus", fmt: "pct", indent: 1, detail: true,
         bbgKeys: EBITDA_KEYS,
         modelFn: d => d.ebitda },
-      { key: "bbg_ni",      label: "Controlling Net Income ($)",      kind: "consensus",    fmt: "abs",
+      { key: "bbg_ni",      label: "Controlling Net Income ($) - Consensus", kind: "consensus",    fmt: "abs",
         bbgKeys: NI_KEYS },
-      { key: "bbg_ni_vs",   label: "vs Consensus (%)",               kind: "vs_consensus", fmt: "pct", indent: 1,
+      { key: "bbg_ni_vs",   label: "vs Consensus (%)",                       kind: "vs_consensus", fmt: "pct", indent: 1, detail: true,
         bbgKeys: NI_KEYS,
         modelFn: d => d.netIncome },
     ],
@@ -201,84 +219,21 @@ const SECTIONS: Section[] = [
   {
     key: "bs", title: "Balance",
     rows: [
-      { key: "ppe",      label: "PP&E (from balance)",    kind: "input",   fmt: "abs",  fn: d => d.ppe },
-      { key: "wk",       label: "Working Capital ($)",    kind: "input",   fmt: "abs",  fn: d => d.workingCapital },
-      { key: "wk_var",   label: "WK Var",                 kind: "derived", fmt: "abs",  indent: 1,
+      { key: "ppe",      label: "Property, Plant & Equipment ($)",    kind: "input",   fmt: "abs",  detail: true, fn: d => d.ppe },
+      { key: "wk",       label: "Working Capital ($)",    kind: "input",   fmt: "abs",  detail: true, fn: d => d.workingCapital },
+      { key: "wk_var",   label: "Working Capital Change ($)",                 kind: "derived", fmt: "abs",  detail: true, indent: 1,
         fn: (d,p) => ssub(d.workingCapital, p?.workingCapital ?? null) },
-      { key: "min",      label: "Minorities ($)",          kind: "input",   fmt: "abs",  fn: d => d.minorities },
+      { key: "min",      label: "Minorities ($)",          kind: "input",   fmt: "abs",  detail: true, fn: d => d.minorities },
       { key: "ctrl_eq",  label: "Controlling Equity ($)",  kind: "input",   fmt: "abs",  fn: d => d.controllingEq },
-      { key: "tan_eq",   label: "Tangible Equity ($)",     kind: "input",   fmt: "abs",  fn: d => d.tangibleEq },
+      { key: "tan_eq",   label: "Tangible Equity ($)",     kind: "input",   fmt: "abs",  detail: true, fn: d => d.tangibleEq },
       { key: "nd",       label: "Net Debt YE ($)",         kind: "input",   fmt: "abs",  fn: d => d.netDebt },
       { key: "nd_eb",    label: "Net debt / EBITDA",       kind: "derived", fmt: "mult", indent: 1,
         fn: d => sdiv(d.netDebt, d.ebitda) },
-    ],
-  },
-
-  // 4. CASH FLOW
-  {
-    key: "cf", title: "Cash Flow",
-    rows: [
-      { key: "capex",      label: "Capex ($)",                    kind: "input",   fmt: "abs",
-        fn: d => d.capex },
-      { key: "capex_rev",  label: "% Revenues",                   kind: "derived", fmt: "pct_plain", indent: 1,
-        fn: d => d.capex !== null ? sdiv(Math.abs(d.capex), d.revenue) : null },
-      { key: "asset_s",    label: "Asset Sales ($)",              kind: "input",   fmt: "abs",
-        fn: d => d.assetSales },
-      { key: "fcf",        label: "FCF ($): CFO-CFI",             kind: "input",   fmt: "abs",
-        fn: d => d.fcf },
-      { key: "fcf_yield",  label: "FCF Yield (%)",                kind: "derived", fmt: "pct", colorize: true, indent: 1,
-        fn: d => sdiv(d.fcf, d.effMarketCap) },
-      { key: "fcfe",       label: "FCFE ($): FCF-CFF ex Divs/I",  kind: "input",   fmt: "abs",
-        fn: d => d.fcfe },
-      { key: "fcfe_yield", label: "FCFE Yield (%)",               kind: "derived", fmt: "pct", colorize: true, indent: 1,
-        fn: d => sdiv(d.fcfe, d.effMarketCap) },
-      { key: "div_bb",     label: "Dividend + Buyback",           kind: "derived", fmt: "abs",
-        fn: d => sadd(d.dividend, d.buybacks) },
-      { key: "tot_yield",  label: "Yield (%)",                    kind: "derived", fmt: "pct", colorize: true, indent: 1,
-        fn: d => {
-          const tot = sadd(d.dividend, d.buybacks);
-          return tot !== null && d.effMarketCap ? Math.abs(tot) / d.effMarketCap : null;
-        } },
-      { key: "div",        label: "Dividend ($) - negative",      kind: "input",   fmt: "abs",
-        fn: d => d.dividend },
-      { key: "payout_r",   label: "Payout - positive",            kind: "derived", fmt: "pct_plain", indent: 1,
-        fn: (d, p) =>
-          d.dividend !== null && p?.netIncome
-            ? Math.abs(d.dividend) / p.netIncome : null },
-      { key: "div_yield",  label: "Dividend Yield (%)",           kind: "derived", fmt: "pct", colorize: true, indent: 1,
-        fn: d => d.dividend !== null && d.effMarketCap
-          ? Math.abs(d.dividend) / d.effMarketCap : null },
-      { key: "dps",        label: "DPS ($) - negative",           kind: "input",   fmt: "small",
-        fn: d => d.dps },
-      { key: "buybacks",   label: "Buybacks ($) - negative",      kind: "input",   fmt: "abs",
-        fn: d => d.buybacks },
-      { key: "bb_yield",   label: "Buybacks Yield (%)",           kind: "derived", fmt: "pct", colorize: true, indent: 1,
-        fn: d => d.buybacks !== null && d.effMarketCap
-          ? Math.abs(d.buybacks) / d.effMarketCap : null },
-    ],
-  },
-
-  // 5. MARKET MULTIPLES
-  {
-    key: "mm", title: "Market Multiples",
-    rows: [
-      { key: "price",    label: "Share Price ($) - LCCY",      kind: "input",   fmt: "small",
-        fn: d => d.effPrice },
-      { key: "mktcap",   label: "Market Cap ($) - LCCY",       kind: "input",   fmt: "abs",
-        fn: d => d.effMarketCap },
-      { key: "ev",       label: "EV",                           kind: "derived", fmt: "abs",
-        fn: d => companyEv(d.effMarketCap, d.netDebt) },
-      { key: "ev_eb",    label: "EV/EBITDA",                    kind: "derived", fmt: "mult",
-        fn: d => companyEvEbitda(d.effMarketCap, d.netDebt, d.ebitda) },
-      { key: "pe",       label: "P/E",                          kind: "derived", fmt: "mult",
-        fn: d => companyPe(d.effMarketCap, d.netIncome) },
-      { key: "pbv",      label: "P/BV",                         kind: "derived", fmt: "mult",
-        fn: d => sdiv(d.effMarketCap, d.controllingEq) },
-      { key: "roe",      label: "ROE (NI / Equity)",            kind: "derived", fmt: "pct_plain",
+      { key: "roe",      label: "ROE (Net Income / Equity)",            kind: "derived", fmt: "pct_plain", look: "main",
         fn: (d,p) => sdiv(d.netIncome, p?.controllingEq ?? null) },
-      { key: "roe_tan",  label: "ROE* (NI / Tang. Equity)",     kind: "derived", fmt: "pct_plain",
+      { key: "roe_tan",  label: "ROE* (Net Income / Tangible Equity)",     kind: "derived", fmt: "pct_plain", look: "main", detail: true,
         fn: (d,p) => sdiv(d.netIncome, p?.tangibleEq ?? null) },
-      { key: "roic",     label: "ROIC (NOPAT / ND+IM+Eq)",      kind: "derived", fmt: "pct_plain",
+      { key: "roic",     label: "ROIC (NOPAT / Net Debt + Minorities + Equity)",      kind: "derived", fmt: "pct_plain", look: "main",
         fn: (d,p) => {
           if (!p) return null;
           const np = nopat(d.ebit, d.taxRate);
@@ -286,7 +241,7 @@ const SECTIONS: Section[] = [
             ? p.netDebt + p.minorities + p.controllingEq : null;
           return sdiv(np, ic);
         } },
-      { key: "roic_tan", label: "ROIC** (NOPAT / ND + IM + Tang Eq)", kind: "derived", fmt: "pct_plain",
+      { key: "roic_tan", label: "ROIC** (NOPAT / Net Debt + Minorities + Tangible Equity)", kind: "derived", fmt: "pct_plain", look: "main", detail: true,
         fn: (d,p) => {
           if (!p) return null;
           const np = nopat(d.ebit, d.taxRate);
@@ -294,7 +249,7 @@ const SECTIONS: Section[] = [
             ? p.netDebt + p.minorities + p.tangibleEq : null;
           return sdiv(np, ic);
         } },
-      { key: "roic_op",  label: "ROIC* (NOPAT / WK + PP&E)",   kind: "derived", fmt: "pct_plain",
+      { key: "roic_op",  label: "ROIC* (NOPAT / Working Capital + Property, Plant & Equipment)",   kind: "derived", fmt: "pct_plain", look: "main", detail: true,
         fn: (d,p) => {
           if (!p) return null;
           const np = nopat(d.ebit, d.taxRate);
@@ -302,11 +257,86 @@ const SECTIONS: Section[] = [
             ? p.workingCapital + p.ppe : null;
           return sdiv(np, ic);
         } },
-      { key: "taxrate",  label: "Tax rate for NOPAT/ROIC (%)",  kind: "input",   fmt: "pct_plain",
+      { key: "taxrate",  label: "Tax Rate for NOPAT / ROIC (%)",  kind: "input",   fmt: "pct_plain", look: "plain", detail: true,
         fn: d => d.taxRate },
     ],
   },
+
+  // 4. CASH FLOW
+  {
+    key: "cf", title: "Cash Flow",
+    rows: [
+      { key: "fcf",        label: "FCF ($): CFO-CFI", kind: "input",   fmt: "abs",
+        fn: d => d.fcf },
+      { key: "fcfe",       label: "FCFE ($): FCF-CFF ex Divs/I", kind: "input",   fmt: "abs",
+        fn: d => d.fcfe },
+      { key: "div_bb",     label: "Dividend + Buyback",           kind: "derived", fmt: "abs",       look: "main",
+        fn: d => sadd(d.dividend, d.buybacks) },
+      { key: "div",        label: "Dividend ($) - negative",      kind: "input",   fmt: "abs",       indent: 1,
+        fn: d => d.dividend },
+      { key: "payout_r",   label: "Payout - positive",            kind: "derived", fmt: "pct_plain", indent: 2,
+        fn: (d, p) =>
+          d.dividend !== null && p?.netIncome
+            ? Math.abs(d.dividend) / p.netIncome : null },
+      { key: "dps",        label: "Dividend per Share ($) - negative",           kind: "input",   fmt: "small",     indent: 1, look: "plain", detail: true,
+        fn: d => d.dps },
+      { key: "buybacks",   label: "Buybacks ($) - negative",      kind: "input",   fmt: "abs",       indent: 1,
+        fn: d => d.buybacks },
+      { key: "capex",      label: "Capex ($)",                    kind: "input",   fmt: "abs",
+        fn: d => d.capex },
+      { key: "capex_rev",  label: "% Revenues",                   kind: "derived", fmt: "pct_plain", indent: 1,
+        fn: d => d.capex !== null ? sdiv(Math.abs(d.capex), d.revenue) : null },
+      { key: "asset_s",    label: "Asset Sales ($)",              kind: "input",   fmt: "abs",
+        fn: d => d.assetSales },
+    ],
+  },
+
+  // 5. MARKET MULTIPLES
+  {
+    key: "mm", title: "Market Multiples",
+    rows: [
+      { key: "price",    label: "Share Price ($) - LCCY",      kind: "input",   fmt: "small", look: "plain",
+        fn: d => d.effPrice },
+      { key: "mktcap",   label: "Market Cap ($) - LCCY",       kind: "input",   fmt: "abs",   look: "plain",
+        fn: d => d.effMarketCap },
+      { key: "ev",       label: "EV",                           kind: "derived", fmt: "abs",   look: "plain",
+        fn: d => companyEv(d.effMarketCap, d.netDebt) },
+      { key: "ev_eb",    label: "EV/EBITDA",                    kind: "derived", fmt: "mult",  look: "plain",
+        fn: d => companyEvEbitda(d.effMarketCap, d.netDebt, d.ebitda) },
+      { key: "pe",       label: "P/E",                          kind: "derived", fmt: "mult",  look: "plain",
+        fn: d => companyPe(d.effMarketCap, d.netIncome) },
+      { key: "pbv",      label: "P/BV",                         kind: "derived", fmt: "mult",  look: "plain",
+        fn: d => sdiv(d.effMarketCap, d.controllingEq) },
+      { key: "fcf_yield",  label: "FCF Yield (%)",                kind: "derived", fmt: "pct", colorize: true, look: "main",
+        fn: d => sdiv(d.fcf, d.effMarketCap) },
+      { key: "fcfe_yield", label: "FCFE Yield (%)",               kind: "derived", fmt: "pct", colorize: true, look: "main",
+        fn: d => sdiv(d.fcfe, d.effMarketCap) },
+      { key: "tot_yield",  label: "Dividend + Buyback Yield (%)", kind: "derived", fmt: "pct", colorize: true, look: "main",
+        fn: d => {
+          const tot = sadd(d.dividend, d.buybacks);
+          return tot !== null && d.effMarketCap ? Math.abs(tot) / d.effMarketCap : null;
+        } },
+      { key: "div_yield",  label: "Dividend Yield (%)",           kind: "derived", fmt: "pct", colorize: true, look: "plain", indent: 1,
+        fn: d => d.dividend !== null && d.effMarketCap
+          ? Math.abs(d.dividend) / d.effMarketCap : null },
+      { key: "bb_yield",   label: "Buybacks Yield (%)",           kind: "derived", fmt: "pct", colorize: true, look: "plain", indent: 1,
+        fn: d => d.buybacks !== null && d.effMarketCap
+          ? Math.abs(d.buybacks) / d.effMarketCap : null },
+    ],
+  },
 ];
+
+// Ventana resumida: los 3 últimos años reales + los 3 primeros proyectados. Se recalcula
+// con el año calendario (mismo corte que `isEst`), así en 2027 el 2026 pasa a historia y
+// entra el 2029 sin tocar nada — si el modelo aún no trae ese año, muestra los que haya.
+const HIST_YEARS = 3;
+const EST_YEARS  = 3;
+function compactYears(years: number[], now: number): number[] {
+  return [
+    ...years.filter(y => y <  now).slice(-HIST_YEARS),
+    ...years.filter(y => y >= now).slice(0, EST_YEARS),
+  ];
+}
 
 // ── Cell renderer ──────────────────────────────────────────────────────────────
 function renderCell(value: number | null, fmt: Fmt, colorize: boolean) {
@@ -384,14 +414,39 @@ function buildKpiSections(kpis: ModelKpiRow[]): KpiSection[] {
 interface ModelExplorerProps {
   ticker:              string;
   consensusEstimates?: ConsensusPoint[];
+  /** Serie de valuation_history: da el P/E de salida sugerido (mediana 5 años del P/E Fwd). */
+  valuationHistory?:   ValuationPoint[];
 }
 
-export default function ModelExplorer({ ticker, consensusEstimates = [] }: ModelExplorerProps) {
+// Supuestos por defecto de la TIR que no salen de datos.
+const IRR_DEFAULT_HORIZON = 3;
+const IRR_DEFAULT_KE      = 0.10;
+const IRR_DEFAULT_PE_STEP = 2;
+const IRR_FALLBACK_PE     = 10;
+
+// Mediana del P/E Fwd de los últimos 5 años (desde la última fecha con dato).
+function peMedian5y(points: ValuationPoint[]): number | null {
+  const last = points.at(-1)?.date;
+  if (!last) return null;
+  const cutoff = new Date(last + "T12:00:00");
+  cutoff.setFullYear(cutoff.getFullYear() - 5);
+  const vals = points
+    .filter(p => new Date(p.date + "T12:00:00") >= cutoff)
+    .map(p => p.peFwd)
+    .filter((v): v is number => v != null && isFinite(v) && v > 0);
+  return vals.length ? computeBands(vals).median : null;
+}
+
+export default function ModelExplorer({ ticker, consensusEstimates = [], valuationHistory = [] }: ModelExplorerProps) {
   const [history,      setHistory]      = useState<ModelHistoryPayload | null>(null);
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [deleting,     setDeleting]     = useState(false);
+  const [showDetail,   setShowDetail]   = useState(false);
+  const [showIrr,      setShowIrr]      = useState(false);
+  // Sólo lo que el usuario editó; el resto sale de los defaults calculados.
+  const [irrEdits,     setIrrEdits]     = useState<Partial<IrrInputs>>({});
   const isAdmin = useIsAdmin();
 
   useEffect(() => {
@@ -400,6 +455,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
     setError(null);
     setHistory(null);
     setSelectedDate("");
+    setIrrEdits({});
 
     fetch(`/api/companies/${encodeURIComponent(ticker)}/model`)
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
@@ -506,6 +562,51 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
     [enriched],
   );
 
+  // ── TIR implícita ───────────────────────────────────────────────────────────
+  // Años proyectados utilizables (consecutivos con Net Income) desde el primero.
+  const irrYearsData = useMemo(
+    () => irrYears(enriched.filter(d => d.isEst).map(d => ({
+      year: d.year, effMarketCap: d.effMarketCap, netIncome: d.netIncome,
+      dividend: d.dividend, buybacks: d.buybacks,
+    }))),
+    [enriched],
+  );
+  // Precio que hay detrás del market cap de entrada (vivo si hay, si no el del modelo):
+  // el precio de entrada editable re-escala ese market cap por la razón de precios.
+  const irrRefPrice = enriched.find(d => d.year === irrYearsData[0]?.year)?.effPrice ?? null;
+
+  const irrDefaults = useMemo<IrrDefaults>(() => {
+    const med = peMedian5y(valuationHistory);
+    const first = enriched.find(d => d.year === irrYearsData[0]?.year);
+    const modelPe = first ? companyPe(first.effMarketCap, first.netIncome) : null;
+    const [exitPe, exitPeSource] =
+      med !== null                    ? [med,     `mediana 5A P/E Fwd ${med.toFixed(1)}x`] :
+      modelPe !== null && modelPe > 0 ? [modelPe, `P/E actual del modelo ${modelPe.toFixed(1)}x (sin histórico)`] :
+                                        [IRR_FALLBACK_PE, `${IRR_FALLBACK_PE}x (sin histórico)`];
+    return {
+      exitPe, exitPeSource,
+      entryPrice: irrRefPrice,
+      entryLabel: first?.priceIsLive ? "Mercado" : "Modelo",
+    };
+  }, [valuationHistory, enriched, irrYearsData, irrRefPrice]);
+
+  const irrInputs: IrrInputs = {
+    horizon:         Math.min(IRR_DEFAULT_HORIZON, Math.max(1, irrYearsData.length)),
+    exitPe:          irrDefaults.exitPe,
+    entryPrice:      irrDefaults.entryPrice,
+    includeBuybacks: false,
+    ke:              IRR_DEFAULT_KE,
+    peStep:          IRR_DEFAULT_PE_STEP,
+    ...irrEdits,
+  };
+  const irrResult = computeModelIrr(irrYearsData, {
+    horizon:         irrInputs.horizon,
+    exitPe:          irrInputs.exitPe,
+    entryScale:      irrInputs.entryPrice !== null && irrRefPrice ? irrInputs.entryPrice / irrRefPrice : 1,
+    includeBuybacks: irrInputs.includeBuybacks,
+  });
+  const irrHorizon = Math.min(irrInputs.horizon, irrYearsData.length);
+
   // ── Loading / error states ─────────────────────────────────────────────────
   if (loading) {
     return (
@@ -538,16 +639,24 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
   const isLatest    = selectedDate === snapshots[0]?.header.updateDate;
   const now         = new Date().getFullYear();
 
+  // Vista: resumida (ficha, 3A + 3E) o detalle (todas las filas y todos los años).
+  // El export a Excel/PDF siempre sale completo.
+  const viewYears  = showDetail ? years : compactYears(years, now);
+  const firstEst   = viewYears.find(y => y >= now);
+  const viewRows   = (s: Section) => s.rows.filter(r => showDetail || !r.detail);
+  // Separador más marcado entre el último año real y el primero proyectado.
+  const colBorder  = (yr: number) => yr === firstEst ? `2px solid ${C.HDR}` : `1px solid ${C.BDR}`;
+
   // ── Shared cell geometry ───────────────────────────────────────────────────
   const MONO: React.CSSProperties = { fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" };
   const labelSticky: React.CSSProperties = {
     position: "sticky", left: 0, zIndex: 1,
-    width: 160, minWidth: 160, maxWidth: 160,
+    width: 300, minWidth: 300, maxWidth: 300,
     borderRight: `1px solid ${C.BDR}`,
-    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+    whiteSpace: "normal", lineHeight: 1.3,
   };
-  const yearColW: React.CSSProperties = { minWidth: 74, width: 74 };
-  const CELL_PAD = "3px 6px";
+  const yearColW: React.CSSProperties = { minWidth: 90, width: 90 };
+  const CELL_PAD = "5px 8px";
 
   // ── Format update date for display ────────────────────────────────────────
   function fmtDate(iso: string) {
@@ -673,18 +782,20 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
       ]);
 
       for (const row of section.rows) {
-        const isDerived   = row.kind === "derived";
+        const look        = lookOf(row);
+        const isDerived   = look === "sub";
+        const isPlain     = look === "plain";
         const isConsensus = row.kind === "consensus";
-        const isVsCons    = row.kind === "vs_consensus";
+        const isVsCons    = look === "vs";
         const indent = "  ".repeat(row.indent ?? 0);
 
         rows.push([
           xc(`${indent}${row.label}`, {
             font: {
-              bold:   !isDerived && !isVsCons,
+              bold:   !isDerived && !isVsCons && !isPlain,
               italic: isDerived,
               sz:     10,
-              color:  { rgb: isDerived || isVsCons ? "5A5A85" : "2044DC" },
+              color:  { rgb: isDerived || isVsCons ? "5A5A85" : isPlain || isConsensus ? "0D0D38" : "2044DC" },
             },
             fill:      isDerived ? F_DRV : F_WHITE,
             alignment: { horizontal: "left" },
@@ -724,7 +835,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
             }
 
             return xc(text, {
-              font:      { name: "Arial", sz: 10, bold: !isDerived && !isVsCons, italic: isDerived, color: { rgb: fColor } },
+              font:      { name: "Arial", sz: 10, bold: !isDerived && !isVsCons && !isPlain, italic: isDerived, color: { rgb: fColor } },
               fill:      fFill,
               alignment: { horizontal: "center" },
               border:    bdr(),
@@ -790,7 +901,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
       }
     }
     ws["!ref"]  = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length - 1, c: years.length } });
-    ws["!cols"] = [{ wch: 30 }, ...years.map(() => ({ wch: 12 }))];
+    ws["!cols"] = [{ wch: 55 }, ...years.map(() => ({ wch: 12 }))];
     ws["!views"] = [{ state: "frozen", xSplit: 1, ySplit: metaItems.length + 2 }];
 
     const wb = XLSX.utils.book_new();
@@ -847,6 +958,16 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                       background: upsideCurrent > 0 ? "rgba(0,30,175,0.12)" : "rgba(248,72,94,0.12)",
                       color: upsideCurrent > 0 ? C.GREEN : C.RED,
                     }}>{fmtPct(upsideCurrent)}</span>
+                  : <span style={{ color: C.TXT2 }}>—</span> },
+              { label: `Implied IRR (${irrHorizon}Y)`, value: irrResult.irr !== null
+                  ? <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                      <span style={{
+                        padding: "1px 10px", borderRadius: 4, fontWeight: 800, ...MONO,
+                        background: irrResult.irr >= irrInputs.ke ? "rgba(0,30,175,0.12)" : "rgba(248,72,94,0.12)",
+                        color: irrResult.irr >= irrInputs.ke ? C.GREEN : C.RED,
+                      }}>{fmtPct(irrResult.irr, true)}</span>
+                      <span style={{ fontSize: 10.5, color: C.TXT2, ...MONO }}>exit P/E {irrInputs.exitPe.toFixed(1)}x</span>
+                    </span>
                   : <span style={{ color: C.TXT2 }}>—</span> },
               { label: "Thesis",          value: header.thesis
                   ? <span style={{ color: C.TXT, fontStyle: "italic" }}>{header.thesis}</span>
@@ -909,6 +1030,67 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
         deleting={deleting}
       />
 
+      {/* ── View toggle: ficha resumida ↔ detalle completo ─────────────────── */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", padding: "0 2px" }}>
+        <span style={{ fontSize: 12, color: C.TXT2, fontFamily: FONT_SECONDARY }}>
+          {showDetail
+            ? `Detalle completo · ${years.length} años`
+            : `Vista resumida · ${viewYears.filter(y => y < now).length} reales + ${viewYears.filter(y => y >= now).length} proyectados`}
+        </span>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button
+          type="button"
+          onClick={() => setShowDetail(v => !v)}
+          aria-pressed={showDetail}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "4px 12px", borderRadius: 5, cursor: "pointer",
+            border: `1px solid ${C.ACC}`,
+            background: showDetail ? C.ACC : C.WHITE,
+            color:      showDetail ? C.WHITE : C.ACC,
+            fontFamily: FONT_SECONDARY, fontWeight: 700, fontSize: 12.5, letterSpacing: "0.02em",
+          }}
+        >
+          <svg width="10" height="10" viewBox="0 0 12 12" fill="none"
+            style={{ transform: showDetail ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>
+            <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          {showDetail ? "Vista resumida" : "Ver detalle"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowIrr(v => !v)}
+          aria-pressed={showIrr}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "4px 12px", borderRadius: 5, cursor: "pointer",
+            border: `1px solid ${C.ACC}`,
+            background: showIrr ? C.ACC : C.WHITE,
+            color:      showIrr ? C.WHITE : C.ACC,
+            fontFamily: FONT_SECONDARY, fontWeight: 700, fontSize: 12.5, letterSpacing: "0.02em",
+          }}
+        >
+          TIR automática
+          {irrResult.irr !== null && (
+            <span style={{ ...MONO, fontWeight: 800, opacity: 0.85 }}>· {fmtPct(irrResult.irr, true)}</span>
+          )}
+        </button>
+        </div>
+      </div>
+
+      {showIrr && (
+        <ModelIrrPanel
+          inputs={irrInputs}
+          defaults={irrDefaults}
+          onChange={patch => setIrrEdits(prev => ({ ...prev, ...patch }))}
+          onReset={() => setIrrEdits({})}
+          result={irrResult}
+          years={irrYearsData}
+          refPrice={irrRefPrice}
+          ccyLabel={ccySuffix(header.currency, header.unit)}
+        />
+      )}
+
       {/* ── TABLE ─────────────────────────────────────────────────────────── */}
       <div style={{ overflow: "clip", borderRadius: 10 }}>
       {/* Scroll propio en los dos ejes: sin alto máximo el contenedor nunca scrollea en
@@ -921,7 +1103,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
         maxHeight: "calc(100dvh - 120px)",
         padding: "0 12px 12px",
       }}>
-        <table style={{ borderCollapse: "collapse", fontSize: 11, tableLayout: "fixed", width: "100%" }}>
+        <table style={{ borderCollapse: "collapse", fontSize: 13, tableLayout: "fixed", width: "100%" }}>
 
           {/* Year header */}
           <thead>
@@ -931,12 +1113,12 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                 // Regla 1 — título principal: dark-blue, blanco, MAYÚSCULAS, Aptos Bold.
                 padding: "7px 10px", background: C.HDR, color: C.WHITE,
                 fontFamily: FONT_PRIMARY,
-                fontWeight: 700, fontSize: 10, letterSpacing: "0.06em",
+                fontWeight: 700, fontSize: 12, letterSpacing: "0.06em",
                 textTransform: "uppercase", textAlign: "left",
               }}>
-                Reported CCY{ccySuffix(header.currency, header.unit)}
+                CCY{ccySuffix(header.currency, header.unit)}
               </th>
-              {years.map(yr => {
+              {viewYears.map(yr => {
                 const isEst = yr >= now;
                 return (
                   <th key={yr} style={{
@@ -944,11 +1126,11 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                     padding: "7px 7px", textAlign: "center",
                     background: C.HDR,
                     color: isEst ? "#FFBB8D" : C.WHITE,
-                    fontWeight: 700, fontSize: 11,
-                    borderLeft: `1px solid rgba(255,255,255,0.10)`,
+                    fontWeight: 700, fontSize: 14,
+                    borderLeft: yr === firstEst ? `2px solid rgba(255,255,255,0.35)` : `1px solid rgba(255,255,255,0.10)`,
                     ...MONO,
                   }}>
-                    {yr}{isEst ? <span style={{ fontSize: 8, opacity: 0.8, marginLeft: 1 }}>E</span> : ""}
+                    {yr}{isEst ? "E" : ""}
                   </th>
                 );
               })}
@@ -960,12 +1142,13 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
             {SECTIONS.map(section => (
               <React.Fragment key={section.key}>
                 <tr>
-                  <td colSpan={years.length + 1} style={{
-                    // Regla 2 — subtítulo: king-blue, texto blanco, Arial Bold.
+                  <td colSpan={viewYears.length + 1} style={{
+                    // Banda de sección en dark-blue (como la ficha del modelo); el
+                    // king-blue queda para las sub-secciones de KPI.
                     ...labelSticky, position: "sticky", left: 0,
-                    padding: "4px 10px", background: C.SEC_SUB, color: C.WHITE,
+                    padding: "4px 10px", background: C.HDR, color: C.WHITE,
                     fontFamily: FONT_SECONDARY,
-                    fontWeight: 700, fontSize: 10, letterSpacing: "0.10em",
+                    fontWeight: 700, fontSize: 11.5, letterSpacing: "0.10em",
                     textTransform: "uppercase", maxWidth: "none",
                     borderTop: "2px solid rgba(255,255,255,0.05)",
                   }}>
@@ -973,10 +1156,12 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                   </td>
                 </tr>
 
-                {section.rows.map(row => {
-                  const isDerived    = row.kind === "derived";
+                {viewRows(section).map(row => {
+                  const look         = lookOf(row);
+                  const isDerived    = look === "sub";
+                  const isPlain      = look === "plain";
                   const isConsensus  = row.kind === "consensus";
-                  const isVsCons     = row.kind === "vs_consensus";
+                  const isVsCons     = look === "vs";
                   const rowBg        = isDerived ? C.DRV_BG : C.WHITE;
                   const paddingLeft  = 10 + (row.indent ?? 0) * 14;
 
@@ -996,16 +1181,16 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                         paddingLeft,
                         background: rowBg,
                         fontFamily: FONT_SECONDARY,
-                        color:      isDerived || isVsCons ? C.TXT2 : isConsensus ? C.TXT : C.IND,
-                        fontWeight: isDerived || isVsCons ? 400 : 700,
+                        color:      isDerived || isVsCons ? C.TXT2 : isConsensus || isPlain ? C.TXT : C.IND,
+                        fontWeight: isDerived || isVsCons || isPlain ? 400 : 700,
                         fontStyle:  isDerived ? "italic" : "normal",
-                        fontSize:   isDerived || isVsCons ? 10.5 : 11,
+                        fontSize:   isDerived || isVsCons ? 12.5 : 13,
                       }}>
                         {row.label}
                       </td>
 
                       {/* Value cells */}
-                      {years.map(yr => {
+                      {viewYears.map(yr => {
                         const d    = byYear.get(yr)!;
                         const prev = byYear.get(yr - 1) ?? null;
                         const isEst = d.isEst;
@@ -1040,8 +1225,8 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                           return (
                             <td key={yr} style={{
                               ...yearColW, padding: CELL_PAD, textAlign: "center",
-                              borderLeft: `1px solid ${C.BDR}`, ...MONO,
-                              fontSize: 10.5, background: cellBg,
+                              borderLeft: colBorder(yr), ...MONO,
+                              fontSize: 12.5, background: cellBg,
                               ...vstyle,
                             }}>
                               {value === null ? "—" : fmtPct(value, false)}
@@ -1061,10 +1246,10 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                             // El subrayado turquesa marca "precio de mercado" sin
                             // necesidad de un relleno fuerte que compita con la tabla.
                             boxShadow:  liveCell ? `inset 0 -2px 0 ${C.LIVE_ACC}` : undefined,
-                            fontWeight: liveCell ? 800 : isDerived ? 400 : 600,
+                            fontWeight: liveCell ? 800 : isDerived || isPlain ? 400 : 600,
                             fontStyle:  isDerived ? "italic" : "normal",
-                            fontSize:   isDerived ? 10.5 : 11,
-                            borderLeft: `1px solid ${C.BDR}`,
+                            fontSize:   isDerived ? 12.5 : 13,
+                            borderLeft: colBorder(yr),
                             ...MONO,
                           }}>
                             {text}
@@ -1082,12 +1267,12 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
               <>
                 {/* KPI master header */}
                 <tr>
-                  <td colSpan={years.length + 1} style={{
+                  <td colSpan={viewYears.length + 1} style={{
                     // Regla 1 — título principal del bloque KPI.
                     ...labelSticky, position: "sticky", left: 0,
                     padding: "4px 10px", background: C.HDR, color: C.WHITE,
                     fontFamily: FONT_PRIMARY,
-                    fontWeight: 700, fontSize: 10, letterSpacing: "0.10em",
+                    fontWeight: 700, fontSize: 11.5, letterSpacing: "0.10em",
                     textTransform: "uppercase", maxWidth: "none",
                     borderTop: "2px solid rgba(255,255,255,0.05)",
                   }}>
@@ -1099,12 +1284,12 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                   <React.Fragment key={`kpisec-${sectionName}`}>
                     {/* Sub-section header */}
                     <tr>
-                      <td colSpan={years.length + 1} style={{
+                      <td colSpan={viewYears.length + 1} style={{
                         // Regla 2 — subtítulo: king-blue con texto BLANCO Arial Bold.
                         ...labelSticky, position: "sticky", left: 0,
                         padding: "3px 16px", background: C.SEC_SUB, color: C.WHITE,
                         fontFamily: FONT_SECONDARY,
-                        fontWeight: 700, fontSize: 10, letterSpacing: "0.08em",
+                        fontWeight: 700, fontSize: 11.5, letterSpacing: "0.08em",
                         textTransform: "uppercase", maxWidth: "none",
                         borderTop: `1px solid rgba(255,255,255,0.07)`,
                       }}>
@@ -1129,11 +1314,11 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                             ...labelSticky, padding: CELL_PAD, paddingLeft: 22,
                             background: hasPct ? C.DRV_BG : C.WHITE,
                             fontFamily: FONT_SECONDARY,
-                            color: C.IND, fontWeight: 700, fontSize: 11,
+                            color: C.IND, fontWeight: 700, fontSize: 13,
                           }}>
                             {kpiName}
                           </td>
-                          {years.map(yr => {
+                          {viewYears.map(yr => {
                             const v    = kByYear.get(yr) ?? null;
                             const isEst = (byYear.get(yr)?.isEst) ?? false;
                             const { text, color } = renderCell(v, fmt, false);
@@ -1141,8 +1326,8 @@ export default function ModelExplorer({ ticker, consensusEstimates = [] }: Model
                               <td key={yr} style={{
                                 ...yearColW, padding: CELL_PAD, textAlign: "center",
                                 background: hasPct ? C.DRV_BG : isEst ? C.EST_BG : C.WHITE,
-                                color: hasPct ? C.BLUE : color, fontWeight: 600, fontSize: 11,
-                                borderLeft: `1px solid ${C.BDR}`, ...MONO,
+                                color: hasPct ? C.BLUE : color, fontWeight: 600, fontSize: 13,
+                                borderLeft: colBorder(yr), ...MONO,
                               }}>
                                 {text}
                               </td>

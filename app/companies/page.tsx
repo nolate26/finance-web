@@ -630,6 +630,7 @@ function CompaniesPageContent() {
                     <ModelExplorer
                       ticker={selectedItem!.ticker}
                       consensusEstimates={deepDive.consensusEstimates}
+                      valuationHistory={deepDive.valuationHistory}
                     />
                   )}
 
