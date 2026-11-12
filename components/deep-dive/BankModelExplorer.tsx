@@ -12,11 +12,14 @@ import { ccySuffix } from "@/lib/ccySuffix";
 import { bankEffMarketCap, bankPe } from "@/lib/modelMultiples";
 import ModelEstimateChart, { buildEstimateRows, type EstimateMetric, type EstimateRow } from "@/components/deep-dive/ModelEstimateChart";
 import ModelActionBar from "@/components/deep-dive/ModelActionBar";
+import ReviseModelModal, { ReviseButton } from "@/components/deep-dive/ReviseModelModal";
 import { exportRowsToPdf } from "@/lib/exportPdf";
 import { webModelLink, isLocalModelLink } from "@/lib/modelLink";
 import LocalLinkNote from "@/components/deep-dive/LocalLinkNote";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { PATRIA, FONT_PRIMARY, FONT_SECONDARY, TEXT, BORDER } from "@/lib/patriaTheme";
+import { computeModelIrr, irrYears } from "@/lib/modelIrr";
+import ModelIrrPanel, { exitMultipleOf, type IrrInputs, type IrrDefaults } from "@/components/deep-dive/ModelIrrPanel";
 
 // ── Estimate-evolution chart metrics (Net Income default) ────────────────────────
 // Banks don't carry EBITDA / FCFE, so we track the closest analogues.
@@ -111,6 +114,11 @@ function enrich(financials: BankFinancialRow[], livePrice: number | null): YearD
 // ── Row types ──────────────────────────────────────────────────────────────────
 type Fmt = "money" | "pct" | "mult";
 type RowKind = "raw" | "derived" | "consensus" | "vs_consensus";
+// Peso visual de la fila (mismo criterio que ModelExplorer):
+//   main  → concepto principal, negrita king-blue
+//   sub   → ratio auxiliar, itálica gris sobre fondo tenue
+//   plain → dato de referencia sin énfasis (precio, market cap, múltiplos)
+type Look = "main" | "sub" | "plain";
 
 interface RowSpec {
   key:       string;
@@ -119,9 +127,16 @@ interface RowSpec {
   fmt:       Fmt;
   indent?:   number;
   colorize?: boolean;                                   // pct rows: blue/red + signed
+  look?:     Look;                                      // default: derived → sub, resto → main
+  detail?:   boolean;                                   // sólo visible con "Ver detalle"
   fn?:       (y: number, by: Map<number, YearData>) => number | null;
   conKeys?:  string[];                                  // consensus / vs_consensus metric match
   modelFn?:  (d: YearData) => number | null;            // vs_consensus: model side
+}
+
+function lookOf(row: RowSpec): Look | "vs" {
+  if (row.kind === "vs_consensus") return "vs";
+  return row.look ?? (row.kind === "derived" ? "sub" : "main");
 }
 
 interface Section {
@@ -170,36 +185,42 @@ function peg2(y: number, by: Map<number, YearData>): number | null {
   return pe / cagrPct;
 }
 
-// ── Section definitions (Vista Analista order) ──────────────────────────────────
+// ROE sobre patrimonio de cierre del año anterior (mismo criterio que la fila ROE).
+const roeOf = (by: Map<number, YearData>, y: number): number | null =>
+  divz(fld(by, y, "controllingNetIncome"), fld(by, y - 1, "controllingEquity"));
+
+// ── Section definitions ────────────────────────────────────────────────────────
+// Mismo formato que la ficha de empresas (ModelExplorer): las filas `detail` no
+// forman parte de la vista resumida y aparecen en su lugar lógico con "Ver detalle".
 const SECTIONS: Section[] = [
   // 1. INCOME STATEMENT
   {
     key: "is", title: "Income Statement",
     rows: [
-      { key: "nii",        label: "Net interest income ($)",   kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "netInterestIncome") },
-      { key: "nii_pr",     label: "% Revenues",                kind: "derived", fmt: "pct", indent: 1, fn: (y, by) => divz(fld(by, y, "netInterestIncome"), fld(by, y, "revenue")) },
-      { key: "nfi",        label: "Net fee income ($)",        kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "netFeeIncome") },
-      { key: "nfi_pr",     label: "% Revenues",                kind: "derived", fmt: "pct", indent: 1, fn: (y, by) => divz(fld(by, y, "netFeeIncome"), fld(by, y, "revenue")) },
-      { key: "treas",      label: "Treasury income ($)",       kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "treasuryIncome") },
-      { key: "treas_pr",   label: "% Revenues",                kind: "derived", fmt: "pct", indent: 1, fn: (y, by) => divz(fld(by, y, "treasuryIncome"), fld(by, y, "revenue")) },
-      { key: "other",      label: "Other income ($)",          kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "otherIncome") },
-      { key: "other_pr",   label: "% Revenues",                kind: "derived", fmt: "pct", indent: 1, fn: (y, by) => divz(fld(by, y, "otherIncome"), fld(by, y, "revenue")) },
-      { key: "rev",        label: "Revenue ($)",               kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "revenue") },
-      { key: "rev_yoy",    label: "Var %",                     kind: "derived", fmt: "pct", colorize: true, indent: 1, fn: (y, by) => yoy(fld(by, y, "revenue"), fld(by, y - 1, "revenue")) },
-      { key: "nim",        label: "NIM (%)",                   kind: "raw",     fmt: "pct", fn: (y, by) => fld(by, y, "nim") },
-      { key: "prov",       label: "Provision expenses ($)",    kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "provisionExpenses") },
-      { key: "cor",        label: "CoR (%)",                   kind: "raw",     fmt: "pct", fn: (y, by) => fld(by, y, "cor") },
-      { key: "ra_nim",     label: "Risk adjusted NIM (%)",     kind: "raw",     fmt: "pct", fn: (y, by) => fld(by, y, "riskAdjustedNim") },
-      { key: "sga",        label: "SG&A ($)",                  kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "sga") },
-      { key: "sga_yoy",    label: "Var %",                     kind: "derived", fmt: "pct", colorize: true, indent: 1, fn: (y, by) => yoy(fld(by, y, "sga"), fld(by, y - 1, "sga")) },
-      { key: "eff",        label: "Efficiency (%)",            kind: "raw",     fmt: "pct", fn: (y, by) => fld(by, y, "efficiency") },
-      { key: "cta",        label: "Cost to assets (%)",        kind: "raw",     fmt: "pct", fn: (y, by) => fld(by, y, "costToAssets") },
-      { key: "ebt",        label: "EBT ($)",                   kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "ebt") },
-      { key: "taxes",      label: "Taxes ($)",                 kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "taxes") },
-      { key: "cni",        label: "Controlling Net Income ($)", kind: "raw",    fmt: "money", fn: (y, by) => fld(by, y, "controllingNetIncome") },
-      { key: "cni_yoy",    label: "Var %",                     kind: "derived", fmt: "pct", colorize: true, indent: 1, fn: (y, by) => yoy(fld(by, y, "controllingNetIncome"), fld(by, y - 1, "controllingNetIncome")) },
-      { key: "eps",        label: "EPS ($)",                   kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "eps") },
-      { key: "shares",     label: "# Shares (mn)",             kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "shares") },
+      { key: "rev",        label: "Revenue ($)",                    kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "revenue") },
+      { key: "rev_yoy",    label: "Var %",                          kind: "derived", fmt: "pct", colorize: true, indent: 1, fn: (y, by) => yoy(fld(by, y, "revenue"), fld(by, y - 1, "revenue")) },
+      { key: "nii",        label: "Net interest income ($)",        kind: "raw",     fmt: "money", look: "plain", indent: 1, fn: (y, by) => fld(by, y, "netInterestIncome") },
+      { key: "nii_pr",     label: "% Revenues",                     kind: "derived", fmt: "pct", indent: 2, detail: true, fn: (y, by) => divz(fld(by, y, "netInterestIncome"), fld(by, y, "revenue")) },
+      { key: "nim",        label: "NIM (%) - NII / IEA",            kind: "raw",     fmt: "pct", look: "plain", indent: 2, fn: (y, by) => fld(by, y, "nim") },
+      { key: "cor",        label: "CoR (%) - Provisions / Loans",   kind: "raw",     fmt: "pct", look: "plain", indent: 2, fn: (y, by) => fld(by, y, "cor") },
+      { key: "ra_nim",     label: "Risk adjusted NIM (%)",          kind: "raw",     fmt: "pct", look: "plain", indent: 3, fn: (y, by) => fld(by, y, "riskAdjustedNim") },
+      { key: "nfi",        label: "Net fee income ($)",             kind: "raw",     fmt: "money", look: "plain", indent: 1, detail: true, fn: (y, by) => fld(by, y, "netFeeIncome") },
+      { key: "nfi_pr",     label: "% Revenues",                     kind: "derived", fmt: "pct", indent: 2, detail: true, fn: (y, by) => divz(fld(by, y, "netFeeIncome"), fld(by, y, "revenue")) },
+      { key: "treas",      label: "Treasury income ($)",            kind: "raw",     fmt: "money", look: "plain", indent: 1, detail: true, fn: (y, by) => fld(by, y, "treasuryIncome") },
+      { key: "treas_pr",   label: "% Revenues",                     kind: "derived", fmt: "pct", indent: 2, detail: true, fn: (y, by) => divz(fld(by, y, "treasuryIncome"), fld(by, y, "revenue")) },
+      { key: "other",      label: "Other income ($)",               kind: "raw",     fmt: "money", look: "plain", indent: 1, detail: true, fn: (y, by) => fld(by, y, "otherIncome") },
+      { key: "other_pr",   label: "% Revenues",                     kind: "derived", fmt: "pct", indent: 2, detail: true, fn: (y, by) => divz(fld(by, y, "otherIncome"), fld(by, y, "revenue")) },
+      { key: "prov",       label: "Provision expenses ($)",         kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "provisionExpenses") },
+      { key: "sga",        label: "SG&A ($)",                       kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "sga") },
+      { key: "sga_yoy",    label: "Var %",                          kind: "derived", fmt: "pct", colorize: true, indent: 1, fn: (y, by) => yoy(fld(by, y, "sga"), fld(by, y - 1, "sga")) },
+      { key: "eff",        label: "Efficiency (%)",                 kind: "raw",     fmt: "pct", look: "plain", indent: 1, fn: (y, by) => fld(by, y, "efficiency") },
+      { key: "cta",        label: "Cost to assets (%)",             kind: "raw",     fmt: "pct", look: "plain", indent: 1, detail: true, fn: (y, by) => fld(by, y, "costToAssets") },
+      { key: "ebt",        label: "EBT ($)",                        kind: "raw",     fmt: "money", detail: true, fn: (y, by) => fld(by, y, "ebt") },
+      { key: "taxes",      label: "Taxes ($)",                      kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "taxes") },
+      { key: "cni",        label: "Controlling Net Income ($)",     kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "controllingNetIncome") },
+      { key: "cni_yoy",    label: "Var %",                          kind: "derived", fmt: "pct", colorize: true, indent: 1, fn: (y, by) => yoy(fld(by, y, "controllingNetIncome"), fld(by, y - 1, "controllingNetIncome")) },
+      { key: "eps",        label: "EPS ($)",                        kind: "raw",     fmt: "money", look: "plain", detail: true, fn: (y, by) => fld(by, y, "eps") },
+      { key: "shares",     label: "# Shares (mn)",                  kind: "raw",     fmt: "money", look: "plain", detail: true, fn: (y, by) => fld(by, y, "shares") },
     ],
   },
 
@@ -207,10 +228,10 @@ const SECTIONS: Section[] = [
   {
     key: "bbg", title: "Bloomberg Consensus",
     rows: [
-      { key: "bbg_rev",    label: "Revenue ($)",               kind: "consensus",    fmt: "money", conKeys: REV_KEYS },
-      { key: "bbg_rev_vs", label: "vs Consensus (%)",          kind: "vs_consensus", fmt: "pct", indent: 1, conKeys: REV_KEYS, modelFn: d => d.revenue ?? null },
-      { key: "bbg_ni",     label: "Controlling Net Income ($)", kind: "consensus",   fmt: "money", conKeys: NI_KEYS },
-      { key: "bbg_ni_vs",  label: "vs Consensus (%)",          kind: "vs_consensus", fmt: "pct", indent: 1, conKeys: NI_KEYS, modelFn: d => d.controllingNetIncome ?? null },
+      { key: "bbg_rev",    label: "Revenue ($)",                    kind: "consensus",    fmt: "money", detail: true, conKeys: REV_KEYS },
+      { key: "bbg_rev_vs", label: "vs Consensus (%)",               kind: "vs_consensus", fmt: "pct", indent: 1, detail: true, conKeys: REV_KEYS, modelFn: d => d.revenue ?? null },
+      { key: "bbg_ni",     label: "Controlling Net Income ($)",     kind: "consensus",    fmt: "money", conKeys: NI_KEYS },
+      { key: "bbg_ni_vs",  label: "vs Consensus (%)",               kind: "vs_consensus", fmt: "pct", indent: 1, conKeys: NI_KEYS, modelFn: d => d.controllingNetIncome ?? null },
     ],
   },
 
@@ -218,37 +239,37 @@ const SECTIONS: Section[] = [
   {
     key: "bs", title: "Balance",
     rows: [
-      { key: "gloans",   label: "Gross loans ($)",                 kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "grossLoans") },
-      { key: "allow",    label: "Allowances for loan losses ($)",  kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "allowancesLoanLosses") },
-      { key: "vprov",    label: "Voluntary provisions ($)",        kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "voluntaryProvisions") },
-      { key: "overdue",  label: "Overdue loans ($)",               kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "overdueLoans") },
-      { key: "sec",      label: "Securities ($)",                  kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "securities") },
-      { key: "iea",      label: "Interest earning assets ($)",     kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "interestEarningAssets") },
-      { key: "tassets",  label: "Total assets ($)",                kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "totalAssets") },
-      { key: "ddep",     label: "Demand deposits ($)",             kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "demandDeposits") },
-      { key: "tdep",     label: "Time deposits ($)",               kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "timeDeposits") },
-      { key: "totdep",   label: "Total deposits ($)",              kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "totalDeposits") },
-      { key: "ibl",      label: "Interest bearing liabilities ($)", kind: "raw",    fmt: "money", fn: (y, by) => fld(by, y, "interestBearingLiabilities") },
-      { key: "tfund",    label: "Total funding ($)",               kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "totalFunding") },
-      { key: "ceq",      label: "Controlling Equity ($)",          kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "controllingEquity") },
-      { key: "teq",      label: "Tangible Equity ($)",             kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "tangibleEquity") },
-      { key: "a_e",      label: "Assets / Equity",                 kind: "derived", fmt: "mult", fn: (y, by) => divz(fld(by, y, "totalAssets"), fld(by, y, "controllingEquity")) },
-      { key: "l_d",      label: "Loans / Deposits",                kind: "derived", fmt: "mult", fn: (y, by) => divz(fld(by, y, "grossLoans"), fld(by, y, "totalDeposits")) },
-      { key: "d_f",      label: "Deposits / Funding",              kind: "derived", fmt: "mult", fn: (y, by) => divz(fld(by, y, "totalDeposits"), fld(by, y, "totalFunding")) },
-      { key: "div_bb",   label: "Dividend + Buyback",              kind: "derived", fmt: "money", fn: (y, by) => divBuyback(by, y) },
-      { key: "dbb_yld",  label: "Yield (%)",                       kind: "derived", fmt: "pct", colorize: true, indent: 1, fn: (y, by) => divz(divBuyback(by, y), effMcap(by, y)) },
+      { key: "iea",      label: "Interest earning assets ($)",      kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "interestEarningAssets") },
+      { key: "gloans",   label: "Gross loans ($)",                  kind: "raw",     fmt: "money", indent: 1, fn: (y, by) => fld(by, y, "grossLoans") },
+      { key: "gl_yoy",   label: "Var %",                            kind: "derived", fmt: "pct", colorize: true, indent: 1, fn: (y, by) => yoy(fld(by, y, "grossLoans"), fld(by, y - 1, "grossLoans")) },
+      { key: "allow",    label: "Allowances for loan losses ($)",   kind: "raw",     fmt: "money", indent: 1, look: "plain", detail: true, fn: (y, by) => fld(by, y, "allowancesLoanLosses") },
+      { key: "vprov",    label: "Voluntary provisions ($)",         kind: "raw",     fmt: "money", indent: 1, look: "plain", detail: true, fn: (y, by) => fld(by, y, "voluntaryProvisions") },
+      { key: "overdue",  label: "Overdue loans ($)",                kind: "raw",     fmt: "money", indent: 1, look: "plain", detail: true, fn: (y, by) => fld(by, y, "overdueLoans") },
+      { key: "sec",      label: "Securities ($)",                   kind: "raw",     fmt: "money", indent: 1, look: "plain", detail: true, fn: (y, by) => fld(by, y, "securities") },
+      { key: "tassets",  label: "Total assets ($)",                 kind: "raw",     fmt: "money", detail: true, fn: (y, by) => fld(by, y, "totalAssets") },
+      { key: "totdep",   label: "Total deposits ($)",               kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "totalDeposits") },
+      { key: "ddep",     label: "Demand deposits ($)",              kind: "raw",     fmt: "money", indent: 1, look: "plain", detail: true, fn: (y, by) => fld(by, y, "demandDeposits") },
+      { key: "tdep",     label: "Time deposits ($)",                kind: "raw",     fmt: "money", indent: 1, look: "plain", detail: true, fn: (y, by) => fld(by, y, "timeDeposits") },
+      { key: "d_f",      label: "Deposits / Funding",               kind: "derived", fmt: "mult", indent: 1, fn: (y, by) => divz(fld(by, y, "totalDeposits"), fld(by, y, "totalFunding")) },
+      { key: "l_d",      label: "Loans / Deposits",                 kind: "derived", fmt: "mult", indent: 1, detail: true, fn: (y, by) => divz(fld(by, y, "grossLoans"), fld(by, y, "totalDeposits")) },
+      { key: "ibl",      label: "Interest bearing liabilities ($)", kind: "raw",     fmt: "money", detail: true, fn: (y, by) => fld(by, y, "interestBearingLiabilities") },
+      { key: "tfund",    label: "Total funding ($)",                kind: "raw",     fmt: "money", detail: true, fn: (y, by) => fld(by, y, "totalFunding") },
+      { key: "ceq",      label: "Controlling Equity ($)",           kind: "raw",     fmt: "money", detail: true, fn: (y, by) => fld(by, y, "controllingEquity") },
+      { key: "teq",      label: "Tangible Equity ($)",              kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "tangibleEquity") },
+      { key: "a_e",      label: "Assets / Equity",                  kind: "derived", fmt: "mult", look: "main", fn: (y, by) => divz(fld(by, y, "totalAssets"), fld(by, y, "controllingEquity")) },
+      { key: "roe",      label: "ROE (NI / Equity)",                kind: "derived", fmt: "pct", look: "main", detail: true, fn: (y, by) => roeOf(by, y) },
     ],
   },
 
-  // 4. CASH FLOW / RETURNS
+  // 4. CASH FLOW / RETURNS — fuera de la vista resumida (la ficha lleva yield y payout
+  // en Market Multiples); sólo aparece con "Ver detalle".
   {
     key: "cf", title: "Cash Flow / Returns",
     rows: [
-      { key: "div",     label: "Dividend ($)",         kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "dividend") },
-      { key: "payout",  label: "Payout",               kind: "raw",     fmt: "pct", fn: (y, by) => fld(by, y, "payout") },
-      { key: "div_yld", label: "Dividend Yield (%)",   kind: "derived", fmt: "pct", colorize: true, indent: 1, fn: (y, by) => divz(neg(fld(by, y, "dividend")), effMcap(by, y)) },
-      { key: "dps",     label: "DPS ($)",              kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "dps") },
-      { key: "bb",      label: "Buybacks ($)",         kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "buybacks") },
+      { key: "div_bb",  label: "Dividend + Buyback",   kind: "derived", fmt: "money", look: "main", detail: true, fn: (y, by) => divBuyback(by, y) },
+      { key: "div",     label: "Dividend ($)",         kind: "raw",     fmt: "money", indent: 1, detail: true, fn: (y, by) => fld(by, y, "dividend") },
+      { key: "dps",     label: "DPS ($)",              kind: "raw",     fmt: "money", indent: 1, look: "plain", detail: true, fn: (y, by) => fld(by, y, "dps") },
+      { key: "bb",      label: "Buybacks ($)",         kind: "raw",     fmt: "money", indent: 1, detail: true, fn: (y, by) => fld(by, y, "buybacks") },
     ],
   },
 
@@ -256,17 +277,38 @@ const SECTIONS: Section[] = [
   {
     key: "mm", title: "Market Multiples",
     rows: [
-      { key: "price",   label: "Share Price ($) - LCCY", kind: "raw",     fmt: "money", fn: (y, by) => by.get(y)?.effPrice ?? null },
-      { key: "mktcap",  label: "Market Cap ($) - LCCY",  kind: "raw",     fmt: "money", fn: (y, by) => effMcap(by, y) },
-      { key: "pe",      label: "P/E",                    kind: "derived", fmt: "mult", fn: (y, by) => peRatio(by, y) },
-      { key: "ptbv",    label: "P/TBV",                  kind: "derived", fmt: "mult", fn: (y, by) => divz(effMcap(by, y), fld(by, y, "tangibleEquity")) },
-      { key: "roe",     label: "ROE (NI / Equity)",      kind: "derived", fmt: "pct", fn: (y, by) => divz(fld(by, y, "controllingNetIncome"), fld(by, y - 1, "controllingEquity")) },
-      { key: "roe_t",   label: "ROE* (NI / Tang. Equity)", kind: "derived", fmt: "pct", fn: (y, by) => divz(fld(by, y, "controllingNetIncome"), fld(by, y - 1, "tangibleEquity")) },
-      { key: "peg1",    label: "PEG (PE / next year EPS g%)", kind: "derived", fmt: "mult", fn: (y, by) => peg1(y, by) },
-      { key: "peg2",    label: "PEG (PE / next 2y EPS CAGR)", kind: "derived", fmt: "mult", fn: (y, by) => peg2(y, by) },
+      { key: "price",   label: "Share Price ($) - LCCY",       kind: "raw",     fmt: "money", fn: (y, by) => by.get(y)?.effPrice ?? null },
+      { key: "mktcap",  label: "Market Cap ($) - LCCY",        kind: "raw",     fmt: "money", fn: (y, by) => effMcap(by, y) },
+      { key: "pe",      label: "P/E",                          kind: "derived", fmt: "mult", fn: (y, by) => peRatio(by, y) },
+      { key: "pbv",     label: "P/BV",                         kind: "derived", fmt: "mult", detail: true, fn: (y, by) => divz(effMcap(by, y), fld(by, y, "controllingEquity")) },
+      { key: "ptbv",    label: "P/TBV",                        kind: "derived", fmt: "mult", fn: (y, by) => divz(effMcap(by, y), fld(by, y, "tangibleEquity")) },
+      { key: "roe_t",   label: "ROE* (NI / Tang. Equity)",     kind: "derived", fmt: "pct", fn: (y, by) => divz(fld(by, y, "controllingNetIncome"), fld(by, y - 1, "tangibleEquity")) },
+      { key: "peg1",    label: "PEG (PE / next year EPS g%)",  kind: "derived", fmt: "mult", detail: true, fn: (y, by) => peg1(y, by) },
+      { key: "peg2",    label: "PEG (PE / next 2y EPS CAGR)",  kind: "derived", fmt: "mult", detail: true, fn: (y, by) => peg2(y, by) },
+      { key: "dbb_yld", label: "Dividend + Buyback Yield (%)", kind: "derived", fmt: "pct", colorize: true, fn: (y, by) => divz(divBuyback(by, y), effMcap(by, y)) },
+      { key: "div_yld", label: "Dividend Yield (%)",           kind: "derived", fmt: "pct", colorize: true, indent: 1, detail: true, fn: (y, by) => divz(neg(fld(by, y, "dividend")), effMcap(by, y)) },
+      { key: "bb_yld",  label: "Buybacks Yield (%)",           kind: "derived", fmt: "pct", colorize: true, indent: 1, detail: true, fn: (y, by) => divz(neg(fld(by, y, "buybacks")), effMcap(by, y)) },
+      { key: "payout",  label: "Net Income Payout",            kind: "raw",     fmt: "pct", look: "sub", indent: 1, fn: (y, by) => fld(by, y, "payout") },
     ],
   },
 ];
+
+// Ventana resumida: 3 últimos años reales + 3 primeros proyectados, recalculada con el
+// año calendario (mismo corte que `isEst`) — ver compactYears en ModelExplorer.
+const HIST_YEARS = 3;
+const EST_YEARS  = 3;
+function compactYears(years: number[], now: number): number[] {
+  return [
+    ...years.filter(y => y <  now).slice(-HIST_YEARS),
+    ...years.filter(y => y >= now).slice(0, EST_YEARS),
+  ];
+}
+
+// Supuestos por defecto de la TIR de bancos que no salen de datos.
+const IRR_DEFAULT_HORIZON  = 3;
+const IRR_DEFAULT_KE       = 0.12;
+const IRR_DEFAULT_GROWTH   = 0.04;
+const IRR_DEFAULT_ROE_STEP = 0.02;
 
 // ── Cell renderer ──────────────────────────────────────────────────────────────
 function renderCell(value: number | null, fmt: Fmt, colorize: boolean): { text: string; color: string } {
@@ -375,6 +417,13 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
   const [error,        setError]        = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [deleting,     setDeleting]     = useState(false);
+  const [showDetail,   setShowDetail]   = useState(false);
+  const [showIrr,      setShowIrr]      = useState(false);
+  // Sólo lo que el usuario editó; el resto sale de los defaults calculados.
+  const [irrEdits,     setIrrEdits]     = useState<Partial<IrrInputs>>({});
+  const [revising,     setRevising]     = useState(false);
+  // Se incrementa tras una revisión manual para volver a pedir el historial.
+  const [reloadKey,    setReloadKey]    = useState(0);
   const isAdmin = useIsAdmin();
 
   useEffect(() => {
@@ -383,6 +432,7 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
     setError(null);
     setHistory(null);
     setSelectedDate("");
+    setIrrEdits({});
 
     fetch(`/api/companies/${encodeURIComponent(ticker)}/bank-model`)
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
@@ -392,7 +442,7 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
       })
       .catch(e => setError(String(e)))
       .finally(() => setLoading(false));
-  }, [ticker]);
+  }, [ticker, reloadKey]);
 
   const snapshot = useMemo(
     () => history?.snapshots.find(s => s.header.updateDate === selectedDate) ?? history?.snapshots[0] ?? null,
@@ -483,6 +533,61 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
     [enriched],
   );
 
+  // ── TIR implícita (salida por P/BV teórico) ─────────────────────────────────
+  // Base de salida = Controlling Equity del año N; múltiplo = (ROE − g) / (Ke − g).
+  const irrYearsData = useMemo(
+    () => irrYears(enriched.filter(d => d.isEst).map(d => ({
+      year: d.year, effMarketCap: d.effMarketCap, exitBase: d.controllingEquity,
+      dividend: d.dividend, buybacks: d.buybacks,
+    }))),
+    [enriched],
+  );
+  const irrRefPrice = enriched.find(d => d.year === irrYearsData[0]?.year)?.effPrice ?? null;
+  const irrHorizonRaw = (irrEdits.horizon ?? IRR_DEFAULT_HORIZON);
+  const irrHorizon    = Math.max(1, Math.min(irrHorizonRaw, irrYearsData.length));
+
+  // ROE sostenible sugerido: el ROE proyectado del año de salida (sigue al horizonte
+  // mientras no se edite).
+  const irrDefaults = useMemo<IrrDefaults>(() => {
+    const exitYear = irrYearsData[irrHorizon - 1]?.year;
+    const roe = exitYear !== undefined ? roeOf(byYear, exitYear) : null;
+    const first = enriched.find(d => d.year === irrYearsData[0]?.year);
+    return {
+      exitPe: 0, exitPeSource: "",          // sólo aplica a empresas (modo pe)
+      sustRoe:   roe ?? IRR_DEFAULT_KE,
+      roeSource: roe !== null ? `ROE ${exitYear}E del modelo ${(roe * 100).toFixed(1)}%` : "sin ROE en el modelo (= Ke)",
+      entryPrice: irrRefPrice,
+      entryLabel: first?.priceIsLive ? "Mercado" : "Modelo",
+    };
+  }, [irrYearsData, irrHorizon, byYear, enriched, irrRefPrice]);
+
+  const irrInputs: IrrInputs = {
+    horizon:         irrHorizon,
+    exitPe:          0,
+    sustRoe:         irrDefaults.sustRoe,
+    growth:          IRR_DEFAULT_GROWTH,
+    entryPrice:      irrDefaults.entryPrice,
+    includeBuybacks: true,
+    ke:              IRR_DEFAULT_KE,
+    peStep:          0,
+    roeStep:         IRR_DEFAULT_ROE_STEP,
+    divOverrides:    {},
+    baseOverrides:   {},
+    ...irrEdits,
+  };
+  const irrMultiple = exitMultipleOf("pbv", irrInputs);
+  const irrAsOf     = new Date();
+  const irrResult   = computeModelIrr(irrYearsData, {
+    horizon:         irrInputs.horizon,
+    exitMultiple:    irrMultiple ?? 0,
+    entryScale:      irrInputs.entryPrice !== null && irrRefPrice ? irrInputs.entryPrice / irrRefPrice : 1,
+    includeBuybacks: irrInputs.includeBuybacks,
+    asOf:            irrAsOf,
+    divOverrides:    irrInputs.divOverrides,
+    baseOverrides:   irrInputs.baseOverrides,
+  });
+  if (irrMultiple === null && irrYearsData.length > 0) irrResult.issue = "Ke ≤ g: el P/BV teórico no está definido.";
+
   // ── Loading / error states ─────────────────────────────────────────────────
   if (loading) {
     return (
@@ -515,16 +620,23 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
   const isLatest    = selectedDate === snapshots[0]?.header.updateDate;
   const now         = new Date().getFullYear();
 
+  // Vista: resumida (3A + 3E) o detalle (todas las filas y años). El export sale completo.
+  const viewYears = showDetail ? years : compactYears(years, now);
+  const firstEst  = viewYears.find(y => y >= now);
+  const viewRows  = (s: Section) => s.rows.filter(r => showDetail || !r.detail);
+  // Separador más marcado entre el último año real y el primero proyectado.
+  const colBorder = (yr: number) => yr === firstEst ? `2px solid ${C.HDR}` : `1px solid ${C.BDR}`;
+
   // ── Shared cell geometry ───────────────────────────────────────────────────
   const MONO: React.CSSProperties = { fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" };
   const labelSticky: React.CSSProperties = {
     position: "sticky", left: 0, zIndex: 1,
-    width: 200, minWidth: 200, maxWidth: 200,
+    width: 300, minWidth: 300, maxWidth: 300,
     borderRight: `1px solid ${C.BDR}`,
-    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+    whiteSpace: "normal", lineHeight: 1.3,
   };
-  const yearColW: React.CSSProperties = { minWidth: 78, width: 78 };
-  const CELL_PAD = "3px 6px";
+  const yearColW: React.CSSProperties = { minWidth: 90, width: 90 };
+  const CELL_PAD = "5px 8px";
 
   function fmtDate(iso: string) {
     const [y, m, d] = iso.split("-");
@@ -633,12 +745,15 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
       ]);
 
       for (const row of section.rows) {
-        const isDerived = row.kind === "derived";
-        const isVs      = row.kind === "vs_consensus";
+        const look      = lookOf(row);
+        const isDerived = look === "sub";
+        const isPlain   = look === "plain";
+        const isVs      = look === "vs";
+        const isCon     = row.kind === "consensus";
         const indent    = "  ".repeat(row.indent ?? 0);
         rows.push([
           xc(`${indent}${row.label}`, {
-            font: { bold: !isDerived && !isVs, italic: isDerived || isVs, sz: 10, color: { rgb: isDerived || isVs ? "5A5A85" : "2044DC" } },
+            font: { bold: !isDerived && !isVs && !isPlain, italic: isDerived || isVs, sz: 10, color: { rgb: isDerived || isVs ? "5A5A85" : isPlain || isCon ? "0D0D38" : "2044DC" } },
             fill: isDerived ? F_DRV : F_WHITE, alignment: { horizontal: "left" },
           }),
           ...years.map(yr => {
@@ -661,7 +776,7 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
               if (row.key === "price" && byYear.get(yr)?.priceIsLive) { cellFill = F_LIVE; fColor = "0D0D38"; }
             }
             return xc(text, {
-              font: { name: "Arial", sz: 10, bold: !isDerived && !isVs, italic: isDerived || isVs, color: { rgb: fColor } },
+              font: { name: "Arial", sz: 10, bold: !isDerived && !isVs && !isPlain, italic: isDerived || isVs, color: { rgb: fColor } },
               fill: cellFill, alignment: { horizontal: "center" }, border: bdr(),
             });
           }),
@@ -715,7 +830,7 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
       }
     }
     ws["!ref"]  = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length - 1, c: years.length } });
-    ws["!cols"] = [{ wch: 34 }, ...years.map(() => ({ wch: 12 }))];
+    ws["!cols"] = [{ wch: 40 }, ...years.map(() => ({ wch: 12 }))];
     ws["!views"] = [{ state: "frozen", xSplit: 1, ySplit: metaItems.length + 2 }];
 
     const wb = XLSX.utils.book_new();
@@ -772,6 +887,18 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
                       color: upsideCurrent > 0 ? C.GREEN : C.RED,
                     }}>{fmtPct(upsideCurrent, true)}</span>
                   : <span style={{ color: C.TXT2 }}>—</span> },
+              { label: `Implied IRR (${irrHorizon}Y)`, value: irrResult.irr !== null
+                  ? <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                      <span style={{
+                        padding: "1px 10px", borderRadius: 4, fontWeight: 800, ...MONO,
+                        background: irrResult.irr >= irrInputs.ke ? "rgba(0,30,175,0.12)" : "rgba(248,72,94,0.12)",
+                        color: irrResult.irr >= irrInputs.ke ? C.GREEN : C.RED,
+                      }}>{fmtPct(irrResult.irr)}</span>
+                      {irrMultiple !== null && (
+                        <span style={{ fontSize: 10.5, color: C.TXT2, ...MONO }}>exit P/BV {irrMultiple.toFixed(1)}x</span>
+                      )}
+                    </span>
+                  : <span style={{ color: C.TXT2 }}>—</span> },
               { label: "Thesis",          value: header.thesis
                   ? <span style={{ color: C.TXT, fontStyle: "italic" }}>{header.thesis}</span>
                   : <span style={{ color: C.TXT2 }}>—</span> },
@@ -802,6 +929,8 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
             ))}
           </tbody>
         </table>
+        {/* Sólo sobre la última versión: la revisión copia sus estimaciones. */}
+        {isLatest && <ReviseButton onClick={() => setRevising(true)} />}
         </div>
 
         {/* ── Right half: estimate evolution chart ── */}
@@ -815,6 +944,16 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
         </div>
       </div>
 
+      {revising && (
+        <ReviseModelModal
+          kind="bank"
+          ticker={ticker}
+          current={{ updateDate: header.updateDate, recc: header.recc, tp: header.tp, thesis: header.thesis }}
+          onClose={() => setRevising(false)}
+          onSaved={() => { setRevising(false); setReloadKey(k => k + 1); }}
+        />
+      )}
+
       {/* ── Actions: precio, ficha, versión y export ── */}
       <ModelActionBar
         ticker={ticker}
@@ -827,32 +966,96 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
         deleting={deleting}
       />
 
+      {/* ── View toggle + TIR ─────────────────────────────────────────────── */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", padding: "0 2px" }}>
+        <span style={{ fontSize: 12, color: C.TXT2, fontFamily: FONT_SECONDARY }}>
+          {showDetail
+            ? `Detalle completo · ${years.length} años`
+            : `Vista resumida · ${viewYears.filter(y => y < now).length} reales + ${viewYears.filter(y => y >= now).length} proyectados`}
+        </span>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={() => setShowDetail(v => !v)}
+            aria-pressed={showDetail}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "4px 12px", borderRadius: 5, cursor: "pointer",
+              border: `1px solid ${C.ACC}`,
+              background: showDetail ? C.ACC : C.WHITE,
+              color:      showDetail ? C.WHITE : C.ACC,
+              fontFamily: FONT_SECONDARY, fontWeight: 700, fontSize: 12.5, letterSpacing: "0.02em",
+            }}
+          >
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none"
+              style={{ transform: showDetail ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>
+              <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            {showDetail ? "Vista resumida" : "Ver detalle"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowIrr(v => !v)}
+            aria-pressed={showIrr}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "4px 12px", borderRadius: 5, cursor: "pointer",
+              border: `1px solid ${C.ACC}`,
+              background: showIrr ? C.ACC : C.WHITE,
+              color:      showIrr ? C.WHITE : C.ACC,
+              fontFamily: FONT_SECONDARY, fontWeight: 700, fontSize: 12.5, letterSpacing: "0.02em",
+            }}
+          >
+            TIR automática
+            {irrResult.irr !== null && (
+              <span style={{ ...MONO, fontWeight: 800, opacity: 0.85 }}>· {fmtPct(irrResult.irr)}</span>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {showIrr && (
+        <ModelIrrPanel
+          mode="pbv"
+          baseLabel="Controlling Equity"
+          inputs={irrInputs}
+          defaults={irrDefaults}
+          onChange={patch => setIrrEdits(prev => ({ ...prev, ...patch }))}
+          onReset={() => setIrrEdits({})}
+          result={irrResult}
+          years={irrYearsData}
+          refPrice={irrRefPrice}
+          asOf={irrAsOf}
+          ccyLabel={ccySuffix(header.currency, header.unit)}
+        />
+      )}
+
       {/* ── TABLE ─────────────────────────────────────────────────────────── */}
       <div style={{ overflow: "clip", borderRadius: 10 }}>
       {/* Scroll propio en los dos ejes (ver ModelExplorer): sin alto máximo la fila de
           años no tiene contra qué pegarse y se pierde al bajar por la tabla. */}
       <div style={{ background: C.WHITE, overflow: "auto", maxHeight: "calc(100dvh - 120px)", padding: "0 12px 12px" }}>
-        <table style={{ borderCollapse: "collapse", fontSize: 11, tableLayout: "fixed", width: "100%" }}>
+        <table style={{ borderCollapse: "collapse", fontSize: 13, tableLayout: "fixed", width: "100%" }}>
           <thead>
             <tr>
               <th style={{
                 ...labelSticky, position: "sticky", left: 0, top: 0, zIndex: 3,
                 // Regla 1 — título principal: dark-blue, blanco, MAYÚSCULAS, Aptos Bold.
                 padding: "7px 10px", background: C.HDR, color: C.WHITE, fontFamily: FONT_PRIMARY,
-                fontWeight: 700, fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", textAlign: "left",
+                fontWeight: 700, fontSize: 12, letterSpacing: "0.06em", textTransform: "uppercase", textAlign: "left",
               }}>
-                Reported CCY{ccySuffix(header.currency, header.unit)}
+                CCY{ccySuffix(header.currency, header.unit)}
               </th>
-              {years.map(yr => {
+              {viewYears.map(yr => {
                 const isEst = yr >= now;
                 return (
                   <th key={yr} style={{
                     ...yearColW, position: "sticky", top: 0, zIndex: 2,
                     padding: "7px 7px", textAlign: "center", background: C.HDR,
-                    color: isEst ? "#FFBB8D" : C.WHITE, fontWeight: 700, fontSize: 11,
-                    borderLeft: `1px solid rgba(255,255,255,0.10)`, ...MONO,
+                    color: isEst ? "#FFBB8D" : C.WHITE, fontWeight: 700, fontSize: 14,
+                    borderLeft: yr === firstEst ? `2px solid rgba(255,255,255,0.35)` : `1px solid rgba(255,255,255,0.10)`, ...MONO,
                   }}>
-                    {yr}{isEst ? <span style={{ fontSize: 8, opacity: 0.8, marginLeft: 1 }}>E</span> : ""}
+                    {yr}{isEst ? "E" : ""}
                   </th>
                 );
               })}
@@ -860,23 +1063,26 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
           </thead>
 
           <tbody>
-            {SECTIONS.map(section => (
+            {/* Una sección sin filas visibles (Cash Flow en la vista resumida) no se dibuja. */}
+            {SECTIONS.filter(s => viewRows(s).length > 0).map(section => (
               <React.Fragment key={section.key}>
                 <tr>
-                  <td colSpan={years.length + 1} style={{
+                  <td colSpan={viewYears.length + 1} style={{
                     ...labelSticky, position: "sticky", left: 0,
-                    // Regla 2 — subtítulo: king-blue, texto blanco, Arial Bold.
-                    padding: "4px 10px", background: C.SEC_SUB, color: C.WHITE, fontFamily: FONT_SECONDARY,
-                    fontWeight: 700, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase",
+                    // Banda de sección en dark-blue (como la ficha); king-blue queda para KPI.
+                    padding: "4px 10px", background: C.HDR, color: C.WHITE, fontFamily: FONT_SECONDARY,
+                    fontWeight: 700, fontSize: 11.5, letterSpacing: "0.10em", textTransform: "uppercase",
                     maxWidth: "none", borderTop: "2px solid rgba(255,255,255,0.05)",
                   }}>
                     {section.title}
                   </td>
                 </tr>
 
-                {section.rows.map(row => {
-                  const isDerived = row.kind === "derived";
-                  const isVs      = row.kind === "vs_consensus";
+                {viewRows(section).map(row => {
+                  const look      = lookOf(row);
+                  const isDerived = look === "sub";
+                  const isPlain   = look === "plain";
+                  const isVs      = look === "vs";
                   const isCon     = row.kind === "consensus";
                   const rowBg     = isDerived ? C.DRV_BG : C.WHITE;
                   const paddingLeft = 10 + (row.indent ?? 0) * 14;
@@ -891,25 +1097,25 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
                         ...labelSticky, padding: CELL_PAD, paddingLeft,
                         background: rowBg,
                         fontFamily: FONT_SECONDARY,
-                        color:      isDerived || isVs ? C.TXT2 : isCon ? C.TXT : C.IND,
-                        fontWeight: isDerived || isVs ? 400 : 700,
+                        color:      isDerived || isVs ? C.TXT2 : isCon || isPlain ? C.TXT : C.IND,
+                        fontWeight: isDerived || isVs || isPlain ? 400 : 700,
                         fontStyle:  isDerived || isVs ? "italic" : "normal",
-                        fontSize:   isDerived || isVs ? 10.5 : 11,
+                        fontSize:   isDerived || isVs ? 12.5 : 13,
                       }}>
                         {row.label}
                       </td>
 
-                      {years.map(yr => {
+                      {viewYears.map(yr => {
                         const value = rowValue(row, yr, byYear, getConsensus);
                         const isEst = (byYear.get(yr)?.isEst) ?? false;
-                        const cellBg = isDerived ? C.DRV_BG : (isCon || row.kind === "raw") && isEst ? C.EST_BG : C.WHITE;
+                        const cellBg = isDerived ? C.DRV_BG : !isVs && isEst ? C.EST_BG : C.WHITE;
 
                         if (isVs) {
                           const vstyle = vsConStyle(value);
                           return (
                             <td key={yr} style={{
                               ...yearColW, padding: CELL_PAD, textAlign: "center",
-                              borderLeft: `1px solid ${C.BDR}`, ...MONO, fontSize: 10.5,
+                              borderLeft: colBorder(yr), ...MONO, fontSize: 12.5,
                               background: cellBg, ...vstyle,
                             }}>
                               {value === null ? "-" : fmtPct(value, true)}
@@ -927,10 +1133,10 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
                             background: liveCell ? C.LIVE_BG : cellBg,
                             color:      liveCell ? C.LIVE_TXT : color,
                             boxShadow:  liveCell ? `inset 0 -2px 0 ${C.LIVE_ACC}` : undefined,
-                            fontWeight: isDerived ? 400 : 600,
+                            fontWeight: isDerived || isPlain ? 400 : 600,
                             fontStyle:  isDerived ? "italic" : "normal",
-                            fontSize:   isDerived ? 10.5 : 11,
-                            borderLeft: `1px solid ${C.BDR}`, ...MONO,
+                            fontSize:   isDerived ? 12.5 : 13,
+                            borderLeft: colBorder(yr), ...MONO,
                           }}>
                             {text}
                           </td>
@@ -946,11 +1152,11 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
             {kpiSections.length > 0 && (
               <>
                 <tr>
-                  <td colSpan={years.length + 1} style={{
+                  <td colSpan={viewYears.length + 1} style={{
                     ...labelSticky, position: "sticky", left: 0,
                     // Regla 1 — título principal del bloque KPI.
                     padding: "4px 10px", background: C.HDR, color: C.WHITE, fontFamily: FONT_PRIMARY,
-                    fontWeight: 700, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase",
+                    fontWeight: 700, fontSize: 11.5, letterSpacing: "0.10em", textTransform: "uppercase",
                     maxWidth: "none", borderTop: "2px solid rgba(255,255,255,0.05)",
                   }}>
                     KPI
@@ -960,10 +1166,10 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
                 {kpiSections.map(({ sectionName, kpis }) => (
                   <React.Fragment key={`kpisec-${sectionName}`}>
                     <tr>
-                      <td colSpan={years.length + 1} style={{
+                      <td colSpan={viewYears.length + 1} style={{
                         ...labelSticky, position: "sticky", left: 0,
                         padding: "3px 16px", background: C.SEC_SUB, color: C.WHITE, fontFamily: FONT_SECONDARY,
-                        fontWeight: 700, fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase",
+                        fontWeight: 700, fontSize: 11.5, letterSpacing: "0.08em", textTransform: "uppercase",
                         maxWidth: "none", borderTop: `1px solid rgba(255,255,255,0.07)`,
                       }}>
                         {sectionName}
@@ -983,11 +1189,11 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
                           <td style={{
                             ...labelSticky, padding: CELL_PAD, paddingLeft: 22,
                             background: hasPct ? C.DRV_BG : C.WHITE, fontFamily: FONT_SECONDARY,
-                            color: C.IND, fontWeight: 700, fontSize: 11,
+                            color: C.IND, fontWeight: 700, fontSize: 13,
                           }}>
                             {kpiName}
                           </td>
-                          {years.map(yr => {
+                          {viewYears.map(yr => {
                             const v = kByYear.get(yr) ?? null;
                             const isEst = (byYear.get(yr)?.isEst) ?? false;
                             const { text, color } = renderCell(v, fmt, false);
@@ -995,8 +1201,8 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
                               <td key={yr} style={{
                                 ...yearColW, padding: CELL_PAD, textAlign: "center",
                                 background: hasPct ? C.DRV_BG : isEst ? C.EST_BG : C.WHITE,
-                                color: hasPct ? C.BLUE : color, fontWeight: 600, fontSize: 11,
-                                borderLeft: `1px solid ${C.BDR}`, ...MONO,
+                                color: hasPct ? C.BLUE : color, fontWeight: 600, fontSize: 13,
+                                borderLeft: colBorder(yr), ...MONO,
                               }}>
                                 {text}
                               </td>

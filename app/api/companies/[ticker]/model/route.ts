@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { normalizeTicker } from "@/lib/issuer";
 import { requireAdmin } from "@/lib/auth";
+import { handleRevision } from "@/lib/modelRevision";
 
 export const dynamic = "force-dynamic";
 
@@ -212,6 +213,16 @@ export async function GET(
     console.error("[model]", e);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
+}
+
+// ── PATCH — revisión manual de recomendación / TP / tesis (cualquier usuario) ──────
+// Crea una versión de hoy con las mismas estimaciones; ver lib/modelRevision.ts.
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ ticker: string }> },
+) {
+  const { ticker: rawTicker } = await params;
+  return handleRevision("company", req, normalizeTicker(decodeURIComponent(rawTicker)));
 }
 
 // ── DELETE — borra una versión (snapshot) del modelo por updateDate (solo admin) ──

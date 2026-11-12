@@ -33,12 +33,15 @@ const INPUT: React.CSSProperties = {
 };
 
 export default function CaseTickersEditor({
-  value, onChange, disabled = false, withTargets = true,
+  value, onChange, disabled = false, withTargets = true, placeholder, emptyHint,
 }: {
   value:    CaseTicker[];
   onChange: (next: CaseTicker[]) => void;
   disabled?: boolean;
   withTargets?: boolean;
+  /** Textos propios para otros usos (fichas); por defecto, los de casos / sectoriales. */
+  placeholder?: string;
+  emptyHint?:   string;
 }) {
   // El combobox se remonta al agregar (cambia la key) para que se limpie solo:
   // mantiene su propio texto interno y no se vacía con un value controlado.
@@ -75,16 +78,16 @@ export default function CaseTickersEditor({
             onChange={add}
             disabled={disabled}
             includeUniverse
-            placeholder={value.length ? "Add another company…" : withTargets ? "Search the company this case covers…" : "Search a company in this update…"}
+            placeholder={value.length ? "Add another company…" : placeholder ?? (withTargets ? "Search the company this case covers…" : "Search a company in this update…")}
           />
         </div>
       </div>
 
       {value.length === 0 && (
         <p style={{ fontSize: 11, color: TEXT.muted, margin: 0, fontStyle: "italic" }}>
-          {withTargets
+          {emptyHint ?? (withTargets
             ? "Pick at least one company. Each one gets its own target price and rating."
-            : "Add every company this update covers. It will also show in their profiles."}
+            : "Add every company this update covers. It will also show in their profiles.")}
         </p>
       )}
 

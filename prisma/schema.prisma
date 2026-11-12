@@ -1089,6 +1089,7 @@ model EmpresasIndustriasV2 {
   yahooFinanceTicker String?  @map("yahoo_finance_ticker") // <-- NUEVA COLUMNA AGREGADA
 
   fichas             Ficha[]
+  fichasMulti        FichaTicker[]
   presentaciones     PresentationTicker[]
 
   // @@index([tickerBloomberg]) eliminado: era un duplicado literal del índice que ya
@@ -1107,13 +1108,21 @@ model EmpresasIndustriasV2 {
 // reemplaza a la anterior — la fila se borra y su PDF se elimina de R2. La decisión es
 // de espacio: interesa la foto vigente, no el archivo histórico. El quarter
 // (fiscal_year + quarter, "2Q26") dice a qué trimestre corresponde esa foto.
+//
+// Fichas MULTI-empresa: `ticker` va en NULL y las empresas viven en `ficha_tickers`.
+// Se identifican por el TÍTULO (sin distinguir mayúsculas): subir otra multi con el
+// mismo título reemplaza a la anterior (fila + PDF), como pasa con el ticker en las
+// individuales. En la UI van en una lista aparte. NULL no choca con el único.
 model Ficha {
   id          String   @id @default(uuid())
-  ticker      String   @unique @db.VarChar(100)   // empresas_industrias_v2.ticker_bloomberg
+  ticker      String?  @unique @db.VarChar(100)   // empresas_industrias_v2.ticker_bloomberg; NULL = multi
   // Trimestre del informe, separado para ordenar/filtrar sin parsear texto.
   // Se muestra siempre como "<quarter>Q<yy>" (lib/quarters.ts).
   fiscalYear  Int      @map("fiscal_year")
   quarter     Int      // 1..4
+  // Fichas MENSUALES: el mes (1..12). NULL = ficha trimestral. Si viene, `quarter`
+  // es el que contiene al mes (oct → 4), así el orden por quarter sigue sirviendo.
+  month       Int?
   title       String   @db.VarChar(300)
   description String?  @db.Text
   fileUrl     String   @map("file_url") @db.VarChar(1000)
@@ -1125,10 +1134,26 @@ model Ficha {
 
   // Restrict: no se puede borrar una empresa de la maestra mientras tenga ficha;
   // primero hay que borrarla (y así tampoco quedan PDFs huérfanos en R2).
-  empresa     EmpresasIndustriasV2 @relation(fields: [ticker], references: [tickerBloomberg], onDelete: Restrict)
+  empresa     EmpresasIndustriasV2? @relation(fields: [ticker], references: [tickerBloomberg], onDelete: Restrict)
+  tickers     FichaTicker[]
 
   @@index([fiscalYear, quarter])
   @@map("fichas")
+}
+
+// Empresas de una ficha multi. Mismo patrón que presentation_tickers: cascade con la
+// ficha, restrict con la maestra.
+model FichaTicker {
+  id      String @id @default(uuid())
+  fichaId String @map("ficha_id")
+  ticker  String @db.VarChar(100)   // empresas_industrias_v2.ticker_bloomberg
+
+  ficha   Ficha                @relation(fields: [fichaId], references: [id], onDelete: Cascade)
+  empresa EmpresasIndustriasV2 @relation(fields: [ticker], references: [tickerBloomberg], onDelete: Restrict)
+
+  @@unique([fichaId, ticker])
+  @@index([ticker])
+  @@map("ficha_tickers")
 }
 
  

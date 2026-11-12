@@ -1,5 +1,6 @@
 import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { normRecc, reccChanged, reccDirection, thesisChanged, tpChanged } from "@/lib/reccChange";
 
 // Avisos del Research Hub por Telegram. Un bot publica en dos grupos:
 //   · "model"        → TELEGRAM_CHAT_MODELS: entra un modelo nuevo por /api/ingest (compañía o banco).
@@ -40,6 +41,10 @@ export type NotifyEvent =
       analyst?:   string | null;
       thesis?:    string | null;
       link?:      string | null;
+      /** Versión anterior: si llega, el mensaje muestra el cambio (SELL → BUY, TP viejo → nuevo). */
+      previous?:  { recc: string | null; tp: number | null; thesis: string | null; updateDate: Date } | null;
+      /** Revisión manual desde la app (mismas estimaciones): quién la hizo. */
+      revisedBy?: string | null;
     }
   | {
       kind:      "task_done";
@@ -137,17 +142,57 @@ async function modelMessage(e: ModelEvent): Promise<string> {
     e.link ? `<a href="${esc(e.link)}">Analyst spreadsheet</a>` : null,
   ].filter(Boolean).join("  ·  ");
 
+  const prev       = e.previous ?? null;
+  const recc       = normRecc(e.recc);
+  const reccMoved  = prev ? reccChanged(prev.recc, e.recc) : false;
+  const tpMoved    = prev ? tpChanged(prev.tp, e.tp) : false;
+  const newThesis  = prev ? thesisChanged(prev.thesis, e.thesis) : false;
+  const direction  = reccMoved ? reccDirection(prev!.recc, e.recc) : null;
+  const revision   = e.revisedBy !== undefined;
+
+  // Encabezado: en una revisión manual dice qué cambió; en un modelo nuevo sigue siendo
+  // MODEL UPDATE. Si la recomendación se movió, va "SELL → BUY" en la primera línea, que
+  // es lo que se ve en la notificación del teléfono.
+  const title = !revision          ? "MODEL UPDATE"
+              : direction === "upgrade"   ? "UPGRADE"
+              : direction === "downgrade" ? "DOWNGRADE"
+              : reccMoved          ? "RECOMMENDATION CHANGE"
+              : tpMoved            ? "TARGET PRICE CHANGE"
+              :                      "THESIS UPDATE";
+  const icon  = direction === "upgrade" ? "🟢⬆️" : direction === "downgrade" ? "🔴⬇️" : revision ? "🔄" : "📊";
+  const reccHead = reccMoved ? `${normRecc(prev!.recc) ?? "—"} → ${recc ?? "—"}` : recc;
+
+  // Líneas de recomendación y TP: con versión previa muestran el antes → después o
+  // "(unchanged)"; sin ella (primer modelo del ticker) quedan como antes.
+  const reccLine = !prev ? null
+    : reccMoved ? `Recommendation: <b>${esc(normRecc(prev.recc) ?? "—")} → ${esc(recc ?? "—")}</b>${
+        direction === "upgrade" ? "  ⬆️ Upgrade" : direction === "downgrade" ? "  ⬇️ Downgrade" : ""}`
+    : recc ? `Recommendation: <b>${esc(recc)}</b> (unchanged)` : null;
+
+  const tpLine = !prev ? field("Target price", e.tp != null ? fmtNum(e.tp) : null)
+    : tpMoved ? `Target price: <b>${prev.tp != null ? fmtNum(prev.tp) : "—"} → ${e.tp != null ? fmtNum(e.tp) : "—"}</b>${
+        prev.tp && e.tp ? ` (${fmtChange(e.tp / prev.tp - 1)})` : ""}`
+    : e.tp != null ? `Target price: <b>${fmtNum(e.tp)}</b> (unchanged)` : null;
+
   return [
-    `📊 <b>${headline("MODEL UPDATE", ticker, e.recc?.toUpperCase())}</b>`,
+    `${icon} <b>${headline(title, ticker, reccHead)}</b>`,
     company?.nombreLatam ? esc(company.nombreLatam) : null,
     "",
     field("Type",          e.modelType === "bank" ? "Bank" : "Company"),
-    field("Target price",  e.tp != null ? fmtNum(e.tp) : null),
+    reccLine,
+    tpLine,
     field("Analyst",       e.analyst),
+    revision ? field("Changed by", e.revisedBy) : null,
     field("Model date",    e.updateDate.toISOString().slice(0, 10)),
-    thesis ? `\n<i>${esc(thesis)}</i>` : null,
+    prev && !revision ? field("Previous model", prev.updateDate.toISOString().slice(0, 10)) : null,
+    revision ? "Estimates: unchanged (rating / TP / thesis revision)" : null,
+    thesis ? `\n${newThesis && prev ? "<b>New thesis</b>\n" : ""}<i>${esc(thesis)}</i>` : null,
     links  ? `\n${links}` : null,
   ].filter((l) => l !== null).join("\n");
+}
+
+function fmtChange(v: number): string {
+  return `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`;
 }
 
 async function taskMessage(e: TaskEvent): Promise<string> {

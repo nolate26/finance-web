@@ -12,6 +12,7 @@ import { ccySuffix } from "@/lib/ccySuffix";
 import { companyEffMarketCapDetailed, companyEv, companyEvEbitda, companyPe, type LiveQuote } from "@/lib/modelMultiples";
 import ModelEstimateChart, { buildEstimateRows, buildRecommendationRows, type EstimateMetric, type EstimateRow } from "@/components/deep-dive/ModelEstimateChart";
 import ModelActionBar from "@/components/deep-dive/ModelActionBar";
+import ReviseModelModal, { ReviseButton } from "@/components/deep-dive/ReviseModelModal";
 import { exportRowsToPdf } from "@/lib/exportPdf";
 import { webModelLink, isLocalModelLink } from "@/lib/modelLink";
 import LocalLinkNote from "@/components/deep-dive/LocalLinkNote";
@@ -447,6 +448,9 @@ export default function ModelExplorer({ ticker, consensusEstimates = [], valuati
   const [showIrr,      setShowIrr]      = useState(false);
   // Sólo lo que el usuario editó; el resto sale de los defaults calculados.
   const [irrEdits,     setIrrEdits]     = useState<Partial<IrrInputs>>({});
+  const [revising,     setRevising]     = useState(false);
+  // Se incrementa tras una revisión manual para volver a pedir el historial.
+  const [reloadKey,    setReloadKey]    = useState(0);
   const isAdmin = useIsAdmin();
 
   useEffect(() => {
@@ -465,7 +469,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [], valuati
       })
       .catch(e => setError(String(e)))
       .finally(() => setLoading(false));
-  }, [ticker]);
+  }, [ticker, reloadKey]);
 
   const snapshot = useMemo(
     () => history?.snapshots.find(s => s.header.updateDate === selectedDate) ?? history?.snapshots[0] ?? null,
@@ -566,7 +570,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [], valuati
   // Años proyectados utilizables (consecutivos con Net Income) desde el primero.
   const irrYearsData = useMemo(
     () => irrYears(enriched.filter(d => d.isEst).map(d => ({
-      year: d.year, effMarketCap: d.effMarketCap, netIncome: d.netIncome,
+      year: d.year, effMarketCap: d.effMarketCap, exitBase: d.netIncome,
       dividend: d.dividend, buybacks: d.buybacks,
     }))),
     [enriched],
@@ -585,6 +589,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [], valuati
                                         [IRR_FALLBACK_PE, `${IRR_FALLBACK_PE}x (sin histórico)`];
     return {
       exitPe, exitPeSource,
+      sustRoe: 0, roeSource: "",            // sólo aplica a bancos (modo pbv)
       entryPrice: irrRefPrice,
       entryLabel: first?.priceIsLive ? "Mercado" : "Modelo",
     };
@@ -593,17 +598,26 @@ export default function ModelExplorer({ ticker, consensusEstimates = [], valuati
   const irrInputs: IrrInputs = {
     horizon:         Math.min(IRR_DEFAULT_HORIZON, Math.max(1, irrYearsData.length)),
     exitPe:          irrDefaults.exitPe,
+    sustRoe:         0,
+    growth:          0,
     entryPrice:      irrDefaults.entryPrice,
-    includeBuybacks: false,
+    includeBuybacks: true,
     ke:              IRR_DEFAULT_KE,
     peStep:          IRR_DEFAULT_PE_STEP,
+    roeStep:         0,
+    divOverrides:    {},
+    baseOverrides:   {},
     ...irrEdits,
   };
+  const irrAsOf   = new Date();
   const irrResult = computeModelIrr(irrYearsData, {
     horizon:         irrInputs.horizon,
-    exitPe:          irrInputs.exitPe,
+    exitMultiple:    irrInputs.exitPe,
     entryScale:      irrInputs.entryPrice !== null && irrRefPrice ? irrInputs.entryPrice / irrRefPrice : 1,
     includeBuybacks: irrInputs.includeBuybacks,
+    asOf:            irrAsOf,
+    divOverrides:    irrInputs.divOverrides,
+    baseOverrides:   irrInputs.baseOverrides,
   });
   const irrHorizon = Math.min(irrInputs.horizon, irrYearsData.length);
 
@@ -1000,6 +1014,8 @@ export default function ModelExplorer({ ticker, consensusEstimates = [], valuati
             ))}
           </tbody>
         </table>
+        {/* Sólo sobre la última versión: la revisión copia sus estimaciones. */}
+        {isLatest && <ReviseButton onClick={() => setRevising(true)} />}
         </div>
 
         {/* ── Right half: estimate evolution chart ── */}
@@ -1012,6 +1028,16 @@ export default function ModelExplorer({ ticker, consensusEstimates = [], valuati
           />
         </div>
       </div>
+
+      {revising && (
+        <ReviseModelModal
+          kind="company"
+          ticker={ticker}
+          current={{ updateDate: header.updateDate, recc: header.recc, tp: header.tp, thesis: header.thesis }}
+          onClose={() => setRevising(false)}
+          onSaved={() => { setRevising(false); setReloadKey(k => k + 1); }}
+        />
+      )}
 
       {/* ── Actions: precio, ficha, versión y export ── */}
       <ModelActionBar
@@ -1080,6 +1106,8 @@ export default function ModelExplorer({ ticker, consensusEstimates = [], valuati
 
       {showIrr && (
         <ModelIrrPanel
+          mode="pe"
+          baseLabel="Net Income"
           inputs={irrInputs}
           defaults={irrDefaults}
           onChange={patch => setIrrEdits(prev => ({ ...prev, ...patch }))}
@@ -1087,6 +1115,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [], valuati
           result={irrResult}
           years={irrYearsData}
           refPrice={irrRefPrice}
+          asOf={irrAsOf}
           ccyLabel={ccySuffix(header.currency, header.unit)}
         />
       )}

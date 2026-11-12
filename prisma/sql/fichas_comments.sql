@@ -14,7 +14,21 @@ COMMENT ON COLUMN fichas.id IS
 'UUID generado por Prisma al crear la fila.';
 
 COMMENT ON COLUMN fichas.ticker IS
-'Ticker Bloomberg de la empresa (p.ej. "FALAB CI EQUITY"). FK a empresas_industrias_v2.ticker_bloomberg, se guarda en mayúsculas tal como está en la maestra. ÚNICO: una sola ficha viva por empresa. Para el país o el nombre de la empresa hay que hacer join con esa tabla.';
+'Ticker Bloomberg de la empresa (p.ej. "FALAB CI EQUITY"). FK a empresas_industrias_v2.ticker_bloomberg, se guarda en mayúsculas tal como está en la maestra. ÚNICO: una sola ficha viva por empresa. Para el país o el nombre de la empresa hay que hacer join con esa tabla. NULL = ficha MULTI-empresa: sus empresas están en ficha_tickers (join por ficha_id). Las multi se identifican por title (sin distinguir mayúsculas): subir otra multi con el mismo título (p.ej. "Preliminar bancos" del mes siguiente) borra la anterior y su PDF, igual que el ticker en las individuales. Para "todas las fichas de una empresa" hay que mirar fichas.ticker Y ficha_tickers.ticker.';
+
+-- ── ficha_tickers ────────────────────────────────────────────────────────────
+
+COMMENT ON TABLE ficha_tickers IS
+'Empresas de una ficha multi-empresa (fichas.ticker IS NULL). Una fila por (ficha, empresa), único en (ficha_id, ticker). ON DELETE CASCADE con fichas: borrar la ficha se lleva sus filas. ON DELETE RESTRICT con empresas_industrias_v2. Las fichas individuales NO tienen filas acá: su empresa está en fichas.ticker. Se escribe sólo vía POST /api/fichas con tickers[] de 2 o más elementos.';
+
+COMMENT ON COLUMN ficha_tickers.id IS
+'UUID generado por Prisma.';
+
+COMMENT ON COLUMN ficha_tickers.ficha_id IS
+'FK a fichas.id (la ficha multi a la que pertenece).';
+
+COMMENT ON COLUMN ficha_tickers.ticker IS
+'Ticker Bloomberg en mayúsculas, FK a empresas_industrias_v2.ticker_bloomberg. Join con esa tabla para nombre (nombre_latam) y país (country_risk).';
 
 COMMENT ON COLUMN fichas.fiscal_year IS
 'Año del trimestre al que corresponde la ficha (p.ej. 2026 para "2Q26"). Junto con quarter forma el período del informe, que NO es la fecha de carga (created_at). Lo elige el admin en el uploader; por defecto se ofrece el trimestre calendario actual.';
@@ -22,8 +36,11 @@ COMMENT ON COLUMN fichas.fiscal_year IS
 COMMENT ON COLUMN fichas.quarter IS
 'Trimestre del informe, 1 a 4 (CHECK fichas_quarter_range). Se muestra siempre como "<quarter>Q<yy>" — 2 + 2026 = "2Q26" (lib/quarters.ts). Las dos fichas cargadas antes de 2026-09-18 se backfillearon a 2Q26 según el nombre de sus archivos.';
 
+COMMENT ON COLUMN fichas.month IS
+'Mes del informe (1-12) en fichas MENSUALES; NULL = ficha trimestral. Si viene, quarter es el trimestre que contiene al mes (octubre → 4), lo deriva POST /api/fichas a partir del mes, así ordenar/filtrar por (fiscal_year, quarter) sigue funcionando. Se muestra como "Oct 26"; la trimestral como "4Q26". Para ordenar ambas juntas: fiscal_year*12 + COALESCE(month, quarter*3) (un quarter cuenta como su último mes).';
+
 COMMENT ON COLUMN fichas.title IS
-'Título visible de la ficha. Por defecto el nombre del archivo sin extensión; el admin puede cambiarlo al subir.';
+'Título visible de la ficha. Por defecto el nombre del archivo sin extensión ni período (el "2Q26" / "Oct26" se saca y va a fiscal_year/quarter/month); se puede cambiar al subir. En las fichas MULTI (ticker NULL) es la identidad del informe: una sola multi viva por título, comparado sin distinguir mayúsculas.';
 
 COMMENT ON COLUMN fichas.description IS
 'Nota opcional del admin (fuente, fecha del documento, etc.). NULL si no se escribió nada.';

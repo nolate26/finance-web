@@ -84,3 +84,10 @@ export const REVIEWABLE_CATEGORY = "investment_cases";
 
 /** Sus empresas van sin TP ni rating y su `description` es texto largo, como en las fichas. */
 export const SECTOR_CATEGORY = "sectorial_updates";
+
+/**
+ * Updates mensuales del equipo de economía (commodities, emergentes): sólo título y
+ * fecha, sin empresas ni origen. No son de un país, así que la región va fija.
+ */
+export const ECONOMICS_CATEGORY = "economics_team";
+export const ECONOMICS_REGION   = "global";

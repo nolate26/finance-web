@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { normalizeTicker } from '@/lib/issuer';
 import { normBBG } from '@/lib/bbg';
 import { notify } from '@/lib/notify';
+import { previousHeader } from '@/lib/modelRevision';
 // ❌ ELIMINADO: import { table } from 'console'; (Esto rompe la API en producción)
 
 // createMany necesita que todas las filas tengan el mismo set de claves:
@@ -232,10 +233,12 @@ export async function POST(request: Request) {
         }, { timeout: 20_000 });
 
         if (!bankExisted) {
+          // Versión anterior: el aviso muestra si cambió la recomendación o el TP.
+          const bankPrev = await previousHeader('bank', bankTicker, bankDate);
           notify({
             kind: 'model', modelType: 'bank', ticker: bankTicker, updateDate: bankDate,
             recc: bHeader.recc, tp: bHeader.tp, analyst: bHeader.analyst,
-            thesis: bHeader.thesis, link: bHeader.link,
+            thesis: bHeader.thesis, link: bHeader.link, previous: bankPrev,
           });
         }
 
@@ -423,10 +426,11 @@ export async function POST(request: Request) {
         }, { timeout: 20_000 });
 
         if (!modelExisted) {
+          const modelPrev = await previousHeader('company', modelTicker, modelDate);
           notify({
             kind: 'model', modelType: 'company', ticker: modelTicker, updateDate: modelDate,
             recc: header.recc, tp: header.tp, analyst: header.analyst,
-            thesis: header.thesis, link: header.link,
+            thesis: header.thesis, link: header.link, previous: modelPrev,
           });
         }
 

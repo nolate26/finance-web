@@ -9,18 +9,23 @@ import { recommendationColors, formatTargetPrice } from "@/lib/recommendations";
 import type { FichaRow as Ficha } from "@/app/api/fichas/route";
 import { useIsAdmin, useIsSignedIn } from "@/lib/useIsAdmin";
 import { countryName } from "@/lib/countryNames";
-import { quarterKey } from "@/lib/quarters";
+import { periodKey } from "@/lib/quarters";
+
+// Clave de orden del período de una ficha (quarter o mes, mayor = más nuevo).
+const fichaKey = (f: { fiscal_year: number; quarter: number; month: number | null }) =>
+  periodKey(f.fiscal_year, f.quarter, f.month);
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-type MainCategory = "fichas" | "sectorial_updates" | "sell_side" | "investment_cases" | "client_presentations";
+type MainCategory = "fichas" | "sectorial_updates" | "economics_team" | "sell_side" | "investment_cases" | "client_presentations";
 
 // Cada grupo es una barra aparte: el research junto, y casos y clientes cada uno por su lado.
 const MAIN_TAB_GROUPS: { key: MainCategory; label: string }[][] = [
   [
     { key: "fichas",            label: "Fichas"            },
     { key: "sectorial_updates", label: "Sectorial Updates" },
-    { key: "sell_side",         label: "Sell Side"         },
+    { key: "economics_team",    label: "Economics Team"    },
+    { key: "sell_side",       label: "Sell Side"         },
   ],
   [{ key: "investment_cases",     label: "Investment Cases"     }],
   [{ key: "client_presentations", label: "Client Presentations" }],
@@ -38,6 +43,14 @@ const CLIENT_FUND_FILTERS = [
 function formatDate(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+}
+
+// Países de una ficha: el suyo, o el de cada empresa si es multi.
+// Valor del chip "Multi-company" en la fila de países (no choca con un código de 2 letras).
+const MULTI_FILTER = "__multi__";
+
+function fichaCountrySet(f: Ficha): Set<string> {
+  return f.multi ? new Set(f.tickers.map((t) => t.country)) : new Set([f.country]);
 }
 
 // Funds per region (values must match what's stored in DB as `region` for client_presentations)
@@ -338,17 +351,35 @@ function FichaRowView({
 
       {/* Company + title */}
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold truncate" style={{ color: "#0D0D38" }}>{ficha.company_name}</p>
+        <p className="text-sm font-semibold truncate" style={{ color: "#0D0D38" }}>{ficha.multi ? ficha.title : ficha.company_name}</p>
         {/* El quarter report ya no va en línea: es texto largo y tiene su propio botón */}
-        <p className="text-xs mt-0.5 truncate" style={{ color: "rgba(13,13,56,0.62)" }}>
-          {ficha.title}
-        </p>
+        {ficha.multi ? (
+          // Multi: una ficha, varias empresas — cada una en su chip.
+          <div className="flex flex-wrap gap-1.5 mt-1.5">
+            {ficha.tickers.map((t) => (
+              <span
+                key={t.ticker}
+                className="text-[10px] font-secondary tabular-nums px-2 py-0.5 rounded-md"
+                style={{ background: "rgba(13,13,56,0.05)", color: "#0D0D38", border: "1px solid rgba(13,13,56,0.12)", whiteSpace: "nowrap" }}
+                title={t.company_name}
+              >
+                <strong style={{ fontWeight: 800 }}>{t.ticker.replace(/ EQUITY$/i, "")}</strong>
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs mt-0.5 truncate" style={{ color: "rgba(13,13,56,0.62)" }}>
+            {ficha.title}
+          </p>
+        )}
       </div>
 
-      {/* Ticker BBG */}
-      <span className="flex-shrink-0 text-xs font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.45)", whiteSpace: "nowrap" }}>
-        {ficha.ticker}
-      </span>
+      {/* Ticker BBG — en las multi ya están en los chips */}
+      {!ficha.multi && (
+        <span className="flex-shrink-0 text-xs font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.45)", whiteSpace: "nowrap" }}>
+          {ficha.ticker}
+        </span>
+      )}
 
       {/* Quarter del informe — el dato que ordena las fichas */}
       <span
@@ -363,7 +394,7 @@ function FichaRowView({
         className="flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-md"
         style={{ background: "rgba(32,68,220,0.07)", color: "#2044DC", border: "1px solid rgba(32,68,220,0.18)", whiteSpace: "nowrap" }}
       >
-        {countryName(ficha.country)}
+        {[...fichaCountrySet(ficha)].map(countryName).join(" · ")}
       </span>
 
       {/* Date */}
@@ -524,11 +555,14 @@ export default function PresentationsPage() {
 
   function handleFichaSaved(f: Ficha) {
     // Una ficha viva por ticker: la nueva reemplaza a la anterior de esa empresa,
-    // igual que hizo el servidor.
-    setFichas((prev) => [f, ...prev.filter((x) => x.ticker.toUpperCase() !== f.ticker.toUpperCase())]);
+    // igual que hizo el servidor. Las multi reemplazan a la multi del mismo título.
+    const sameTitle = (x: Ficha) => x.title.trim().toLowerCase() === f.title.trim().toLowerCase();
+    setFichas((prev) => f.multi
+      ? [f, ...prev.filter((x) => !x.multi || !sameTitle(x))]
+      : [f, ...prev.filter((x) => x.multi || x.ticker.toUpperCase() !== f.ticker.toUpperCase())]);
     setShowModal(false);
     setMainCategory("fichas");
-    setFichaCountry(f.country);
+    setFichaCountry(f.multi ? MULTI_FILTER : f.country);
     setFichaQuarter("All");
     setFichaSearch("");
   }
@@ -560,20 +594,24 @@ export default function PresentationsPage() {
     if (mainCategory === "client_presentations") {
       if (!activeCpFundValues.includes(p.region)) return false;
       if (cpFund !== "All" && p.region !== cpFund) return false;
-    } else {
+    } else if (mainCategory !== "economics_team") {   // economics no tiene región
       if (p.region !== subFilter) return false;
     }
     return true;
   });
 
-  // Países presentes en las fichas, con conteo, ordenados por nombre visible.
+  // Países presentes en las fichas individuales, con conteo, ordenados por nombre
+  // visible. Las multi no entran acá: tienen su propio chip "Multi-company".
   const fichaCountries = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const f of fichas) counts.set(f.country, (counts.get(f.country) ?? 0) + 1);
+    for (const f of fichas) {
+      if (!f.multi) counts.set(f.country, (counts.get(f.country) ?? 0) + 1);
+    }
     return [...counts.entries()]
       .map(([code, n]) => ({ code, label: countryName(code), n }))
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [fichas]);
+  const multiCount = useMemo(() => fichas.filter((f) => f.multi).length, [fichas]);
 
   // Quarters presentes, del más nuevo al más viejo, con su conteo.
   const fichaQuarters = useMemo(() => {
@@ -581,7 +619,7 @@ export default function PresentationsPage() {
     for (const f of fichas) {
       const prev = counts.get(f.quarter_label);
       if (prev) prev.n++;
-      else counts.set(f.quarter_label, { label: f.quarter_label, key: quarterKey(f.fiscal_year, f.quarter), n: 1 });
+      else counts.set(f.quarter_label, { label: f.quarter_label, key: fichaKey(f), n: 1 });
     }
     return [...counts.values()].sort((a, b) => b.key - a.key);
   }, [fichas]);
@@ -589,7 +627,8 @@ export default function PresentationsPage() {
   const displayFichas = useMemo(() => {
     const q = fichaSearch.trim().toLowerCase();
     return fichas.filter((f) => {
-      if (fichaCountry !== "All" && f.country !== fichaCountry) return false;
+      // Un país muestra sólo sus individuales; MULTI_FILTER, sólo las multi.
+      if (fichaCountry === MULTI_FILTER ? !f.multi : fichaCountry !== "All" && (f.multi || f.country !== fichaCountry)) return false;
       if (fichaQuarter !== "All" && f.quarter_label !== fichaQuarter) return false;
       if (q && !(
         f.company_name.toLowerCase().includes(q) ||
@@ -600,10 +639,19 @@ export default function PresentationsPage() {
     });
   }, [fichas, fichaCountry, fichaQuarter, fichaSearch]);
 
+  // Las multi-empresa van en su propia lista, debajo de los países.
+  const multiFichas = useMemo(
+    () => displayFichas.filter((f) => f.multi).sort((a, b) =>
+      fichaKey(b) - fichaKey(a) ||
+      b.created_at.localeCompare(a.created_at)),
+    [displayFichas],
+  );
+
   // Agrupadas por país (sólo cuando se ve "All"); dentro del país, por empresa.
   const fichaGroups = useMemo(() => {
     const byCountry = new Map<string, Ficha[]>();
     for (const f of displayFichas) {
+      if (f.multi) continue;
       const arr = byCountry.get(f.country) ?? [];
       arr.push(f);
       byCountry.set(f.country, arr);
@@ -614,7 +662,7 @@ export default function PresentationsPage() {
         label: countryName(code),
         // Quarter más nuevo primero; dentro del quarter, por empresa.
         rows: [...rows].sort((a, b) =>
-          quarterKey(b.fiscal_year, b.quarter) - quarterKey(a.fiscal_year, a.quarter) ||
+          fichaKey(b) - fichaKey(a) ||
           a.company_name.localeCompare(b.company_name)),
       }))
       .sort((a, b) => a.label.localeCompare(b.label));
@@ -674,7 +722,7 @@ export default function PresentationsPage() {
         <div className="flex items-start justify-between mb-6">
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0D0D38", letterSpacing: "-0.035em", lineHeight: 1.15, margin: 0 }}>Presentations</h1>
-            <p style={{ fontSize: 12, marginTop: 5, color: "rgba(13,13,56,0.62)", fontWeight: 500, letterSpacing: "0.01em" }}>Company fichas · Sectorial updates · Research reports · Investor presentations</p>
+            <p style={{ fontSize: 12, marginTop: 5, color: "rgba(13,13,56,0.62)", fontWeight: 500, letterSpacing: "0.01em" }}>Company fichas · Sectorial updates · Economics · Research reports · Investor presentations</p>
           </div>
           <div className="flex items-center gap-3">
             {canUpload && (
@@ -845,12 +893,22 @@ export default function PresentationsPage() {
                       <span className="font-secondary tabular-nums" style={{ marginLeft: 5, opacity: 0.55, fontWeight: 500 }}>{c.n}</span>
                     </button>
                   ))}
+                  {multiCount > 0 && (
+                    <button
+                      onClick={() => setFichaCountry(MULTI_FILTER)}
+                      className="px-3 py-1 rounded text-xs font-semibold transition-all"
+                      style={pillStyle(fichaCountry === MULTI_FILTER)}
+                    >
+                      Multi-company
+                      <span className="font-secondary tabular-nums" style={{ marginLeft: 5, opacity: 0.55, fontWeight: 500 }}>{multiCount}</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
               {/* Row 2: quarter del informe + buscador */}
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "rgba(13,13,56,0.45)", minWidth: 52 }}>Quarter</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "rgba(13,13,56,0.45)", minWidth: 52 }}>Period</span>
                 <div className="tab-rail flex items-center gap-1 p-0.5 rounded-md" style={PILL_WRAP}>
                   <button
                     onClick={() => setFichaQuarter("All")}
@@ -931,6 +989,28 @@ export default function PresentationsPage() {
                   </div>
                 </div>
               ))}
+
+              {/* Fichas de varias empresas: lista aparte, siempre con su encabezado */}
+              {multiFichas.length > 0 && (
+                <div>
+                  <div className="flex items-baseline gap-2 mb-2 px-1">
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(13,13,56,0.62)", textTransform: "uppercase", letterSpacing: "0.07em" }}>Multi-company</span>
+                    <span className="font-secondary tabular-nums" style={{ fontSize: 11, color: "rgba(13,13,56,0.40)" }}>{multiFichas.length}</span>
+                  </div>
+                  <div className="card overflow-hidden" style={{ padding: 0 }}>
+                    {multiFichas.map((f) => (
+                      <FichaRowView
+                        key={f.id}
+                        ficha={f}
+                        isAdmin={isAdmin}
+                        deleting={deletingId === f.id}
+                        onDelete={handleDeleteFicha}
+                        onOpenComment={(f) => setComment(fichaComment(f))}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )
         ) : presentationsError ? (

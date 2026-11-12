@@ -6,14 +6,17 @@ import { FONT_SECONDARY } from "@/lib/patriaTheme";
 import CompanyCombobox from "@/components/CompanyCombobox";
 import CaseTickersEditor, { type CaseTicker } from "@/components/presentations/CaseTickersEditor";
 import type { FichaRow } from "@/app/api/fichas/route";
-import { currentQuarter, quarterKey, quarterLabel, quarterOptions, parseQuarterLabel } from "@/lib/quarters";
+import {
+  currentQuarter, quarterLabel, quarterOptions, parseQuarterLabel,
+  monthLabel, monthOptions, parseMonthLabel, quarterOfMonth, periodKey,
+} from "@/lib/quarters";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 // El tipo canónico vive en lib/presentationDto (lo comparten API y UI); se re-exporta
 // acá porque media app ya lo importaba desde este módulo.
 export type { Presentation } from "@/lib/presentationDto";
-import { SECTOR_CATEGORY, type Presentation } from "@/lib/presentationDto";
+import { SECTOR_CATEGORY, ECONOMICS_CATEGORY, ECONOMICS_REGION, type Presentation } from "@/lib/presentationDto";
 
 interface Props {
   defaultCategory: string;
@@ -36,7 +39,7 @@ type Phase = "idle" | "requesting" | "uploading" | "saving";
 // Un solo modal para todo el uploader. "fichas" no va a `presentations` sino a la
 // tabla `fichas` (ticker obligatorio, sólo PDF, sin origen ni región): el formulario
 // cambia de forma según la categoría y el submit elige el endpoint.
-type Category = "fichas" | "sectorial_updates" | "sell_side" | "investment_cases" | "client_presentations";
+type Category = "fichas" | "sectorial_updates" | "economics_team" | "sell_side" | "investment_cases" | "client_presentations";
 
 const MIME_MAP: Record<string, string> = {
   pdf:  "application/pdf",
@@ -58,6 +61,7 @@ const CLIENT_FUNDS = [
 ] as const;
 
 function defaultRegionFor(cat: Category): string {
+  if (cat === ECONOMICS_CATEGORY) return ECONOMICS_REGION;
   return cat === "client_presentations" ? "Pionero/MRV" : "chile";
 }
 
@@ -132,6 +136,12 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
     const q = currentQuarter();
     return quarterLabel(q.fiscalYear, q.quarter);
   });
+  // …o mes, para las fichas mensuales. Por defecto el mes actual.
+  const [periodType,  setPeriodType]  = useState<"quarter" | "month">("quarter");
+  const [monthSel,    setMonthSel]    = useState(() => {
+    const d = new Date();
+    return monthLabel(d.getFullYear(), d.getMonth() + 1);
+  });
   // Investment cases: empresas cubiertas (con TP y rating) + fecha del caso.
   const [caseTickers, setCaseTickers] = useState<CaseTicker[]>([]);
   const [caseDate,    setCaseDate]    = useState(() => new Date().toISOString().slice(0, 10));
@@ -156,18 +166,36 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
   const isFicha = category === "fichas";
   const isCase  = category === "investment_cases";
   const isSector = category === SECTOR_CATEGORY;
+  const isEcon   = category === ECONOMICS_CATEGORY;
 
-  // Quarter elegido, ya parseado. El selector sólo ofrece etiquetas válidas.
-  const quarter = parseQuarterLabel(quarterSel);
+  // Período elegido, ya parseado. Los selectores sólo ofrecen etiquetas válidas.
+  const isMonthly = periodType === "month";
+  const month     = isMonthly ? parseMonthLabel(monthSel) : null;
+  const quarter   = isMonthly
+    ? (month ? { fiscalYear: month.fiscalYear, quarter: quarterOfMonth(month.month) } : null)
+    : parseQuarterLabel(quarterSel);
+  const periodSel = isMonthly ? monthSel : quarterSel;
 
-  // Ficha vigente de esta empresa: la que se va a reemplazar al guardar.
-  const replacing = isFicha && companyTicker
-    ? existingFichas.find((f) => f.ticker.toUpperCase() === companyTicker.toUpperCase()) ?? null
-    : null;
+  // Fichas: una empresa = ficha individual (reemplaza la vigente); 2+ = ficha multi,
+  // que va a su propia lista y se identifica por el título.
+  const fichaTickers = caseTickers.map((t) => t.ticker);
+  const fichaMulti   = isFicha && fichaTickers.length > 1;
+  const fichaSingle  = isFicha && fichaTickers.length === 1 ? fichaTickers[0] : "";
+
+  // Ficha vigente que se va a reemplazar al guardar: la de esta empresa, o en una
+  // multi la que tiene el mismo título ("Preliminar bancos" de un mes pisa al anterior).
+  const titleKey  = title.trim().toLowerCase();
+  const replacing = fichaSingle
+    ? existingFichas.find((f) => !f.multi && f.ticker.toUpperCase() === fichaSingle.toUpperCase()) ?? null
+    : fichaMulti && titleKey
+      ? existingFichas.find((f) => f.multi && f.title.trim().toLowerCase() === titleKey) ?? null
+      : null;
+  const replacingName = replacing?.multi ? `"${replacing.title}"` : replacing?.company_name;
   // Subir un quarter MÁS VIEJO que el vigente casi siempre es un error de dedo, y
   // acá es destructivo: se avisa distinto, pero no se bloquea.
   const replacingNewer = !!(replacing && quarter &&
-    quarterKey(replacing.fiscal_year, replacing.quarter) > quarterKey(quarter.fiscalYear, quarter.quarter));
+    periodKey(replacing.fiscal_year, replacing.quarter, replacing.month) >
+    periodKey(quarter.fiscalYear, quarter.quarter, month?.month ?? null));
 
   // ── File handling ────────────────────────────────────────────────────────────
 
@@ -176,14 +204,28 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
     setFile(f);
     setFileError(null);
     setError(null);
-    if (!title) setTitle(f.name.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ").trim());
-    // El equipo nombra los archivos "CCU_2Q26.pdf": si el nombre trae el quarter, se
-    // toma de ahí en vez de dejar el default del trimestre actual.
-    const fromName = f.name.match(/([1-4])\s*[Qq]\s*(\d{2}|\d{4})/);
-    if (fromName) {
-      const parsed = parseQuarterLabel(`${fromName[1]}Q${fromName[2]}`);
-      if (parsed) setQuarterSel(quarterLabel(parsed.fiscalYear, parsed.quarter));
+    // El equipo nombra los archivos "CCU_2Q26.pdf" / "Preliminar bancos Oct26.pdf": si
+    // el nombre trae el período, se toma de ahí y se saca del título sugerido — el
+    // período va en su propio campo, y en las multi el título es lo que identifica al
+    // informe mes a mes.
+    let base = f.name.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ");
+    const qMatch = base.match(/([1-4])\s*Q\s*(\d{4}|\d{2})(?!\d)/i);
+    const qParsed = qMatch ? parseQuarterLabel(`${qMatch[1]}Q${qMatch[2]}`) : null;
+    if (qMatch && qParsed) {
+      setQuarterSel(quarterLabel(qParsed.fiscalYear, qParsed.quarter));
+      setPeriodType("quarter");
+      base = base.replace(qMatch[0], " ");
+    } else {
+      // Mensuales: "Oct26" / "Oct 2026" → mes.
+      const mMatch = base.match(/(?:^|[^a-z])([a-z]{3})\s*(\d{4}|\d{2})(?!\d)/i);
+      const mParsed = mMatch ? parseMonthLabel(`${mMatch[1]} ${mMatch[2]}`) : null;
+      if (mMatch && mParsed) {
+        setMonthSel(monthLabel(mParsed.fiscalYear, mParsed.month));
+        setPeriodType("month");
+        base = `${base.slice(0, mMatch.index)} ${base.slice(mMatch.index! + mMatch[0].length)}`;
+      }
     }
+    if (!title) setTitle(base.replace(/\s+/g, " ").trim());
   }
 
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -207,8 +249,8 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!file)                    { setError("Please select a file first.");     return; }
-    if (isFicha && !companyTicker) { setError("A company ticker is required for fichas."); return; }
-    if (isFicha && !quarter)       { setError("A valid quarter is required (e.g. 2Q26)."); return; }
+    if (isFicha && fichaTickers.length === 0) { setError("Pick at least one company for this ficha."); return; }
+    if (isFicha && !quarter)       { setError(isMonthly ? "A valid month is required (e.g. Oct 26)." : "A valid quarter is required (e.g. 2Q26)."); return; }
     if (isCase && caseTickers.length === 0) { setError("Pick at least one company for this investment case."); return; }
     if (!title.trim())            { setError("Title is required.");              return; }
 
@@ -226,7 +268,7 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
         body: JSON.stringify({
           filename: file.name, contentType,
           folder: isFicha
-            ? `fichas/${companyTicker.replace(/[^a-z0-9]/gi, "_")}`
+            ? `fichas/${fichaMulti ? "_multi" : fichaSingle.replace(/[^a-z0-9]/gi, "_")}`
             : `presentations/${category}/${region.replace(/[^a-z0-9]/gi, "_")}`,
         }),
       });
@@ -273,9 +315,10 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            ticker:      companyTicker,
+            tickers:     fichaTickers,
             fiscal_year: quarter!.fiscalYear,
             quarter:     quarter!.quarter,
+            month:       month?.month ?? null,
             title:       title.trim(),
             description: desc.trim() || null,
             file_url:    fileUrl,
@@ -300,8 +343,11 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
           file_url:     fileUrl,
           category,
           region,
-          company_name: companyTicker || null,
-          is_sell_side: isSellSide,
+          // Economics: sólo título y fecha — sin empresa ni origen, aunque hayan quedado
+          // elegidos de otra categoría.
+          company_name: isEcon ? null : companyTicker || null,
+          is_sell_side: isEcon ? false : isSellSide,
+          ...(isEcon ? { case_date: caseDate || null } : {}),
           // Casos y sectorial updates llevan empresas y fecha del informe. TP y rating son
           // sólo de los casos: si se cambió de categoría a mitad de camino, no se arrastran.
           ...(isCase || isSector ? {
@@ -350,8 +396,9 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
             <div>
               <p style={{ fontSize: 15, fontWeight: 700, color: "#0D0D38", margin: 0 }}>Upload document</p>
               <p style={{ fontSize: 11, color: "rgba(13,13,56,0.45)", margin: "3px 0 0", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
-                {isFicha ? "One PDF, linked to a Bloomberg ticker"
+                {isFicha ? "One PDF, linked to one or more Bloomberg tickers"
                   : isSector ? "A file, your sector comment and the companies it covers"
+                  : isEcon ? "Monthly update: a file, a title and its date"
                   : "Select a file, fill in the details, then upload"}
               </p>
             </div>
@@ -446,6 +493,7 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
                 <select value={category} onChange={(e) => handleCategoryChange(e.target.value as Category)} disabled={isSubmitting} style={{ ...INPUT, opacity: isSubmitting ? 0.6 : 1 }}>
                   <option value="fichas">Fichas</option>
                   <option value={SECTOR_CATEGORY}>Sectorial Updates</option>
+                  <option value={ECONOMICS_CATEGORY}>Economics Team</option>
                   <option value="sell_side">Sell Side</option>
                   <option value="investment_cases">Investment Cases</option>
                   <option value="client_presentations">Client Presentations</option>
@@ -453,12 +501,12 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
               </div>
 
               {/* Origen — Moneda / Sell Side toggle (hidden for "sell_side"; fichas no tienen origen) */}
-              {isFicha ? (
+              {isFicha || isEcon ? (
                 <div>
                   <label style={LABEL}>Type</label>
                   <div style={{ display: "flex", alignItems: "center", height: 36 }}>
                     <span style={{ fontSize: 12, fontWeight: 700, color: "#001EAF", background: "rgba(32,68,220,0.10)", border: "1px solid #2044DC", borderRadius: 7, padding: "5px 14px" }}>
-                      Company ficha
+                      {isFicha ? "Company ficha" : "Monthly update"}
                     </span>
                   </div>
                 </div>
@@ -507,7 +555,7 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
             </div>
 
             {/* ── Region / Fund (fichas: el país sale de la maestra, no se pide) ── */}
-            {isFicha ? null : category === "client_presentations" ? (
+            {isFicha || isEcon ? null : category === "client_presentations" ? (
               <div>
                 <label style={LABEL}>Fund</label>
                 <select value={region} onChange={(e) => setRegion(e.target.value)} disabled={isSubmitting} style={{ ...INPUT, opacity: isSubmitting ? 0.6 : 1 }}>
@@ -555,7 +603,21 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
             {/* ── Company autocomplete ──────────────────────────────────── */}
             {/* Investment cases: varias empresas, cada una con su TP y rating. Sectorial
                 updates: varias empresas, sin precio. El resto sigue con el ticker suelto. */}
-            {isCase || isSector ? (
+            {isEcon ? (
+              <div>
+                <label style={LABEL}>Update date</label>
+                <input
+                  type="date"
+                  value={caseDate}
+                  onChange={(e) => setCaseDate(e.target.value)}
+                  disabled={isSubmitting}
+                  style={{ ...INPUT, opacity: isSubmitting ? 0.6 : 1 }}
+                />
+                <p style={{ fontSize: 10.5, color: "rgba(13,13,56,0.45)", margin: "5px 0 0", lineHeight: 1.5 }}>
+                  La fecha del informe, no la de carga.
+                </p>
+              </div>
+            ) : isCase || isSector ? (
               <>
                 <div>
                   <label style={LABEL}>
@@ -581,40 +643,86 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
                   </p>
                 </div>
               </>
+            ) : isFicha ? (
+              <div>
+                <label style={LABEL}>Companies <span style={{ color: "#F8485E" }}>*</span></label>
+                {/* Buscan en TODA la maestra: una empresa puede tener ficha antes que modelo o posición. */}
+                <CaseTickersEditor
+                  value={caseTickers}
+                  onChange={setCaseTickers}
+                  disabled={isSubmitting}
+                  withTargets={false}
+                  placeholder="Search any company in empresas_industrias_v2…"
+                  emptyHint="One company for a regular ficha. Add more and it goes to the multi-company list."
+                />
+                {fichaMulti && (
+                  <p style={{ fontSize: 10.5, color: "rgba(13,13,56,0.45)", margin: "6px 0 0", lineHeight: 1.5 }}>
+                    Ficha multi-empresa: va a su propia lista dentro de Fichas y se identifica por el <strong>título</strong>.
+                    Usá siempre el mismo (p.ej. "Preliminar bancos") y elegí el período abajo: la del mes siguiente reemplaza a esta.
+                  </p>
+                )}
+              </div>
             ) : (
               <div>
                 <label style={LABEL}>
                   Company / Ticker{" "}
-                  {isFicha
-                    ? <span style={{ color: "#F8485E" }}>*</span>
-                    : <span style={{ color: "rgba(13,13,56,0.45)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(optional)</span>}
+                  <span style={{ color: "rgba(13,13,56,0.45)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(optional)</span>
                 </label>
-                {/* Fichas buscan en TODA la maestra: una empresa puede tener ficha antes que modelo o posición. */}
                 <CompanyCombobox
                   value={companyTicker}
                   onChange={(ticker) => setCompanyTicker(ticker)}
                   disabled={isSubmitting}
-                  includeUniverse={isFicha}
-                  placeholder={isFicha ? "Search any company in empresas_industrias_v2…" : undefined}
                 />
               </div>
             )}
 
-            {/* ── Quarter de la ficha + aviso de reemplazo ──────────────── */}
+            {/* ── Período de la ficha (quarter o mes) + aviso de reemplazo ── */}
             {isFicha && (
               <div>
-                <label style={LABEL}>Quarter <span style={{ color: "#F8485E" }}>*</span></label>
-                <select
-                  value={quarterSel}
-                  onChange={(e) => setQuarterSel(e.target.value)}
-                  disabled={isSubmitting}
-                  style={{ ...INPUT, opacity: isSubmitting ? 0.6 : 1 }}
-                >
-                  {quarterOptions().map((q) => {
-                    const label = quarterLabel(q.fiscalYear, q.quarter);
-                    return <option key={label} value={label}>{label}</option>;
-                  })}
-                </select>
+                <label style={LABEL}>Period <span style={{ color: "#F8485E" }}>*</span></label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {/* Trimestral / Mensual */}
+                  <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                    {([["quarter", "Quarter"], ["month", "Month"]] as const).map(([value, label]) => {
+                      const active = periodType === value;
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          disabled={isSubmitting}
+                          onClick={() => setPeriodType(value)}
+                          style={{
+                            padding: "7px 12px", borderRadius: 7,
+                            border: `1px solid ${active ? "#2044DC" : "rgba(13,13,56,0.14)"}`,
+                            background: active ? "rgba(32,68,220,0.10)" : "#F5F7FD",
+                            color: active ? "#001EAF" : "rgba(13,13,56,0.62)",
+                            fontSize: 12, fontWeight: 700,
+                            cursor: isSubmitting ? "not-allowed" : "pointer",
+                            transition: "all 0.12s",
+                          }}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <select
+                    value={periodSel}
+                    onChange={(e) => (isMonthly ? setMonthSel : setQuarterSel)(e.target.value)}
+                    disabled={isSubmitting}
+                    style={{ ...INPUT, flex: 1, minWidth: 0, opacity: isSubmitting ? 0.6 : 1 }}
+                  >
+                    {isMonthly
+                      ? monthOptions().map((m) => {
+                          const label = monthLabel(m.fiscalYear, m.month);
+                          return <option key={label} value={label}>{label}</option>;
+                        })
+                      : quarterOptions().map((q) => {
+                          const label = quarterLabel(q.fiscalYear, q.quarter);
+                          return <option key={label} value={label}>{label}</option>;
+                        })}
+                  </select>
+                </div>
 
                 {replacing && (
                   <div style={{
@@ -627,13 +735,18 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
                     <p style={{ fontSize: 11.5, color: replacingNewer ? "#F8485E" : "#C25205", margin: 0, lineHeight: 1.5 }}>
                       {replacingNewer ? (
                         <>
-                          <strong>{replacing.company_name}</strong> ya tiene la ficha de <strong>{replacing.quarter_label}</strong>, que es
-                          MÁS NUEVA que {quarterSel}. Si continuás, la de {replacing.quarter_label} se borra y su PDF se elimina.
+                          <strong>{replacingName}</strong> ya tiene la ficha de <strong>{replacing.quarter_label}</strong>, que es
+                          MÁS NUEVA que {periodSel}. Si continuás, la de {replacing.quarter_label} se borra y su PDF se elimina.
                         </>
                       ) : (
                         <>
-                          Reemplaza la ficha <strong>{replacing.quarter_label}</strong> de <strong>{replacing.company_name}</strong>:
+                          Reemplaza la ficha <strong>{replacing.quarter_label}</strong> de <strong>{replacingName}</strong>:
                           al guardar se borra y su PDF se elimina del almacenamiento.
+                        </>
+                      )}
+                      {replacing.multi && (
+                        <>
+                          {" "}Las multi se reemplazan por título: si es un informe distinto, cambiale el nombre.
                         </>
                       )}
                     </p>
