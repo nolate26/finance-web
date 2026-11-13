@@ -9,6 +9,7 @@ import type {
 } from "@/app/api/companies/[ticker]/bank-model/route";
 import { consensusScaleFactor } from "@/lib/consensusScale";
 import { ccySuffix } from "@/lib/ccySuffix";
+import { tickerPath } from "@/lib/issuer";
 import { bankEffMarketCap, bankPe } from "@/lib/modelMultiples";
 import ModelEstimateChart, { buildEstimateRows, type EstimateMetric, type EstimateRow } from "@/components/deep-dive/ModelEstimateChart";
 import ModelActionBar from "@/components/deep-dive/ModelActionBar";
@@ -250,7 +251,7 @@ const SECTIONS: Section[] = [
       { key: "totdep",   label: "Total deposits ($)",               kind: "raw",     fmt: "money", fn: (y, by) => fld(by, y, "totalDeposits") },
       { key: "ddep",     label: "Demand deposits ($)",              kind: "raw",     fmt: "money", indent: 1, look: "plain", detail: true, fn: (y, by) => fld(by, y, "demandDeposits") },
       { key: "tdep",     label: "Time deposits ($)",                kind: "raw",     fmt: "money", indent: 1, look: "plain", detail: true, fn: (y, by) => fld(by, y, "timeDeposits") },
-      { key: "d_f",      label: "Deposits / Funding",               kind: "derived", fmt: "mult", indent: 1, fn: (y, by) => divz(fld(by, y, "totalDeposits"), fld(by, y, "totalFunding")) },
+      { key: "d_f",      label: "Deposits / Funding (%)",           kind: "derived", fmt: "pct", indent: 1, fn: (y, by) => divz(fld(by, y, "totalDeposits"), fld(by, y, "totalFunding")) },
       { key: "l_d",      label: "Loans / Deposits",                 kind: "derived", fmt: "mult", indent: 1, detail: true, fn: (y, by) => divz(fld(by, y, "grossLoans"), fld(by, y, "totalDeposits")) },
       { key: "ibl",      label: "Interest bearing liabilities ($)", kind: "raw",     fmt: "money", detail: true, fn: (y, by) => fld(by, y, "interestBearingLiabilities") },
       { key: "tfund",    label: "Total funding ($)",                kind: "raw",     fmt: "money", detail: true, fn: (y, by) => fld(by, y, "totalFunding") },
@@ -282,7 +283,7 @@ const SECTIONS: Section[] = [
       { key: "pe",      label: "P/E",                          kind: "derived", fmt: "mult", fn: (y, by) => peRatio(by, y) },
       { key: "pbv",     label: "P/BV",                         kind: "derived", fmt: "mult", detail: true, fn: (y, by) => divz(effMcap(by, y), fld(by, y, "controllingEquity")) },
       { key: "ptbv",    label: "P/TBV",                        kind: "derived", fmt: "mult", fn: (y, by) => divz(effMcap(by, y), fld(by, y, "tangibleEquity")) },
-      { key: "roe_t",   label: "ROE* (NI / Tang. Equity)",     kind: "derived", fmt: "pct", fn: (y, by) => divz(fld(by, y, "controllingNetIncome"), fld(by, y - 1, "tangibleEquity")) },
+      { key: "roe_t",   label: "ROE",                          kind: "derived", fmt: "pct", fn: (y, by) => divz(fld(by, y, "controllingNetIncome"), fld(by, y - 1, "tangibleEquity")) },
       { key: "peg1",    label: "PEG (PE / next year EPS g%)",  kind: "derived", fmt: "mult", detail: true, fn: (y, by) => peg1(y, by) },
       { key: "peg2",    label: "PEG (PE / next 2y EPS CAGR)",  kind: "derived", fmt: "mult", detail: true, fn: (y, by) => peg2(y, by) },
       { key: "dbb_yld", label: "Dividend + Buyback Yield (%)", kind: "derived", fmt: "pct", colorize: true, fn: (y, by) => divz(divBuyback(by, y), effMcap(by, y)) },
@@ -434,7 +435,7 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
     setSelectedDate("");
     setIrrEdits({});
 
-    fetch(`/api/companies/${encodeURIComponent(ticker)}/bank-model`)
+    fetch(`/api/companies/${tickerPath(ticker)}/bank-model`)
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((d: BankModelHistoryPayload) => {
         setHistory(d);
@@ -652,7 +653,7 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
     setDeleting(true);
     try {
       const res = await fetch(
-        `/api/companies/${encodeURIComponent(ticker)}/bank-model?updateDate=${selectedDate}`,
+        `/api/companies/${tickerPath(ticker)}/bank-model?updateDate=${selectedDate}`,
         { method: "DELETE" },
       );
       if (!res.ok) {

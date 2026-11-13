@@ -29,6 +29,23 @@ export function normalizeTicker(raw: string | null | undefined): string {
 }
 
 /**
+ * Ticker → segmento de URL para /api/companies/[ticker]/…
+ *
+ * Tickers como "AGUAS/A CI EQUITY" traen "/". encodeURIComponent la deja en %2F, pero el
+ * router de Next la decodifica antes de matchear y la URL cae en
+ * /api/companies/AGUAS/A CI EQUITY → 404. Se reemplaza por "|", que ningún ticker
+ * Bloomberg usa, y tickerFromPath lo revierte en el servidor.
+ */
+export function tickerPath(ticker: string): string {
+  return encodeURIComponent(ticker.replace(/\//g, "|"));
+}
+
+/** Inverso de tickerPath: parámetro de ruta → ticker canónico. */
+export function tickerFromPath(raw: string): string {
+  return normalizeTicker(decodeURIComponent(raw).replace(/\|/g, "/"));
+}
+
+/**
  * Normaliza el campo `company` que llega desde el ingest de correos.
  *
  * Acepta un string, un string con varios tickers separados por coma, o un array

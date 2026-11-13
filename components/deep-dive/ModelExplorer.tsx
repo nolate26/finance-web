@@ -9,6 +9,7 @@ import type {
 } from "@/app/api/companies/[ticker]/model/route";
 import { consensusScaleFactor } from "@/lib/consensusScale";
 import { ccySuffix } from "@/lib/ccySuffix";
+import { tickerPath } from "@/lib/issuer";
 import { companyEffMarketCapDetailed, companyEv, companyEvEbitda, companyPe, type LiveQuote } from "@/lib/modelMultiples";
 import ModelEstimateChart, { buildEstimateRows, buildRecommendationRows, type EstimateMetric, type EstimateRow } from "@/components/deep-dive/ModelEstimateChart";
 import ModelActionBar from "@/components/deep-dive/ModelActionBar";
@@ -461,7 +462,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [], valuati
     setSelectedDate("");
     setIrrEdits({});
 
-    fetch(`/api/companies/${encodeURIComponent(ticker)}/model`)
+    fetch(`/api/companies/${tickerPath(ticker)}/model`)
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((d: ModelHistoryPayload) => {
         setHistory(d);
@@ -687,7 +688,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [], valuati
     setDeleting(true);
     try {
       const res = await fetch(
-        `/api/companies/${encodeURIComponent(ticker)}/model?updateDate=${selectedDate}`,
+        `/api/companies/${tickerPath(ticker)}/model?updateDate=${selectedDate}`,
         { method: "DELETE" },
       );
       if (!res.ok) {

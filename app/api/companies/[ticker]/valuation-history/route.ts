@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { normalizeTicker } from "@/lib/issuer";
+import { tickerFromPath } from "@/lib/issuer";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +34,7 @@ export async function GET(
   { params }: { params: Promise<{ ticker: string }> },
 ) {
   const { ticker } = await params;
-  const normalized = normalizeTicker(decodeURIComponent(ticker));
+  const normalized = tickerFromPath(ticker);
 
   try {
     const rows = await prisma.valuationHistory.findMany({

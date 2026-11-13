@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { X, Loader2, ArrowRight, Pencil } from "lucide-react";
 import { FONT_SECONDARY, TEXT, BORDER, PATRIA } from "@/lib/patriaTheme";
+import { tickerPath } from "@/lib/issuer";
 import {
   RECC_OPTIONS, normRecc, reccChanged, reccDirection, thesisChanged, tpChanged, todayIsoSantiago,
 } from "@/lib/reccChange";
@@ -64,7 +65,7 @@ export default function ReviseModelModal({ kind, ticker, current, onClose, onSav
     setError(null);
     try {
       const res = await fetch(
-        `/api/companies/${encodeURIComponent(ticker)}/${kind === "bank" ? "bank-model" : "model"}`,
+        `/api/companies/${tickerPath(ticker)}/${kind === "bank" ? "bank-model" : "model"}`,
         {
           method:  "PATCH",
           headers: { "Content-Type": "application/json" },

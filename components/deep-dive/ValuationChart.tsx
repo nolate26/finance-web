@@ -13,6 +13,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { computeBands } from "@/lib/stats";
+import { tickerPath } from "@/lib/issuer";
 import type { ValuationPoint } from "@/app/api/companies/[ticker]/route";
 import type { ValuationHistoryPayload } from "@/app/api/companies/[ticker]/valuation-history/route";
 import type { UniverseItem } from "@/app/api/analysis/universe/route";
@@ -235,7 +236,7 @@ export default function ValuationChart({
     const color = COMPARABLE_COLORS[comparables.length % COMPARABLE_COLORS.length];
     setComparables((prev) => [...prev, { ticker: item.ticker, name: item.name, color, loading: true }]);
 
-    fetch(`/api/companies/${encodeURIComponent(item.ticker)}/valuation-history`)
+    fetch(`/api/companies/${tickerPath(item.ticker)}/valuation-history`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("fetch failed"))))
       .then((d: ValuationHistoryPayload) => {
         setCmpSeries((prev) => ({ ...prev, [item.ticker]: d.points }));

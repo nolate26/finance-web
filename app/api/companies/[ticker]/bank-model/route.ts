@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { normalizeTicker } from "@/lib/issuer";
+import { tickerFromPath } from "@/lib/issuer";
 import { requireAdmin } from "@/lib/auth";
 import { handleRevision } from "@/lib/modelRevision";
 
@@ -172,7 +172,7 @@ export async function GET(
   { params }: { params: Promise<{ ticker: string }> },
 ) {
   const { ticker: rawTicker } = await params;
-  const ticker = normalizeTicker(decodeURIComponent(rawTicker));
+  const ticker = tickerFromPath(rawTicker);
 
   try {
     const headers = await prisma.bankHeader.findMany({
@@ -268,7 +268,7 @@ export async function PATCH(
   { params }: { params: Promise<{ ticker: string }> },
 ) {
   const { ticker: rawTicker } = await params;
-  return handleRevision("bank", req, normalizeTicker(decodeURIComponent(rawTicker)));
+  return handleRevision("bank", req, tickerFromPath(rawTicker));
 }
 
 // ── DELETE — borra una versión (snapshot) del modelo de banco (solo admin) ────────
@@ -281,7 +281,7 @@ export async function DELETE(
   if (deny) return deny;
 
   const { ticker: rawTicker } = await params;
-  const ticker = normalizeTicker(decodeURIComponent(rawTicker));
+  const ticker = tickerFromPath(rawTicker);
   const updateDate = req.nextUrl.searchParams.get("updateDate");
 
   if (!updateDate) {

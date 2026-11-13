@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { tickerFromPath } from "@/lib/issuer";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ export async function GET(
   { params }: { params: Promise<{ ticker: string }> },
 ) {
   const { ticker: rawTicker } = await params;
-  const ticker = decodeURIComponent(rawTicker);
+  const ticker = tickerFromPath(rawTicker);
 
   try {
     const all = await prisma.consensusEstimate.findMany({

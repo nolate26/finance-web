@@ -22,6 +22,7 @@ import { PATRIA, FONT_PRIMARY, FONT_SECONDARY, TEXT_ON_DARK } from "@/lib/patria
 import { PatriaTitle } from "@/components/patria/PatriaTitle";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { useCompact } from "@/lib/useBreakpoint";
+import { tickerPath } from "@/lib/issuer";
 
 // ── Shared card style ─────────────────────────────────────────────────────────
 const CARD: React.CSSProperties = {
@@ -266,7 +267,9 @@ function CompaniesPageContent() {
     setDeepDive(null);
     setAnalysisTab("consensus");
 
-    fetch(`/api/companies/${item.ticker}`)
+    // tickerPath y no el ticker crudo: "AGUAS/A CI EQUITY" trae "/", que partía la URL en
+    // /api/companies/AGUAS/A CI EQUITY → ruta inexistente → 404 (ver lib/issuer.ts).
+    fetch(`/api/companies/${tickerPath(item.ticker)}`)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();

@@ -1,6 +1,6 @@
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { normalizeTicker } from "@/lib/issuer";
+import { tickerFromPath } from "@/lib/issuer";
 
 export const dynamic = "force-dynamic";
 
@@ -85,7 +85,7 @@ export async function GET(
 ) {
   const { ticker } = await params;
   // Se normaliza UNA vez acá; de ahí en adelante todo compara por igualdad.
-  const decodedTicker = normalizeTicker(decodeURIComponent(ticker));
+  const decodedTicker = tickerFromPath(ticker);
 
   try {
 

@@ -5,6 +5,7 @@ import { Download } from "lucide-react";
 import type { ModelHistoryPayload, ModelFinancialRow } from "@/app/api/companies/[ticker]/model/route";
 import { downloadExcel } from "@/lib/exportExcel";
 import { ccySuffix } from "@/lib/ccySuffix";
+import { tickerPath } from "@/lib/issuer";
 import { PATRIA, FONT_PRIMARY, FONT_SECONDARY } from "@/lib/patriaTheme";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
@@ -352,7 +353,7 @@ export default function ModelTable({ ticker }: { ticker: string }) {
     setPayload(null);
     setConsensusData([]);
 
-    fetch(`/api/companies/${encodeURIComponent(ticker)}/model`)
+    fetch(`/api/companies/${tickerPath(ticker)}/model`)
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((d: ModelHistoryPayload) => setPayload(d))
       .catch((e) => setError(String(e)))
@@ -361,7 +362,7 @@ export default function ModelTable({ ticker }: { ticker: string }) {
 
   useEffect(() => {
     if (!ticker) return;
-    fetch(`/api/companies/${encodeURIComponent(ticker)}/consensus`)
+    fetch(`/api/companies/${tickerPath(ticker)}/consensus`)
       .then((r) => r.ok ? r.json() : Promise.reject())
       .then((d: { rows?: { metric: string; period: string; value: number }[] }) =>
         setConsensusData(d.rows ?? []))
