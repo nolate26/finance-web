@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { Loader2, Search, X, ChevronDown, Mail, ExternalLink, Copy, Check, Send, Pencil, Trash2, Save, Unlink, Link2 } from "lucide-react";
 import { useIsAdmin } from "@/lib/useIsAdmin";
+import { usePhone } from "@/lib/useBreakpoint";
 import { FONT_SECONDARY } from "@/lib/patriaTheme";
 import { prepareResearchHtml } from "@/lib/researchHtml";
 import OrphanNotesPanel from "@/components/deep-dive/OrphanNotesPanel";
@@ -144,7 +145,7 @@ function FilterSelect({
 }) {
   const active = value !== "";
   return (
-    <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+    <div style={{ position: "relative", display: "inline-flex", alignItems: "center", maxWidth: "100%" }}>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -574,11 +575,37 @@ function DetailModal({
 
 // ── Table row ─────────────────────────────────────────────────────────────────
 
-function NoteRow({ r, zebra, onClick }: { r: ResearchRecord; zebra: boolean; onClick: () => void }) {
+function NoteRow({ r, zebra, onClick, phone }: { r: ResearchRecord; zebra: boolean; onClick: () => void; phone?: boolean }) {
   const col = groupColor(categoryGroup(r.category));
   const tp  = fmtTarget(r.targetPrice);
   const rec = cleanRec(r.recommendation);
   const rc  = rec ? recColor(rec) : null;
+  // Teléfono: la grilla de 8 columnas no entra y lo que se busca es el título. Pasa a
+  // ser una fila de lista — título arriba (dos líneas), compañía · industria debajo, y
+  // una línea de metadatos con fecha, tipo, TP y recomendación.
+  if (phone) {
+    return (
+      <div onClick={onClick}
+        style={{ padding: "12px 14px", borderBottom: "1px solid rgba(13,13,56,0.05)", background: zebra ? "rgba(13,13,56,0.012)" : "transparent", cursor: "pointer" }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "#0D0D38", lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+          {r.title ?? r.subject ?? <span style={{ color: "rgba(13,13,56,0.62)" }}>No title</span>}
+        </div>
+        <div style={{ fontSize: 11, color: "rgba(13,13,56,0.62)", marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          <strong style={{ color: r.dismissed ? "rgba(13,13,56,0.45)" : "#0D0D38", fontWeight: 700 }}>{r.dismissed ? "General" : r.company}</strong>
+          {(r.dismissed ? r.company : r.industry) ? ` · ${r.dismissed ? r.company : r.industry}` : ""}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+          <span style={{ fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 10.5, color: "rgba(13,13,56,0.45)" }}>{formatDate(r.date)}</span>
+          <span style={{ fontSize: 9.5, fontWeight: 700, padding: "1px 7px", borderRadius: 6, background: col.bg, border: `1px solid ${col.border}`, color: col.text, whiteSpace: "nowrap" }}>{r.category}</span>
+          {rec && rc && (
+            <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", padding: "1px 7px", borderRadius: 6, background: rc.bg, border: `1px solid ${rc.border}`, color: rc.text }}>{rec}</span>
+          )}
+          {/* Un TP de 0 es "sin TP" cargado desde el correo, no un precio objetivo. */}
+          {tp && r.targetPrice !== 0 && <span style={{ fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 10.5, fontWeight: 700, color: "#0D0D38" }}>TP {tp}</span>}
+        </div>
+      </div>
+    );
+  }
   return (
     <div
       onClick={onClick}
@@ -1047,6 +1074,10 @@ export default function ResearchPage() {
   const [tickers,  setTickers]  = useState<ResearchTicker[]>([]);
   // El generador de asuntos arranca plegado: la cabecera queda limpia.
   const [composerOpen, setComposerOpen] = useState(false);
+  const isPhone = usePhone();
+  // Teléfono: los filtros (fuera del buscador) se pliegan detrás de un botón — abiertos
+  // ocupaban la primera pantalla entera antes de la primera nota.
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const isAdmin = useIsAdmin();
   // Categorías expandidas (por defecto se muestran las más recientes; al hacer clic se ven todas).
   const [expanded, setExpanded] = useState<Set<Group>>(new Set());
@@ -1193,6 +1224,16 @@ export default function ResearchPage() {
           />
         </div>
 
+        <button type="button" className="phone-only keep-dense" onClick={() => setFiltersOpen((o) => !o)}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer",
+            border: activeFilterCount > 0 ? "1px solid rgba(32,68,220,0.30)" : "1px solid rgba(13,13,56,0.12)",
+            background: activeFilterCount > 0 ? "rgba(32,68,220,0.07)" : "#F5F7FD", color: activeFilterCount > 0 ? "#001EAF" : "rgba(13,13,56,0.62)" }}>
+          Filtros{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""} {filtersOpen ? "▴" : "▾"}
+        </button>
+
+        {/* `display: contents` no altera la grilla flex en escritorio; en teléfono el
+            bloque entero se oculta mientras los filtros están plegados. */}
+        <div className={filtersOpen ? undefined : "hide-phone"} style={{ display: "contents" }}>
         <FilterSelect label="Industry"   value={fIndustry} options={filters.industries} onChange={setFIndustry} />
         <FilterSelect label="Company"    value={fCompany}  options={filters.companies}  onChange={setFCompany}  />
         <FilterSelect label="Group"      value={fGroup}    options={groups as unknown as string[]} onChange={(v) => setFGroup(v as "" | Group)} />
@@ -1228,6 +1269,7 @@ export default function ResearchPage() {
             fontFamily: FONT_SECONDARY,
           }}
         />
+        </div>
 
         {/* Clear */}
         {activeFilterCount > 0 && (
@@ -1258,9 +1300,9 @@ export default function ResearchPage() {
         boxShadow: "0 1px 4px rgba(13,13,56,0.05)",
       }}>
        <div className="scroll-x">
-        <div style={{ minWidth: GRID_MIN }}>
-        {/* Column headers */}
-        <div style={{
+        <div style={{ minWidth: isPhone ? 0 : GRID_MIN }}>
+        {/* Column headers — en teléfono las filas son de lista y no tienen columnas */}
+        <div className="hide-phone" style={{
           display: "grid",
           gridTemplateColumns: GRID,
           gap: "0 16px",
@@ -1334,7 +1376,7 @@ export default function ResearchPage() {
                 </div>
 
                 {shown.map((r, idx) => (
-                  <NoteRow key={r.id} r={r} zebra={idx % 2 === 1} onClick={() => setSelected(r)} />
+                  <NoteRow key={r.id} r={r} zebra={idx % 2 === 1} onClick={() => setSelected(r)} phone={isPhone} />
                 ))}
 
                 {/* Footer expand — visible sólo cuando hay filas ocultas */}

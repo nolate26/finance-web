@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import { usePhone } from "@/lib/useBreakpoint";
 import * as XLSX from "xlsx-js-style";
 import type {
   ModelHistoryPayload,
@@ -440,6 +441,9 @@ function peMedian5y(points: ValuationPoint[]): number | null {
 }
 
 export default function ModelExplorer({ ticker, consensusEstimates = [], valuationHistory = [] }: ModelExplorerProps) {
+  // Teléfono: la columna de indicadores baja de 300 a 140px (las etiquetas se parten en
+  // dos líneas) y los años a 72px — en 390px entran tres años en vez de uno.
+  const isPhone = usePhone();
   const [history,      setHistory]      = useState<ModelHistoryPayload | null>(null);
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState<string | null>(null);
@@ -664,13 +668,14 @@ export default function ModelExplorer({ ticker, consensusEstimates = [], valuati
 
   // ── Shared cell geometry ───────────────────────────────────────────────────
   const MONO: React.CSSProperties = { fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" };
+  const LABEL_W = isPhone ? 140 : 300;
   const labelSticky: React.CSSProperties = {
     position: "sticky", left: 0, zIndex: 1,
-    width: 300, minWidth: 300, maxWidth: 300,
+    width: LABEL_W, minWidth: LABEL_W, maxWidth: LABEL_W,
     borderRight: `1px solid ${C.BDR}`,
     whiteSpace: "normal", lineHeight: 1.3,
   };
-  const yearColW: React.CSSProperties = { minWidth: 90, width: 90 };
+  const yearColW: React.CSSProperties = isPhone ? { minWidth: 72, width: 72 } : { minWidth: 90, width: 90 };
   const CELL_PAD = "5px 8px";
 
   // ── Format update date for display ────────────────────────────────────────
@@ -1131,7 +1136,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [], valuati
         background: C.WHITE,
         overflow: "auto",
         maxHeight: "calc(100dvh - 120px)",
-        padding: "0 12px 12px",
+        padding: isPhone ? "0 4px 8px" : "0 12px 12px",
       }}>
         <table style={{ borderCollapse: "collapse", fontSize: 13, tableLayout: "fixed", width: "100%" }}>
 

@@ -369,7 +369,7 @@ export default function TopPicksPanel({ defaultRegion, region: regionProp }: Pro
           </>
         )}
 
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", maxWidth: "100%" }}>
           {view === "summary" && activePeriods.length > 0 && (
             <>
               <button onClick={exportSummary} style={ghostBtn}>

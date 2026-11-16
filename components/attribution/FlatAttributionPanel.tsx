@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import type { FlatAttributionPayload, AssetAttribution } from "@/app/api/attribution/flat/route";
 import { PATRIA, FONT_SECONDARY } from "@/lib/patriaTheme";
 import { PatriaTitle } from "@/components/patria/PatriaTitle";
+import { usePhone } from "@/lib/useBreakpoint";
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
 const BORDER   = "rgba(13,13,56,0.08)";
@@ -49,7 +50,7 @@ function KpiCard({
   label, value, valueColor, sub,
 }: { label: string; value: string; valueColor?: string; sub?: string }) {
   return (
-    <div style={{ ...cardStyle, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
+    <div style={{ ...cardStyle, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 4, flex: 1, minWidth: 0 }}>
       <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.10em", color: TEXT2, textTransform: "uppercase" }}>
         {label}
       </span>
@@ -68,6 +69,9 @@ type SortKey = keyof Pick<AssetAttribution, "ticker" | "wp" | "wb" | "activeWeig
 function AttributionTable({ assets }: { assets: AssetAttribution[] }) {
   const [sortKey,   setSortKey]   = useState<SortKey>("allocationEffect");
   const [sortDir,   setSortDir]   = useState<"asc" | "desc">("desc");
+  // Teléfono: Ticker (con la compañía debajo) · Active W · Return · Alloc. Los pesos
+  // absolutos quedan para pantallas anchas: el activo ya dice de qué lado está la apuesta.
+  const isPhone = usePhone();
 
   const sorted = [...assets].sort((a, b) => {
     const av = a[sortKey] as number | string;
@@ -104,12 +108,12 @@ function AttributionTable({ assets }: { assets: AssetAttribution[] }) {
         <thead>
           <tr>
             <Th col="ticker"           label="Ticker"            />
-            <th style={{ padding: "7px 10px", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: PATRIA.kingBlue, fontFamily: FONT_SECONDARY, background: "#F5F7FD", whiteSpace: "nowrap" }}>Company</th>
-            <Th col="wp"               label="Port. W%"   right  />
-            <Th col="wb"               label="Bench. W%"  right  />
-            <Th col="activeWeight"     label="Active W%"  right  />
+            {!isPhone && <th style={{ padding: "7px 10px", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: PATRIA.kingBlue, fontFamily: FONT_SECONDARY, background: "#F5F7FD", whiteSpace: "nowrap" }}>Company</th>}
+            {!isPhone && <Th col="wp"  label="Port. W%"   right  />}
+            {!isPhone && <Th col="wb"  label="Bench. W%"  right  />}
+            <Th col="activeWeight"     label={isPhone ? "Active" : "Active W%"}  right  />
             <Th col="ret"              label="Return"     right  />
-            <Th col="allocationEffect" label="Alloc. Effect" right />
+            <Th col="allocationEffect" label={isPhone ? "Alloc." : "Alloc. Effect"} right />
           </tr>
         </thead>
         <tbody>
@@ -125,10 +129,14 @@ function AttributionTable({ assets }: { assets: AssetAttribution[] }) {
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = i % 2 === 0 ? "#FFFFFF" : "rgba(13,13,56,0.018)"; }}
             >
               {/* Ticker */}
-              <td style={{ padding: "8px 10px", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontWeight: 700, color: BLUE, fontSize: 11, whiteSpace: "nowrap" }}>
-                {row.ticker}
+              <td style={{ padding: "8px 10px", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontWeight: 700, color: BLUE, fontSize: 11, whiteSpace: "nowrap", maxWidth: isPhone ? 140 : undefined }}>
+                {isPhone ? row.ticker.replace(/ EQUITY$/i, "") : row.ticker}
+                {isPhone && (
+                  <div style={{ fontFamily: "inherit", fontWeight: 400, fontSize: 9.5, color: TEXT2, overflow: "hidden", textOverflow: "ellipsis" }}>{row.company}</div>
+                )}
               </td>
 
+              {!isPhone && <>
               {/* Company */}
               <td style={{ padding: "8px 10px", color: TEXT1, fontSize: 11, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {row.company}
@@ -143,6 +151,7 @@ function AttributionTable({ assets }: { assets: AssetAttribution[] }) {
               <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, color: TEXT2 }}>
                 {fmtW(row.wb)}
               </td>
+              </>}
 
               {/* Active Weight */}
               <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, fontWeight: 700 }}>
@@ -179,15 +188,17 @@ function AttributionTable({ assets }: { assets: AssetAttribution[] }) {
         {/* Totals row */}
         <tfoot>
           <tr style={{ background: "#F5F7FD", borderTop: "2px solid rgba(13,13,56,0.10)" }}>
-            <td colSpan={2} style={{ padding: "8px 10px", fontSize: 10, fontWeight: 700, color: PATRIA.kingBlue, fontFamily: FONT_SECONDARY, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-              Total / Weighted Sum
+            <td colSpan={isPhone ? 1 : 2} style={{ padding: "8px 10px", fontSize: 10, fontWeight: 700, color: PATRIA.kingBlue, fontFamily: FONT_SECONDARY, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+              {isPhone ? "Total" : "Total / Weighted Sum"}
             </td>
+            {!isPhone && <>
             <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, fontWeight: 700, color: TEXT1 }}>
               {fmtW(assets.reduce((s, r) => s + r.wp, 0))}
             </td>
             <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, fontWeight: 700, color: TEXT2 }}>
               {fmtW(assets.reduce((s, r) => s + r.wb, 0))}
             </td>
+            </>}
             <td style={{ padding: "8px 10px", textAlign: "right" }} />
             <td style={{ padding: "8px 10px", textAlign: "right" }} />
             <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 11, fontWeight: 800 }}>
@@ -200,8 +211,8 @@ function AttributionTable({ assets }: { assets: AssetAttribution[] }) {
       </table>
 
       {/* Legend */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", borderTop: "1px solid rgba(13,13,56,0.06)" }}>
-        <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "8px 14px", borderTop: "1px solid rgba(13,13,56,0.06)" }}>
+        <div style={{ display: "flex", gap: "4px 16px", alignItems: "center", flexWrap: "wrap" }}>
           <span style={{ fontSize: 10, color: GREEN, fontWeight: 600 }}>● Overweight / Positive</span>
           <span style={{ fontSize: 10, color: RED,   fontWeight: 600 }}>● Underweight / Negative</span>
           <span style={{ fontSize: 10, color: TEXT2, fontStyle: "italic" }}>
@@ -338,7 +349,7 @@ export default function FlatAttributionPanel() {
       {data && !loading && (
         <>
           {/* ── KPI Cards ── */}
-          <div style={{ display: "flex", gap: 12 }}>
+          <div className="g-2col-sm" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
             <KpiCard
               label={`Portfolio Return — ${fundInfo.label}`}
               value={fmtPct(data.summary.portReturn)}
@@ -382,7 +393,7 @@ export default function FlatAttributionPanel() {
           <div style={{ ...cardStyle, overflow: "hidden" }}>
             <PatriaTitle
               style={{ borderRadius: 0, marginBottom: 4 }}
-              right={<span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: 11, opacity: 0.75 }}>Click column headers to sort</span>}
+              right={<span className="hide-phone" style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: 11, opacity: 0.75 }}>Click column headers to sort</span>}
             >
               Asset-Level Attribution — {selPeriod.label}
             </PatriaTitle>

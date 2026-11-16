@@ -444,20 +444,21 @@ export default function PerformanceAttribution({ fundId, displayName }: Props) {
           alignItems: "center",
           justifyContent: "space-between",
           gap: 12,
+          flexWrap: "wrap",
         }}
       >
         <span style={{ fontSize: 11, fontWeight: 600, color: "rgba(13,13,56,0.62)", letterSpacing: "0.08em" }}>
           PERFORMANCE ATTRIBUTION — {displayName.toUpperCase()}
         </span>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px 16px", flexWrap: "wrap" }}>
           <div
             className="inline-flex items-center gap-1.5 bg-patria-dark-blue/[0.06] border border-patria-dark-blue/10 text-patria-dark-blue font-semibold tracking-wide rounded-md"
             style={{ fontSize: 11, padding: "3px 10px" }}
           >
             as of {fmtFullDate(data.currentDate)}
-            <span style={{ color: "rgba(13,13,56,0.45)", fontWeight: 400 }}>·</span>
-            <span style={{ color: "rgba(13,13,56,0.62)", fontWeight: 500 }}>MoM Δ vs prev period</span>
+            <span className="hide-phone" style={{ color: "rgba(13,13,56,0.45)", fontWeight: 400 }}>·</span>
+            <span className="hide-phone" style={{ color: "rgba(13,13,56,0.62)", fontWeight: 500 }}>MoM Δ vs prev period</span>
           </div>
 
           {/* Segmented control toggle */}
@@ -503,7 +504,9 @@ export default function PerformanceAttribution({ fundId, displayName }: Props) {
       {/* ── Table view ─────────────────────────────────────────────────────── */}
       {viewMode === "table" && (
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          {/* `.perf-attr`: en teléfono quedan Security · Active · Total · Δ Total
+              (globals.css, por posición de columna). */}
+          <table className="perf-attr" style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ background: "#F5F7FD" }}>
                 <th style={{ width: 32, padding: "8px 6px" }} />

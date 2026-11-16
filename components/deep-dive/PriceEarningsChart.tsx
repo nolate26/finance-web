@@ -401,7 +401,7 @@ export default function PriceEarningsChart({ data, consensus }: Props) {
         </div>
 
         {/* Right-side controls: metric selector · badge · time range */}
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", maxWidth: "100%" }}>
 
           {/* Earnings metric selector */}
           <div style={{

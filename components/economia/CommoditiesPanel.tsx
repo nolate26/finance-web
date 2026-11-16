@@ -370,7 +370,7 @@ function HistoricalPanel({
       {/* Right — chart */}
       <div className="card flex flex-col overflow-hidden" style={{ minHeight: 340 }}>
         <div
-          className="px-5 py-3 flex items-center justify-between"
+          className="px-5 py-3 flex flex-wrap items-center justify-between gap-3"
         style={{ background: PATRIA.darkBlue }}
         >
           <div>

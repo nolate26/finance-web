@@ -181,13 +181,13 @@ function HoldingsTable({
     borderBottom: "1px solid rgba(13,13,56,0.07)",
   } as const;
 
-  function thBtn(col: SortCol, label: string, align: "left" | "right" = "right") {
+  function thBtn(col: SortCol, label: string, align: "left" | "right" = "right", extra = "") {
     const active = sortCol === col;
     return (
       <th
         className={`px-3 py-2.5 font-medium cursor-pointer select-none ${
           align === "left" ? "text-left" : "text-right"
-        }`}
+        } ${extra}`}
         style={{ ...thStyle, color: active ? "#2044DC" : "rgba(13,13,56,0.62)" }}
         onClick={() => handleSort(col)}
       >
@@ -206,9 +206,11 @@ function HoldingsTable({
       {/* Header */}
       <div
         className="px-4 py-3 border-b flex items-center justify-between gap-3 flex-wrap"
-        style={{ borderColor: "rgba(13,13,56,0.07)" }}
+        // Sin sector elegido el título va en blanco: necesita la banda dark-blue
+        // (sin ella el encabezado quedaba blanco sobre blanco, invisible).
+        style={{ borderColor: "rgba(13,13,56,0.07)", background: selectedSector ? undefined : PATRIA.darkBlue }}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           {selectedSector ? (
             <>
               <button
@@ -247,7 +249,7 @@ function HoldingsTable({
               <h2 className="text-sm font-bold font-primary uppercase tracking-wide" style={{ color: PATRIA.white }}>
                 Portfolio Holdings
               </h2>
-              <p className="text-xs font-secondary" style={{ color: "rgba(255,255,255,0.72)" }}>
+              <p className="hide-phone text-xs font-secondary" style={{ color: "rgba(255,255,255,0.72)" }}>
                 Click a sector block to filter · Click again to clear
               </p>
             </>
@@ -255,7 +257,7 @@ function HoldingsTable({
         </div>
         <span
           className="text-xs font-secondary tabular-nums px-2 py-0.5 rounded"
-          style={{ background: "rgba(32,68,220,0.08)", color: "#2044DC" }}
+          style={selectedSector ? { background: "rgba(32,68,220,0.08)", color: "#2044DC" } : { background: "rgba(255,255,255,0.12)", color: "#fff" }}
         >
           {sorted.length}{selectedSector ? ` / ${allCount}` : ""} positions
         </span>
@@ -267,13 +269,13 @@ function HoldingsTable({
           <thead className="sticky top-0 z-10" style={{ background: "#F5F7FD" }}>
             <tr>
               <th
-                className="px-3 py-2.5 text-left font-medium w-7"
+                className="hide-phone px-3 py-2.5 text-left font-medium w-7"
                 style={thStyle}
               >
                 #
               </th>
               {thBtn("company", "Company", "left")}
-              {thBtn("sector", "Sector", "left")}
+              {thBtn("sector", "Sector", "left", "hide-phone")}
               {thBtn("portfolioPct", "Fund %")}
               {thBtn("benchmarkPct", `% ${benchmark}`)}
               {thBtn("overweight", "Active Weight")}
@@ -295,8 +297,8 @@ function HoldingsTable({
                   </span>
                 </th>
               )}
-              {hasDelta1W && thBtn("delta1W", "Δ 1W")}
-              {hasDelta1M && thBtn("delta1M", "Δ 1M")}
+              {hasDelta1W && thBtn("delta1W", "Δ 1W", "right", "hide-phone")}
+              {hasDelta1M && thBtn("delta1M", "Δ 1M", "right", "hide-phone")}
             </tr>
           </thead>
           <tbody>
@@ -324,17 +326,21 @@ function HoldingsTable({
                   }
                 >
                   {/* # */}
-                  <td className="px-3 py-2 font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.45)" }}>
+                  <td className="hide-phone px-3 py-2 font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.45)" }}>
                     {i + 1}
                   </td>
 
                   {/* Company */}
-                  <td className="px-3 py-2 font-medium" style={{ color: "#0D0D38" }}>
+                  <td className="px-3 py-2 font-medium wrap-phone" style={{ color: "#0D0D38" }}>
                     {row.company}
+                    {/* Teléfono: el sector va debajo del nombre en vez de en su columna */}
+                    <div className="phone-only" style={{ fontSize: 10, fontWeight: 400, color: "rgba(13,13,56,0.45)", marginTop: 1 }}>
+                      {displaySector}
+                    </div>
                   </td>
 
                   {/* Sector (new column) */}
-                  <td className="px-3 py-2">
+                  <td className="hide-phone px-3 py-2">
                     <span
                       className="px-1.5 py-0.5 rounded text-[10px] font-medium"
                       style={{
@@ -351,7 +357,7 @@ function HoldingsTable({
                   <td className="px-3 py-2 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <div
-                        className="w-10 h-1.5 rounded-full"
+                        className="hide-phone w-10 h-1.5 rounded-full"
                         style={{ background: "rgba(32,68,220,0.10)" }}
                       >
                         <div
@@ -429,7 +435,7 @@ function HoldingsTable({
 
                   {/* Δ 1W */}
                   {hasDelta1W && (
-                    <td className="px-3 py-2 text-right">
+                    <td className="hide-phone px-3 py-2 text-right">
                       <span
                         className="font-secondary tabular-nums font-semibold text-[11px] px-1.5 py-0.5 rounded"
                         style={{ color: d1w.color, background: d1w.bg }}
@@ -441,7 +447,7 @@ function HoldingsTable({
 
                   {/* Δ 1M */}
                   {hasDelta1M && (
-                    <td className="px-3 py-2 text-right">
+                    <td className="hide-phone px-3 py-2 text-right">
                       <span
                         className="font-secondary tabular-nums font-semibold text-[11px] px-1.5 py-0.5 rounded"
                         style={{ color: d1m.color, background: d1m.bg }}

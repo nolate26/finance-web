@@ -3,6 +3,7 @@
 import { PATRIA, FONT_SECONDARY } from "@/lib/patriaTheme";
 
 import { useEffect, useState, useMemo } from "react";
+import { usePhone } from "@/lib/useBreakpoint";
 import {
   LineChart,
   Line,
@@ -249,6 +250,19 @@ const EXTENDED_COLS: ColDef[] = [
   FEE_COL,
 ];
 
+// Teléfono: las 9–14 columnas van de a un bloque, elegido con chips. Las columnas se
+// eligen por etiqueta, así sirven igual para el set estándar y el extendido (Brasil).
+const PHONE_SETS = [
+  { id: "ret",  label: "Retornos",    cols: ["MTD", "YTD", "1 YEAR", "3 YEARS"] },
+  { id: "long", label: "Largo plazo", cols: ["5 YEARS", "10 YEARS", "SINCE INCEP.", "ANN. S. INCEP."] },
+  { id: "fund", label: "Fondo",       cols: ["AUM ($MM)", "SHARPE", "MGMT FEE"] },
+] as const;
+type PhoneSet = (typeof PHONE_SETS)[number]["id"];
+const PHONE_LABEL: Record<string, string> = {
+  "1 YEAR": "1Y", "3 YEARS": "3Y", "5 YEARS": "5Y", "10 YEARS": "10Y",
+  "SINCE INCEP.": "S. INCEP.", "ANN. S. INCEP.": "S. INCEP.", "AUM ($MM)": "AUM $MM", "MGMT FEE": "FEE",
+};
+
 // ── Chart helpers ─────────────────────────────────────────────────────────────
 
 function fmtShortDate(iso: string): string {
@@ -339,8 +353,13 @@ function compareRows(a: NRow, b: NRow, cfg: SortConfig): number {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function ReturnsDashboard({ query, fundDisplayName, fundKey, columns = "standard" }: Props) {
-  const TABLE_COLS = columns === "extended" ? EXTENDED_COLS : STANDARD_COLS;
+  const isPhone = usePhone();
+  const [phoneSet, setPhoneSet] = useState<PhoneSet>("ret");
+  const ALL_COLS = columns === "extended" ? EXTENDED_COLS : STANDARD_COLS;
+  const phoneCols: readonly string[] = PHONE_SETS.find((x) => x.id === phoneSet)!.cols;
+  const TABLE_COLS = isPhone ? ALL_COLS.filter((c) => phoneCols.includes(c.label)) : ALL_COLS;
   const TOTAL_COLS = 1 + TABLE_COLS.length;
+  const colLabel = (c: ColDef) => (isPhone ? PHONE_LABEL[c.label] ?? c.label : c.label);
 
   const [rows, setRows] = useState<RentabilidadRow[]>([]);
   const [timeseries, setTimeseries] = useState<TimeseriesPoint[]>([]);
@@ -796,6 +815,19 @@ export default function ReturnsDashboard({ query, fundDisplayName, fundKey, colu
       </div>
 
       {/* ── Grouped Returns Table ────────────────────────────────────────────── */}
+      {isPhone && (
+        <div className="tab-rail" style={{ display: "flex", gap: 6, padding: "8px 12px", borderBottom: "1px solid rgba(13,13,56,0.06)" }}>
+          {PHONE_SETS.map((x) => {
+            const on = x.id === phoneSet;
+            return (
+              <button key={x.id} onClick={() => setPhoneSet(x.id)} className="keep-dense"
+                style={{ padding: "6px 14px", borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", border: `1px solid ${on ? PATRIA.kingBlue : "rgba(13,13,56,0.14)"}`, background: on ? PATRIA.kingBlue : "#fff", color: on ? "#fff" : "rgba(13,13,56,0.62)" }}>
+                {x.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
 
@@ -811,14 +843,14 @@ export default function ReturnsDashboard({ query, fundDisplayName, fundKey, colu
                   zIndex: 10,
                   background: "#F5F7FD",
                   boxShadow: "2px 0 4px rgba(13,13,56,0.06)",
-                  padding: "8px 18px",
+                  padding: isPhone ? "8px 12px" : "8px 18px",
                   textAlign: "left",
                   fontSize: 9,
                   fontWeight: 600,
                   fontFamily: FONT_SECONDARY,
                   color: sortConfig?.key === "fund" ? PATRIA.darkBlue : PATRIA.kingBlue,
                   letterSpacing: "0.08em",
-                  minWidth: 200,
+                  minWidth: isPhone ? 120 : 200,
                   whiteSpace: "nowrap",
                   cursor: "pointer",
                   userSelect: "none",
@@ -832,20 +864,20 @@ export default function ReturnsDashboard({ query, fundDisplayName, fundKey, colu
                   key={col.label}
                   onClick={() => col.sortKey && handleSort(col.sortKey)}
                   style={{
-                    padding: "8px 14px",
+                    padding: isPhone ? "8px 8px" : "8px 14px",
                     textAlign: col.right ? "right" : "left",
                     fontSize: 9,
                     fontWeight: 700,
                     fontFamily: FONT_SECONDARY,
                     color: col.sortKey && sortConfig?.key === col.sortKey ? PATRIA.darkBlue : PATRIA.kingBlue,
                     letterSpacing: "0.08em",
-                    minWidth: col.label === "MANAGER" ? 110 : 76,
+                    minWidth: isPhone ? 0 : col.label === "MANAGER" ? 110 : 76,
                     whiteSpace: "nowrap",
                     cursor: col.sortKey ? "pointer" : "default",
                     userSelect: "none",
                   }}
                 >
-                  {col.label} {sortIndicator(col.sortKey)}
+                  {colLabel(col)} {sortIndicator(col.sortKey)}
                 </th>
               ))}
             </tr>
@@ -894,9 +926,9 @@ export default function ReturnsDashboard({ query, fundDisplayName, fundKey, colu
                           zIndex: 5,
                           background: rowBg,
                           boxShadow: "2px 0 4px rgba(13,13,56,0.05)",
-                          padding: "9px 18px",
-                          minWidth: 200,
-                          whiteSpace: "nowrap",
+                          padding: isPhone ? "9px 12px" : "9px 18px",
+                          minWidth: isPhone ? 120 : 200,
+                          whiteSpace: isPhone ? "normal" : "nowrap",
                         }}
                       >
                         <span
@@ -918,7 +950,7 @@ export default function ReturnsDashboard({ query, fundDisplayName, fundKey, colu
                           <td
                             key={col.label}
                             style={{
-                              padding: "9px 14px",
+                              padding: isPhone ? "9px 8px" : "9px 14px",
                               textAlign: isDash ? "center" : col.right ? "right" : "left",
                               fontFamily: FONT_SECONDARY,
                               fontSize: 12,

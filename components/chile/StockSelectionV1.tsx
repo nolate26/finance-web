@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw, LayoutGrid, X, Check, Plus, Save, Search, Pencil, RotateCcw, Lock, FileSpreadsheet, Printer } from "lucide-react";
 import { useIsAdmin } from "@/lib/useIsAdmin";
+import { usePhone } from "@/lib/useBreakpoint";
 import SsV1PrintView, { type PrintColGroup } from "./SsV1PrintView";
 import { EDIT_BG, EDIT_BORDER, GROUP_RULE, SECTION_RULE } from "./ssTokens";
 import StockSelectionFreshness from "./StockSelectionFreshness";
@@ -617,8 +618,50 @@ function buildGroups(periodN: string | null, periodN4: string | null, returnsAsO
   ];
 }
 
+// ── Teléfono vertical ─────────────────────────────────────────────────────────────
+// En 390px no entran 30 columnas, y arrastrar la tabla en horizontal pierde el hilo. En
+// teléfono la tabla muestra Empresa + UN grupo a la vez, elegido en un riel de chips. La
+// vista por defecto es un resumen armado con las columnas que se miran primero; el resto
+// de los grupos se ven completos (desplegados), uno por chip.
+// Los múltiplos dependen del precio de Yahoo: sin traerlo saldrían todos "—", así que
+// el resumen sin precios muestra retornos (que vienen de Bloomberg y siempre están).
+type PhoneCol = { id: string; label: string };
+const PHONE_SUMMARY_PRICED: PhoneCol[] = [
+  { id: "retYtd", label: "YTD" }, { id: "fvEbitda26", label: "FV/EB 26E" }, { id: "pu26", label: "P/U 26E" }, { id: "rec", label: "Rec." },
+];
+const PHONE_SUMMARY_UNPRICED: PhoneCol[] = [
+  { id: "retMonth", label: "Mes" }, { id: "retYtd", label: "YTD" }, { id: "retYear", label: "Año" }, { id: "rec", label: "Rec." },
+];
+// Índices y fondos: no tienen retornos ni recomendación, el resumen son los múltiplos.
+const PHONE_SUMMARY_IDX: PhoneCol[] = [
+  { id: "mcap", label: "M.Cap" }, { id: "fvEbitda26", label: "FV/EB 26E" }, { id: "pu26", label: "P/U 26E" }, { id: "divYield", label: "Yld 26E" },
+];
+const PHONE_SUMMARY_ID = "resumen";
+/** Título corto del chip: "Retornos · al 16/10/26" → "Retornos". */
+const chipTitle = (g: Group) => g.title.split(" · ")[0];
+function summaryGroup(groups: Group[], ids: PhoneCol[]): Group {
+  const byId = new Map(groups.flatMap((g) => g.cols.map((c) => [c.id, c] as const)));
+  const cols = ids.flatMap(({ id, label }) => { const c = byId.get(id); return c ? [{ ...c, label }] : []; });
+  return { id: PHONE_SUMMARY_ID, title: "Resumen", cols };
+}
+function phoneGroups(groups: Group[], view: string, priced: boolean): Group[] {
+  if (view === PHONE_SUMMARY_ID) return [summaryGroup(groups, priced ? PHONE_SUMMARY_PRICED : PHONE_SUMMARY_UNPRICED)];
+  const g = groups.find((x) => x.id === view);
+  return g ? [{ ...g, collapsible: false }] : [];
+}
+/** Lo mismo para la tabla de índices: el grupo elegido si agrega, si no el resumen
+ *  (sin precios, el crecimiento de EBITDA: es lo único que no depende del precio). */
+function phoneIdxGroups(idxGroups: Group[], view: string, priced: boolean): Group[] {
+  const g = idxGroups.find((x) => x.id === view && x.id !== "ret");
+  if (g) return [g];
+  const growth = idxGroups.find((x) => x.id === "ebitdaUsd");
+  return !priced && growth ? [growth] : [summaryGroup(idxGroups, PHONE_SUMMARY_IDX)];
+}
+
 // ── Component ────────────────────────────────────────────────────────────────────
 export default function StockSelectionV1() {
+  const isPhone = usePhone();
+  const [phoneView, setPhoneView] = useState(PHONE_SUMMARY_ID);
   const [data, setData] = useState<SsV1Payload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -990,17 +1033,25 @@ export default function StockSelectionV1() {
     ] },
   ];
 
+  // Lo que pinta la tabla principal: todos los grupos en escritorio, uno solo en teléfono.
+  const shownGroups = isPhone ? phoneGroups(groupDefs, phoneView, priced) : groupDefs;
+  const colsOf = (g: Group) => (isPhone ? g.cols : visibleCols(g, expandedGroups));
+  // En teléfono la tabla tiene scroll propio (ver el contenedor): el encabezado se pega
+  // al borde de ESE contenedor, no debajo del navbar, y la columna Empresa a su izquierda.
+  const headTop = isPhone ? 0 : NAV_H;
+  const leftPx  = isPhone ? 0 : stickyLeftPx;
+
   const renderCells = (r: DisplayRow, topBorder = false) => {
     // Sólo la celda directa del campo editado, y en las series sólo la de su clase.
     const aff = r.overrides?.length ? affectedCols(r.overrides, r.kind === "series" ? r.label : null) : null;
-    return groupDefs.map((g, gIdx) =>
-      visibleCols(g, expandedGroups).map((col, i) => {
+    return shownGroups.map((g, gIdx) =>
+      colsOf(g).map((col, i) => {
         const out = col.render(r);
         const edited = aff?.has(col.id);
         return (
           <td key={col.id}
             title={g.id === "ret" && r.retAsOf ? `Retorno al ${fmtDate(r.retAsOf)} · Bloomberg` : undefined}
-            style={{ padding: r.kind === "series" ? "3px 7px" : "5px 7px", textAlign: col.align ?? "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: r.kind === "series" ? 10 : 10.5, color: out.color ?? TEXT1, fontWeight: edited ? 700 : out.weight ?? 400, borderBottom: `1px solid ${BORDER}`, borderTop: topBorder ? SECTION_BORDER : undefined, borderLeft: i === 0 ? `1px solid ${GROUP_RULE}` : "none", background: edited ? EDIT_BG : g.tint ?? (gIdx % 2 === 1 ? BAND : undefined), boxShadow: edited ? `inset 0 0 0 1px ${EDIT_BORDER}55` : undefined, whiteSpace: "nowrap" }}>
+            style={{ padding: isPhone ? (r.kind === "series" ? "4px 6px" : "7px 6px") : r.kind === "series" ? "3px 7px" : "5px 7px", textAlign: col.align ?? "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: isPhone ? (r.kind === "series" ? 11 : 12) : r.kind === "series" ? 10 : 10.5, color: out.color ?? TEXT1, fontWeight: edited ? 700 : out.weight ?? 400, borderBottom: `1px solid ${BORDER}`, borderTop: topBorder ? SECTION_BORDER : undefined, borderLeft: i === 0 ? `1px solid ${GROUP_RULE}` : "none", background: edited ? EDIT_BG : g.tint ?? (gIdx % 2 === 1 ? BAND : undefined), boxShadow: edited ? `inset 0 0 0 1px ${EDIT_BORDER}55` : undefined, whiteSpace: "nowrap" }}>
             {out.text}
           </td>
         );
@@ -1051,19 +1102,19 @@ export default function StockSelectionV1() {
             style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", color: NAVY, background: "#fff", border: `1px solid ${BORDER}` }}>
             <FileSpreadsheet size={13} /> Excel
           </button>
-          <button onClick={() => window.print()} disabled={pricesLoading}
+          <button onClick={() => window.print()} disabled={pricesLoading} className="hide-phone"
             title="Hoja imprimible: legal apaisado, dos planas. En el diálogo elegí “Guardar como PDF”."
             style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", color: NAVY, background: "#fff", border: `1px solid ${BORDER}` }}>
             <Printer size={13} /> PDF
           </button>
           {isAdmin && (
-            <button onClick={() => setShowIndexEditor(true)} title="Editar la pertenencia de cada empresa a los índices (admin)"
+            <button onClick={() => setShowIndexEditor(true)} className="hide-phone" title="Editar la pertenencia de cada empresa a los índices (admin)"
               style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", color: NAVY, background: "#fff", border: `1px solid ${NAVY}` }}>
               <LayoutGrid size={13} /> Índices
             </button>
           )}
           {isAdmin && (
-            <button onClick={() => setEditMode((e) => !e)} title="Editar valores de las compañías (override de admin). Clic en el nombre de una empresa para abrir su panel."
+            <button onClick={() => setEditMode((e) => !e)} className="hide-phone" title="Editar valores de las compañías (override de admin). Clic en el nombre de una empresa para abrir su panel."
               style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", color: editMode ? "#fff" : EDIT_BORDER, background: editMode ? EDIT_BORDER : "#fff", border: `1px solid ${EDIT_BORDER}` }}>
               <Pencil size={13} /> {editMode ? "Editando valores" : "Editar valores"}
             </button>
@@ -1110,7 +1161,7 @@ export default function StockSelectionV1() {
       </div>
 
       {!priced && (
-        <div style={{ fontSize: 11.5, color: TEXT2, marginBottom: 10 }}>
+        <div className="hide-phone" style={{ fontSize: 11.5, color: TEXT2, marginBottom: 10 }}>
           Apretá <strong>Traer precios (Yahoo)</strong> para llenar Precio, M.Cap, FV y los múltiplos que dependen del precio (incluye precios por serie A/B). Los retornos ya están cargados: no dependen de Yahoo.
         </div>
       )}
@@ -1130,7 +1181,10 @@ export default function StockSelectionV1() {
         </span>
       </div>
 
-      <div style={{ fontSize: 10.5, color: TEXT3, marginBottom: 6 }}>
+      <div className="phone-only" style={{ fontSize: 10.5, color: TEXT3, marginBottom: 6 }}>
+        Montos en USD mn · L3Y/L5Y anualizados · NM = no significativo
+      </div>
+      <div className="hide-phone" style={{ fontSize: 10.5, color: TEXT3, marginBottom: 6 }}>
         Montos en USD mn (÷ TC si es CLP) · Retornos = total return con dividendos brutos; <strong style={{ color: TEXT2 }}>L3Y y L5Y anualizados</strong> · <strong style={{ color: TEXT2 }}>NM</strong> = no significativo · Los grupos con <span style={{ color: TEXT2, fontWeight: 700 }}>▸</span> muestran 1 columna — clic en el encabezado para desplegar el resto.
       </div>
 
@@ -1143,18 +1197,33 @@ export default function StockSelectionV1() {
           y el encabezado se iría con la página), así que en una ventana angosta con todos
           los grupos abiertos la tabla puede sobresalir a la derecha y scrollear la página
           en horizontal — la columna Empresa queda fija igual. */}
-      <div ref={tableWrapRef} className="fit-width" style={{ overflow: "visible", border: "1px solid rgba(13,13,56,0.18)", borderRadius: 8, background: "#fff" }}>
+      {/* Teléfono: riel de chips que elige el grupo de columnas visible. */}
+      {isPhone && (
+        <div className="tab-rail" style={{ display: "flex", gap: 6, marginBottom: 8, paddingBottom: 2 }}>
+          {[{ id: PHONE_SUMMARY_ID, label: "Resumen" }, ...groupDefs.map((g) => ({ id: g.id, label: chipTitle(g) }))].map((c) => {
+            const on = phoneView === c.id;
+            return (
+              <button key={c.id} onClick={() => setPhoneView(c.id)} className="keep-dense"
+                style={{ padding: "6px 12px", borderRadius: 999, fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", cursor: "pointer", border: `1px solid ${on ? INK : BORDER}`, background: on ? INK : "#fff", color: on ? "#fff" : TEXT2 }}>
+                {c.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <div ref={tableWrapRef} className={isPhone ? "no-fit" : "fit-width"}
+        style={{ overflow: isPhone ? "auto" : "visible", maxHeight: isPhone ? "calc(100dvh - 120px)" : undefined, overscrollBehavior: isPhone ? "contain" : undefined, border: "1px solid rgba(13,13,56,0.18)", borderRadius: 8, background: "#fff" }}>
         <table style={{ borderCollapse: "separate", borderSpacing: 0, fontSize: 11, width: "100%" }}>
           <thead>
-            <tr ref={headRowRef}>
-              <th style={{ ...stickyTh, left: fitPx(stickyLeftPx), top: fitPx(NAV_H), zIndex: Z.corner }} rowSpan={2}>Empresa</th>
-              {groupDefs.map((g, gIdx) => {
+            <tr ref={headRowRef} style={isPhone ? { display: "none" } : undefined}>
+              {!isPhone && <th style={{ ...stickyTh, left: fitPx(leftPx), top: fitPx(headTop), zIndex: Z.corner }} rowSpan={2}>Empresa</th>}
+              {shownGroups.map((g, gIdx) => {
                 const open = !g.collapsible || expandedGroups.has(g.id);
                 return (
-                  <th key={g.id} colSpan={visibleCols(g, expandedGroups).length}
+                  <th key={g.id} colSpan={colsOf(g).length}
                     onClick={() => g.collapsible && toggleGroup(g.id)}
                     title={[g.hint, g.collapsible ? (open ? "Clic para contraer" : "Clic para desplegar") : null].filter(Boolean).join(" · ") || undefined}
-                    style={{ position: "sticky", top: fitPx(NAV_H), zIndex: Z.head, padding: "5px 7px", textAlign: "center", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: NAVY_TEXT, borderLeft: "1px solid rgba(255,255,255,0.14)", whiteSpace: "nowrap", background: g.headBg ?? (gIdx % 2 === 1 ? NAVY_BAND : NAVY), cursor: g.collapsible ? "pointer" : "default", userSelect: "none" }}>
+                    style={{ position: "sticky", top: fitPx(headTop), zIndex: Z.head, padding: "5px 7px", textAlign: "center", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: NAVY_TEXT, borderLeft: "1px solid rgba(255,255,255,0.14)", whiteSpace: "nowrap", background: g.headBg ?? (gIdx % 2 === 1 ? NAVY_BAND : NAVY), cursor: g.collapsible ? "pointer" : "default", userSelect: "none" }}>
                     {g.collapsible && <span style={{ fontSize: 8, marginRight: 3, opacity: 0.7 }}>{open ? "▾" : "▸"}</span>}
                     {g.title}
                   </th>
@@ -1162,12 +1231,13 @@ export default function StockSelectionV1() {
               })}
             </tr>
             <tr>
-              {groupDefs.map((g, gIdx) =>
-                visibleCols(g, expandedGroups).map((col, i) => {
+              {isPhone && <th style={{ ...stickyTh, left: 0, top: 0, zIndex: Z.corner, verticalAlign: "bottom" }}>Empresa</th>}
+              {shownGroups.map((g, gIdx) =>
+                colsOf(g).map((col, i) => {
                   const active = sortKey === col.id;
                   return (
                     <th key={col.id} onClick={() => col.sortVal && sortBy(col.id)}
-                      style={{ position: "sticky", top: fitPx(NAV_H + headRowH), zIndex: Z.head, padding: "5px 7px", textAlign: col.align ?? "right", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: active ? "#fff" : HEAD2_TEXT, borderBottom: `2px solid ${g.headBg ?? NAVY}`, borderLeft: i === 0 ? `1px solid ${GROUP_RULE}` : "none", whiteSpace: "nowrap", cursor: col.sortVal ? "pointer" : "default", userSelect: "none", background: active ? NAVY_BAND : solidTint(g.tint) ?? (gIdx % 2 === 1 ? HEAD2_BAND_SOLID : HEAD2_BG) }}>
+                      style={{ position: "sticky", top: fitPx(isPhone ? 0 : headTop + headRowH), zIndex: Z.head, padding: isPhone ? "8px 6px" : "5px 7px", textAlign: col.align ?? "right", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: active ? "#fff" : HEAD2_TEXT, borderBottom: `2px solid ${g.headBg ?? NAVY}`, borderLeft: i === 0 ? `1px solid ${GROUP_RULE}` : "none", whiteSpace: "nowrap", cursor: col.sortVal ? "pointer" : "default", userSelect: "none", background: active ? NAVY_BAND : solidTint(g.tint) ?? (gIdx % 2 === 1 ? HEAD2_BAND_SOLID : HEAD2_BG) }}>
                       {col.label}{col.sortVal && <span style={{ fontSize: 8, opacity: active ? 1 : 0.45, marginLeft: 3 }}>{active ? (sortDir === "asc" ? "▲" : "▼") : "↕"}</span>}
                     </th>
                   );
@@ -1187,7 +1257,7 @@ export default function StockSelectionV1() {
                   <tr key={`${r.company}-${r.label || "cons"}`} style={{ background: bg }}>
                     <td onClick={editMode && !isSeries ? () => { const c = companyByName.get(normName(r.company)); if (c) setEditCompany(c); } : undefined}
                       title={editMode && !isSeries ? "Editar valores de esta compañía" : undefined}
-                      style={{ ...stickyTd, left: fitPx(stickyLeftPx), borderTop: topBorder ? SECTION_BORDER : undefined, background: editMode && !isSeries ? EDIT_ROW_SOLID : bg, paddingLeft: isSeries ? 18 : 8, cursor: editMode && !isSeries ? "pointer" : undefined }}>
+                      style={{ ...stickyTd, left: fitPx(leftPx), borderTop: topBorder ? SECTION_BORDER : undefined, background: editMode && !isSeries ? EDIT_ROW_SOLID : bg, paddingLeft: isSeries ? 18 : 8, cursor: editMode && !isSeries ? "pointer" : undefined, ...(isPhone ? { maxWidth: 132, overflow: "hidden" } : null) }}>
                       {isSeries ? (
                         <>
                           <div style={{ fontSize: 10, fontWeight: 600, color: TEXT2, whiteSpace: "nowrap" }}>
@@ -1197,11 +1267,11 @@ export default function StockSelectionV1() {
                         </>
                       ) : (
                         <>
-                          <div style={{ fontSize: 11, fontWeight: 600, color: TEXT1, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 5 }}>
+                          <div style={{ fontSize: isPhone ? 12.5 : 11, fontWeight: 600, color: TEXT1, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 5 }}>
                             {editMode && <Pencil size={11} color={EDIT_BORDER} />}
                             {r.company}
                             {r.kind === "consolidated" && <span style={consBadge}>consol.</span>}
-                            {r.overrides?.length ? (
+                            {r.overrides?.length && !isPhone ? (
                               <span style={editedBadge} title="Celdas con valor editado a mano: overrides de esta vista y/o ediciones hechas en Proyecciones">
                                 {r.overrides.length} ed.
                               </span>
@@ -1219,7 +1289,7 @@ export default function StockSelectionV1() {
               });
             })}
             {groups.length === 0 && (
-              <tr><td colSpan={1 + groupDefs.reduce((n, g) => n + visibleCols(g, expandedGroups).length, 0)} style={{ textAlign: "center", padding: 32, color: TEXT3, fontSize: 13 }}>Sin empresas para los filtros actuales.</td></tr>
+              <tr><td colSpan={1 + shownGroups.reduce((n, g) => n + colsOf(g).length, 0)} style={{ textAlign: "center", padding: 32, color: TEXT3, fontSize: 13 }}>Sin empresas para los filtros actuales.</td></tr>
             )}
           </tbody>
         </table>
@@ -1227,7 +1297,8 @@ export default function StockSelectionV1() {
 
       {/* Sumaproducto por índice y por fondo — tabla aparte, tono teal */}
       {(indexAggregates.length > 0 || fundAggregates.length > 0) && (() => {
-        const idxGroupDefs = groupDefs.filter((g) => IDX_GROUP_IDS.includes(g.id));
+        const allIdxGroups = groupDefs.filter((g) => IDX_GROUP_IDS.includes(g.id));
+        const idxGroupDefs = isPhone ? phoneIdxGroups(allIdxGroups, phoneView, priced) : allIdxGroups;
         // Celdas de una fila agregada. Índices y fondos comparten markup: lo único que
         // cambia es el tinte y lo que va en la columna pegada de la izquierda.
         const aggCells = (r: DisplayRow, band: string | undefined) =>
@@ -1249,7 +1320,7 @@ export default function StockSelectionV1() {
               <h3 style={{ fontSize: 14, fontWeight: 700, color: IDX_HEAD, letterSpacing: "-0.01em", margin: 0 }}>
                 {fundAggregates.length > 0 ? "Índices y fondos — sumaproducto" : "Índices — sumaproducto de sus miembros"}
               </h3>
-              <span style={{ fontSize: 10.5, color: TEXT3 }}>
+              <span className="hide-phone" style={{ fontSize: 10.5, color: TEXT3 }}>
                 Cada índice = Σ (M.Cap y fundamentales × peso); los múltiplos salen de esas sumas. Precio = nivel real del índice (solo IPSA/IGPA). Los retornos van en blanco: el snapshot de Bloomberg es por ticker de acción, y ponderar los de los miembros no da el retorno del índice. {fundAggregates.length > 0 && "En los fondos el peso es la participación —acciones en cartera / acciones de la compañía— y el FV/EBITDA excluye a las que no reportan EBITDA en ese horizonte. "}{priced ? "" : "Traé precios para llenar."}
               </span>
             </div>

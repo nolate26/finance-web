@@ -10,6 +10,7 @@ import type { CellState, OverridesPayload } from "@/app/api/projections/override
 import { PATRIA, FONT_SECONDARY, TEXT, BORDER, SURFACE } from "@/lib/patriaTheme";
 import { YEAR_METRICS, ROW_YEAR, type YearMetric } from "@/lib/proyeccionOverrideFields";
 import { buildOrder, FIXED_KEY, type OrdenPayload, type OrdenIndex } from "@/lib/chileCompanyOrder";
+import { usePhone } from "@/lib/useBreakpoint";
 
 export type { ProjectionRowAPI as ProjectionRow };
 
@@ -366,6 +367,11 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
   const [sort, setSort] = useState<SortState>({ key: FIXED_KEY, dir: "asc" });
   const [hover, setHover] = useState<HoverInfo | null>(null);
   const [editMode, setEditMode] = useState(false);
+  // Teléfono: una métrica a la vez (3 años) en vez de 4 × 3; las columnas de info de la
+  // fila (sector, analista, payout, moneda) pasan a una línea debajo del nombre.
+  const isPhone = usePhone();
+  const [phoneMetric, setPhoneMetric] = useState<(typeof METRIC_HEADERS)[number]>("Utilidad");
+  const metrics = isPhone ? [phoneMetric] : METRIC_HEADERS;
   const [editing, setEditing] = useState<ProjectionRowAPI | null>(null);
 
   // Editar está abierto a CUALQUIER usuario autenticado (user o admin): el permiso no es
@@ -485,6 +491,7 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
         )}
         {supersededTotal > 0 && (
           <span
+            className="hide-phone"
             style={{ fontSize: 10, color: TEXT.muted }}
             title="Ediciones anteriores al último reporte del Excel. Siguen en la bitácora, pero ya no se aplican: manda la foto más fresca."
           >
@@ -505,7 +512,7 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
           >
             Orden fijo
           </button>
-          {canEdit ? (
+          {isPhone ? null : canEdit ? (
             <button
               onClick={() => setEditMode((e) => !e)}
               title="Clic en el nombre de una empresa para editar toda su fila"
@@ -534,7 +541,7 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
             borderBottom: BORDER_LIGHT,
             display: "flex",
             alignItems: "center",
-            gap: 18,
+            gap: isPhone ? "4px 12px" : 18,
             flexWrap: "wrap",
             fontSize: 10,
             color: "rgba(13,13,56,0.45)",
@@ -564,13 +571,27 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
             </span>
             no change
           </span>
-          <span style={{ color: "rgba(13,13,56,0.28)" }}>·</span>
-          <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span className="hide-phone" style={{ color: "rgba(13,13,56,0.28)" }}>·</span>
+          <span className="hide-phone" style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <span style={{ background: EDIT_BG, color: EDIT_INK, fontWeight: 700, padding: "0 4px", borderRadius: 3 }}>
               ámbar
             </span>
             editado a mano — pasá por encima para ver quién y cuándo
           </span>
+        </div>
+      )}
+
+      {isPhone && (
+        <div className="tab-rail" style={{ display: "flex", gap: 6, padding: "10px 12px", borderBottom: BORDER_LIGHT }}>
+          {METRIC_HEADERS.map((m) => {
+            const on = m === phoneMetric;
+            return (
+              <button key={m} onClick={() => setPhoneMetric(m)} className="keep-dense"
+                style={{ padding: "6px 14px", borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", border: `1px solid ${on ? PATRIA.kingBlue : "rgba(13,13,56,0.14)"}`, background: on ? PATRIA.kingBlue : "#fff", color: on ? "#fff" : TEXT.label }}>
+                {m}
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -583,13 +604,13 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
             {/* Row 1 — metric group headers */}
             <tr style={{ background: "#F5F7FD" }}>
               <th
-                colSpan={5}
+                colSpan={isPhone ? 1 : 5}
                 className="px-4 py-2 text-left text-[10px] font-bold tracking-widest uppercase"
                 style={{ color: "rgba(13,13,56,0.62)", borderBottom: BORDER_METRIC, borderRight: BORDER_METRIC }}
               >
                 Company Info
               </th>
-              {METRIC_HEADERS.map((m) => (
+              {metrics.map((m) => (
                 <th
                   key={m}
                   colSpan={3}
@@ -609,6 +630,7 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
               >
                 Empresa <SortIcon colKey="empresa" />
               </th>
+              {!isPhone && <>
               <th
                 className="px-3 py-2 text-left font-medium"
                 style={{ ...thStyle(sort.key === "sector"), borderBottom: BORDER_LIGHT }}
@@ -637,7 +659,8 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
               >
                 Mon.
               </th>
-              {METRIC_HEADERS.map((m) =>
+              </>}
+              {metrics.map((m) =>
                 COL_INDICES.map((ci) => {
                   const sortKey = `${METRIC_KEY[m]}_y${ci}` as SortKey;
                   return (
@@ -730,8 +753,14 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
                         base {row.sourceBaseYear}
                       </span>
                     )}
+                    {isPhone && (
+                      <div style={{ fontSize: 10, color: TEXT.muted, fontWeight: 400, marginTop: 2 }}>
+                        {[row.sector, row.moneda].filter(Boolean).join(" · ") || "—"}
+                      </div>
+                    )}
                   </td>
 
+                  {!isPhone && <>
                   <td className="px-3 py-2" style={{ color: TEXT.label, verticalAlign: "top" }}>
                     {row.sector || "—"}
                   </td>
@@ -763,9 +792,10 @@ export default function ProjectionsTable({ rows, base_year: globalBaseYear, prev
                     align="left"
                     borderRight={BORDER_METRIC}
                   />
+                  </>}
 
-                  {/* Las 4 métricas × 3 años */}
-                  {METRIC_HEADERS.map((m, mi) =>
+                  {/* Las 4 métricas × 3 años (en teléfono, la elegida) */}
+                  {metrics.map((m, mi) =>
                     COL_INDICES.map((ci) => {
                       const metric = METRIC_KEY[m];
                       const { value, pct, edit } = resolveCell(row, metric, ci);

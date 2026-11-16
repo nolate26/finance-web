@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { RefreshCw, TrendingDown, TrendingUp, Minus, RotateCcw } from "lucide-react";
 import type { ADCompany, ADBand, ActiveDecisionsPayload } from "@/app/api/chile/active-decisions/route";
 import { PATRIA, FONT_SECONDARY, TEXT } from "@/lib/patriaTheme";
+import { usePhone } from "@/lib/useBreakpoint";
 
 // ── Tokens ───────────────────────────────────────────────────────────────────
 const TEXT1 = PATRIA.darkBlue;   // Regla 4
@@ -126,6 +127,7 @@ export default function ActiveDecisions() {
   const [error,         setError]         = useState(false);
   const [pricesLoading, setPricesLoading] = useState(false);
   const [metric,        setMetric]        = useState<Metric>("pe");
+  const isPhone = usePhone();
   const [gicsFilter,    setGicsFilter]    = useState<string>("all");
   const [sortKey,       setSortKey]       = useState<SortKey>("position");
   const [sortDir,       setSortDir]       = useState<"asc" | "desc">("desc");
@@ -304,24 +306,26 @@ export default function ActiveDecisions() {
 
       {/* ── Table ─────────────────────────────────────────────────────────── */}
       <div style={{ overflowX: "auto", border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 1px 4px rgba(13,13,56,0.06)" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 1120 }}>
+        {/* Teléfono: Empresa · Precio · Dónde estamos (con el implícito debajo). La banda
+            editable, los fundamentales y las acciones quedan para tablet/escritorio. */}
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: isPhone ? 0 : 1120 }}>
           <thead>
             <tr style={{ background: "#F5F7FD" }}>
               <Th label="Company"      k="name"     {...{ sortKey, sortDir, sortBy }} align="left" />
-              <Th label="GICS"         k="gics"     {...{ sortKey, sortDir, sortBy }} align="left" />
+              <Th label="GICS"         k="gics"     {...{ sortKey, sortDir, sortBy }} align="left" hidePhone />
               <Th label="Current"      k="current"  {...{ sortKey, sortDir, sortBy }} align="right" />
               <Th label="Where are we" k="position" {...{ sortKey, sortDir, sortBy }} align="left" />
-              <Th label={`${metricLabel} band (×)`} k="mult" {...{ sortKey, sortDir, sortBy }} align="left" />
+              <Th label={`${metricLabel} band (×)`} k="mult" {...{ sortKey, sortDir, sortBy }} align="left" hidePhone />
               {metric === "pe" ? (
-                <Th label="Utilidad NI (MM)" k="ni" {...{ sortKey, sortDir, sortBy }} align="right" />
+                <Th label="Utilidad NI (MM)" k="ni" {...{ sortKey, sortDir, sortBy }} align="right" hidePhone />
               ) : (
                 <>
-                  <Th label="EBITDA (MM)" k="ni" {...{ sortKey, sortDir, sortBy }} align="right" />
-                  <Th label="Deuda Neta (CLP bn)" k="netDebt" {...{ sortKey, sortDir, sortBy }} align="right" />
+                  <Th label="EBITDA (MM)" k="ni" {...{ sortKey, sortDir, sortBy }} align="right" hidePhone />
+                  <Th label="Deuda Neta (CLP bn)" k="netDebt" {...{ sortKey, sortDir, sortBy }} align="right" hidePhone />
                 </>
               )}
-              <Th label="Acciones"     k="shares"   {...{ sortKey, sortDir, sortBy }} align="right" />
-              <Th label="Implied (−1σ / avg / +1σ)" k="implied" {...{ sortKey, sortDir, sortBy }} align="center" />
+              <Th label="Acciones"     k="shares"   {...{ sortKey, sortDir, sortBy }} align="right" hidePhone />
+              <Th label="Implied (−1σ / avg / +1σ)" k="implied" {...{ sortKey, sortDir, sortBy }} align="center" hidePhone />
             </tr>
           </thead>
           <tbody>
@@ -335,48 +339,53 @@ export default function ActiveDecisions() {
                     <div style={{ fontSize: 10, color: TEXT3, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>{r.ticker.replace(/ EQUITY$/i, "")}</div>
                   </td>
                   {/* GICS */}
-                  <td style={{ ...td, fontSize: 11, color: TEXT2, maxWidth: 150 }}>{r.gics ?? "—"}</td>
+                  <td className="hide-phone" style={{ ...td, fontSize: 11, color: TEXT2, maxWidth: 150 }}>{r.gics ?? "—"}</td>
                   {/* Current */}
                   <td style={{ ...td, textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontWeight: 600, color: r.currentPrice != null ? TEXT1 : TEXT3 }}>{fmtCLP(r.currentPrice)}</td>
                   {/* Where are we */}
-                  <td style={{ ...td, minWidth: 200 }}>
+                  <td style={{ ...td, minWidth: isPhone ? 150 : 200 }}>
                     {r.implied && r.signal && r.currentPrice != null ? (
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <div style={{ flex: 1 }}><Gauge low={r.implied.low} mid={r.implied.mid} high={r.implied.high} current={r.currentPrice} signal={r.signal} /></div>
                         <SignalBadge signal={r.signal} />
                       </div>
                     ) : <span style={{ color: TEXT3, fontSize: 11 }}>{noImplied}</span>}
+                    {r.implied && (
+                      <div className="phone-only" style={{ marginTop: 4, fontSize: 10.5, color: TEXT3, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
+                        {fmtCLP(r.implied.low)} / <strong style={{ color: TEXT1 }}>{fmtCLP(r.implied.mid)}</strong> / {fmtCLP(r.implied.high)}
+                      </div>
+                    )}
                   </td>
                   {/* Multiple band (editable en P/E y EV/EBITDA) */}
-                  <td style={td}>
+                  <td className="hide-phone" style={td}>
                     <BandEdit band={r.band} vals={r.vals} editable edited={r.edited}
                       onChange={(f, v) => setBandField(r, f, v)} onReset={() => resetBand(r)} />
                   </td>
                   {/* Earnings: Utilidad NI (P/E) — o EBITDA + Deuda Neta (EV/EBITDA) */}
                   {metric === "pe" ? (
-                    <td style={{ ...td, textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", color: r.netIncome != null ? TEXT1 : TEXT3 }}>
+                    <td className="hide-phone" style={{ ...td, textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", color: r.netIncome != null ? TEXT1 : TEXT3 }}>
                       {fmtMM(r.netIncome)}
                       {r.niCurrency && <span style={ccyBadge(r.niCurrency)}>{r.niCurrency}</span>}
                     </td>
                   ) : (
                     <>
-                      <td style={{ ...td, textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", color: r.ebitda != null ? TEXT1 : TEXT3 }}>
+                      <td className="hide-phone" style={{ ...td, textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", color: r.ebitda != null ? TEXT1 : TEXT3 }}>
                         {fmtMM(r.ebitda)}
                         {r.niCurrency && <span style={ccyBadge(r.niCurrency)}>{r.niCurrency}</span>}
                       </td>
-                      <td style={{ ...td, textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", color: r.netDebt != null ? (r.netDebt < 0 ? GREEN : TEXT1) : TEXT3 }}>
+                      <td className="hide-phone" style={{ ...td, textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", color: r.netDebt != null ? (r.netDebt < 0 ? GREEN : TEXT1) : TEXT3 }}>
                         {fmtBn(r.netDebt)}
                         {r.netDebt != null && r.netDebt < 0 && <span style={{ marginLeft: 4, fontSize: 9, color: GREEN }}>caja</span>}
                       </td>
                     </>
                   )}
                   {/* Acciones (+ EPS solo en P/E) */}
-                  <td style={{ ...td, textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
+                  <td className="hide-phone" style={{ ...td, textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
                     <div style={{ color: r.shares != null ? TEXT1 : TEXT3 }}>{fmtSh(r.shares)}</div>
                     {metric === "pe" && r.eps != null && <div style={{ fontSize: 10, color: TEXT3 }}>EPS {fmtCLP(r.eps)}</div>}
                   </td>
                   {/* Implied */}
-                  <td style={{ ...td, textAlign: "center", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
+                  <td className="hide-phone" style={{ ...td, textAlign: "center", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums" }}>
                     {r.implied ? (
                       <span style={{ color: TEXT1 }}>{fmtCLP(r.implied.low)} <span style={{ color: TEXT3 }}>/</span> <strong>{fmtCLP(r.implied.mid)}</strong> <span style={{ color: TEXT3 }}>/</span> {fmtCLP(r.implied.high)}</span>
                     ) : <span style={{ color: TEXT3 }}>{noImplied}</span>}
@@ -394,7 +403,7 @@ export default function ActiveDecisions() {
       </div>
 
       {/* ── Legend ────────────────────────────────────────────────────────── */}
-      <div style={{ marginTop: 10, fontSize: 11, color: TEXT2, lineHeight: 1.6 }}>
+      <div className="hide-phone" style={{ marginTop: 10, fontSize: 11, color: TEXT2, lineHeight: 1.6 }}>
         <div><strong>{rows.length} empresas.</strong> <strong>avg</strong> = promedio histórico del múltiplo forward (10A); la <strong>banda</strong> es avg ±1σ; <strong>n</strong> = nº de observaciones mensuales. Podés <strong>editar</strong> los múltiplos (low/avg/high con cualquier número) y el implícito se recalcula.</div>
         <div><strong>Monedas:</strong> los múltiplos no tienen moneda (son ratios). El NET_INCOME / EBITDA del consenso vienen en la moneda de reporte de la empresa; las que reportan en <span style={{ color: "#FF6B06", fontWeight: 700 }}>USD</span> se detectan y convierten a CLP con USDCLP (badge <span style={{ color: "#FF6B06", fontWeight: 700 }}>USD</span>). El precio está en CLP.</div>
         {metric === "ev" && <div><strong>EV/EBITDA:</strong> Equity = EV − Deuda Neta (<code>ss_universe.net_debt</code>, CLP; negativo = caja neta). Se ignoran minoritarios/asociadas. Precio implícito = Equity / acciones.</div>}
@@ -409,12 +418,12 @@ const td: React.CSSProperties = { padding: "8px 12px", borderBottom: `1px solid 
 const retryBtn: React.CSSProperties = { marginTop: 10, padding: "6px 16px", borderRadius: 6, background: "rgba(32,68,220,0.08)", border: "1px solid rgba(32,68,220,0.20)", color: BLUE, cursor: "pointer", fontSize: 13 };
 const ccyBadge = (ccy: "CLP" | "USD"): React.CSSProperties => ({ marginLeft: 4, fontSize: 9, fontWeight: 700, color: ccy === "USD" ? "#FF6B06" : TEXT3, background: ccy === "USD" ? "rgba(255,107,6,0.12)" : "rgba(13,13,56,0.10)", borderRadius: 4, padding: "1px 4px" });
 
-function Th({ label, k, sortKey, sortDir, sortBy, align }: {
-  label: string; k: SortKey; sortKey: SortKey; sortDir: "asc" | "desc"; sortBy: (k: SortKey) => void; align: "left" | "right" | "center";
+function Th({ label, k, sortKey, sortDir, sortBy, align, hidePhone }: {
+  label: string; k: SortKey; sortKey: SortKey; sortDir: "asc" | "desc"; sortBy: (k: SortKey) => void; align: "left" | "right" | "center"; hidePhone?: boolean;
 }) {
   const active = sortKey === k;
   return (
-    <th onClick={() => sortBy(k)} style={{ padding: "8px 12px", textAlign: align, fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: active ? BLUE : TEXT2, textTransform: "uppercase", whiteSpace: "nowrap", borderBottom: `1px solid ${BORDER}`, cursor: "pointer", userSelect: "none" }}>
+    <th onClick={() => sortBy(k)} className={hidePhone ? "hide-phone" : undefined} style={{ padding: "8px 12px", textAlign: align, fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: active ? BLUE : TEXT2, textTransform: "uppercase", whiteSpace: "nowrap", borderBottom: `1px solid ${BORDER}`, cursor: "pointer", userSelect: "none" }}>
       {label} <span style={{ fontSize: 9, opacity: active ? 1 : 0.35 }}>{active ? (sortDir === "asc" ? "▲" : "▼") : "↕"}</span>
     </th>
   );

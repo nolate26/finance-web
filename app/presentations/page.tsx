@@ -127,15 +127,16 @@ function FileRow({
   const isSector = pres.category === SECTOR_CATEGORY;
   return (
     <div
-      className="flex items-center gap-4 px-5 py-4 border-b border-patria-dark-blue/[0.06] last:border-0 transition-colors"
+      className="flex flex-wrap sm:flex-nowrap items-center gap-x-4 gap-y-2 px-4 sm:px-5 py-4 border-b border-patria-dark-blue/[0.06] last:border-0 transition-colors"
       style={{ ...(pending ? { background: "rgba(255,107,6,0.035)" } : {}), opacity: deleting ? 0.45 : 1 }}
       onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.02)")}
       onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = pending ? "rgba(255,107,6,0.035)" : "transparent")}
     >
       <PdfIcon />
 
-      {/* Title + description + empresas cubiertas */}
-      <div className="flex-1 min-w-0">
+      {/* Title + description + empresas cubiertas. En teléfono ocupa el resto de la
+          primera línea y los badges / acciones de la fila bajan a la segunda. */}
+      <div className="flex-1 min-w-0 basis-[calc(100%-3.25rem)] sm:basis-auto">
         <div className="flex items-center gap-2 min-w-0">
           <p className="text-sm font-semibold truncate" style={{ color: "#0D0D38" }}>{pres.title}</p>
           {pending && (
@@ -177,7 +178,7 @@ function FileRow({
       )}
 
       {/* Fecha del caso si la tiene; si no, la de carga */}
-      <span className="font-secondary tabular-nums text-xs flex-shrink-0" style={{ color: "rgba(13,13,56,0.28)", minWidth: 90, textAlign: "right" }}>
+      <span className="font-secondary tabular-nums text-xs flex-shrink-0 sm:min-w-[90px] sm:text-right" style={{ color: "rgba(13,13,56,0.28)" }}>
         {formatDate(pres.case_date ?? pres.created_at)}
       </span>
 
@@ -342,15 +343,15 @@ function FichaRowView({
   const hasComment = !!ficha.description?.trim();
   return (
     <div
-      className="flex items-center gap-4 px-5 py-4 border-b border-patria-dark-blue/[0.06] last:border-0 transition-colors"
+      className="flex flex-wrap sm:flex-nowrap items-center gap-x-4 gap-y-2 px-4 sm:px-5 py-4 border-b border-patria-dark-blue/[0.06] last:border-0 transition-colors"
       style={{ opacity: deleting ? 0.45 : 1 }}
       onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(32,68,220,0.02)")}
       onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
     >
       <PdfIcon />
 
-      {/* Company + title */}
-      <div className="flex-1 min-w-0">
+      {/* Company + title (en teléfono, primera línea completa; ver FileRow) */}
+      <div className="flex-1 min-w-0 basis-[calc(100%-3.25rem)] sm:basis-auto">
         <p className="text-sm font-semibold truncate" style={{ color: "#0D0D38" }}>{ficha.multi ? ficha.title : ficha.company_name}</p>
         {/* El quarter report ya no va en línea: es texto largo y tiene su propio botón */}
         {ficha.multi ? (
@@ -398,7 +399,7 @@ function FichaRowView({
       </span>
 
       {/* Date */}
-      <span className="font-secondary tabular-nums text-xs flex-shrink-0" style={{ color: "rgba(13,13,56,0.28)", minWidth: 90, textAlign: "right" }}>
+      <span className="font-secondary tabular-nums text-xs flex-shrink-0 sm:min-w-[90px] sm:text-right" style={{ color: "rgba(13,13,56,0.28)" }}>
         {formatDate(ficha.created_at)}
       </span>
 
@@ -764,10 +765,10 @@ export default function PresentationsPage() {
                       type="button"
                       onClick={() => { setMainCategory(REVIEWABLE_CATEGORY as MainCategory); setSubFilter(p.region); setReviewing(p); }}
                       className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all"
-                      style={{ background: "#fff", color: "#0D0D38", border: "1px solid rgba(255,107,6,0.30)", cursor: "pointer", maxWidth: 340 }}
+                      style={{ background: "#fff", color: "#0D0D38", border: "1px solid rgba(255,107,6,0.30)", cursor: "pointer", maxWidth: "min(340px, 100%)" }}
                     >
                       <span className="truncate">{p.title}</span>
-                      <span className="font-secondary tabular-nums flex-shrink-0" style={{ color: "rgba(13,13,56,0.45)", fontWeight: 500 }}>
+                      <span className="font-secondary tabular-nums truncate" style={{ color: "rgba(13,13,56,0.45)", fontWeight: 500, maxWidth: "45%" }}>
                         {p.tickers.map((t) => t.ticker.replace(/ EQUITY$/i, "")).join(", ") || "sin tickers"}
                       </span>
                     </button>

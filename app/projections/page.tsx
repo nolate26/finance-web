@@ -77,7 +77,7 @@ export default function ProjectionsPage() {
   return (
     <div className="max-w-[1600px] mx-auto page-shell">
       {/* Header */}
-      <div className="flex items-start justify-between mb-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-5">
         <div>
           <h1 className="text-xl font-bold tracking-tight" style={{ color: "#0D0D38" }}>
             Analyst Projections
@@ -100,7 +100,7 @@ export default function ProjectionsPage() {
             )}
           </p>
         </div>
-        <div className="flex flex-col items-end gap-1">
+        <div className="flex flex-col sm:items-end gap-1">
           {data.generatedAt && (
             <div className="flex items-center gap-1.5 text-xs font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.45)" }}>
               <Calendar size={11} />
@@ -113,7 +113,7 @@ export default function ProjectionsPage() {
               <span>Previous: {formatDate(data.prevAt)}</span>
             </div>
           )}
-          <div className="flex items-center gap-3 text-xs font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.28)" }}>
+          <div className="flex flex-wrap items-center gap-x-3 text-xs font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.28)" }}>
             <span>{filteredRows.length} / {data.rows.length} companies</span>
             <span>Fuente: Proyecciones Chile.xlsx</span>
           </div>

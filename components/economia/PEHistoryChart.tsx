@@ -157,6 +157,9 @@ export default function PEHistoryChart({
                 fontFamily: "inherit",
                 outline: "none",
                 boxShadow: "0 1px 3px rgba(13,13,56,0.08)",
+                // En táctil el select sube a 16px (anti-zoom de iOS) y su ancho
+                // intrínseco empujaba encima de "Actual / Mediana".
+                maxWidth: "100%", minWidth: 0,
               }}
             >
               {availableIndices!.map((idx) => (

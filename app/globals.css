@@ -441,6 +441,61 @@
 
   .g-stack-sm { grid-template-columns: minmax(0, 1fr) !important; }
   .g-2col-sm  { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+
+  /* ── Teléfono vertical: la vista SÍ cambia de forma ──────────────────────
+     (2026-11-16) En 390px arrastrar una tabla de 20 columnas no sirve: las
+     tablas principales se rediseñan para el teléfono (columnas de bajo valor
+     fuera, grupos de columnas de a uno, tarjetas). Dos utilidades para eso:
+       · .hide-phone  — columna / bloque que no se muestra en teléfono.
+       · .phone-only  — su reemplazo compacto (oculto fuera del teléfono).
+     Todas las demás tablas reciben de FitTablesLandscape un zoom moderado y
+     la primera columna fija (`data-stick`). */
+  .hide-phone { display: none !important; }
+
+  /* Un <select> mide lo que su opción más larga ("Real Estate Management &
+     Development…"): en 390px eso empujaba la página entera a la derecha y con
+     ella el botón del menú. Acotado al ancho de su contenedor y, como tope
+     duro, al de la pantalla: cuando el contenedor es un flex que crece con su
+     contenido, el 100% sólo no alcanza (el porcentaje se resuelve contra un
+     padre que ya se estiró). */
+  select { max-width: min(100%, calc(100vw - 32px)); }
+  /* Celda de texto largo (sector, nombre) que en escritorio va en una línea y en
+     teléfono puede partirse en dos antes que empujar los números fuera. */
+  .wrap-phone { white-space: normal !important; min-width: 7rem; }
+  .wrap-phone * { white-space: normal !important; }
+
+  /* Primera columna fija. `!important` en position porque varias celdas traen
+     `position: relative` inline. El ancho se acota (en px de PANTALLA, de ahí
+     la división por el zoom) para que el nombre no se coma media pantalla. */
+  [data-stick] {
+    position: sticky !important;
+    left: 0;
+    z-index: 2;
+    max-width: calc(150px / var(--fit-zoom, 1));
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-shadow: inset -1px 0 0 rgba(13,13,56,0.12), 6px 0 8px -6px rgba(13,13,56,0.22);
+  }
+  th[data-stick] { z-index: 4; }
+
+  /* LatAm · Attribution Matrix: quedan Sector · Allocation · Selection ·
+     Total (en los activos, su contribución). Por posición porque las filas de sector, activo y
+     subtotal se arman en un componente y comparten las 10 columnas; el pie
+     tiene su propio orden (una celda abarca dos). */
+  .matrix-attr thead tr:first-child { display: none; }
+  .matrix-attr thead tr > :is(:nth-child(2), :nth-child(3), :nth-child(4), :nth-child(5), :nth-child(6), :nth-child(9)),
+  .matrix-attr tbody tr > :is(:nth-child(2), :nth-child(3), :nth-child(4), :nth-child(5), :nth-child(6), :nth-child(9)),
+  .matrix-attr tfoot tr:first-child > :is(:nth-child(2), :nth-child(3), :nth-child(4), :nth-child(5), :nth-child(8)) {
+    display: none;
+  }
+
+  /* Fondos · Performance Attribution: ▼ · Security · Active · Total · Δ Total.
+     Las filas de detalle (gráfico) son una sola celda y no se tocan. */
+  .perf-attr tr > :is(:nth-child(3), :nth-child(4), :nth-child(5), :nth-child(7), :nth-child(8)) { display: none; }
+  .perf-attr tr > :nth-child(2) { min-width: 0 !important; white-space: normal !important; }
+}
+@media (min-width: 641px) {
+  .phone-only { display: none !important; }
 }
 
 /* ── Punteros gruesos (dedo) ───────────────────────────────────────────────────

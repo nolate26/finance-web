@@ -111,7 +111,7 @@ export default function EconomiaPage() {
       {/* Page header */}
       {/* Regla 1 — título principal de la vista: banda dark-blue, Aptos Bold. */}
       <div
-        className="flex items-center justify-between mb-6"
+        className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6"
         style={{ background: PATRIA.darkBlue, borderRadius: 10, padding: "14px 18px" }}
       >
         <div>
@@ -122,7 +122,7 @@ export default function EconomiaPage() {
             Market performance & multiples · Macro forecasts · Commodity forecasts
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="source-pill source-pill--on-dark">Bloomberg</span>
           {data.updateDate && (
             <div className="source-pill source-pill--on-dark">

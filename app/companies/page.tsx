@@ -586,7 +586,9 @@ function CompaniesPageContent() {
               </div>
 
               {/* ══ Analysis tab bar ════════════════════════════════════════════ */}
-              <div style={{
+              {/* tab-rail: las 5 pestañas no entran en un teléfono y empujaban el panel
+                  entero en horizontal; así scrollean solas. */}
+              <div className="tab-rail" style={{
                 display:      "flex",
                 gap:          0,
                 borderBottom: "1px solid rgba(13,13,56,0.08)",
@@ -653,7 +655,7 @@ function CompaniesPageContent() {
               {analysisTab === "consensus" && (
                 <>
               {/* ── ROW 1: Historical Valuation (3/4) + Market Snapshot (1/4) ── */}
-              <div className="grid lg:grid-cols-4 gap-6 mb-4">
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-4">
                 <div className="lg:col-span-3" style={{ ...CARD, minHeight: 320 }}>
                   <SectionLabel>Historical Valuation</SectionLabel>
                   {deepDive.valuationHistory.length > 0 ? (
@@ -684,7 +686,7 @@ function CompaniesPageContent() {
               </div>
 
               {/* ── ROW 2: Consensus Evolution (2/5) + Estimate Momentum (3/5) ── */}
-              <div className="grid lg:grid-cols-5 items-stretch gap-4 mb-4">
+              <div className="grid grid-cols-1 lg:grid-cols-5 items-stretch gap-4 mb-4">
                 <div className="lg:col-span-2 flex flex-col" style={{ ...CARD }}>
                   <SectionLabel>Consensus Evolution</SectionLabel>
                   <div style={{ flex: 1, minHeight: 0 }}>
@@ -699,7 +701,7 @@ function CompaniesPageContent() {
               </div>
 
               {/* ── ROW 3: Sell Side Sentiment (1/3) + Price vs Earnings (2/3) ─── */}
-              <div className="grid lg:grid-cols-3 gap-6 mb-4">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-4">
                 <div className="lg:col-span-1" style={{ ...CARD }}>
                   <SectionLabel>Sell Side Sentiment</SectionLabel>
                   <AnalystDonut

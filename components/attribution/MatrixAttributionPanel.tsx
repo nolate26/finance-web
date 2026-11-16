@@ -49,7 +49,7 @@ function KpiCard({ label, value, valueColor, sub }: {
   label: string; value: string; valueColor?: string; sub?: string;
 }) {
   return (
-    <div style={{ ...cardStyle, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
+    <div style={{ ...cardStyle, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 4, flex: 1, minWidth: 0 }}>
       <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.10em", color: TEXT2, textTransform: "uppercase" }}>
         {label}
       </span>
@@ -153,7 +153,7 @@ function SectorRow({
         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = rowBg; }}
       >
         {/* Col 1 — expand toggle + sector name */}
-        <td style={{ padding: "9px 10px", fontWeight: 700, color: TEXT1, fontSize: 12, whiteSpace: "nowrap" }}>
+        <td className="wrap-phone" style={{ padding: "9px 10px", fontWeight: 700, color: TEXT1, fontSize: 12, whiteSpace: "nowrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{
               display: "inline-flex", alignItems: "center", justifyContent: "center",
@@ -212,7 +212,7 @@ function SectorRow({
         >
           {/* Col 1 — Ticker + Company (indented) */}
           {cellDiv(
-            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px 7px 36px", whiteSpace: "nowrap",
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px 7px 26px", whiteSpace: "nowrap",
               borderBottom: ai < sector.assets.length - 1 ? "1px solid rgba(13,13,56,0.04)" : "none" }}>
               <span style={{
                 fontSize: 10, fontWeight: 700, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums",
@@ -221,7 +221,7 @@ function SectorRow({
               }}>
                 {asset.ticker}
               </span>
-              <span style={{ fontSize: 11, color: TEXT1, fontWeight: 500 }}>{asset.company}</span>
+              <span className="hide-phone" style={{ fontSize: 11, color: TEXT1, fontWeight: 500 }}>{asset.company}</span>
             </div>
           )}
 
@@ -549,7 +549,7 @@ export default function MatrixAttributionPanel() {
       {data && !loading && (
         <>
           {/* KPI Cards */}
-          <div style={{ display: "flex", gap: 12 }}>
+          <div className="g-2col-sm" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
             <KpiCard
               label={`Portfolio Return — ${fundInfo.label}`}
               value={fmtPct(data.summary.portReturn)}
@@ -605,12 +605,15 @@ export default function MatrixAttributionPanel() {
                 >
                   {expanded.size === data.sectors.length ? "Collapse all" : "Expand all"}
                 </button>
-                <span style={{ fontSize: 11, color: TEXT2 }}>Click headers to sort · Click sector row to expand</span>
+                <span className="hide-phone" style={{ fontSize: 11, color: TEXT2 }}>Click headers to sort · Click sector row to expand</span>
               </div>
             </div>
 
             <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              {/* `.matrix-attr`: en teléfono globals.css oculta pesos, retornos e
+                  interacción por posición de columna (las 4 clases de fila —sector,
+                  activo, subtotal, encabezado— tienen las mismas 10 celdas). */}
+              <table className="matrix-attr" style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
                   {/* Group row */}
                   <tr>
@@ -696,8 +699,8 @@ export default function MatrixAttributionPanel() {
             </div>
 
             {/* Legend */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", borderTop: "1px solid rgba(13,13,56,0.06)" }}>
-              <div style={{ display: "flex", gap: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "8px 14px", borderTop: "1px solid rgba(13,13,56,0.06)" }}>
+              <div style={{ display: "flex", gap: "4px 16px", flexWrap: "wrap" }}>
                 <span style={{ fontSize: 10, color: GREEN, fontWeight: 600 }}>● Positive alpha</span>
                 <span style={{ fontSize: 10, color: RED,   fontWeight: 600 }}>● Negative alpha</span>
                 <span style={{ fontSize: 10, color: TEXT2 }}>Heatmap intensity ∝ |Total Alpha|</span>

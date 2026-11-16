@@ -285,12 +285,12 @@ export default function UnmappedTickersAlert() {
         <span style={{ fontSize: 12, fontWeight: 700, color: PATRIA.darkBlue }}>
           {tickers.length} ticker{tickers.length !== 1 ? "s" : ""} con datos fuera de empresas_industrias_v2
         </span>
-        <span style={{ fontSize: 11, color: TEXT.muted, flex: 1 }}>
+        <span className="hide-phone" style={{ fontSize: 11, color: TEXT.muted, flex: 1 }}>
           Tienen modelos o consensus cargados pero no aparecen en el sidebar
         </span>
         <ChevronDown
           size={13}
-          style={{ color: TEXT.muted, flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}
+          style={{ color: TEXT.muted, flexShrink: 0, marginLeft: "auto", transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}
         />
       </button>
 

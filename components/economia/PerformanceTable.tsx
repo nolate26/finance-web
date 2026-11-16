@@ -3,6 +3,7 @@
 import { PATRIA } from "@/lib/patriaTheme";
 
 import { useState } from "react";
+import { usePhone } from "@/lib/useBreakpoint";
 
 interface TablaRow {
   Ticker: string;
@@ -41,6 +42,16 @@ interface SortConfig { key: SortKey; dir: "asc" | "desc" }
 
 // Column span: Index + Price + periods + EV/EBITDA + P/U + ROE
 const COL_SPAN = 2 + PERIODS.length + 3;
+
+// Teléfono: 13 columnas de datos no entran en 390px. Se muestran de a un bloque de
+// cuatro, elegido con chips; en tablet/escritorio `show` deja pasar todo.
+type ColKey = "price" | Period | "ev" | "pu" | "roe";
+const PHONE_SETS = [
+  { id: "short", label: "Corto plazo", cols: ["1W", "1M", "3M", "YTD"] },
+  { id: "long",  label: "Largo plazo", cols: ["1Y", "3Y", "5Y", "10Y"] },
+  { id: "mult",  label: "Múltiplos",   cols: ["price", "ev", "pu", "roe"] },
+] as const satisfies readonly { id: string; label: string; cols: readonly ColKey[] }[];
+type PhoneSet = (typeof PHONE_SETS)[number]["id"];
 
 function pctColor(val: string) {
   const n = parseFloat(val);
@@ -137,7 +148,7 @@ function GroupHeader({ label }: { label: string }) {
   );
 }
 
-function DataRow({ row, isLast }: { row: TablaRow; isLast: boolean }) {
+function DataRow({ row, isLast, show }: { row: TablaRow; isLast: boolean; show: (k: ColKey) => boolean }) {
   return (
     <tr
       className="transition-colors"
@@ -154,38 +165,42 @@ function DataRow({ row, isLast }: { row: TablaRow; isLast: boolean }) {
       }
     >
       <td
-        className="px-4 py-2.5 sticky left-0 z-10"
+        className="px-4 py-2.5 sticky left-0 z-10 wrap-phone"
         style={{ background: "#FFFFFF", color: "#0D0D38", fontWeight: 500 }}
       >
         {row.Index_Name}
       </td>
-      <td className="px-4 py-2.5 text-center font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.62)" }}>
+      {show("price") && <td className="px-4 py-2.5 text-center font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.62)" }}>
         {typeof row["Price (Local)"] === "number"
           ? row["Price (Local)"] > 1000
             ? row["Price (Local)"].toLocaleString("en-US", { maximumFractionDigits: 0 })
             : row["Price (Local)"].toFixed(2)
           : "—"}
-      </td>
-      {PERIODS.map((p) => (
+      </td>}
+      {PERIODS.filter(show).map((p) => (
         <td key={p} className="px-3 py-2.5 text-center">
           {pctCell(row[p])}
         </td>
       ))}
-      <td className="px-4 py-2.5 text-center font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.62)" }}>
+      {show("ev") && <td className="px-4 py-2.5 text-center font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.62)" }}>
         {row["EV/EBITDA (Fwd 12m)"] != null ? `${row["EV/EBITDA (Fwd 12m)"]}x` : "—"}
-      </td>
-      <td className="px-4 py-2.5 text-center font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.62)" }}>
+      </td>}
+      {show("pu") && <td className="px-4 py-2.5 text-center font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.62)" }}>
         {row["P/U (Fwd 12m)"] != null ? `${row["P/U (Fwd 12m)"]}x` : "—"}
-      </td>
-      <td className="px-4 py-2.5 text-center">
+      </td>}
+      {show("roe") && <td className="px-4 py-2.5 text-center">
         {row["ROE (Trailing)"] ? rawPctCell(row["ROE (Trailing)"]) : "—"}
-      </td>
+      </td>}
     </tr>
   );
 }
 
 export default function PerformanceTable({ data }: Props) {
   const [sortCfg, setSortCfg] = useState<SortConfig | null>(null);
+  const isPhone = usePhone();
+  const [phoneSet, setPhoneSet] = useState<PhoneSet>("short");
+  const phoneCols: readonly ColKey[] = PHONE_SETS.find((x) => x.id === phoneSet)!.cols;
+  const show = (k: ColKey) => !isPhone || phoneCols.includes(k);
 
   function handleSort(key: SortKey) {
     setSortCfg((prev) =>
@@ -207,6 +222,19 @@ export default function PerformanceTable({ data }: Props) {
           Rendimiento por período y valuación comparada (en moneda local)
         </p>
       </div>
+      {isPhone && (
+        <div className="tab-rail" style={{ display: "flex", gap: 6, padding: "10px 12px", borderBottom: "1px solid rgba(13,13,56,0.07)" }}>
+          {PHONE_SETS.map((x) => {
+            const on = x.id === phoneSet;
+            return (
+              <button key={x.id} onClick={() => setPhoneSet(x.id)} className="keep-dense"
+                style={{ padding: "6px 14px", borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", border: `1px solid ${on ? PATRIA.kingBlue : "rgba(13,13,56,0.14)"}`, background: on ? PATRIA.kingBlue : "#fff", color: on ? "#fff" : "rgba(13,13,56,0.62)" }}>
+                {x.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full text-xs whitespace-nowrap">
           <thead>
@@ -217,23 +245,23 @@ export default function PerformanceTable({ data }: Props) {
               >
                 Índice
               </th>
-              <th className="px-4 py-2.5 text-center">
+              {show("price") && <th className="px-4 py-2.5 text-center">
                 <SortBtn label="Price" sortKey="Price (Local)" cfg={sortCfg} onSort={handleSort} />
-              </th>
-              {PERIODS.map((p) => (
+              </th>}
+              {PERIODS.filter(show).map((p) => (
                 <th key={p} className="px-3 py-2.5 text-center">
                   <SortBtn label={p} sortKey={p} cfg={sortCfg} onSort={handleSort} />
                 </th>
               ))}
-              <th className="px-4 py-2.5 text-center">
+              {show("ev") && <th className="px-4 py-2.5 text-center">
                 <SortBtn label="EV/EBITDA" sortKey="EV/EBITDA (Fwd 12m)" cfg={sortCfg} onSort={handleSort} />
-              </th>
-              <th className="px-4 py-2.5 text-center">
+              </th>}
+              {show("pu") && <th className="px-4 py-2.5 text-center">
                 <SortBtn label="P/U" sortKey="P/U (Fwd 12m)" cfg={sortCfg} onSort={handleSort} />
-              </th>
-              <th className="px-4 py-2.5 text-center">
+              </th>}
+              {show("roe") && <th className="px-4 py-2.5 text-center">
                 <SortBtn label="ROE" sortKey="ROE (Trailing)" cfg={sortCfg} onSort={handleSort} />
-              </th>
+              </th>}
             </tr>
           </thead>
           <tbody>
@@ -247,7 +275,7 @@ export default function PerformanceTable({ data }: Props) {
                 <>
                   <GroupHeader key={`hdr-${group.label}`} label={group.label} />
                   {rows.map((row, i) => (
-                    <DataRow key={row.Index_Name} row={row} isLast={i === rows.length - 1} />
+                    <DataRow key={row.Index_Name} row={row} isLast={i === rows.length - 1} show={show} />
                   ))}
                 </>
               );
@@ -256,7 +284,7 @@ export default function PerformanceTable({ data }: Props) {
               <>
                 <GroupHeader key="hdr-ungrouped" label="OTROS" />
                 {sortRows(ungrouped, sortCfg).map((row, i) => (
-                  <DataRow key={row.Index_Name} row={row} isLast={i === ungrouped.length - 1} />
+                  <DataRow key={row.Index_Name} row={row} isLast={i === ungrouped.length - 1} show={show} />
                 ))}
               </>
             )}

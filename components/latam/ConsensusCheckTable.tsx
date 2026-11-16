@@ -9,6 +9,7 @@ import ExportButtons from "@/components/ExportButtons";
 import { FONT_SECONDARY, PATRIA } from "@/lib/patriaTheme";
 import { countryName } from "@/lib/countryNames";
 import { useIsAdmin } from "@/lib/useIsAdmin";
+import { usePhone } from "@/lib/useBreakpoint";
 
 // ── Palette ────────────────────────────────────────────────────────────────────
 const C = {
@@ -272,6 +273,10 @@ interface ColGroup {
   metrics: [string, string];
   cols:    [SortKey, SortKey, SortKey, SortKey];   // orden de display → SortKey
 }
+// Chips de la vista de teléfono, en orden de uso.
+const PHONE_VIEWS: readonly (readonly ["resumen" | ColGroupKey, string])[] = [
+  ["resumen", "Resumen"], ["var", "Var % vs Cons."], ["mult", "Múltiplos"], ["moneda", "Moneda"], ["consensus", "Consenso"],
+];
 const COL_GROUPS: ColGroup[] = [
   { key: "moneda",    label: "Moneda",             bg: C.HDR_BG,  metrics: ["EBITDA", "NI"],     cols: ["monEbitda1",   "monEbitda2",   "monNi1", "monNi2"] },
   { key: "consensus", label: "Consensus",          bg: "#2044DC", metrics: ["EBITDA", "NI"],     cols: ["conEbitda1",   "conEbitda2",   "conNi1", "conNi2"] },
@@ -350,6 +355,10 @@ export default function ConsensusCheckTable() {
   // Ocultar compañías a los no-admin. El servidor ya no les manda esas filas; el admin
   // las recibe marcadas (`hidden`) y decide si verlas atenuadas o sacarlas de su vista.
   const isAdmin = useIsAdmin();
+  // Teléfono: Company + un bloque a la vez (chips). "Resumen" = Rec · TP · Upside Live;
+  // el resto son los grupos de columnas completos. Fecha y analista van bajo el ticker.
+  const isPhone = usePhone();
+  const [phoneView, setPhoneView] = useState<"resumen" | ColGroupKey>("resumen");
   const [showHidden,   setShowHidden]   = useState(true);
   const [togglingHide, setTogglingHide] = useState<string | null>(null);
   const [hideError,    setHideError]    = useState<string | null>(null);
@@ -491,7 +500,12 @@ export default function ConsensusCheckTable() {
   const thProps = { sortBy, sortDir, onSort: handleSort };
 
   // Grupos visibles y sus columnas de datos en orden de display (header fila 3 + colSpan).
-  const sections = COL_GROUPS.filter((g) => showConsensus || g.key !== "consensus");
+  const sections = isPhone
+    ? COL_GROUPS.filter((g) => g.key === phoneView)
+    : COL_GROUPS.filter((g) => showConsensus || g.key !== "consensus");
+  const showGroup = (k: ColGroupKey) => sections.some((g) => g.key === k);
+  type FixedCol = "date" | "analyst" | "rec" | "tp" | "upModel" | "up" | "ccy";
+  const fixedOn = (k: FixedCol) => !isPhone || (phoneView === "resumen" && (k === "rec" || k === "tp" || k === "up"));
   const dataCols = sections.flatMap((g) => g.cols);
 
   // Una sola hoja para Excel y PDF: lo que está filtrado/ordenado en pantalla.
@@ -555,7 +569,7 @@ export default function ConsensusCheckTable() {
 
       {/* ── Toolbar: filtros + download ── */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minWidth: 0, maxWidth: "100%" }}>
           {/* Buscador de compañías — filtra la tabla; Enter o click abre el modelo */}
           <div ref={searchRef} style={{ position: "relative", width: 280, maxWidth: "100%" }}>
             <Search size={13} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: "#2044DC", pointerEvents: "none" }} />
@@ -647,6 +661,7 @@ export default function ConsensusCheckTable() {
           {/* Consensus block toggle — oculto por defecto */}
           <button
             onClick={toggleConsensus}
+            className="hide-phone"
             title={showConsensus ? "Hide the Bloomberg consensus columns" : "Show the Bloomberg consensus columns"}
             style={{
               display: "inline-flex", alignItems: "center", gap: 5,
@@ -721,24 +736,37 @@ export default function ConsensusCheckTable() {
       )}
 
       {/* ── Table ── */}
+      {isPhone && (
+        <div className="tab-rail" style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+          {PHONE_VIEWS.map(([k, label]) => {
+            const on = phoneView === k;
+            return (
+              <button key={k} onClick={() => setPhoneView(k)} className="keep-dense"
+                style={{ padding: "6px 14px", borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", border: `1px solid ${on ? PATRIA.kingBlue : "rgba(13,13,56,0.14)"}`, background: on ? PATRIA.kingBlue : "#fff", color: on ? "#fff" : "rgba(13,13,56,0.62)" }}>
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
       <div style={{ overflowX: "auto", borderRadius: 10, border: `1px solid ${C.BDR}`, boxShadow: "0 1px 6px rgba(13,13,56,0.07)" }}>
-        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: showConsensus ? 1350 : 1130, tableLayout: "auto" }}>
+        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: isPhone ? 0 : showConsensus ? 1350 : 1130, tableLayout: "auto" }}>
           <thead>
             {/* ── Row 1: section headers ── */}
             <tr>
               <Th level={0} rowSpan={3} sticky stickyLeft={0} sortKey="ticker" {...thProps}>
                 Company
               </Th>
-              <Th level={0} rowSpan={3} sortKey="updateDate" {...thProps}>Update As Of</Th>
-              <Th level={0} rowSpan={3}>Analyst</Th>
-              <Th level={0} rowSpan={3} sortKey="recc" {...thProps}>Rec</Th>
+              {fixedOn("date") && <Th level={0} rowSpan={3} sortKey="updateDate" {...thProps}>Update As Of</Th>}
+              {fixedOn("analyst") && <Th level={0} rowSpan={3}>Analyst</Th>}
+              {fixedOn("rec") && <Th level={0} rowSpan={3} sortKey="recc" {...thProps}>Rec</Th>}
               {/* Target price del header del modelo (empresa o banco), en la moneda del analista */}
-              <Th level={0} rowSpan={3} sortKey="tp" {...thProps}>TP</Th>
-              <Th level={0} rowSpan={3} sortKey="upsideModel" {...thProps}>Upside @Model</Th>
-              <Th level={0} rowSpan={3} sortKey="upside" {...thProps}>Upside Live</Th>
+              {fixedOn("tp") && <Th level={0} rowSpan={3} sortKey="tp" {...thProps}>TP</Th>}
+              {fixedOn("upModel") && <Th level={0} rowSpan={3} sortKey="upsideModel" {...thProps}>Upside @Model</Th>}
+              {fixedOn("up") && <Th level={0} rowSpan={3} sortKey="upside" {...thProps}>{isPhone ? "Upside" : "Upside Live"}</Th>}
               {/* Moneda y unidad del modelo (header del analista), como en "Reported CCY" del deep-dive */}
-              <Th level={0} rowSpan={3} sortKey="currency" {...thProps}>CCY (FFSS)</Th>
-              <Th level={0} rowSpan={3} sortKey="unit" {...thProps}>Unit</Th>
+              {fixedOn("ccy") && <Th level={0} rowSpan={3} sortKey="currency" {...thProps}>CCY (FFSS)</Th>}
+              {fixedOn("ccy") && <Th level={0} rowSpan={3} sortKey="unit" {...thProps}>Unit</Th>}
 
               {sections.map((s) => (
                 <th
@@ -891,10 +919,15 @@ export default function ConsensusCheckTable() {
                         {row.hidden ? <Eye size={11} /> : <EyeOff size={11} />}
                       </button>
                     )}
+                    {isPhone && (
+                      <div style={{ fontSize: 9.5, fontWeight: 400, color: "rgba(13,13,56,0.45)", marginTop: 2 }}>
+                        {fmtDate(row.updateDate)}{row.analyst ? ` · ${row.analyst}` : ""}
+                      </div>
+                    )}
                   </td>
 
                   {/* Update As Of */}
-                  <td style={{
+                  {fixedOn("date") && <td style={{
                     padding:     "6px 10px",
                     fontSize:    11,
                     color:       "rgba(13,13,56,0.62)",
@@ -903,10 +936,10 @@ export default function ConsensusCheckTable() {
                     whiteSpace:  "nowrap",
                   }}>
                     {fmtDate(row.updateDate)}
-                  </td>
+                  </td>}
 
                   {/* Analyst */}
-                  <td style={{
+                  {fixedOn("analyst") && <td style={{
                     padding:      "6px 10px",
                     fontSize:     11,
                     color:        "rgba(13,13,56,0.62)",
@@ -918,20 +951,20 @@ export default function ConsensusCheckTable() {
                     textOverflow: "ellipsis",
                   }}>
                     {row.analyst ?? "—"}
-                  </td>
+                  </td>}
 
                   {/* Rec */}
-                  <td style={{
+                  {fixedOn("rec") && <td style={{
                     padding:     "6px 10px",
                     textAlign:   "center",
                     borderRight: `1px solid ${C.BDR}`,
                     whiteSpace:  "nowrap",
                   }}>
                     <ReccBadge recc={row.recc} />
-                  </td>
+                  </td>}
 
                   {/* TP del modelo */}
-                  <td style={{
+                  {fixedOn("tp") && <td style={{
                     padding:     "6px 10px",
                     fontSize:    12,
                     fontFamily:  FONT_SECONDARY,
@@ -943,10 +976,10 @@ export default function ConsensusCheckTable() {
                     whiteSpace:  "nowrap",
                   }}>
                     {fmtTp(row.tp)}
-                  </td>
+                  </td>}
 
                   {/* Upside @Model (analyst, al hacer el modelo) */}
-                  <td style={{
+                  {fixedOn("upModel") && <td style={{
                     padding:     "6px 10px",
                     fontSize:    12,
                     fontFamily:  FONT_SECONDARY,
@@ -957,10 +990,10 @@ export default function ConsensusCheckTable() {
                     whiteSpace:  "nowrap",
                   }}>
                     {upsideM.text}
-                  </td>
+                  </td>}
 
                   {/* Upside Live (vs precio actual) */}
-                  <td style={{
+                  {fixedOn("up") && <td style={{
                     padding:     "6px 10px",
                     fontSize:    12,
                     fontFamily:  FONT_SECONDARY,
@@ -971,10 +1004,10 @@ export default function ConsensusCheckTable() {
                     whiteSpace:  "nowrap",
                   }}>
                     {upside.text}
-                  </td>
+                  </td>}
 
                   {/* CCY / Unit del modelo */}
-                  {[row.currency, row.unit].map((v, i) => (
+                  {fixedOn("ccy") && [row.currency, row.unit].map((v, i) => (
                     <td key={i} style={{
                       padding:     "6px 10px",
                       fontSize:    11,
@@ -990,13 +1023,17 @@ export default function ConsensusCheckTable() {
                   ))}
 
                   {/* Moneda: EBITDA, NI */}
-                  <NumCell v={row.moneda.ebitda1FY} />
-                  <NumCell v={row.moneda.ebitda2FY} />
-                  <NumCell v={row.moneda.ni1FY}     />
-                  <NumCell v={row.moneda.ni2FY}     />
+                  {showGroup("moneda") && (
+                    <>
+                      <NumCell v={row.moneda.ebitda1FY} />
+                      <NumCell v={row.moneda.ebitda2FY} />
+                      <NumCell v={row.moneda.ni1FY}     />
+                      <NumCell v={row.moneda.ni2FY}     />
+                    </>
+                  )}
 
                   {/* Consensus: EBITDA, NI — oculto por defecto (toggle en la toolbar) */}
-                  {showConsensus && (
+                  {showGroup("consensus") && (
                     <>
                       <ConNumCell v={row.consensus.ebitda1FY} />
                       <ConNumCell v={row.consensus.ebitda2FY} />
@@ -1006,16 +1043,24 @@ export default function ConsensusCheckTable() {
                   )}
 
                   {/* Var % vs Consensus */}
-                  <VarCell moneda={row.moneda.ebitda1FY} consensus={row.consensus.ebitda1FY} />
-                  <VarCell moneda={row.moneda.ebitda2FY} consensus={row.consensus.ebitda2FY} />
-                  <VarCell moneda={row.moneda.ni1FY}     consensus={row.consensus.ni1FY}     />
-                  <VarCell moneda={row.moneda.ni2FY}     consensus={row.consensus.ni2FY}     />
+                  {showGroup("var") && (
+                    <>
+                      <VarCell moneda={row.moneda.ebitda1FY} consensus={row.consensus.ebitda1FY} />
+                      <VarCell moneda={row.moneda.ebitda2FY} consensus={row.consensus.ebitda2FY} />
+                      <VarCell moneda={row.moneda.ni1FY}     consensus={row.consensus.ni1FY}     />
+                      <VarCell moneda={row.moneda.ni2FY}     consensus={row.consensus.ni2FY}     />
+                    </>
+                  )}
 
                   {/* Moneda Multiples: EV/EBITDA, P/E (mismo cálculo que el deep-dive) */}
-                  <MultCell v={row.multiples.evEbitda1FY} />
-                  <MultCell v={row.multiples.evEbitda2FY} />
-                  <MultCell v={row.multiples.pe1FY}       />
-                  <MultCell v={row.multiples.pe2FY}       />
+                  {showGroup("mult") && (
+                    <>
+                      <MultCell v={row.multiples.evEbitda1FY} />
+                      <MultCell v={row.multiples.evEbitda2FY} />
+                      <MultCell v={row.multiples.pe1FY}       />
+                      <MultCell v={row.multiples.pe2FY}       />
+                    </>
+                  )}
                 </tr>
               );
             })}
