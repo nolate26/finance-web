@@ -65,10 +65,10 @@ export default function RootLayout({
       <body className="min-h-screen grid-bg">
         <AuthProvider>
           <Navbar />
-          {/* pt-16 = los 64px del navbar fijo. El valor está también en
-              StockSelectionV1 como NAV_H, porque su encabezado sticky se pega
-              justo debajo: si acá cambia, allá también. */}
-          <main className="pt-16">{children}</main>
+          {/* --nav-h = el alto del navbar fijo (64px + barra de estado en
+              pantalla completa, ver globals.css). StockSelectionV1 pega su
+              encabezado sticky contra la misma variable. */}
+          <main style={{ paddingTop: "var(--nav-h)" }}>{children}</main>
           {/* Va en el layout raíz a propósito: así NO se vuelve a montar en cada
               navegación del router, sólo en una carga completa de página. */}
           <SystemFreshnessModal />

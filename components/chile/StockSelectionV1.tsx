@@ -83,9 +83,13 @@ const solidTint = (c: string | undefined): string | undefined => (c ? SOLID_TINT
 // Todo por debajo de 50: la barra de navegación es `fixed z-50` y el encabezado de la
 // tabla, que ahora se pega al viewport justo debajo de ella, no debe taparla nunca.
 const Z = { corner: 40, head: 30, leftCol: 20, body: 1 } as const;
-// Alto de la barra de navegación (Navbar: `fixed h-16`, main: `pt-16`). Es el `top` al que
-// se pega el encabezado de la tabla principal cuando scrollea la página.
+// Alto base de la barra de navegación. El real es --nav-h (64px + barra de estado del
+// iPhone/iPad a pantalla completa, ver globals.css): es el `top` al que se pega el
+// encabezado de la tabla principal cuando scrollea la página. Ver navPx.
 const NAV_H = 64;
+/** `top` sticky contra el navbar: --nav-h (64px + barra de estado en pantalla
+ *  completa) más `extra`, compensado por el zoom igual que fitPx. */
+const navPx = (extra: number) => `calc((var(--nav-h, ${NAV_H}px) + ${extra}px) / var(--fit-zoom, 1))`;
 
 /**
  * Offset sticky compensado por el shrink-to-fit de táctil horizontal.
@@ -1038,7 +1042,8 @@ export default function StockSelectionV1() {
   const colsOf = (g: Group) => (isPhone ? g.cols : visibleCols(g, expandedGroups));
   // En teléfono la tabla tiene scroll propio (ver el contenedor): el encabezado se pega
   // al borde de ESE contenedor, no debajo del navbar, y la columna Empresa a su izquierda.
-  const headTop = isPhone ? 0 : NAV_H;
+  // En teléfono la tabla scrollea en su propio contenedor (top 0); fuera, contra el navbar.
+  const stickTop = (extra: number) => (isPhone ? fitPx(extra) : navPx(extra));
   const leftPx  = isPhone ? 0 : stickyLeftPx;
 
   const renderCells = (r: DisplayRow, topBorder = false) => {
@@ -1216,14 +1221,14 @@ export default function StockSelectionV1() {
         <table style={{ borderCollapse: "separate", borderSpacing: 0, fontSize: 11, width: "100%" }}>
           <thead>
             <tr ref={headRowRef} style={isPhone ? { display: "none" } : undefined}>
-              {!isPhone && <th style={{ ...stickyTh, left: fitPx(leftPx), top: fitPx(headTop), zIndex: Z.corner }} rowSpan={2}>Empresa</th>}
+              {!isPhone && <th style={{ ...stickyTh, left: fitPx(leftPx), top: stickTop(0), zIndex: Z.corner }} rowSpan={2}>Empresa</th>}
               {shownGroups.map((g, gIdx) => {
                 const open = !g.collapsible || expandedGroups.has(g.id);
                 return (
                   <th key={g.id} colSpan={colsOf(g).length}
                     onClick={() => g.collapsible && toggleGroup(g.id)}
                     title={[g.hint, g.collapsible ? (open ? "Clic para contraer" : "Clic para desplegar") : null].filter(Boolean).join(" · ") || undefined}
-                    style={{ position: "sticky", top: fitPx(headTop), zIndex: Z.head, padding: "5px 7px", textAlign: "center", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: NAVY_TEXT, borderLeft: "1px solid rgba(255,255,255,0.14)", whiteSpace: "nowrap", background: g.headBg ?? (gIdx % 2 === 1 ? NAVY_BAND : NAVY), cursor: g.collapsible ? "pointer" : "default", userSelect: "none" }}>
+                    style={{ position: "sticky", top: stickTop(0), zIndex: Z.head, padding: "5px 7px", textAlign: "center", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: NAVY_TEXT, borderLeft: "1px solid rgba(255,255,255,0.14)", whiteSpace: "nowrap", background: g.headBg ?? (gIdx % 2 === 1 ? NAVY_BAND : NAVY), cursor: g.collapsible ? "pointer" : "default", userSelect: "none" }}>
                     {g.collapsible && <span style={{ fontSize: 8, marginRight: 3, opacity: 0.7 }}>{open ? "▾" : "▸"}</span>}
                     {g.title}
                   </th>
@@ -1237,7 +1242,7 @@ export default function StockSelectionV1() {
                   const active = sortKey === col.id;
                   return (
                     <th key={col.id} onClick={() => col.sortVal && sortBy(col.id)}
-                      style={{ position: "sticky", top: fitPx(isPhone ? 0 : headTop + headRowH), zIndex: Z.head, padding: isPhone ? "8px 6px" : "5px 7px", textAlign: col.align ?? "right", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: active ? "#fff" : HEAD2_TEXT, borderBottom: `2px solid ${g.headBg ?? NAVY}`, borderLeft: i === 0 ? `1px solid ${GROUP_RULE}` : "none", whiteSpace: "nowrap", cursor: col.sortVal ? "pointer" : "default", userSelect: "none", background: active ? NAVY_BAND : solidTint(g.tint) ?? (gIdx % 2 === 1 ? HEAD2_BAND_SOLID : HEAD2_BG) }}>
+                      style={{ position: "sticky", top: isPhone ? 0 : stickTop(headRowH), zIndex: Z.head, padding: isPhone ? "8px 6px" : "5px 7px", textAlign: col.align ?? "right", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: active ? "#fff" : HEAD2_TEXT, borderBottom: `2px solid ${g.headBg ?? NAVY}`, borderLeft: i === 0 ? `1px solid ${GROUP_RULE}` : "none", whiteSpace: "nowrap", cursor: col.sortVal ? "pointer" : "default", userSelect: "none", background: active ? NAVY_BAND : solidTint(g.tint) ?? (gIdx % 2 === 1 ? HEAD2_BAND_SOLID : HEAD2_BG) }}>
                       {col.label}{col.sortVal && <span style={{ fontSize: 8, opacity: active ? 1 : 0.45, marginLeft: 3 }}>{active ? (sortDir === "asc" ? "▲" : "▼") : "↕"}</span>}
                     </th>
                   );

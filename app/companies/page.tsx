@@ -305,7 +305,7 @@ function CompaniesPageContent() {
       {/* `dvh` y no `vh`: en Safari móvil `100vh` mide la ventana sin la barra de
           direcciones, así que el pie del panel (el contador de empresas) queda
           debajo del borde visible y no se puede llegar nunca. */}
-      <div style={{ display: "flex", height: "calc(100dvh - 64px)", overflow: "hidden" }}>
+      <div style={{ display: "flex", height: "calc(100dvh - var(--nav-h))", overflow: "hidden" }}>
         {/* ── Sidebar ───────────────────────────────────────────────────────── */}
         {!compact && (
           <div style={{ width: 220, flexShrink: 0, overflow: "hidden" }}>

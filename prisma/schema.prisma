@@ -1599,3 +1599,54 @@ model AnalystLink {
   @@index([sectionId, sortOrder])
   @@map("analyst_links")
 }
+
+// ==========================================
+// SECCIÓN: FICHAS — ESTADOS FINANCIEROS Y KPIs
+// ==========================================
+// Datos de la hoja "Send Ficha" (macro SubirFicha → POST /api/ficha/ingest).
+// No confundir con Ficha (PDFs en R2): estas tablas guardan los números.
+// Sin relaciones: cada fila es autocontenida (ticker + período + línea).
+// Siempre UPSERT por la clave única → reenviar la planilla pisa, no duplica.
+// No hay tabla de períodos: SELECT DISTINCT period_type, year, quarter, period_end.
+// quarter = 0 en anuales (nunca NULL, para que entre en la clave única).
+model FichaStatement {
+  id         Int      @id @default(autoincrement())
+  ticker     String   @db.VarChar(100)                     // Ej: "ANDINAB CI EQUITY" (canónico, MAYÚSCULA)
+  currency   String   @db.VarChar(10)                      // Moneda reportada, Ej: "CLP"
+  fx         Decimal  @db.Decimal(18, 6)                   // Celda C6 de la hoja
+  periodType String   @map("period_type") @db.VarChar(1)   // "A" anual / "Q" trimestre
+  year       Int
+  quarter    Int                                           // 0 si es anual, 1..4 si es trimestre
+  periodEnd  DateTime @map("period_end") @db.Date
+  section    String   @db.VarChar(50)                      // "Income Statement" | "Balance Sheet" | "Cash Flow"
+  line       String   @db.VarChar(255)
+  lineOrder  Int      @map("line_order")                   // Orden dentro de la sección
+  value      Decimal  @db.Decimal(24, 6)
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([ticker, periodType, year, quarter, section, line])
+  @@index([ticker, periodType, year, quarter])
+  @@index([ticker, periodEnd])
+  @@map("ficha_statements")
+}
+
+model FichaKpi {
+  id         Int      @id @default(autoincrement())
+  ticker     String   @db.VarChar(100)
+  currency   String   @db.VarChar(10)
+  fx         Decimal  @db.Decimal(18, 6)
+  periodType String   @map("period_type") @db.VarChar(1)
+  year       Int
+  quarter    Int
+  periodEnd  DateTime @map("period_end") @db.Date
+  section    String   @db.VarChar(255)                     // Subtítulo del bloque KPIs, Ej: "Chile"
+  kpi        String   @db.VarChar(255)
+  kpiOrder   Int      @map("kpi_order")
+  value      Decimal  @db.Decimal(24, 6)
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([ticker, periodType, year, quarter, section, kpi])
+  @@index([ticker, periodType, year, quarter])
+  @@index([ticker, periodEnd])
+  @@map("ficha_kpis")
+}

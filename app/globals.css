@@ -287,6 +287,31 @@
    estilo inline desde una hoja de estilos sin eso. Están todos dentro de media
    queries, así que en escritorio no aplican nunca.
    ══════════════════════════════════════════════════════════════════════════ */
+/* ── Alto del navbar ──────────────────────────────────────────────────────────
+   La app declara `viewportFit: "cover"` y barra de estado "black-translucent":
+   abierta a pantalla completa (ícono en la pantalla de inicio) en iPhone/iPad,
+   la página arranca DEBAJO de la hora y la batería. Con un navbar de 64px a
+   top:0, la mitad superior —donde estaba la hamburguesa— quedaba bajo la barra
+   de estado, y el toque caía en la fecha. El navbar suma el inset superior
+   (0 en escritorio y en Safari normal), y todo lo que se mide contra él usa
+   --nav-h en vez de 64px. */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --nav-h: calc(64px + var(--safe-top));
+}
+/* Márgenes laterales del navbar (antes px-3 / min-[1280px]:px-5): en horizontal
+   con notch, el borde curvo se come la hamburguesa si no se suma el inset. */
+.nav-root {
+  padding-left:  max(12px, env(safe-area-inset-left));
+  padding-right: max(12px, env(safe-area-inset-right));
+}
+@media (min-width: 1280px) {
+  .nav-root {
+    padding-left:  max(20px, env(safe-area-inset-left));
+    padding-right: max(20px, env(safe-area-inset-right));
+  }
+}
+
 @layer components {
 
   /* ── Marco de página ──────────────────────────────────────────────────────

@@ -482,8 +482,13 @@ export default function Navbar() {
 
   return (
     <nav
-      className="nav-root fixed top-0 left-0 right-0 z-50 h-16 flex items-center justify-between px-3 min-[1280px]:px-5 gap-2 min-[1280px]:gap-4"
+      className="nav-root fixed top-0 left-0 right-0 z-50 flex items-center justify-between gap-2 min-[1280px]:gap-4"
       style={{
+        // Alto = 64px + la barra de estado del iPhone/iPad a pantalla completa (ver
+        // --nav-h en globals.css). El padding empuja el contenido debajo de la hora;
+        // los laterales (con el notch en horizontal) van en `.nav-root`.
+        height:              "var(--nav-h)",
+        paddingTop:          "var(--safe-top)",
         background:          "rgba(255,255,255,0.98)",
         borderBottom:        "1px solid rgba(13,13,56,0.09)",
         backdropFilter:      "blur(20px)",
@@ -546,7 +551,8 @@ export default function Navbar() {
 
       {/* ── DERECHA, bajo 1280px — hamburguesa ─────────────────────────────────
           `ml-auto` la pega al borde: el nombre de la vista queda a la izquierda,
-          junto al logo, y no flotando en el medio. */}
+          junto al logo, y no flotando en el medio. 48×48: el mínimo cómodo para
+          el pulgar en la esquina (con 40px se erraba seguido). */}
       <button
         type="button"
         onClick={() => setDrawer(true)}
@@ -554,12 +560,13 @@ export default function Navbar() {
         aria-expanded={drawer}
         className="min-[1280px]:hidden flex items-center justify-center flex-shrink-0 ml-auto"
         style={{
-          width: 40, height: 40, borderRadius: 10,
-          background: "rgba(13,13,56,0.04)", border: "1px solid rgba(13,13,56,0.09)",
+          width: 48, height: 48, borderRadius: 12,
+          background: "rgba(13,13,56,0.05)", border: "1px solid rgba(13,13,56,0.12)",
           cursor: "pointer", color: "#0D0D38",
+          touchAction: "manipulation",
         }}
       >
-        <Menu size={19} />
+        <Menu size={24} strokeWidth={2.25} />
       </button>
 
       {/* RIGHT — bloque 3 (Team Planning) + metadatos de sesión */}
