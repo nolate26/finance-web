@@ -70,19 +70,13 @@ function checkQuarter(r: { periodType: 'A' | 'Q'; quarter: number }, ctx: z.Refi
   }
 }
 
-// La macro manda el título tal como está escrito en la hoja (lo compara con LCase):
-// se acepta sin distinguir mayúsculas y se guarda con la grafía canónica.
-const section = z
-  .string({ required_error: 'section es obligatorio', invalid_type_error: 'section debe ser texto' })
-  .trim()
-  .transform((s, ctx) => {
-    const hit = SECTIONS.find((x) => x.toLowerCase() === s.toLowerCase());
-    if (!hit) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `section debe ser ${SECTIONS.map((x) => `"${x}"`).join(', ')} (llegó "${s}")` });
-      return z.NEVER;
-    }
-    return hit;
-  });
+// Case sensitive: tiene que llegar exactamente con esta grafía (la macro la canoniza).
+const section = z.enum(SECTIONS, {
+  errorMap: (issue, ctx) => ({
+    message: `section debe ser exactamente ${SECTIONS.map((x) => `"${x}"`).join(', ')}` +
+      (issue.code === z.ZodIssueCode.invalid_enum_value ? ` (llegó "${issue.received}")` : ''),
+  }),
+});
 
 // 240 y no 255: deja lugar al sufijo " (n)" de disambiguate().
 const statementSchema = z
