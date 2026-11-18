@@ -129,6 +129,26 @@ function LongShortTooltip({
   );
 }
 
+// Eje de sectores en una sola línea: recharts parte los nombres GICS largos
+// ("Real Estate Management & Development") en dos y, con el gráfico angosto al
+// lado de la tabla, los cortaba por la izquierda. Se recortan con "…" y el nombre
+// completo queda en el <title> (hover) y en el tooltip de la barra.
+const AXIS_WIDTH = 150;
+const AXIS_MAX_CHARS = 24; // ~5.8px por carácter a 10.5px en 150px
+
+function SectorTick({ x, y, payload }: { x?: number; y?: number; payload?: { value: string } }) {
+  const full = payload?.value ?? "";
+  const label = full.length > AXIS_MAX_CHARS ? full.slice(0, AXIS_MAX_CHARS - 1).trimEnd() + "…" : full;
+  return (
+    <g transform={`translate(${x ?? 0},${y ?? 0})`}>
+      <title>{full}</title>
+      <text x={-6} y={0} dy={4} textAnchor="end" fontSize={10.5} fill="#0D0D38">
+        {label}
+      </text>
+    </g>
+  );
+}
+
 // ── BarChart tooltip ──────────────────────────────────────────────────────────
 function SectorTooltip({
   active,
@@ -396,6 +416,9 @@ function HoldingsTable({
 
                   {/* Company */}
                   <td className="px-3 py-1.5 font-medium wrap-phone" style={{ color: "#0D0D38" }}>
+                    {/* Tope de ancho: "GRUPO AEROPORTUARIO DEL PACIFICO" empujaba
+                        Active Weight y las Δ fuera de la tarjeta en la vista lado a lado. */}
+                    <div title={row.company} style={{ maxWidth: 210, overflow: "hidden", textOverflow: "ellipsis" }}>
                     {row.company}
                     {isShort && (
                       <span
@@ -409,6 +432,7 @@ function HoldingsTable({
                         SHORT
                       </span>
                     )}
+                    </div>
                     {/* Brasil guarda el ticker BBG: va debajo del nombre que salió de la maestra */}
                     {row.ticker && row.ticker !== row.company && (
                       <div className="font-secondary tabular-nums" style={{ fontSize: 10, fontWeight: 400, color: "rgba(13,13,56,0.45)", marginTop: 1 }}>
@@ -425,10 +449,16 @@ function HoldingsTable({
                   <td className="hide-phone px-3 py-1.5">
                     <span
                       className="px-1.5 py-0.5 rounded text-[10px] font-medium"
+                      title={displaySector}
                       style={{
                         background: "rgba(13,13,56,0.055)",
                         color: "rgba(13,13,56,0.62)",
                         whiteSpace: "nowrap",
+                        display: "inline-block",
+                        maxWidth: 150,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        verticalAlign: "middle",
                       }}
                     >
                       {displaySector}
@@ -636,11 +666,12 @@ export default function CarteraView({
   const fade = (sector: string) => (selectedSector === null || selectedSector === sector ? 1 : 0.35);
 
   return (
-    // Desde 1280px gráfico y tabla van lado a lado (5 + 7 columnas) para no
-    // tener que bajar; en tablet y teléfono siguen apilados.
+    // Desde 1280px gráfico y tabla van lado a lado (4 + 8 columnas: la tabla
+    // necesita el espacio para sus 8 columnas) para no tener que bajar; en
+    // tablet y teléfono siguen apilados.
     <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
       {/* ── Sector BarChart ── */}
-      <div className="card p-4 xl:col-span-5 min-w-0">
+      <div className="card p-4 xl:col-span-4 min-w-0">
         <div className="flex items-start justify-between mb-2 flex-wrap gap-2">
           <div>
             <p className="text-sm font-semibold" style={{ color: "#0D0D38" }}>
@@ -719,8 +750,9 @@ export default function CarteraView({
               <YAxis
                 type="category"
                 dataKey="sector"
-                width={140}
-                tick={{ fontSize: 10.5, fill: "#0D0D38" }}
+                width={AXIS_WIDTH}
+                tick={<SectorTick />}
+                interval={0}
                 axisLine={false}
                 tickLine={false}
               />
@@ -762,8 +794,9 @@ export default function CarteraView({
               <YAxis
                 type="category"
                 dataKey="sector"
-                width={140}
-                tick={{ fontSize: 10.5, fill: "#0D0D38" }}
+                width={AXIS_WIDTH}
+                tick={<SectorTick />}
+                interval={0}
                 axisLine={false}
                 tickLine={false}
               />
@@ -785,7 +818,7 @@ export default function CarteraView({
       </div>
 
       {/* ── Full holdings table (always visible, filtered when sector selected) ── */}
-      <div className="xl:col-span-7 min-w-0">
+      <div className="xl:col-span-8 min-w-0">
         <HoldingsTable
           holdings={tableHoldings}
           allCount={cartera.length}
