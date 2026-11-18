@@ -6,9 +6,9 @@ import FreshnessModal from "@/components/FreshnessModal";
 //
 // Existe aparte del modal global porque esta vista NO se alimenta del lote de mercado
 // del resto de la plataforma: sus precios y retornos vienen del snapshot diario de
-// Bloomberg (ticker_return_snapshot) y sus proyecciones del Excel del analista
-// (proyecciones_financieras). Mezclar esas dos fechas en el modal global daba a
-// entender que aplicaban a toda la app, y no es así.
+// Bloomberg (ticker_return_snapshot), sus fundamentales de las fichas y sus proyecciones
+// de los modelos del analista. Mezclar esas fechas en el modal global daba a entender que
+// aplicaban a toda la app, y no es así.
 export default function StockSelectionFreshness() {
   return (
     <FreshnessModal

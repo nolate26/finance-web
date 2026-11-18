@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { RefreshCw, LayoutGrid, X, Check, Plus, Save, Search, Pencil, RotateCcw, Lock, FileSpreadsheet, Printer } from "lucide-react";
+import { RefreshCw, LayoutGrid, X, Check, Plus, Save, Search, Pencil, RotateCcw, Lock, FileSpreadsheet, Printer, Maximize2, Minimize2 } from "lucide-react";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { usePhone } from "@/lib/useBreakpoint";
 import SsV1PrintView, { type PrintColGroup } from "./SsV1PrintView";
@@ -65,6 +65,10 @@ const RET_TINT = "rgba(69,113,255,0.075)"; // cuerpo — dark-sky-blue al 7.5%
 const RET_TINT_SOLID   = "#F1F4FF";  // = RET_TINT sobre blanco
 const HEAD2_BAND_SOLID = "#E9ECFC";  // = HEAD2_BAND sobre blanco
 const EDIT_ROW_SOLID   = "#FFF0E6";  // = rgba(255,107,6,0.10) sobre blanco
+// Compañía SIN FICHA para el período n (fundamentales de la tabla vieja, o vacíos): rosa claro
+// PATRIA en la columna Empresa + chip "sin ficha". Distinto a propósito del naranja de
+// "editado a mano". Opaco porque la columna es sticky.
+const NOFICHA_BG       = "#FFEFF3";  // = rgba(255,153,175,0.16) sobre blanco
 const IDX_TINT_SOLID   = "#F2FDFD";  // = IDX_TINT sobre blanco
 const IDX_ZEBRA_SOLID  = "#E5FCFB";  // = IDX_ZEBRA sobre blanco
 // Fondos propios: van en la misma tabla que los índices, debajo, pero con tinte azul para
@@ -83,6 +87,8 @@ const solidTint = (c: string | undefined): string | undefined => (c ? SOLID_TINT
 // Todo por debajo de 50: la barra de navegación es `fixed z-50` y el encabezado de la
 // tabla, que ahora se pega al viewport justo debajo de ella, no debe taparla nunca.
 const Z = { corner: 40, head: 30, leftCol: 20, body: 1 } as const;
+// Grupos colapsables que parten abiertos: los múltiplos clave.
+const DEFAULT_OPEN_GROUPS = ["fvEbitda", "pu"];
 // Alto base de la barra de navegación. El real es --nav-h (64px + barra de estado del
 // iPhone/iPad a pantalla completa, ver globals.css): es el `top` al que se pega el
 // encabezado de la tabla principal cuando scrollea la página. Ver navPx.
@@ -162,7 +168,7 @@ const fmtDate = (d: string | null): string => {
   return y && m && day ? `${day}/${m}/${y.slice(2)}` : d;
 };
 
-// El orden fijo por sector vive en lib/chileCompanyOrder.ts: lo comparte /projections.
+// El orden fijo por sector vive en lib/chileCompanyOrder.ts.
 
 
 // ── Computed value bag (USD mn) ────────────────────────────────────────────────
@@ -212,9 +218,8 @@ function computeV(mcap: number | null, a: Alloc): Record<string, number | null> 
 // definiciones de columna: lo que se imprime es exactamente lo que se ve.
 export interface DisplayRow {
   company: string; tickerBBG: string | null; ssCurrency: "CLP" | "USD"; industria: string | null;
-  divLabel: string | null;
-  payout: number | null;    // pool_div (payout) de proyecciones_financieras, decimal 0..1
-  rec: string | null;       // recomendación (AnalystRecommendationHistory)
+  payout: number | null;    // payout del modelo del analista, decimal 0..1
+  rec: string | null;       // recomendación (modelo del analista, o AnalystRecommendationHistory)
   recDate: string | null;   // YYYY-MM-DD
   tp: number | null;        // target price, moneda del listado (sin conv)
   label: string;            // "" consolidada/single · "A"/"B" serie
@@ -223,6 +228,10 @@ export interface DisplayRow {
   v: Record<string, number | null>;
   overrides?: string[];     // campos con override de admin (para pintar)
   retAsOf?: string | null;  // fecha del snapshot de retornos que aplicó a esta fila
+  // Fuente de los datos de la compañía (ver SsV1Company): todo lo que no sea ficha / modelo
+  // se marca en la columna Empresa. Opcionales: las filas agregadas (índices, fondos) no tienen.
+  fundSource?: SsV1Company["fundSource"];
+  projSource?: SsV1Company["projSource"];
 }
 // Unidad agregable para el sumaproducto por índice: los primitivos aditivos (Alloc en
 // USD mn) + su M.Cap + su dividendo estimado. `key` = nombre normalizado (single/consol
@@ -328,11 +337,12 @@ function computeGroup(c: SsV1Company, tc: number): CompanyGroup {
   const base = normName(c.company);
 
   const ovr = c.overrides;
+  const src = { fundSource: c.fundSource, projSource: c.projSource };
   if (!c.dual) {
     const s = c.series[0];
     const v = withPriceFields(computeV(seriesMcaps[0], whole), s);
     return {
-      cons: { company: c.company, tickerBBG: c.tickerBBG, ssCurrency: ss, industria: c.industria, divLabel: c.divLabel, payout: c.payout, rec: c.rec, recDate: c.recDate, tp: c.tp, label: "", kind: "single", seriesBBG: c.tickerBBG, v, overrides: ovr, retAsOf: s?.retAsOf ?? null },
+      cons: { ...src, company: c.company, tickerBBG: c.tickerBBG, ssCurrency: ss, industria: c.industria, payout: c.payout, rec: c.rec, recDate: c.recDate, tp: c.tp, label: "", kind: "single", seriesBBG: c.tickerBBG, v, overrides: ovr, retAsOf: s?.retAsOf ?? null },
       series: [],
       units: [{ key: base, u: { alloc: whole, mcap: seriesMcaps[0], dividendos: dividendosOf(whole) } }],
     };
@@ -340,7 +350,7 @@ function computeGroup(c: SsV1Company, tc: number): CompanyGroup {
 
   // Consolidada (whole, M.Cap = Σ series)
   const consV = withPriceFields(computeV(mcapConsol, whole), null);
-  const cons: DisplayRow = { company: c.company, tickerBBG: c.tickerBBG, ssCurrency: ss, industria: c.industria, divLabel: c.divLabel, payout: c.payout, rec: c.rec, recDate: c.recDate, tp: c.tp, label: "", kind: "consolidated", seriesBBG: c.tickerBBG, v: consV, overrides: ovr };
+  const cons: DisplayRow = { ...src, company: c.company, tickerBBG: c.tickerBBG, ssCurrency: ss, industria: c.industria, payout: c.payout, rec: c.rec, recDate: c.recDate, tp: c.tp, label: "", kind: "consolidated", seriesBBG: c.tickerBBG, v: consV, overrides: ovr };
 
   // Series A/B (prorateadas por acciones). Cada serie es también una unidad agregable.
   const seriesUnits: UnitEntry[] = [];
@@ -349,7 +359,7 @@ function computeGroup(c: SsV1Company, tc: number): CompanyGroup {
     const sAlloc = scaleAlloc(w);
     const v = withPriceFields(computeV(seriesMcaps[i], sAlloc), s);
     seriesUnits.push({ key: `${base}-${s.label.toLowerCase()}`, u: { alloc: sAlloc, mcap: seriesMcaps[i], dividendos: dividendosOf(sAlloc) } });
-    return { company: c.company, tickerBBG: c.tickerBBG, ssCurrency: ss, industria: c.industria, divLabel: c.divLabel, payout: c.payout, rec: s.rec ?? null, recDate: s.recDate ?? null, tp: s.tp ?? null, label: s.label, kind: "series", seriesBBG: s.bbg, v, overrides: ovr, retAsOf: s.retAsOf ?? null };
+    return { ...src, company: c.company, tickerBBG: c.tickerBBG, ssCurrency: ss, industria: c.industria, payout: c.payout, rec: s.rec ?? null, recDate: s.recDate ?? null, tp: s.tp ?? null, label: s.label, kind: "series", seriesBBG: s.bbg, v, overrides: ovr, retAsOf: s.retAsOf ?? null };
   });
 
   // Unidades: consolidada (por nombre base) + cada serie (nombre-a / nombre-b).
@@ -532,7 +542,7 @@ const idxCols = (g: Group): ColDef[] =>
   : g.cols;
 // Una fila agregada (índice o fondo) con la forma de DisplayRow, para reusar los renders.
 const aggRow = (name: string, v: Record<string, number | null>): DisplayRow => ({
-  company: name, tickerBBG: null, ssCurrency: "USD", industria: null, divLabel: null,
+  company: name, tickerBBG: null, ssCurrency: "USD", industria: null,
   payout: null, rec: null, recDate: null, tp: null, label: "", kind: "single", seriesBBG: null, v,
 });
 
@@ -678,7 +688,7 @@ export default function StockSelectionV1() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [showMethod, setShowMethod] = useState(false);   // colapsada al cargar
   const [selPeriod, setSelPeriod] = useState<string | null>(null); // "fy-q"; null = más reciente
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(["fvEbitda", "pu"])); // grupos colapsables abiertos (los múltiplos clave parten desplegados)
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(DEFAULT_OPEN_GROUPS)); // grupos colapsables abiertos (los múltiplos clave parten desplegados)
   const [showIndexEditor, setShowIndexEditor] = useState(false); // editor de membresía de índices (solo admin)
   const [membership, setMembership] = useState<IndexMembershipPayload | null>(null); // matriz índice↔empresa (para el sumaproducto)
   const [carteras, setCarteras] = useState<CarterasPayload | null>(null); // posiciones de los fondos propios
@@ -775,6 +785,11 @@ export default function StockSelectionV1() {
   const changePeriod = (key: string) => { setSelPeriod(key); load(data?.withPrices ?? false, key); };
 
   const groupDefs = useMemo(() => buildGroups(data?.periodN ?? null, data?.periodN4 ?? null, data?.returnsAsOf ?? null), [data]);
+  // "Ver todo en detalle": despliega todos los grupos colapsables de una vez; el segundo
+  // clic vuelve a la vista resumida de siempre (sólo los múltiplos clave abiertos).
+  const collapsibleIds = useMemo(() => groupDefs.filter((g) => g.collapsible).map((g) => g.id), [groupDefs]);
+  const allExpanded = collapsibleIds.length > 0 && collapsibleIds.every((id) => expandedGroups.has(id));
+  const toggleAllGroups = () => setExpandedGroups(new Set(allExpanded ? DEFAULT_OPEN_GROUPS : collapsibleIds));
   const allCols = useMemo(() => groupDefs.flatMap((g) => g.cols), [groupDefs]);
   const colById = useMemo(() => new Map(allCols.map((c) => [c.id, c])), [allCols]);
 
@@ -952,7 +967,8 @@ export default function StockSelectionV1() {
   const methodology: { title: string; wide?: boolean; items: MethItem[] }[] = [
     { title: "Convenciones y fuentes", wide: true, items: [
       { k: "“NM” vs “—”", v: "“—” = dato no disponible. “NM” = no significativo: múltiplos con numerador o denominador ≤ 0 (utilidad, EBITDA, patrimonio o capital invertido negativo), ROE / ROIC negativos o sobre base ≤ 0, y variaciones a/a sobre base ≤ 0 o con período actual negativo. Las filas con NM se ordenan al final." },
-      { k: "Fuentes", v: "stock_selection_v1 (fundamentales reportados, en millones, moneda local) · proyecciones_financieras (estimaciones + payout) · empresas_industrias_v2 (homologación nombre → ticker Bloomberg / Yahoo y sector) · Yahoo Finance (precios y retornos) · AnalystRecommendationHistory (recomendaciones)." },
+      { k: "Fuentes", v: "ficha_statements (fundamentales trimestrales reportados, en millones, moneda local; macro “Send Ficha”) · model_headers / model_financials y bank_headers / bank_financials (proyecciones 2026E–2027E, payout, Rec y TP del modelo del analista) · empresas_industrias_v2 (homologación nombre → ticker Bloomberg / Yahoo y sector) · Yahoo Finance (precios) · ticker_return_snapshot (retornos)." },
+      { k: "Transición", v: "mientras falten fichas o modelos, la compañía cae a las tablas antiguas y se marca: “sin ficha” (columna Empresa en rosa) = fundamentales de stock_selection_v1, o vacíos si esa tabla tampoco tiene el trimestre; “sin modelo” = sin proyecciones ni payout, y Rec/TP de AnalystRecommendationHistory. Nunca se mezclan dos fuentes de fundamentales en una misma compañía." },
       { k: "Moneda", f: "USD → USD · CLP → ÷ TC", v: "todos los montos quedan en USD millones; el TC USD/CLP es editable arriba. Monedas no soportadas (p. ej. GBp) → “—”." },
       { k: "Períodos", v: `n = ${pN} (último trimestre cargado) · n-4 = ${pN4} (mismo trimestre, año previo) · LTM = suma de los últimos 4 trimestres (${ltmLbl}).` },
       { k: "Series A/B", v: "cada serie usa su propio precio y nº de acciones; las filas A/B prorratean los fundamentales por su % de acciones; la consolidada usa el fundamental completo contra el M.Cap total (Σ de las series)." },
@@ -973,7 +989,7 @@ export default function StockSelectionV1() {
     ] },
     { title: "Tamaño / EV (USD mn)", items: [
       { k: "M.Cap", f: "Precio × nº de acciones", v: "convertido a USD. Doble serie: consolidada = Σ M.Cap de cada serie." },
-      { k: "DN", v: "deuda neta del período n (campo debt de stock_selection_v1), → USD." },
+      { k: "DN", v: "deuda neta del período n (línea “Total Net Debt” del Balance Sheet de la ficha), → USD." },
       { k: "FV", f: "M.Cap + DN", v: "firm value (enterprise value)." },
     ] },
     { title: `EBITDA Y/Y — ${pN4} → ${pN} (USD mn)`, items: [
@@ -986,14 +1002,14 @@ export default function StockSelectionV1() {
     ] },
     { title: "EBITDA (USD mn)", items: [
       { k: "LTM", f: "Σ EBITDA últimos 4T", v: "convertido a USD." },
-      { k: "2026E / 2027E", v: "EBITDA estimado (proyecciones_financieras) para ese año calendario, → USD." },
+      { k: "2026E / 2027E", v: "EBITDA estimado del último modelo del analista (model_financials) para ese año, llevado a millones y → USD. La escala del modelo se mide contra el año 2025 reportado (×1 o ×1000), porque la etiqueta de unidad del modelo no es confiable." },
     ] },
     { title: "FV/EBITDA", items: [
       { k: "LTM · 2026E · 2027E", f: "FV / EBITDA del período", v: "menor = más barato." },
     ] },
     { title: "Utilidad (USD mn)", items: [
       { k: "LTM", f: "Σ utilidad últimos 4T", v: "convertido a USD." },
-      { k: "2026E / 2027E", v: "utilidad estimada (proyecciones_financieras), → USD." },
+      { k: "2026E / 2027E", v: "utilidad neta controladora estimada del modelo del analista (model_financials.net_income; en bancos bank_financials.controlling_net_income), → USD." },
     ] },
     { title: "P/U (precio / utilidad)", items: [
       { k: "LTM · 2026E · 2027E", f: "M.Cap / Utilidad del período", v: "“NM” cuando la utilidad del período es ≤ 0." },
@@ -1009,7 +1025,7 @@ export default function StockSelectionV1() {
       { k: "FV/S", f: "FV / Ventas LTM" },
     ] },
     { title: "Dividendos", items: [
-      { k: "Pol Div", v: "payout objetivo (proyecciones_financieras.pool_div), en %." },
+      { k: "Pol Div", v: "payout del modelo para 2027 (dividendo 2027 / utilidad 2026), en %, sin signo. Es el que se aplica sobre la Utilidad 2026E." },
       { k: "Yield 26E", f: "máx(payout × Utilidad 2026E, 0) / M.Cap", v: "dividendo estimado sobre el M.Cap." },
     ] },
     { title: "ROIC — retorno sobre capital", items: [
@@ -1017,9 +1033,9 @@ export default function StockSelectionV1() {
       { k: "FV/IC", f: "FV / Capital invertido (n)", v: "Capital invertido (n) = Patrimonio + Deuda neta + Interés minoritario del período n." },
     ] },
     { title: "Recomendación", items: [
-      { k: "Rec.", v: "última recomendación del analista por fecha (Comprar / Mantener / Vender). Cruce: AnalystRecommendationHistory.company → company_isins.company_name → isin → ticker_bloomberg (cada serie por el BBG de su clase)." },
-      { k: "Date", v: "fecha de esa recomendación." },
-      { k: "TP", v: "precio objetivo, en la moneda de cotización (sin convertir por TC)." },
+      { k: "Rec.", v: "recomendación del último modelo del analista (model_headers / bank_headers.recc: Buy / Hold / Sell → Comprar / Mantener / Vender), cruzada por ticker Bloomberg. En las de doble serie va en la serie del ticker del modelo (Andina → serie B). Sin modelo: última de AnalystRecommendationHistory." },
+      { k: "Date", v: "fecha del modelo (update_date) o de esa recomendación." },
+      { k: "TP", v: "precio objetivo del modelo, en la moneda de cotización (sin convertir por TC)." },
     ] },
     { title: "Fondos — sumaproducto por participación", wide: true, items: [
       { k: "Ponderador", f: "acciones en cartera / acciones de la unidad", v: "las dos en millones. Es la fracción de la compañía que el fondo posee. Las posiciones salen de `carteras`, que se carga mes a mes desde el Excel en Admin Issues → Stock Selection (Chile) →Carteras." },
@@ -1089,6 +1105,12 @@ export default function StockSelectionV1() {
               {data.periods.map((p) => <option key={`${p.fy}-${p.q}`} value={`${p.fy}-${p.q}`}>{p.label}</option>)}
             </select>
           </div>
+          {/* Cobertura de las fuentes nuevas en el período: el resto va marcado en la tabla. */}
+          <div title="Compañías con ficha cargada para este trimestre (el resto va en rosa, “sin ficha”) y con modelo del analista (el resto, “sin modelo”: proyecciones y Rec de las tablas antiguas)."
+            style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "4px 8px", borderRadius: 6, border: `1px solid ${BORDER}`, background: SURFACE, fontSize: 11, color: TEXT2, fontVariantNumeric: "tabular-nums" }}>
+            <span><b style={{ color: TEXT1 }}>Ficha</b> {data.fichaCount}/{data.companies.length}</span>
+            <span><b style={{ color: TEXT1 }}>Modelo</b> {data.modelCount}/{data.companies.length}</span>
+          </div>
           <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 8px", borderRadius: 6, border: `1px solid ${BORDER}`, background: SURFACE }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: TEXT2 }}>TC USD/CLP</span>
             <input type="text" inputMode="decimal" value={tcInput} onChange={(e) => setTcInput(e.target.value)} onBlur={applyTc}
@@ -1099,6 +1121,13 @@ export default function StockSelectionV1() {
             style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: pricesLoading ? "default" : "pointer", color: "#fff", background: INK, border: "none", opacity: pricesLoading ? 0.7 : 1 }}>
             <RefreshCw size={13} style={pricesLoading ? { animation: "spin 0.8s linear infinite" } : undefined} />
             {pricesLoading ? "Trayendo…" : priced ? "Actualizar precios" : "Traer precios (Yahoo)"}
+          </button>
+          {/* En teléfono no aplica: ahí la tabla muestra un grupo por vez (chips). */}
+          <button onClick={toggleAllGroups} className="hide-phone"
+            title={allExpanded ? "Volver a la vista resumida (sólo FV/EBITDA y P/U abiertos)" : "Desplegar todos los grupos de columnas"}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", color: allExpanded ? "#fff" : NAVY, background: allExpanded ? NAVY : "#fff", border: `1px solid ${NAVY}` }}>
+            {allExpanded ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+            {allExpanded ? "Vista resumida" : "Ver todo en detalle"}
           </button>
           {/* Exportar: Excel con valores crudos, y la hoja imprimible (legal apaisado, dos
               planas) vía el diálogo del navegador, donde "Guardar como PDF" es el PDF. */}
@@ -1258,11 +1287,14 @@ export default function StockSelectionV1() {
                 const isSeries = r.kind === "series";
                 const topBorder = sectionStart && ri === 0;
                 const bg = isSeries ? "#F5F7FD" : gi % 2 === 0 ? "#fff" : ZEBRA;
+                // Sin ficha para n: la celda Empresa (y la de sus series) va en rosa.
+                const noFicha = r.fundSource != null && r.fundSource !== "ficha";
+                const srcTitle = !isSeries ? sourceTitle(r, data.periodN) : undefined;
                 return (
                   <tr key={`${r.company}-${r.label || "cons"}`} style={{ background: bg }}>
                     <td onClick={editMode && !isSeries ? () => { const c = companyByName.get(normName(r.company)); if (c) setEditCompany(c); } : undefined}
-                      title={editMode && !isSeries ? "Editar valores de esta compañía" : undefined}
-                      style={{ ...stickyTd, left: fitPx(leftPx), borderTop: topBorder ? SECTION_BORDER : undefined, background: editMode && !isSeries ? EDIT_ROW_SOLID : bg, paddingLeft: isSeries ? 18 : 8, cursor: editMode && !isSeries ? "pointer" : undefined, ...(isPhone ? { maxWidth: 132, overflow: "hidden" } : null) }}>
+                      title={editMode && !isSeries ? "Editar valores de esta compañía" : srcTitle}
+                      style={{ ...stickyTd, left: fitPx(leftPx), borderTop: topBorder ? SECTION_BORDER : undefined, background: editMode && !isSeries ? EDIT_ROW_SOLID : noFicha ? NOFICHA_BG : bg, paddingLeft: isSeries ? 18 : 8, cursor: editMode && !isSeries ? "pointer" : undefined, ...(isPhone ? { maxWidth: 132, overflow: "hidden" } : null) }}>
                       {isSeries ? (
                         <>
                           <div style={{ fontSize: 10, fontWeight: 600, color: TEXT2, whiteSpace: "nowrap" }}>
@@ -1276,6 +1308,8 @@ export default function StockSelectionV1() {
                             {editMode && <Pencil size={11} color={EDIT_BORDER} />}
                             {r.company}
                             {r.kind === "consolidated" && <span style={consBadge}>consol.</span>}
+                            {noFicha && !isPhone && <span style={noFichaBadge}>sin ficha</span>}
+                            {r.projSource != null && r.projSource !== "model" && !isPhone && <span style={noModelBadge}>sin modelo</span>}
                             {r.overrides?.length && !isPhone ? (
                               <span style={editedBadge} title="Celdas con valor editado a mano: overrides de esta vista y/o ediciones hechas en Proyecciones">
                                 {r.overrides.length} ed.
@@ -1739,25 +1773,17 @@ function SsV1OverrideEditor({ company, fy, q, onClose, onSaved }: { company: SsV
               })}
             </div>
           ))}
-          {/* Proyecciones — sólo lectura. La fuente de verdad es /projections. */}
+          {/* Proyecciones — sólo lectura. Salen del último modelo del analista. */}
           <div style={{ marginTop: 14, border: `1px dashed ${BORDER}`, borderRadius: 8, padding: "9px 11px", background: SURFACE }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: TEXT2, marginBottom: 7 }}>
               <Lock size={11} /> Proyecciones · sólo lectura
             </div>
             {PROJECTION_FIELDS.map((f) => {
               const v = curFieldValue(company, f.key);
-              const sig = company.projEdits?.[f.key];
               return (
                 <div key={f.key} style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "2px 0" }}>
-                  <div style={{ flex: 1, fontSize: 12, color: TEXT1 }}>
-                    {f.label}
-                    {sig && (
-                      <span style={{ fontSize: 10, color: EDIT_BORDER, marginLeft: 6 }}>
-                        editado por {sig.by ?? "usuario"} · {fmtDate(sig.at.slice(0, 10))}
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: 12, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", color: TEXT1, fontWeight: sig ? 700 : 400 }}>
+                  <div style={{ flex: 1, fontSize: 12, color: TEXT1 }}>{f.label}</div>
+                  <div style={{ fontSize: 12, fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", color: TEXT1 }}>
                     {v == null ? "—" : v.toLocaleString("en-US")}
                   </div>
                 </div>
@@ -1774,10 +1800,9 @@ function SsV1OverrideEditor({ company, fy, q, onClose, onSaved }: { company: SsV
               </div>
             </div>
             <div style={{ fontSize: 10.5, color: TEXT3, marginTop: 8, lineHeight: 1.5 }}>
-              Estos valores salen de Proyecciones y no se editan desde acá. Para cambiarlos andá a{" "}
-              <a href="/projections" style={{ color: INK, fontWeight: 600 }}>/projections</a>, que es la única
-              fuente de edición manual: ahí se resuelve cuál valor manda —el más reciente entre el último
-              Excel cargado y la última edición de un analista— y esta vista muestra ese ganador.
+              {company.projSource === "model"
+                ? <>Salen del último modelo del analista ({company.modelTicker} · {fmtDate(company.modelDate)}) y no se editan desde acá: para cambiarlos hay que subir el modelo de nuevo.</>
+                : <>Esta compañía no tiene modelo del analista cargado: las proyecciones y el payout quedan vacíos.</>}
             </div>
           </div>
 
@@ -1811,4 +1836,16 @@ const retryBtn: React.CSSProperties = { marginTop: 10, padding: "6px 16px", bord
 // USD se marca algo más fuerte que CLP (es la excepción en un listado mayormente CLP).
 const ccyBadge = (ccy: "CLP" | "USD"): React.CSSProperties => ({ marginLeft: 5, fontSize: 9, fontWeight: 700, color: ccy === "USD" ? TEXT1 : TEXT3, background: ccy === "USD" ? "rgba(13,13,56,0.09)" : "rgba(13,13,56,0.05)", borderRadius: 3, padding: "1px 4px" });
 const consBadge: React.CSSProperties = { marginLeft: 6, fontSize: 8.5, fontWeight: 700, color: NAVY, background: "rgba(13,13,56,0.10)", borderRadius: 3, padding: "1px 5px", textTransform: "uppercase", letterSpacing: "0.04em" };
-const editedBadge: React.CSSProperties = { marginLeft: 6, fontSize: 8.5, fontWeight: 700, color: "#FF6B06", background: "rgba(255,107,6,0.35)", borderRadius: 3, padding: "1px 5px", letterSpacing: "0.02em" };
+const noFichaBadge: React.CSSProperties = { marginLeft: 6, fontSize: 8.5, fontWeight: 700, color: PATRIA.pink, background: "rgba(248,72,94,0.12)", borderRadius: 3, padding: "1px 5px", letterSpacing: "0.02em" };
+const noModelBadge: React.CSSProperties = { marginLeft: 4, fontSize: 8.5, fontWeight: 700, color: TEXT2, background: "rgba(13,13,56,0.07)", borderRadius: 3, padding: "1px 5px", letterSpacing: "0.02em" };
+
+/** Tooltip de la columna Empresa: de dónde salen los datos de la fila. */
+function sourceTitle(r: DisplayRow, periodN: string | null): string | undefined {
+  const p = periodN ?? "este trimestre";
+  const fund = r.fundSource === "legacy" ? `Sin ficha para ${p}: fundamentales de stock_selection_v1 (fuente antigua).`
+    : r.fundSource === "none" ? `Sin ficha para ${p} y sin datos en la fuente antigua: fundamentales vacíos.` : null;
+  const proj = r.projSource === "none"
+    ? "Sin modelo del analista: proyecciones y payout vacíos; Rec/TP de AnalystRecommendationHistory." : null;
+  return fund || proj ? [fund, proj].filter(Boolean).join("\n") : undefined;
+}
+const editedBadge: React.CSSProperties ={ marginLeft: 6, fontSize: 8.5, fontWeight: 700, color: "#FF6B06", background: "rgba(255,107,6,0.35)", borderRadius: 3, padding: "1px 5px", letterSpacing: "0.02em" };

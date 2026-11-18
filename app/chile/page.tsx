@@ -4,16 +4,17 @@ import { Fragment, useState } from "react";
 import TabSpacer from "@/components/TabSpacer";
 import ActiveDecisions from "@/components/chile/ActiveDecisions";
 import StockSelectionV1 from "@/components/chile/StockSelectionV1";
-import ProjectionsPage from "@/app/projections/page";
+import LastFicha from "@/components/chile/LastFicha";
 
 // Top Picks salió de acá: vive en Analyst Estimates como "Top Picks Chile".
-type ActiveTab = "stock-selection" | "projections" | "active-decisions";
+// Projections se eliminó (2026-11-18): las proyecciones salen de los modelos del analista.
+type ActiveTab = "stock-selection" | "last-ficha" | "active-decisions";
 
 // `spacerBefore` abre un separador antes de la pestaña: agrupa Stock Selection y
-// Projections a la izquierda y despega Multiples Range del bloque principal.
+// Last Ficha a la izquierda y despega Multiples Range del bloque principal.
 const TABS: { key: ActiveTab; label: string; spacerBefore?: boolean }[] = [
   { key: "stock-selection",  label: "Stock Selection" },
-  { key: "projections",      label: "Projections"     },
+  { key: "last-ficha",       label: "Last Ficha"      },
   { key: "active-decisions", label: "Multiples Range", spacerBefore: true },
 ];
 
@@ -71,8 +72,8 @@ export default function ChilePage() {
       {/* ── Stock Selection ─────────────────────────────────────────────────── */}
       {activeTab === "stock-selection" && <StockSelectionV1 />}
 
-      {/* ── Projections ─────────────────────────────────────────────────────── */}
-      {activeTab === "projections" && <ProjectionsPage />}
+      {/* ── Last Ficha ──────────────────────────────────────────────────────── */}
+      {activeTab === "last-ficha" && <LastFicha />}
 
       {/* ── Active Decisions ────────────────────────────────────────────────── */}
       {activeTab === "active-decisions" && <ActiveDecisions />}

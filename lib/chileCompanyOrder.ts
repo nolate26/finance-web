@@ -1,8 +1,7 @@
 // Orden fijo por sector de las compañías chilenas.
 //
-// Vive en lib/ porque lo comparten Stock Selection (/chile) y Proyecciones (/projections):
-// las dos vistas tienen que listar las empresas exactamente en el mismo orden, y con una
-// sola definición agregar una empresa acá las mueve a las dos a la vez.
+// Vive en lib/ porque lo comparten Stock Selection (/chile) y el panel de admin que lo edita:
+// con una sola definición, agregar una empresa acá la mueve en todos lados a la vez.
 //
 // Cada sub-array es una SECCIÓN; entre secciones las vistas dibujan un borde. Las empresas
 // que no están en la lista caen al final con orden alfabético (el sort es estable y las

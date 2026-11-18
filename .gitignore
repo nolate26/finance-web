@@ -17,6 +17,9 @@ next-env.d.ts
 # user uploads — generated at runtime, not committed
 public/uploads/
 
+# respaldos locales de tablas eliminadas (datos de producción: no van al repo)
+backups/
+
 # misc
 .DS_Store
 

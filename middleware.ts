@@ -27,7 +27,6 @@ export const config = {
     "/economia/:path*",
     "/fondos/:path*",
     "/presentations/:path*",
-    "/projections/:path*",
     "/macro/:path*",
     "/admin/:path*",
     "/admin-issues/:path*",

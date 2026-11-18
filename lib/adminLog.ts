@@ -10,7 +10,7 @@ export const ENTITY = {
   ssOverride: "stock_selection_override",
   indexMembership: "index_membership",
   ssHidden: "stock_selection_hidden",
-  proyeccionOverride: "proyecciones_override",
+  fichaComment: "ficha_comments",
   weeklyPlan: "weekly_plan",
   sector: "sectors",
   sectorSection: "sector_sections",

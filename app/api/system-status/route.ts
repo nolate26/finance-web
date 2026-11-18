@@ -42,7 +42,8 @@ const THRESHOLDS: Record<string, { warn: number; stale: number }> = {
   consensus:   { warn: 14, stale: 30 },   // valuación + consenso (semanal)
   funds:       { warn: 14, stale: 30 },   // pesos de cartera (semanal)
   ssPrices:    { warn: 3,  stale: 7  },   // snapshot de retornos (diario)
-  ssEstimates: { warn: 45, stale: 90 },   // proyecciones (sin periodicidad fija)
+  ssEstimates: { warn: 45, stale: 90 },   // modelos del analista (sin periodicidad fija)
+  ssFichas:    { warn: 100, stale: 130 }, // fichas (trimestral)
 };
 
 const iso = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : null);
@@ -104,22 +105,31 @@ async function buildGlobal(): Promise<FreshnessItem[]> {
 
 // ── Ámbito Stock Selection (Chile) ────────────────────────────────────────────
 // Stock Selection no se alimenta del lote de mercado del resto de la app: los precios
-// y retornos vienen del snapshot de Bloomberg (diario) y las proyecciones del Excel
-// del analista. Por eso tiene alerta propia en vez de mezclarse en el modal global.
+// y retornos vienen del snapshot de Bloomberg (diario), los fundamentales de las fichas y
+// las proyecciones de los modelos del analista. Por eso tiene alerta propia en vez de
+// mezclarse en el modal global.
 async function buildStockSelection(): Promise<FreshnessItem[]> {
-  const [prices, estimates] = await Promise.all([
+  const [prices, models, banks, fichas] = await Promise.all([
     prisma.tickerReturnSnapshot.aggregate({ _max: { asOf: true } }),
-    prisma.proyecciones_financieras.aggregate({ _max: { generated_at: true } }),
+    prisma.modelHeader.aggregate({ _max: { updateDate: true } }),
+    prisma.bankHeader.aggregate({ _max: { updateDate: true } }),
+    prisma.fichaStatement.aggregate({ _max: { updatedAt: true } }),
   ]);
+  const m = models._max.updateDate, b = banks._max.updateDate;
+  const lastModel = m && b ? (m > b ? m : b) : m ?? b ?? null;
 
   return [
     // ticker_return_snapshot — snapshot diario de Bloomberg.
     item("ss-prices", "Prices", null,
          prices._max.asOf ?? null, "ssPrices"),
 
-    // proyecciones_financieras — el Excel del analista.
+    // ficha_statements — última carga de la macro "Send Ficha".
+    item("ss-fichas", "Company fichas (reported)", null,
+         fichas._max.updatedAt ?? null, "ssFichas"),
+
+    // model_headers / bank_headers — último modelo del analista subido.
     item("ss-estimates", "Moneda analyst estimates", null,
-         estimates._max.generated_at ?? null, "ssEstimates"),
+         lastModel, "ssEstimates"),
   ];
 }
 

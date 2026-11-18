@@ -2,15 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import YahooFinance from "yahoo-finance2";
 import { OVERRIDE_FIELD_KEYS } from "@/lib/ssOverrideFields";
-import {
-  buildOverrideIndex, getOverride, ROW_YEAR,
-  type OverrideRecord, type OverrideIndex,
-} from "@/lib/proyeccionOverrideFields";
 // Parche de tickers Yahoo rotos en la fuente. Vive en lib/ porque el panel de admin
 // necesita mostrar qué filas está reescribiendo (y Next no deja exportarlo desde acá).
 import { fixYahooTicker } from "@/lib/yahooTickerFixes";
 import { normBBG } from "@/lib/bbg";
 import { norm, cleanBBG, NAME_OVERRIDES, SERIES_NAMES } from "@/lib/ssHomologacion";
+import {
+  qKey, hasPeriod, loadFichaFunds, loadModelPicks, modelScale, recLabel,
+  type Fund, type ModelPick,
+} from "@/lib/ssFichaModel";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +31,8 @@ export interface SsV1Series {
   bbg:         string | null;
   yahooTicker: string | null;
   shares:      number | null; // millones de acciones de esta serie
-  // Recomendación (AnalystRecommendationHistory, match por BBG de la serie)
+  // Recomendación: modelo del analista (model_headers/bank_headers) si la serie es la del
+  // modelo; si la compañía no tiene modelo, AnalystRecommendationHistory (match por BBG).
   rec?:     string | null;
   recDate?: string | null;    // YYYY-MM-DD
   tp?:      number | null;     // target price, moneda del listado (sin conv)
@@ -63,6 +64,24 @@ export interface SsV1Company {
    */
   seeded?:     boolean;
 
+  /**
+   * De dónde salieron los fundamentales del período n:
+   *   "ficha"  = ficha_statements (fuente nueva)
+   *   "legacy" = stock_selection_v1 (la compañía todavía no tiene ficha para ese trimestre)
+   *   "none"   = ninguna de las dos tiene ese trimestre → fundamentales vacíos
+   * La vista pinta distinto todo lo que no sea "ficha".
+   */
+  fundSource:  "ficha" | "legacy" | "none";
+  fichaTicker: string | null;  // ticker de la ficha usada (normalizado), si hay
+  /**
+   * Proyecciones/payout/Rec/TP: "model" = último modelo en model_* / bank_*. "none" = sin
+   * modelo: proyecciones y payout vacíos, Rec/TP de AnalystRecommendationHistory.
+   */
+  projSource:  "model" | "none";
+  modelTicker: string | null;
+  modelDate:   string | null;  // YYYY-MM-DD del modelo usado
+  modelScale:  number | null;  // factor modelo → millones que se aplicó (1 / 1000)
+
   ssCurrency:   "CLP" | "USD";
   projCurrency: "CLP" | "USD" | null;
 
@@ -93,27 +112,22 @@ export interface SsV1Company {
   ebitdaLtmPrev: number | null;  // LTM del período n-4 (misma ventana, un año antes)
   ebitdaFyPrev:  number | null;  // año calendario anterior al de las proyecciones
 
-  // Proyecciones (moneda projCurrency, millones)
+  // Proyecciones del modelo (moneda projCurrency, millones)
   ebitda2026E:   number | null;
   ebitda2027E:   number | null;
   utilidad2026E: number | null;
   utilidad2027E: number | null;
-  divLabel:      string | null;
   payout:        number | null;
 
-  // Recomendación a nivel compañía (match por tickerBBG) — para fila consolidada/single
+  // Recomendación a nivel compañía (modelo, o ARH por tickerBBG) — fila consolidada/single
   rec:     string | null;
   recDate: string | null;   // YYYY-MM-DD
   tp:      number | null;    // target price, moneda del listado (sin conv)
 
   // Campos con override de admin aplicado en este período (para pintarlos en la vista).
-  // Incluye los campos de proyección que llegaron editados desde /projections, que se
-  // pintan igual pero NO se editan acá.
   overrides?: string[];
   // Valor base (previo al override) de esos campos, para mostrarlo en el panel de edición.
   baseValues?: Record<string, number | null>;
-  // Firma de los campos de proyección editados a mano en /projections (sólo lectura acá).
-  projEdits?: Record<string, { by: string | null; at: string }>;
 }
 
 export interface SsV1Period { fy: number; q: number; label: string; }
@@ -137,6 +151,9 @@ export interface SsV1Payload {
   returnsSource:   string | null;
   returnsMatched:  number;        // series de la vista con retorno
   returnsRows:     number;        // filas totales del snapshot
+  // Cobertura de las fuentes nuevas en el período n (sobre las compañías mostradas).
+  fichaCount:      number;
+  modelCount:      number;
   // Nivel real de cada índice (solo con ?withPrices). Sólo los que Yahoo sirve por quote:
   // IPSA (^IPSA) e IGPA (IGPA.SN). Los sub-índices IGPA y los "Mon" no existen en Yahoo.
   indexLevels?: Record<string, IndexLevel>;
@@ -262,12 +279,16 @@ export async function GET(request: NextRequest) {
   const qParam = request.nextUrl.searchParams.get("q");
 
   try {
-    const [ssRows, projRows, empresas, isins, recRows] = await Promise.all([
-      // Sin filtro de serie: necesitamos shares A/B además de TOTAL.
+    const [fichaFunds, modelPicks, ssRows, empresas, isins, recRows] = await Promise.all([
+      // Fundamentales de la ficha y proyecciones/Rec/TP del modelo. Del modelo basta el año
+      // reportado (para medir la escala) y los dos proyectados.
+      loadFichaFunds(),
+      loadModelPicks([PROJ_Y0 - 1, PROJ_Y0, PROJ_Y1]),
+      // stock_selection_v1: respaldo de fundamentales mientras falten fichas. Sin filtro de
+      // serie: necesitamos shares A/B además de TOTAL.
       prisma.stockSelectionV1.findMany({
         select: { company: true, currency: true, metric: true, series: true, fiscalYear: true, quarter: true, value: true },
       }),
-      prisma.proyecciones_financieras.findMany(),
       prisma.empresasIndustriasV2.findMany({
         select: { nombreLatam: true, nombreChile: true, isin: true, tickerBloomberg: true, industriaChile: true, industriaGics: true, yahooFinanceTicker: true, moneda: true },
       }),
@@ -380,12 +401,17 @@ export async function GET(request: NextRequest) {
     const returnsSource = retRows.find((r) => r.source)?.source ?? null;
 
     // ── Periodo n (seleccionable vía ?fy=&q=) ─────────────────────────────────
-    const qKey = (fy: number, q: number) => fy * 10 + q;
     const labelOf = (fy: number, q: number) => `${q}Q ${fy}`;
 
-    // Quarters presentes en los datos (desc) → para el selector del front.
+    // Quarters presentes en los datos (desc) → para el selector del front. Fichas + tabla vieja:
+    // el más reciente suele estar sólo en fichas (3Q26 hoy), los viejos sólo en la tabla vieja.
     const periodMap = new Map<number, { fy: number; q: number }>();
     for (const r of ssRows) { const k = qKey(r.fiscalYear, r.quarter); if (!periodMap.has(k)) periodMap.set(k, { fy: r.fiscalYear, q: r.quarter }); }
+    for (const f of fichaFunds.values()) {
+      for (const mm of f.metrics.values()) for (const k of mm.keys()) {
+        if (!periodMap.has(k)) periodMap.set(k, { fy: Math.floor(k / 10), q: k % 10 });
+      }
+    }
     const periods = [...periodMap.values()]
       .sort((a, b) => qKey(b.fy, b.q) - qKey(a.fy, a.q))
       .map((p) => ({ fy: p.fy, q: p.q, label: labelOf(p.fy, p.q) }));
@@ -401,7 +427,6 @@ export async function GET(request: NextRequest) {
     // Ventana LTM de un año antes (n-4) y año calendario previo al de las proyecciones:
     // son las bases contra las que la tabla de índices calcula el crecimiento de EBITDA.
     const ltmPrevKeys: number[] = []; { let f = selFy - 1, q = selQ; for (let i = 0; i < 4; i++) { ltmPrevKeys.push(qKey(f, q)); q--; if (q === 0) { q = 4; f--; } } }
-    const fyPrevKeys = [1, 2, 3, 4].map((q) => qKey(PROJ_Y0 - 1, q));
 
     // ── Overrides de admin para el período activo (norm(company) → field → value) ──
     // Resiliente: si la tabla aún no existe (falta `prisma db push`), se ignora y la vista
@@ -431,32 +456,14 @@ export async function GET(request: NextRequest) {
       if (!overrideLabels.has(k)) overrideLabels.set(k, o.company);
     }
 
-    // ── Proyecciones: esta vista sólo CONSUME ─────────────────────────────────
-    // EBITDA/Utilidad 26E-27E, la moneda proyectada y el payout salen de Proyecciones y
-    // son de sólo lectura acá. La única forma de editarlos a mano es /projections, que
-    // resuelve el valor ganador con su propia regla (gana la foto más fresca entre el
-    // último Excel y la última edición manual). Acá se lee ese ganador y se muestra.
-    let proyOverrideRows: OverrideRecord[] = [];
-    try {
-      proyOverrideRows = await prisma.proyeccionOverride.findMany();
-    } catch (e) {
-      console.warn("[stock-selection-v1] ediciones de proyecciones no disponibles (¿falta db push?):", String(e).slice(0, 120));
-    }
     // Campos numéricos que se asignan directo al objeto compañía (los demás son shares).
-    // Sin los 26E/27E: esos ya no se editan desde acá.
+    // Las proyecciones 26E/27E no se editan: salen tal cual del modelo del analista.
     const DIRECT_FIELDS = new Set(["debtN", "debtN4", "equityN", "equityN4", "minorityN", "minorityN4", "ebitdaN", "ebitdaN4", "ebitdaLtm", "utilidadN", "utilidadN4", "utilidadLtm", "revenueLtm", "ebitLtm"]);
-
-    // Campos cuyo valor llegó de una edición manual hecha en /projections, con su firma.
-    // No son overrides de esta vista (nadie los editó acá): se listan aparte para poder
-    // pintarlos y decir de dónde salieron, pero el panel los muestra en sólo lectura.
-    const projEditedFields = new Map<string, string[]>();
-    const projEditInfo = new Map<string, Record<string, { by: string | null; at: string }>>();
 
     const applyOverrides = (co: SsV1Company): void => {
       const key = norm(co.company);
       const ov = overridesByCompany.get(key);
-      const fromProj = projEditedFields.get(key) ?? [];
-      const applied: string[] = [...fromProj];
+      const applied: string[] = [];
       const baseValues: Record<string, number | null> = {};
 
       for (const [field, value] of ov ?? []) {
@@ -477,13 +484,12 @@ export async function GET(request: NextRequest) {
         if (a != null && b != null) co.sharesTotal = a + b;
       }
       if (applied.length) { co.overrides = applied; co.baseValues = baseValues; }
-      const info = projEditInfo.get(key);
-      if (info) co.projEdits = info;
     };
     const ltmLabels = (() => { const o: string[] = []; let f = selFy, q = selQ; for (let i = 0; i < 4; i++) { o.push(labelOf(f, q)); q--; if (q === 0) { q = 4; f--; } } return o.reverse(); })();
 
     // ── Fundamentales (serie TOTAL) + shares por serie ────────────────────────
-    interface Fund { currency: "CLP" | "USD"; metrics: Map<string, Map<number, number>>; sharesSeries: Map<string, Map<number, number>>; }
+    // `funds` = stock_selection_v1 por nombre (respaldo). La fuente principal es fichaFunds
+    // (por ticker); la elección se hace por compañía al armar el universo.
     const funds = new Map<string, Fund>();
     for (const r of ssRows) {
       const k = norm(r.company);
@@ -512,64 +518,16 @@ export async function GET(request: NextRequest) {
       for (const key of keys) { const v = mm.get(key); if (v == null) return null; s += v; }
       return s;
     };
+    // Año calendario reportado: la ficha trae el período anual ("A") tal cual; la tabla vieja
+    // sólo trimestres, así que ahí se suma (estricto: con los 4 trimestres o nada).
+    const fyOf = (f: Fund, metric: string, year: number): number | null =>
+      f.annual?.get(metric)?.get(year) ?? sumStrict(f, metric, [1, 2, 3, 4].map((q) => qKey(year, q)));
     const latestOf = (mm: Map<number, number> | undefined): number | null => {
       if (!mm) return null;
       const atN = mm.get(nKey); if (atN != null) return atN;
       let bk = -1, bv: number | null = null; for (const [key, v] of mm) if (key > bk) { bk = key; bv = v; }
       return bv;
     };
-
-    // ── Proyecciones (latest generated_at) ────────────────────────────────────
-    interface ProjPick { moneda: "CLP" | "USD" | null; base_year: number; div: string | null; pool_div: number | null; ebitda: (number | null)[]; utilidad: (number | null)[]; }
-    const projByName = new Map<string, ProjPick>(); const projAt = new Map<string, number>();
-    for (const p of projRows) {
-      const k = norm(p.empresa); const ts = new Date(p.generated_at).getTime();
-      if (!projAt.has(k) || ts > projAt.get(k)!) {
-        projAt.set(k, ts);
-        projByName.set(k, {
-          moneda: p.moneda === "USD" ? "USD" : p.moneda === "CLP" ? "CLP" : null, base_year: p.base_year, div: p.div ?? null,
-          pool_div: p.pool_div ?? null,
-          ebitda: [p.ebitda_y0 ?? null, p.ebitda_y1 ?? null, p.ebitda_y2 ?? null],
-          utilidad: [p.utilidad_y0 ?? null, p.utilidad_y1 ?? null, p.utilidad_y2 ?? null],
-        });
-      }
-    }
-    const projYear = (pick: ProjPick | undefined, arr: "ebitda" | "utilidad", cal: number): number | null => {
-      if (!pick) return null; const off = cal - pick.base_year; if (off < 0 || off > 2) return null; return pick[arr][off] ?? null;
-    };
-
-    // Ediciones manuales de /projections. Cada una compite contra el snapshot vigente DE SU
-    // empresa (projAt): si el Excel se corrió después, la edición ya no aplica.
-    const proyIndex: OverrideIndex = buildOverrideIndex(
-      proyOverrideRows,
-      (key) => { const ts = projAt.get(key); return ts == null ? null : new Date(ts); },
-    );
-
-    // Valor ganador de una celda de proyección: la edición manual si le gana al snapshot,
-    // si no el del Excel. La decisión ya la tomó buildOverrideIndex; acá sólo se lee.
-    const projYearEff = (
-      key: string, pick: ProjPick | undefined, arr: "ebitda" | "utilidad", cal: number, field: string,
-    ): number | null => {
-      const o = getOverride(proyIndex, key, arr, cal);
-      if (!o) return projYear(pick, arr, cal);
-
-      const list = projEditedFields.get(key) ?? [];
-      list.push(field);
-      projEditedFields.set(key, list);
-
-      const info = projEditInfo.get(key) ?? {};
-      info[field] = { by: o.editedBy, at: o.editedAt.toISOString() };
-      projEditInfo.set(key, info);
-      return o.value;
-    };
-
-    const monedaEff = (key: string, pick: ProjPick | undefined): "CLP" | "USD" | null => {
-      const t = getOverride(proyIndex, key, "moneda", ROW_YEAR)?.textValue?.toUpperCase();
-      if (t === "USD" || t === "CLP") return t;
-      return pick?.moneda ?? null;
-    };
-    const payoutEff = (key: string, pick: ProjPick | undefined): number | null =>
-      getOverride(proyIndex, key, "pool_div", ROW_YEAR)?.value ?? pick?.pool_div ?? null;
 
     // ── Construir universo ────────────────────────────────────────────────────
     // El universo es stock_selection_v1 MÁS las compañías sembradas a mano: las que un
@@ -596,6 +554,34 @@ export async function GET(request: NextRequest) {
       universo.push(label);
     }
 
+    // Tickers con los que una compañía puede aparecer en la ficha o en el modelo: el de la
+    // compañía y, en las de doble serie, el de cada serie (la ficha de Andina viene por ANDINAB,
+    // la de Aguas podría venir por AGUAS/A).
+    const tickerCandidates = (companyName: string, resolved: ResolvedName): string[] => {
+      const sn = SERIES_NAMES[norm(companyName)];
+      const raw = [resolved.tickerBBG, sn ? empByName(sn.A)?.tickerBloomberg : null, sn ? empByName(sn.B)?.tickerBloomberg : null];
+      return [...new Set(raw.map((t) => normBBG(t)).filter((t): t is string => !!t))];
+    };
+    // Compañías con ficha que no están en la tabla vieja: entran con su nombre de la maestra.
+    // Es lo que va a definir el universo cuando stock_selection_v1 se elimine.
+    const claimed = new Set<string>();
+    for (const name of universo) {
+      const r = resolveName(name);
+      if (r) for (const t of tickerCandidates(name, r)) claimed.add(t);
+    }
+    const nameByBbg = new Map<string, string>();
+    for (const e of empresas) {
+      const t = normBBG(e.tickerBloomberg), nm = e.nombreChile?.trim() || e.nombreLatam?.trim();
+      if (t && nm && !nameByBbg.has(t)) nameByBbg.set(t, nm);
+    }
+    const extraTicker = new Map<string, string>(); // norm(nombre) → ticker de su ficha
+    for (const t of fichaFunds.keys()) {
+      const nm = claimed.has(t) ? null : nameByBbg.get(t);
+      if (!nm || seen.has(norm(nm))) continue;
+      seen.add(norm(nm)); extraTicker.set(norm(nm), t);
+      universo.push(nm);
+    }
+
     const companies: SsV1Company[] = [];
     // Moneda de cotización según la maestra, para cuando Yahoo no la manda. Pasa en los
     // listados recién renombrados (PAMPA.SN llega con currency null): sin este respaldo el
@@ -610,11 +596,52 @@ export async function GET(request: NextRequest) {
       if (!resolved) continue;
       if (resolved.moneda) monedaListado.set(k, resolved.moneda.trim().toUpperCase());
 
-      // Sembrada: sin fundamentales cargados. La moneda sale de la maestra (la compañía
-      // todavía no tiene filas en stock_selection_v1 de donde leerla) y todo lo demás
-      // queda en null hasta que lo llene el override o el cargador.
-      const f = funds.get(k) ?? { currency: resolved.moneda === "USD" ? "USD" as const : "CLP" as const, metrics: new Map(), sharesSeries: new Map() };
-      const pick = projByName.get(k);
+      const cands = tickerCandidates(companyName, resolved);
+      const extra = extraTicker.get(k);
+      if (extra && !cands.includes(extra)) cands.push(extra);
+
+      // ── Fundamentales: ficha → tabla vieja → vacío ──
+      // Se elige UNA fuente por compañía para el período n, sin mezclar: la ficha si tiene ese
+      // trimestre; si no, stock_selection_v1 si lo tiene; si ninguna, vacío. Mezclar daría LTM
+      // falsos: la tabla vieja llega hasta 1Q26, y a 3Q26 sumaría medio año como si fuera uno.
+      const fichaTicker = cands.find((t) => fichaFunds.has(t)) ?? null;
+      const ficha = fichaTicker ? fichaFunds.get(fichaTicker) : undefined;
+      const legacy = funds.get(k);
+      const fundSource: SsV1Company["fundSource"] =
+        hasPeriod(ficha, nKey) ? "ficha" : hasPeriod(legacy, nKey) ? "legacy" : "none";
+      const base = ficha ?? legacy;
+      // Sin fuente para n (o sembrada, sin nada cargado): vacío, salvo las acciones, que no
+      // cambian de un trimestre a otro y permiten seguir mostrando M.Cap y series A/B. La
+      // moneda: la de la fuente que exista, o la de la maestra.
+      const f: Fund = fundSource === "ficha" ? ficha! : fundSource === "legacy" ? legacy! : {
+        currency: base?.currency ?? (resolved.moneda === "USD" ? "USD" : "CLP"),
+        metrics: base?.metrics.has("shares") ? new Map([["shares", base.metrics.get("shares")!]]) : new Map(),
+        sharesSeries: base?.sharesSeries ?? new Map(),
+      };
+
+      // ── Proyecciones / payout / Rec / TP: último modelo del analista ──
+      const modelTicker = cands.find((t) => modelPicks.has(t)) ?? null;
+      const model: ModelPick | null = modelTicker ? modelPicks.get(modelTicker)! : null;
+      const projSource: SsV1Company["projSource"] = model ? "model" : "none";
+      // Escala del modelo medida contra el año reportado de la compañía (ver modelScale).
+      const scale = model
+        ? modelScale(model, PROJ_Y0 - 1, base ? {
+            revenue: fyOf(base, "revenue", PROJ_Y0 - 1), ebitda: fyOf(base, "ebitda", PROJ_Y0 - 1), utilidad: fyOf(base, "utilidad", PROJ_Y0 - 1),
+          } : null, base?.currency ?? null)
+        : null;
+      const modelVal = (year: number, field: "ebitda" | "utilidad"): number | null => {
+        const v = model?.years.get(year)?.[field];
+        return v == null || scale == null ? null : v * scale;
+      };
+      // Pol Div = payout del modelo para el año SIGUIENTE (PROJ_Y1): en el modelo el payout del
+      // año Y es dividendo(Y) / utilidad(Y−1), y la vista lo aplica sobre la utilidad 2026E. En
+      // Andina da 0,80 (= el pool_div de la tabla de proyecciones que reemplazó). El signo varía
+      // entre modelos.
+      const modelPayout = model?.years.get(PROJ_Y1)?.payout;
+      const modelRec = model && recLabel(model.recc)
+        ? { rec: recLabel(model.recc)!, recDate: model.updateDate.toISOString().slice(0, 10), tp: model.tp }
+        : null;
+
       const sharesTotal = latestOf(f.metrics.get("shares"));
 
       // ¿Doble serie? Requiere mapeo de nombres de serie + shares A/B.
@@ -634,16 +661,24 @@ export async function GET(request: NextRequest) {
       } else {
         series = [{ label: "TOTAL", bbg: resolved.tickerBBG, yahooTicker: resolved.yahoo, shares: sharesTotal }];
       }
-      // Rec/Date/TP por BBG: cada serie por su clase; nivel compañía por tickerBBG.
-      for (const s of series) { const ri = recOf(s.bbg); s.rec = ri?.rec ?? null; s.recDate = ri?.recDate ?? null; s.tp = ri?.tp ?? null; }
+      // Rec/Date/TP. Con modelo: el del header, en la serie del ticker del modelo (Andina →
+      // serie B) y a nivel compañía; la otra serie queda sin Rec, igual que con ARH. Sin modelo
+      // (o con recc vacío): AnalystRecommendationHistory, cada serie por el BBG de su clase.
+      for (const s of series) {
+        const ri = modelRec ? (normBBG(s.bbg) === modelTicker ? modelRec : null) : recOf(s.bbg);
+        s.rec = ri?.rec ?? null; s.recDate = ri?.recDate ?? null; s.tp = ri?.tp ?? null;
+      }
       // Retornos por BBG de la clase. Independientes de ?withPrices: vienen de la base.
       for (const s of series) applyReturns(s);
-      const coRec = recOf(resolved.tickerBBG);
+      const coRec = modelRec ?? recOf(resolved.tickerBBG);
 
       const co: SsV1Company = {
         company: companyName, tickerBBG: resolved.tickerBBG, industria: resolved.industria, gics: resolved.gics, dual,
         seeded: sembradas.has(k) || undefined,
-        ssCurrency: f.currency, projCurrency: monedaEff(k, pick),
+        fundSource, fichaTicker, projSource, modelTicker,
+        modelDate: model ? model.updateDate.toISOString().slice(0, 10) : null,
+        modelScale: scale,
+        ssCurrency: f.currency, projCurrency: model?.currency ?? null,
         series, sharesTotal,
         rec: coRec?.rec ?? null, recDate: coRec?.recDate ?? null, tp: coRec?.tp ?? null,
         ebitdaN: at(f, "ebitda", nKey), ebitdaN4: at(f, "ebitda", n4Key), ebitdaLtm: ltmSum(f, "ebitda"),
@@ -654,12 +689,13 @@ export async function GET(request: NextRequest) {
         minorityN: at(f, "minority_interest", nKey), minorityN4: at(f, "minority_interest", n4Key),
         ebitdaLtm4:    sumStrict(f, "ebitda", ltmKeys),
         ebitdaLtmPrev: sumStrict(f, "ebitda", ltmPrevKeys),
-        ebitdaFyPrev:  sumStrict(f, "ebitda", fyPrevKeys),
-        ebitda2026E:   projYearEff(k, pick, "ebitda",   PROJ_Y0, "ebitda2026E"),
-        ebitda2027E:   projYearEff(k, pick, "ebitda",   PROJ_Y1, "ebitda2027E"),
-        utilidad2026E: projYearEff(k, pick, "utilidad", PROJ_Y0, "utilidad2026E"),
-        utilidad2027E: projYearEff(k, pick, "utilidad", PROJ_Y1, "utilidad2027E"),
-        divLabel: pick?.div ?? null, payout: payoutEff(k, pick),
+        ebitdaFyPrev:  fundSource === "none" ? null : fyOf(f, "ebitda", PROJ_Y0 - 1),
+        // Valores del modelo tal cual, escalados a millones. Sin modelo → vacíos.
+        ebitda2026E:   modelVal(PROJ_Y0, "ebitda"),
+        ebitda2027E:   modelVal(PROJ_Y1, "ebitda"),
+        utilidad2026E: modelVal(PROJ_Y0, "utilidad"),
+        utilidad2027E: modelVal(PROJ_Y1, "utilidad"),
+        payout: modelPayout == null ? null : Math.abs(modelPayout),
       };
       applyOverrides(co); // capa de overrides de admin (in place)
       companies.push(co);
@@ -692,6 +728,8 @@ export async function GET(request: NextRequest) {
       periodN4: selFy ? labelOf(selFy - 1, selQ) : null,
       ltmLabels, periods, selFy, selQ, companies, indexLevels,
       returnsAsOf, returnsSource, returnsMatched, returnsRows: retRows.length,
+      fichaCount: companies.filter((c) => c.fundSource === "ficha").length,
+      modelCount: companies.filter((c) => c.projSource === "model").length,
     };
     return NextResponse.json(payload);
   } catch (e) {

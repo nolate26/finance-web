@@ -96,9 +96,8 @@ export async function POST(request: Request) {
       case 'FundPortfolioWeights':
         await prisma.fundPortfolioWeight.createMany({ data: rows, skipDuplicates: true }); 
         break;
-      case 'ProyeccionesFinancieras':
-        await prisma.proyecciones_financieras.createMany({ data: rows, skipDuplicates: true }); 
-        break;
+      // 'ProyeccionesFinancieras' se eliminó (2026-11-18): las proyecciones salen de los
+      // modelos del analista (AnalystModel / BankModel). Un envío viejo cae en el default (400).
       case 'MonedaFundReturns':
         await prisma.monedaFundReturn.createMany({ data: rows, skipDuplicates: true }); 
         break;
