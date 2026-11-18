@@ -578,6 +578,14 @@ const visibleCols = (g: Group, expanded: Set<string>): ColDef[] =>
   g.collapsible && !expanded.has(g.id)
     ? [g.cols.find((c) => c.id === g.primary) ?? g.cols[0]]
     : g.cols;
+// Lo mismo para la tabla de índices y fondos: sigue el abrir/cerrar de la tabla de empresas
+// (un grupo cerrado arriba también se cierra abajo). En el bloque de EBITDA la "primary" de
+// la tabla de empresas es un monto que acá no existe: cerrado muestra el crecimiento 26E/25.
+const idxVisibleCols = (g: Group, expanded: Set<string>): ColDef[] => {
+  const cols = idxCols(g);
+  if (!g.collapsible || expanded.has(g.id)) return cols;
+  return [cols.find((c) => c.id === (g.id === "ebitdaUsd" ? "ebitda26Var" : g.primary)) ?? cols[0]];
+};
 
 function buildGroups(periodN: string | null, periodN4: string | null, returnsAsOf: string | null): Group[] {
   const mnCol = (id: string, label: string, color = NUM): ColDef => ({
@@ -1228,9 +1236,9 @@ export default function StockSelectionV1() {
           tabla. Antes el contenedor estaba limitado a calc(100vh − 160px) con scroll
           interno, y con ~120 filas se veía como una ventanita corta dentro de la página.
           El costo: `overflow` tiene que ser visible (un scroll container captura el sticky
-          y el encabezado se iría con la página), así que en una ventana angosta con todos
-          los grupos abiertos la tabla puede sobresalir a la derecha y scrollear la página
-          en horizontal — la columna Empresa queda fija igual. */}
+          y el encabezado se iría con la página). Para que con todos los grupos abiertos no
+          sobresalga a la derecha, el contenedor es `.fit-desktop`: FitTablesLandscape la
+          achica hasta que entra (piso 0.6; por debajo sí scrollea la página). */}
       {/* Teléfono: riel de chips que elige el grupo de columnas visible. */}
       {isPhone && (
         <div className="tab-rail" style={{ display: "flex", gap: 6, marginBottom: 8, paddingBottom: 2 }}>
@@ -1245,7 +1253,10 @@ export default function StockSelectionV1() {
           })}
         </div>
       )}
-      <div ref={tableWrapRef} className={isPhone ? "no-fit" : "fit-width"}
+      {/* fit-desktop: con "Ver todo en detalle" (o varios grupos abiertos) la tabla se achica
+          para entrar en el ancho de la página en vez de quedar cortada. Los `top`/`left`
+          sticky ya compensan el zoom con --fit-zoom. */}
+      <div ref={tableWrapRef} className={isPhone ? "no-fit" : "fit-width fit-desktop"}
         style={{ overflow: isPhone ? "auto" : "visible", maxHeight: isPhone ? "calc(100dvh - 120px)" : undefined, overscrollBehavior: isPhone ? "contain" : undefined, border: "1px solid rgba(13,13,56,0.18)", borderRadius: 8, background: "#fff" }}>
         <table style={{ borderCollapse: "separate", borderSpacing: 0, fontSize: 11, width: "100%" }}>
           <thead>
@@ -1338,11 +1349,14 @@ export default function StockSelectionV1() {
       {(indexAggregates.length > 0 || fundAggregates.length > 0) && (() => {
         const allIdxGroups = groupDefs.filter((g) => IDX_GROUP_IDS.includes(g.id));
         const idxGroupDefs = isPhone ? phoneIdxGroups(allIdxGroups, phoneView, priced) : allIdxGroups;
+        // Columnas de cada grupo: en escritorio siguen el abrir/cerrar de la tabla de empresas
+        // (y "Ver todo en detalle"); en teléfono, el grupo elegido en los chips va completo.
+        const ic = (g: Group) => (isPhone ? idxCols(g) : idxVisibleCols(g, expandedGroups));
         // Celdas de una fila agregada. Índices y fondos comparten markup: lo único que
         // cambia es el tinte y lo que va en la columna pegada de la izquierda.
         const aggCells = (r: DisplayRow, band: string | undefined) =>
           idxGroupDefs.map((g, gi) =>
-            idxCols(g).map((col, i) => {
+            ic(g).map((col, i) => {
               const out = col.render(r);
               return (
                 <td key={col.id} style={{ padding: "5px 7px", textAlign: col.align ?? "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", fontSize: 10.5, color: out.color ?? TEXT1, fontWeight: out.weight ?? 400, borderBottom: `1px solid ${IDX_HEAD}18`, borderLeft: i === 0 ? `1px solid ${IDX_HEAD}18` : "none", background: gi % 2 === 1 ? band : undefined, whiteSpace: "nowrap" }}>
@@ -1351,7 +1365,7 @@ export default function StockSelectionV1() {
               );
             }),
           );
-        const nCols = idxGroupDefs.reduce((n, g) => n + idxCols(g).length, 0);
+        const nCols = idxGroupDefs.reduce((n, g) => n + ic(g).length, 0);
         return (
           <div style={{ marginTop: 22 }}>
             <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 8 }}>
@@ -1363,21 +1377,30 @@ export default function StockSelectionV1() {
                 Cada índice = Σ (M.Cap y fundamentales × peso); los múltiplos salen de esas sumas. Precio = nivel real del índice (solo IPSA/IGPA). Los retornos van en blanco: el snapshot de Bloomberg es por ticker de acción, y ponderar los de los miembros no da el retorno del índice. {fundAggregates.length > 0 && "En los fondos el peso es la participación —acciones en cartera / acciones de la compañía— y el FV/EBITDA excluye a las que no reportan EBITDA en ese horizonte. "}{priced ? "" : "Traé precios para llenar."}
               </span>
             </div>
-            <div style={{ overflow: "auto", maxHeight: "72dvh", border: `1px solid ${IDX_HEAD}33`, borderRadius: 8, background: IDX_TINT }}>
+            {/* fit-desktop: con muchos grupos abiertos la tabla se achica para entrar en el
+                ancho (FitTablesLandscape), en vez de quedar cortada a la derecha. */}
+            <div className="fit-desktop" style={{ overflow: "auto", maxHeight: "72dvh", border: `1px solid ${IDX_HEAD}33`, borderRadius: 8, background: IDX_TINT }}>
               <table style={{ borderCollapse: "separate", borderSpacing: 0, fontSize: 11, width: "100%" }}>
                 <thead>
                   <tr ref={idxHeadRef}>
                     <th style={{ position: "sticky", left: 0, top: 0, zIndex: Z.corner, textAlign: "left", padding: "5px 10px", background: IDX_HEAD, color: IDX_HEAD_TEXT, fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }} rowSpan={2}>{fundAggregates.length > 0 ? "Índice / Fondo" : "Índice"}</th>
-                    {idxGroupDefs.map((g, gi) => (
-                      <th key={g.id} colSpan={idxCols(g).length}
-                        style={{ position: "sticky", top: 0, zIndex: Z.head, padding: "5px 7px", textAlign: "center", fontSize: 9, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: IDX_HEAD_TEXT, background: gi % 2 === 1 ? IDX_HEAD_BAND : IDX_HEAD, borderLeft: "1px solid rgba(255,255,255,0.12)", whiteSpace: "nowrap" }}>
-                        {IDX_GROUP_TITLE[g.id] ?? g.title}
-                      </th>
-                    ))}
+                    {idxGroupDefs.map((g, gi) => {
+                      const open = !g.collapsible || expandedGroups.has(g.id);
+                      const toggles = !isPhone && g.collapsible;
+                      return (
+                        <th key={g.id} colSpan={ic(g).length}
+                          onClick={toggles ? () => toggleGroup(g.id) : undefined}
+                          title={toggles ? (open ? "Clic para contraer (también en la tabla de empresas)" : "Clic para desplegar (también en la tabla de empresas)") : undefined}
+                          style={{ position: "sticky", top: 0, zIndex: Z.head, padding: "5px 7px", textAlign: "center", fontSize: 9, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: IDX_HEAD_TEXT, background: gi % 2 === 1 ? IDX_HEAD_BAND : IDX_HEAD, borderLeft: "1px solid rgba(255,255,255,0.12)", whiteSpace: "nowrap", cursor: toggles ? "pointer" : "default", userSelect: "none" }}>
+                          {toggles && <span style={{ fontSize: 8, marginRight: 3, opacity: 0.7 }}>{open ? "▾" : "▸"}</span>}
+                          {IDX_GROUP_TITLE[g.id] ?? g.title}
+                        </th>
+                      );
+                    })}
                   </tr>
                   <tr>
                     {idxGroupDefs.map((g, gi) =>
-                      idxCols(g).map((col, i) => (
+                      ic(g).map((col, i) => (
                         <th key={col.id} style={{ position: "sticky", top: fitPx(idxHeadTop), zIndex: Z.head, padding: "4px 7px", textAlign: col.align ?? "right", fontSize: 9, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: IDX_HEAD, background: gi % 2 === 1 ? IDX_ZEBRA_SOLID : IDX_TINT_SOLID, borderBottom: `2px solid ${IDX_HEAD}`, borderLeft: i === 0 ? `1px solid ${IDX_HEAD}22` : "none", whiteSpace: "nowrap" }}>
                           {col.label}
                         </th>

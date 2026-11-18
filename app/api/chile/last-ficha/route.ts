@@ -44,7 +44,7 @@ export interface LastFichaComment {
   source: "statement" | "kpi";
   section: string;
   line: string;
-  target: "line" | "yoy" | "qoq";
+  target: string;            // "line" | "yoy" | "qoq" | "A2025" | "Q2026-3"
   comment: string;
   updatedBy: string | null;
   updatedAt: string;
@@ -203,7 +203,7 @@ export async function GET(request: NextRequest) {
       sections,
       comments: comments.map((c) => ({
         source: c.source as LastFichaComment["source"], section: c.section, line: c.line,
-        target: c.target as LastFichaComment["target"], comment: c.comment,
+        target: c.target, comment: c.comment,
         updatedBy: c.updatedBy ?? c.createdBy, updatedAt: c.updatedAt.toISOString(),
       })),
     };

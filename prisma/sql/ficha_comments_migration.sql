@@ -31,8 +31,11 @@ CREATE TABLE IF NOT EXISTS "ficha_comments" (
 CREATE INDEX IF NOT EXISTS "ficha_comments_ticker_year_quarter_idx" ON "ficha_comments"("ticker", "year", "quarter");
 CREATE UNIQUE INDEX IF NOT EXISTS "ficha_comments_ticker_year_quarter_source_section_line_targ_key" ON "ficha_comments"("ticker", "year", "quarter", "source", "section", "line", "target");
 
+-- target: "line" (comentario de fila) · "yoy" / "qoq" (variación) · "A2025" (celda del año) ·
+-- "Q2026-3" (celda del trimestre). Ampliado el 2026-11-18 para poder marcar cualquier celda.
 ALTER TABLE "ficha_comments" DROP CONSTRAINT IF EXISTS "ficha_comments_values_check";
 ALTER TABLE "ficha_comments" ADD CONSTRAINT "ficha_comments_values_check"
-  CHECK (quarter BETWEEN 1 AND 4 AND source IN ('statement', 'kpi') AND target IN ('line', 'yoy', 'qoq'));
+  CHECK (quarter BETWEEN 1 AND 4 AND source IN ('statement', 'kpi')
+         AND target ~ '^(line|yoy|qoq|A[0-9]{4}|Q[0-9]{4}-[1-4])$');
 
 COMMIT;

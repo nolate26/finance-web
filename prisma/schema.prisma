@@ -1549,7 +1549,8 @@ model FichaKpi {
 // trimestre siguiente la vista abre en blanco y los comentarios viejos siguen consultables
 // eligiendo ese trimestre. Sin relaciones, igual que las fichas.
 //   target "line" = comentario de la fila (columna de la derecha)
-//   target "yoy" / "qoq" = la variación de esa columna queda marcada con un círculo + comentario
+//   cualquier otro = esa celda queda marcada con un círculo + comentario:
+//     "yoy" / "qoq" (variaciones), "A2025" (valor anual), "Q2026-3" (valor del 3Q26)
 // Cualquier usuario autenticado escribe (requireAuth); queda firmado en created_by/updated_by.
 model FichaComment {
   id        Int      @id @default(autoincrement())
@@ -1559,7 +1560,7 @@ model FichaComment {
   source    String   @db.VarChar(10)                  // "statement" | "kpi"
   section   String   @db.VarChar(255)
   line      String   @db.VarChar(255)                 // ficha_statements.line o ficha_kpis.kpi
-  target    String   @db.VarChar(10)                  // "line" | "yoy" | "qoq"
+  target    String   @db.VarChar(10)                  // "line" | "yoy" | "qoq" | "A2025" | "Q2026-3"
   comment   String   @db.Text
   createdBy String?  @map("created_by") @db.VarChar(200)
   updatedBy String?  @map("updated_by") @db.VarChar(200)

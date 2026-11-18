@@ -45,6 +45,13 @@ import { usePathname } from "next/navigation";
  * tabla que se ANGOSTA (un grupo de columnas que se contrae) se quedaría con el
  * zoom viejo, más chica de lo necesario.
  *
+ * ── ESCRITORIO (mouse) — sólo los que optan con `.fit-desktop` ───────────────
+ * Con mouse no se encoge nada por defecto (el scroll horizontal es cómodo), salvo
+ * los contenedores marcados `.fit-desktop`: Stock Selection con "Ver todo en
+ * detalle" y su tabla de índices y fondos, que el usuario quiere ver enteras de
+ * una vez. Mismo algoritmo, con piso DESKTOP_MIN_ZOOM para que siga legible; por
+ * debajo de ese piso vuelve a sobresalir y scrollea.
+ *
  * El factor queda publicado como `--fit-zoom` en el contenedor para quien
  * necesite compensarlo: un `top: 64px` sticky dentro de un elemento con zoom
  * 0.5 se pega a 32px de pantalla, así que StockSelectionV1 escribe
@@ -84,12 +91,15 @@ const EXCLUDE = ".nav-root, .tab-rail, .modal-overlay--scroll, .no-fit";
 const MIN_ZOOM = 0.2;
 // En vertical el texto de 12–13px baja a ~10px: el límite de lo cómodo.
 const PHONE_MIN_ZOOM = 0.8;
+// Escritorio: 11px × 0.6 ≈ 6.6px es el mínimo que se lee en un monitor.
+const DESKTOP_MIN_ZOOM = 0.6;
+const DESKTOP_SELECTOR = ".fit-desktop";
 
 const ATTR  = "data-fit-zoom";
 const STICK = "data-stick";
 const STICK_BG = "data-stick-bg";
 
-type Mode = "landscape" | "phone";
+type Mode = "landscape" | "phone" | "desktop";
 
 function unstick(el: HTMLElement) {
   el.querySelectorAll<HTMLElement>(`[${STICK}]`).forEach((c) => {
@@ -164,7 +174,8 @@ function fit(el: HTMLElement, mode: Mode) {
   const natural = el.scrollWidth;
   // Oculto (pestaña inactiva) o ya cabe: sin zoom.
   if (avail === 0 || natural <= avail + 1) { clear(el); return; }
-  const z = Math.max(mode === "phone" ? PHONE_MIN_ZOOM : MIN_ZOOM, avail / natural);
+  const floor = mode === "phone" ? PHONE_MIN_ZOOM : mode === "desktop" ? DESKTOP_MIN_ZOOM : MIN_ZOOM;
+  const z = Math.max(floor, avail / natural);
   if (z >= 1) { clear(el); return; }
   for (const c of kids) c.style.zoom = String(z);
   el.style.setProperty("--fit-zoom", String(z));
@@ -179,7 +190,7 @@ function clearAll() {
 }
 
 function fitAll(mode: Mode) {
-  document.querySelectorAll<HTMLElement>(SELECTOR).forEach((el) => {
+  document.querySelectorAll<HTMLElement>(mode === "desktop" ? DESKTOP_SELECTOR : SELECTOR).forEach((el) => {
     if (el.closest(EXCLUDE)) { if (el.hasAttribute(ATTR)) clear(el); return; }
     fit(el, mode);
   });
@@ -191,7 +202,8 @@ export default function FitTablesLandscape() {
   useEffect(() => {
     const land  = window.matchMedia(LANDSCAPE_QUERY);
     const phone = window.matchMedia(PHONE_QUERY);
-    const mode = (): Mode | null => land.matches ? "landscape" : phone.matches ? "phone" : null;
+    // Siempre hay un modo: en escritorio sólo se miden los `.fit-desktop` (pocos y baratos).
+    const mode = (): Mode => land.matches ? "landscape" : phone.matches ? "phone" : "desktop";
     let raf = 0;
     let observer: MutationObserver | null = null;
 
@@ -199,7 +211,7 @@ export default function FitTablesLandscape() {
     // vez por frame, después de que el DOM quedó quieto.
     const schedule = () => {
       if (raf) return;
-      raf = requestAnimationFrame(() => { raf = 0; const m = mode(); if (m) fitAll(m); });
+      raf = requestAnimationFrame(() => { raf = 0; fitAll(mode()); });
     };
 
     const start = () => {
@@ -218,7 +230,8 @@ export default function FitTablesLandscape() {
       clearAll();
     };
 
-    const onChange = () => { if (mode()) start(); else stop(); };
+    // Al cambiar de modo, start() limpia los zoom del modo anterior y vuelve a medir.
+    const onChange = () => start();
     onChange();
 
     land.addEventListener("change", onChange);

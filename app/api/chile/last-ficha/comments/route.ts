@@ -11,7 +11,7 @@ import { logAdminChanges, ENTITY } from "@/lib/adminLog";
 //
 // PUT { ticker, year, quarter, source, section, line, target, comment }
 //   · comment con texto → crea o actualiza (único por todo lo demás)
-//   · comment vacío     → borra (quita el círculo de una variación)
+//   · comment vacío     → borra (quita el círculo de la celda)
 
 const bodySchema = z.object({
   ticker:  z.string().trim().min(1, "ticker es obligatorio").transform(normalizeTicker),
@@ -20,7 +20,9 @@ const bodySchema = z.object({
   source:  z.enum(["statement", "kpi"]),
   section: z.string().trim().min(1).max(255),
   line:    z.string().trim().min(1).max(255),
-  target:  z.enum(["line", "yoy", "qoq"]),
+  // "line" = comentario de fila; el resto marca una celda: variación (yoy/qoq), año
+  // ("A2025") o trimestre ("Q2026-3"). Mismo patrón que el CHECK de la tabla.
+  target:  z.string().regex(/^(line|yoy|qoq|A\d{4}|Q\d{4}-[1-4])$/, 'target debe ser "line", "yoy", "qoq", "A<año>" o "Q<año>-<trimestre>"'),
   comment: z.string().max(4000, "el comentario supera 4.000 caracteres").transform((s) => s.trim()),
 });
 
