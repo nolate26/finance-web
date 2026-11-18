@@ -449,58 +449,6 @@ export async function POST(request: Request) {
         await prisma.latamEquitySnapshot.createMany({ data: rows });
         break;
 
-      // --- NUEVAS TABLAS: SIGNALS Y BENCHMARK ---
-      case 'MomentumSignal':
-        const momentumRows = rows.map((r: any) => ({
-          // Mantenemos la fecha para no perder la historia
-          signalDate: new Date(r.signalDate ?? r.signal_date ?? r.date),
-          ticker:     r.ticker ?? r.Ticker,
- 
-          // Señal cruda (skip-return en %) y puntaje relativo 0-100
-          signal:     r.signal ?? r.Signal ?? null,
-          score:      r.score ?? r.Score ?? null,
- 
-          // zscore: el campo físico es z_score, pero @map lo resuelve Prisma
-          zscore:     r.zscore ?? r.z_score ?? r.zScore ?? null,
- 
-          // rank ordinal (1 = mejor momentum)
-          rank:       r.rank ?? r.Rank ?? null,
-        }));
- 
-        await prisma.momentumSignal.createMany({
-          data: momentumRows,
-          skipDuplicates: true // Evita duplicados si corres el script 2 veces el mismo día
-        });
-        break;
-      // --- NUEVAS TABLAS: SIGNALS Y BENCHMARK ---
-      case 'SignalRaw':
-        const signalRows = rows.map((r: any) => ({
-          // Mantenemos la fecha para no perder la historia
-          signalDate: new Date(r.signalDate ?? r.signal_date ?? r.date),
-          ticker:     r.ticker ?? r.Ticker,
-          
-          score:      r.score ?? r.Score ?? null,
-          value:      r.value ?? r.Value ?? null,
-          quality:    r.quality ?? r.Quality ?? null,
-          
-          pe:         r.pe ?? r.PE ?? null,
-          dy:         r.dy ?? r.DY ?? null,
-          roe:        r.roe ?? r.ROE ?? null,
-          
-          // Captura ΔROE ya sea que Python lo envíe como delta_roe, dRoe o literal ΔROE
-          deltaRoe:   r.deltaRoe ?? r.delta_roe ?? r.dRoe ?? r['ΔROE'] ?? null,
-          price:      r.price ?? r.Price ?? null,
-          
-          // Convertimos a booleano de forma segura
-          top20:      r.top20 !== undefined ? Boolean(r.top20) : (r.Top20 !== undefined ? Boolean(r.Top20) : null),
-        }));
-
-        await prisma.signalRaw.createMany({ 
-          data: signalRows, 
-          skipDuplicates: true // Evita duplicados si corres el script 2 veces el mismo día
-        });
-        break;
-
 
       case 'BetaSensitivity':
         await prisma.betaSensitivity.createMany({ 

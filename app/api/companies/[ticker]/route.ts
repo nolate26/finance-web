@@ -139,10 +139,11 @@ export async function GET(
           select: { shortIntRatio: true },
         }),
 
-        // 7. Portfolio weights — most recent per fund (Step B of the ticker→company join)
+        // 7. Portfolio weights — most recent per fund (Step B of the ticker→company join).
+        // Los fondos de Brasil guardan el ticker BBG en `company` en vez del nombre.
         empresa?.nombreLatam
           ? prisma.fundPortfolioWeight.findMany({
-              where: { company: empresa.nombreLatam },
+              where: { company: { in: [empresa.nombreLatam, decodedTicker] } },
               orderBy: { reportDate: "desc" },
               select: { fundName: true, reportDate: true, portfolioWeight: true, benchmarkWeight: true, overweight: true },
             })

@@ -25,6 +25,7 @@ interface SectorSummary {
 
 interface CarteraRow {
   company: string;
+  ticker?: string;
   portfolioPct: number;
   benchmarkPct: number;
   overweight: number;
@@ -38,6 +39,9 @@ interface Props {
   sectorSummary: SectorSummary[];
   cartera: CarteraRow[];
   benchmark: string;
+  // false = fondo sin benchmark (Brasil): pesos absolutos, sin columnas de
+  // benchmark ni active weight, y el gráfico de sectores en peso del fondo.
+  hasBenchmark?: boolean;
   fundName?: string;
 }
 
@@ -75,9 +79,11 @@ const SORT_ICON = { asc: "↑", desc: "↓", none: "↕" } as const;
 function SectorTooltip({
   active,
   payload,
+  hasBenchmark = true,
 }: {
   active?: boolean;
   payload?: Array<{ payload?: SectorSummary }>;
+  hasBenchmark?: boolean;
 }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
@@ -100,16 +106,25 @@ function SectorTooltip({
           <span style={{ color: "rgba(13,13,56,0.62)" }}>Fund</span>
           <span style={{ fontWeight: 600, color: "#0D0D38" }}>{fmtPct(d.fundWeight)}</span>
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
-          <span style={{ color: "rgba(13,13,56,0.62)" }}>Benchmark</span>
-          <span style={{ fontWeight: 600, color: "rgba(13,13,56,0.62)" }}>{fmtPct(d.benchWeight)}</span>
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
-          <span style={{ color: "rgba(13,13,56,0.62)" }}>Active</span>
-          <span style={{ fontWeight: 700, color: activeColor(d.activeWeight) }}>
-            {fmtPct(d.activeWeight, true)}
-          </span>
-        </div>
+        {hasBenchmark ? (
+          <>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
+              <span style={{ color: "rgba(13,13,56,0.62)" }}>Benchmark</span>
+              <span style={{ fontWeight: 600, color: "rgba(13,13,56,0.62)" }}>{fmtPct(d.benchWeight)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
+              <span style={{ color: "rgba(13,13,56,0.62)" }}>Active</span>
+              <span style={{ fontWeight: 700, color: activeColor(d.activeWeight) }}>
+                {fmtPct(d.activeWeight, true)}
+              </span>
+            </div>
+          </>
+        ) : (
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
+            <span style={{ color: "rgba(13,13,56,0.62)" }}>Positions</span>
+            <span style={{ fontWeight: 600, color: "rgba(13,13,56,0.62)" }}>{d.count}</span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -120,6 +135,7 @@ interface HoldingsTableProps {
   holdings: CarteraRow[];
   allCount: number;
   benchmark: string;
+  hasBenchmark: boolean;
   selectedSector: string | null;
   totalSectorFundWeight: number;
   onClear: () => void;
@@ -129,6 +145,7 @@ function HoldingsTable({
   holdings,
   allCount,
   benchmark,
+  hasBenchmark,
   selectedSector,
   totalSectorFundWeight,
   onClear,
@@ -277,8 +294,8 @@ function HoldingsTable({
               {thBtn("company", "Company", "left")}
               {thBtn("sector", "Sector", "left", "hide-phone")}
               {thBtn("portfolioPct", "Fund %")}
-              {thBtn("benchmarkPct", `% ${benchmark}`)}
-              {thBtn("overweight", "Active Weight")}
+              {hasBenchmark && thBtn("benchmarkPct", `% ${benchmark}`)}
+              {hasBenchmark && thBtn("overweight", "Active Weight")}
               {hasSectorWeight && (
                 <th
                   className="px-3 py-2.5 text-right font-medium cursor-pointer select-none"
@@ -314,7 +331,7 @@ function HoldingsTable({
 
               return (
                 <tr
-                  key={row.company}
+                  key={row.ticker ?? row.company}
                   className="border-t transition-colors"
                   style={{ borderColor: "rgba(13,13,56,0.05)" }}
                   onMouseEnter={(e) =>
@@ -333,6 +350,12 @@ function HoldingsTable({
                   {/* Company */}
                   <td className="px-3 py-2 font-medium wrap-phone" style={{ color: "#0D0D38" }}>
                     {row.company}
+                    {/* Brasil guarda el ticker BBG: va debajo del nombre que salió de la maestra */}
+                    {row.ticker && row.ticker !== row.company && (
+                      <div className="font-secondary tabular-nums" style={{ fontSize: 10, fontWeight: 400, color: "rgba(13,13,56,0.45)", marginTop: 1 }}>
+                        {row.ticker}
+                      </div>
+                    )}
                     {/* Teléfono: el sector va debajo del nombre en vez de en su columna */}
                     <div className="phone-only" style={{ fontSize: 10, fontWeight: 400, color: "rgba(13,13,56,0.45)", marginTop: 1 }}>
                       {displaySector}
@@ -378,26 +401,30 @@ function HoldingsTable({
                   </td>
 
                   {/* Benchmark % */}
-                  <td
-                    className="px-3 py-2 font-secondary tabular-nums text-right"
-                    style={{ color: "rgba(13,13,56,0.62)" }}
-                  >
-                    {fmtPct(row.benchmarkPct)}
-                  </td>
+                  {hasBenchmark && (
+                    <td
+                      className="px-3 py-2 font-secondary tabular-nums text-right"
+                      style={{ color: "rgba(13,13,56,0.62)" }}
+                    >
+                      {fmtPct(row.benchmarkPct)}
+                    </td>
+                  )}
 
                   {/* Active Weight */}
-                  <td className="px-3 py-2 text-right">
-                    <span
-                      className="font-secondary tabular-nums font-bold text-[11px] px-2 py-0.5 rounded-full"
-                      style={{
-                        color: overColor,
-                        background: activeBg(row.overweight),
-                        border: `1px solid ${overColor}28`,
-                      }}
-                    >
-                      {fmtPct(row.overweight, true)}
-                    </span>
-                  </td>
+                  {hasBenchmark && (
+                    <td className="px-3 py-2 text-right">
+                      <span
+                        className="font-secondary tabular-nums font-bold text-[11px] px-2 py-0.5 rounded-full"
+                        style={{
+                          color: overColor,
+                          background: activeBg(row.overweight),
+                          border: `1px solid ${overColor}28`,
+                        }}
+                      >
+                        {fmtPct(row.overweight, true)}
+                      </span>
+                    </td>
+                  )}
 
                   {/* Sector Weight (100%) — only when sector is selected */}
                   {hasSectorWeight && (
@@ -471,6 +498,7 @@ export default function CarteraView({
   sectorSummary,
   cartera,
   benchmark,
+  hasBenchmark = true,
 }: Props) {
   const [selectedSector, setSelectedSector] = useState<string | null>(null);
 
@@ -492,11 +520,19 @@ export default function CarteraView({
     [tableHoldings]
   );
 
-  // BarChart data: sorted by activeWeight descending
+  // Sin benchmark el "activo" sería el peso mismo contra cero: se grafica el
+  // peso del fondo y lo negativo es posición neta corta (Long Biased).
+  const barKey = hasBenchmark ? "activeWeight" : "fundWeight";
+
+  // BarChart data: sorted by the plotted value, descending
   const barData = useMemo(
-    () => [...sectorSummary].sort((a, b) => b.activeWeight - a.activeWeight),
-    [sectorSummary]
+    () => [...sectorSummary].sort((a, b) => b[barKey] - a[barKey]),
+    [sectorSummary, barKey]
   );
+
+  // Exposición neta / bruta: la referencia de un fondo sin benchmark.
+  const netExposure   = useMemo(() => cartera.reduce((acc, r) => acc + r.portfolioPct, 0), [cartera]);
+  const grossExposure = useMemo(() => cartera.reduce((acc, r) => acc + Math.abs(r.portfolioPct), 0), [cartera]);
 
   if (sectorSummary.length === 0) {
     return (
@@ -515,14 +551,40 @@ export default function CarteraView({
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <div>
             <p className="text-sm font-semibold" style={{ color: "#0D0D38" }}>
-              Sector Allocation — Active Weight
+              {hasBenchmark ? "Sector Allocation — Active Weight" : "Sector Allocation — Fund Weight"}
             </p>
-            <p className="text-xs mt-0.5 font-secondary" style={{ color: "rgba(255,255,255,0.72)" }}>
-              <span style={{ color: "#001EAF", fontWeight: 600 }}>Green</span> = overweight &nbsp;·&nbsp;{" "}
-              <span style={{ color: "#F8485E", fontWeight: 600 }}>Red</span> = underweight &nbsp;·&nbsp; Click to filter
+            {/* Va sobre la tarjeta blanca: antes estaba en blanco 72% y no se leía. */}
+            <p className="text-xs mt-0.5 font-secondary" style={{ color: "rgba(13,13,56,0.45)" }}>
+              {hasBenchmark ? (
+                <>
+                  <span style={{ color: "#001EAF", fontWeight: 600 }}>Blue</span> = overweight &nbsp;·&nbsp;{" "}
+                  <span style={{ color: "#F8485E", fontWeight: 600 }}>Red</span> = underweight &nbsp;·&nbsp; Click to filter
+                </>
+              ) : (
+                <>
+                  No benchmark &nbsp;·&nbsp;{" "}
+                  <span style={{ color: "#F8485E", fontWeight: 600 }}>Red</span> = net short &nbsp;·&nbsp; Click to filter
+                </>
+              )}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {!hasBenchmark && (
+              <>
+                <span
+                  className="text-xs font-secondary tabular-nums px-2 py-0.5 rounded"
+                  style={{ background: "rgba(13,13,56,0.05)", color: "#0D0D38" }}
+                >
+                  Net {fmtPct(netExposure)}
+                </span>
+                <span
+                  className="text-xs font-secondary tabular-nums px-2 py-0.5 rounded"
+                  style={{ background: "rgba(13,13,56,0.05)", color: "#0D0D38" }}
+                >
+                  Gross {fmtPct(grossExposure)}
+                </span>
+              </>
+            )}
             {selectedSector && (
               <button
                 onClick={() => setSelectedSector(null)}
@@ -559,8 +621,8 @@ export default function CarteraView({
           >
             <XAxis
               type="number"
-              dataKey="activeWeight"
-              tickFormatter={(v) => fmtPct(v as number, true)}
+              dataKey={barKey}
+              tickFormatter={(v) => fmtPct(v as number, hasBenchmark)}
               tick={{ fontSize: 10, fill: "rgba(13,13,56,0.45)" }}
               axisLine={false}
               tickLine={false}
@@ -573,22 +635,22 @@ export default function CarteraView({
               axisLine={false}
               tickLine={false}
             />
-            <Tooltip content={<SectorTooltip />} cursor={{ fill: "rgba(13,13,56,0.04)" }} />
+            <Tooltip content={<SectorTooltip hasBenchmark={hasBenchmark} />} cursor={{ fill: "rgba(13,13,56,0.04)" }} />
             <ReferenceLine x={0} stroke="rgba(13,13,56,0.28)" strokeWidth={1} />
-            <Bar dataKey="activeWeight" radius={[0, 3, 3, 0]} isAnimationActive={false}>
+            <Bar dataKey={barKey} radius={[0, 3, 3, 0]} isAnimationActive={false}>
               {barData.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
                   fill={
                     selectedSector === entry.sector
-                      ? entry.activeWeight >= 0
+                      ? entry[barKey] >= 0
                         ? "#001EAF"
                         : "#F8485E"
-                      : entry.activeWeight >= 0
+                      : entry[barKey] >= 0
                       ? "rgba(0,30,175,0.75)"
                       : "rgba(248,72,94,0.75)"
                   }
-                  stroke={selectedSector === entry.sector ? (entry.activeWeight >= 0 ? "#001EAF" : "#F8485E") : "none"}
+                  stroke={selectedSector === entry.sector ? (entry[barKey] >= 0 ? "#001EAF" : "#F8485E") : "none"}
                   strokeWidth={selectedSector === entry.sector ? 2 : 0}
                 />
               ))}
@@ -602,6 +664,7 @@ export default function CarteraView({
         holdings={tableHoldings}
         allCount={cartera.length}
         benchmark={benchmark}
+        hasBenchmark={hasBenchmark}
         selectedSector={selectedSector}
         totalSectorFundWeight={selectedSector ? totalSectorFundWeight : 0}
         onClear={() => setSelectedSector(null)}

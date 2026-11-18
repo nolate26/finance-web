@@ -329,8 +329,13 @@
      ventana desbordaban y arrastraban la página entera en horizontal. Acá
      quedan acotadas al ancho disponible y scrollean solas.
      `flex-shrink: 0` en los hijos evita que los botones se compriman hasta
-     volverse ilegibles antes de empezar a scrollear. */
+     volverse ilegibles antes de empezar a scrollear.
+     `min-height: min-content`: un elemento con overflow ≠ visible pierde el
+     `min-height: auto` de los ítems flex, así que dentro de una columna flex
+     de alto fijo (Company Info) la barra se encogía a 0px y desaparecía en
+     cuanto el contenido de abajo era más alto que la pantalla. */
   .tab-rail {
+    min-height: min-content;
     max-width: 100%;
     overflow-x: auto;
     overflow-y: hidden;

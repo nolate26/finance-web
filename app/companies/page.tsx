@@ -13,7 +13,6 @@ import ConsensusMomentumCards from "@/components/deep-dive/ConsensusMomentumCard
 import RelatedReports from "@/components/deep-dive/RelatedReports";
 import ResearchNotesPanel from "@/components/deep-dive/ResearchNotesPanel";
 import UnmappedTickersAlert from "@/components/deep-dive/UnmappedTickersAlert";
-import ScorecardGrid from "@/components/deep-dive/ScorecardGrid";
 import ModelExplorer from "@/components/deep-dive/ModelExplorer";
 import BankModelExplorer from "@/components/deep-dive/BankModelExplorer";
 import type { CompanyListItem } from "@/app/api/companies/list/route";
@@ -99,6 +98,8 @@ const FUND_DISPLAY_NAMES: Record<string, string> = {
   Orange:                                  "Orange",
   Glory:                                   "Glory",
   Mercer:                                  "Mercer",
+  Patria_Long_Biased_Master_FIM:           "Patria LB",
+  Patria_LO_Master_FIA:                    "Patria LO",
 };
 
 function fmtPct(v: number | null): string {
@@ -211,7 +212,7 @@ function CompaniesPageContent() {
   const [diveError, setDiveError] = useState<string | null>(null);
   // Consensus Estimates es la pestaña de entrada: es donde vive el gráfico de
   // valuación histórica y lo primero que se mira al abrir una empresa.
-  const [analysisTab, setAnalysisTab] = useState<"scorecard" | "model" | "consensus" | "reports" | "research">("consensus");
+  const [analysisTab, setAnalysisTab] = useState<"model" | "consensus" | "reports" | "research">("consensus");
   const [tickerNotFound, setTickerNotFound] = useState<string | null>(null);
   // Uploaded docs keyed by ticker → array of {url, label}
   const [companyDocs, setCompanyDocs] = useState<Record<string, { url: string; label: string }[]>>({});
@@ -249,7 +250,7 @@ function CompaniesPageContent() {
             handleSelect(defaultItem);
           }
           if (tabParam === "model" || tabParam === "consensus" || tabParam === "research"
-              || tabParam === "scorecard" || tabParam === "reports") {
+              || tabParam === "reports") {
             setAnalysisTab(tabParam);
           }
         }
@@ -586,17 +587,18 @@ function CompaniesPageContent() {
               </div>
 
               {/* ══ Analysis tab bar ════════════════════════════════════════════ */}
-              {/* tab-rail: las 5 pestañas no entran en un teléfono y empujaban el panel
+              {/* tab-rail: las 4 pestañas no entran en un teléfono y empujaban el panel
                   entero en horizontal; así scrollean solas. */}
               <div className="tab-rail" style={{
                 display:      "flex",
                 gap:          0,
                 borderBottom: "1px solid rgba(13,13,56,0.08)",
                 marginBottom: 20,
+                flexShrink:   0,
               }}>
-                {(["scorecard", "model", "consensus", "reports", "research"] as const).map((tab) => {
+                {(["model", "consensus", "reports", "research"] as const).map((tab) => {
                   const active = analysisTab === tab;
-                  const LABELS = { scorecard: "Scorecard", model: "Analyst Models", consensus: "Consensus Estimates", reports: "Related Reports", research: "Research Notes" };
+                  const LABELS = { model: "Analyst Models", consensus: "Consensus Estimates", reports: "Related Reports", research: "Research Notes" };
                   const label  = LABELS[tab];
                   return (
                     <button
@@ -640,15 +642,6 @@ function CompaniesPageContent() {
                   )}
 
                 </>
-              )}
-
-              {/* ══ Scorecard tab ═══════════════════════════════════════════════ */}
-              {analysisTab === "scorecard" && (
-                <ScorecardGrid
-                  deepDive={deepDive}
-                  latestPrice={latestPrice}
-                  onViewDetail={() => setAnalysisTab("consensus")}
-                />
               )}
 
               {/* ══ Consensus Estimates tab ═════════════════════════════════════ */}

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { normalizeTicker } from "@/lib/issuer";
 
 const FUND_PAGE_MAP: Record<string, string> = {
   Pionero: "1",
@@ -24,7 +25,9 @@ const DISPLAY_NAMES: Record<string, string> = {
 };
 
 const CHILE_FUNDS = new Set(["Pionero", "Moneda_Renta_Variable", "Orange"]);
-// fund_name con que llegarán a fund_portfolio_weights (aún sin datos).
+// Hojas LB / LO del Excel diario de Patria (scripts/ingest_brazil_portfolio.py).
+// A diferencia de Chile/LATAM, `company` trae el ticker BBG y no el nombre, y no
+// hay benchmark: nombre y sector salen de empresas_industrias_v2 por ticker.
 const BRAZIL_FUNDS = new Set(["Patria_Long_Biased_Master_FIM", "Patria_LO_Master_FIA"]);
 
 type Region = "Chile" | "LATAM" | "Brazil";
@@ -47,6 +50,7 @@ export interface SectorSummary {
 
 export interface CarteraRow {
   company: string;
+  ticker?: string; // sólo Brasil: el ticker BBG tal como está guardado en `company`
   portfolioPct: number;
   benchmarkPct: number;
   overweight: number;
@@ -66,6 +70,7 @@ export interface FondoMeta {
 
 export interface FondoData extends FondoMeta {
   benchmark: string;
+  hasBenchmark: boolean;
   cartera: CarteraRow[];
   sectorSummary: SectorSummary[];
   error?: string;
@@ -82,11 +87,13 @@ export interface FondoData extends FondoMeta {
 //   2. nombre_latam.toLowerCase()  → industria_chile  (fallback via global name)
 //
 // LATAM funds use only nombre_latam → industria_gics.
+// Brazil funds hold BBG tickers: ticker_bloomberg → nombre_latam + industria_gics.
 
 type IndustryMaps = {
   chileByChile: Map<string, string>; // nombre_chile.lower() → industria_chile
   chileByLatam: Map<string, string>; // nombre_latam.lower() → industria_chile
   latamMap:     Map<string, string>; // nombre_latam.lower() → industria_gics
+  byTicker:     Map<string, { name: string; sector: string }>; // ticker canónico
 };
 
 async function loadIndustryMaps(): Promise<IndustryMaps> {
@@ -95,8 +102,15 @@ async function loadIndustryMaps(): Promise<IndustryMaps> {
   const chileByChile = new Map<string, string>();
   const chileByLatam = new Map<string, string>();
   const latamMap     = new Map<string, string>();
+  const byTicker     = new Map<string, { name: string; sector: string }>();
 
   for (const r of rows) {
+    if (r.tickerBloomberg) {
+      byTicker.set(normalizeTicker(r.tickerBloomberg), {
+        name:   r.nombreLatam || r.tickerBloomberg,
+        sector: r.industriaGics || "Unclassified",
+      });
+    }
     // Fuente con campos vacíos: ignorar filas sin nombre_latam (IS NOT NULL AND <> '')
     if (!r.nombreLatam) continue;
     const latamKey = r.nombreLatam.toLowerCase().trim();
@@ -107,7 +121,7 @@ async function loadIndustryMaps(): Promise<IndustryMaps> {
     if (r.industriaGics) latamMap.set(latamKey, r.industriaGics);
   }
 
-  return { chileByChile, chileByLatam, latamMap };
+  return { chileByChile, chileByLatam, latamMap, byTicker };
 }
 
 // ── Sector aggregation ────────────────────────────────────────────────────────
@@ -288,9 +302,12 @@ export async function GET(request: Request) {
 
       if (holdings.length === 0) throw new Error("No holdings found");
 
-      const benchmarkName = holdings[0].benchmarkName ?? "Benchmark";
+      // Sin benchmark (Brasil) la vista muestra pesos absolutos en vez de activos.
+      const hasBenchmark = holdings.some((h) => h.benchmarkName != null || h.benchmarkWeight != null);
+      const benchmarkName = holdings[0].benchmarkName ?? (hasBenchmark ? "Benchmark" : "");
       const isChile = CHILE_FUNDS.has(fundName);
-      const { chileByChile, chileByLatam, latamMap } = await loadIndustryMaps();
+      const isBrazil = BRAZIL_FUNDS.has(fundName);
+      const { chileByChile, chileByLatam, latamMap, byTicker } = await loadIndustryMaps();
 
       // ── Find closest prior snapshots for delta calculations ──────────────
       const allDatesForFund = await prisma.fundPortfolioWeight.findMany({
@@ -343,7 +360,12 @@ export async function GET(request: Request) {
         // Chile funds: try nombre_chile match first, then nombre_latam fallback.
         // Industry assigned is always industria_chile regardless of which key matched.
         // LATAM funds: use nombre_latam → industria_gics directly.
-        const rawSector = isChile
+        // Brazil: futuros y opciones de índice ("BZZ6 Index", "ESZ6 Index") no
+        // están en la maestra → bucket propio en vez de inflar "Unclassified".
+        const brazilHit = isBrazil ? byTicker.get(normalizeTicker(company)) : undefined;
+        const rawSector = isBrazil
+          ? (brazilHit?.sector ?? (/ INDEX$/i.test(company.trim()) ? "Index & Futures" : "Unclassified"))
+          : isChile
           ? (chileByChile.get(key) ?? chileByLatam.get(key) ?? "Unclassified")
           : (latamMap.get(key) ?? "Unclassified");
         if (key === "edelpa") console.log("[fondos] Cruce de EDELPA:", rawSector);
@@ -357,7 +379,8 @@ export async function GET(request: Request) {
         const delta1M = has1M ? currentPct - (weights1M[company.toLowerCase()] ?? 0) : null;
 
         return {
-          company,
+          company: isBrazil ? (brazilHit?.name ?? company) : company,
+          ...(isBrazil ? { ticker: company } : {}),
           portfolioPct: currentPct,
           benchmarkPct: r.benchmarkWeight ?? 0,
           overweight: r.overweight ?? 0,
@@ -379,6 +402,7 @@ export async function GET(request: Request) {
       return NextResponse.json({
         ...meta,
         benchmark: benchmarkName,
+        hasBenchmark,
         cartera,
         sectorSummary,
         timeseries,
@@ -388,6 +412,7 @@ export async function GET(request: Request) {
       return NextResponse.json({
         ...meta,
         benchmark: "",
+        hasBenchmark: false,
         cartera: [],
         sectorSummary: [],
         error: String(err),

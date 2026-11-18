@@ -666,49 +666,6 @@ model LastRun {
   @@map("last_run")
 }
 
-model SignalRaw {
-  signalDate DateTime @map("signal_date") @db.Date
-  ticker     String   @db.VarChar(100) // Ticker Bloomberg
-
-  // Factores y Scores
-  score      Float?
-  value      Float?
-  quality    Float?
-
-  // Métricas
-  pe         Float?
-  dy         Float?
-  roe        Float?
-  deltaRoe   Float?   @map("delta_roe") // Para tu ΔROE
-  price      Float?
-
-  // Flags
-  top20      Boolean? // True si la empresa entró al Top 20 esa semana
-
-  // @@index([signalDate]) eliminado: es prefijo de la PK. El de ticker no lo es → se conserva.
-  @@id([signalDate, ticker])
-  @@index([ticker])
-  @@map("signals_raw")
-}
-
-model MomentumSignal {
-
-  signalDate DateTime @map("signal_date") @db.Date
-  ticker     String   @db.VarChar(100) // Ticker Bloomberg
-
-  // Señal de momentum (skip-return 315-15, total return USD)
-  signal     Float?   // retorno acumulado de la ventana [t-315, t-15], en %
-  score      Float?   // puntaje rank-percentil 0-100 (rank 1 = 100)
-  zscore     Float?   @map("z_score") // sigmas vs media cross-section de la fecha
-  rank       Int?     // puesto ordinal (1 = mejor momentum)
-
-  // @@index([signalDate]) eliminado: es prefijo de la PK.
-  @@id([signalDate, ticker])
-  @@index([ticker])
-  @@map("momentum_signals")
-
-}
- 
 
 
 

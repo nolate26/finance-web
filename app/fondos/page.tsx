@@ -65,6 +65,7 @@ const FUND_ORDER: Record<Region, string[]> = {
 
 interface CarteraRow {
   company: string;
+  ticker?: string;
   portfolioPct: number;
   benchmarkPct: number;
   overweight: number;
@@ -92,6 +93,7 @@ interface SectorSummary {
 
 interface FondoData extends FondoMeta {
   benchmark: string;
+  hasBenchmark: boolean;
   cartera: CarteraRow[];
   sectorSummary: SectorSummary[];
   error?: string;
@@ -431,6 +433,7 @@ export default function FondosPage() {
                 sectorSummary={fondoData.sectorSummary ?? []}
                 cartera={fondoData.cartera}
                 benchmark={fondoData.benchmark}
+                hasBenchmark={fondoData.hasBenchmark ?? true}
                 fundName={selectedFundName}
               />
             </>
