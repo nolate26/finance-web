@@ -84,6 +84,9 @@ const CHART_LINES: Record<string, string[]> = {
 // No afecta la tabla, sólo el gráfico y las opciones de benchmark del modo alfa.
 const CHART_INDICES: Record<string, string[]> = {
   Patria_Long_Biased_Master_FIM: ["Ibovespa Index"],
+  // El Ibovespa no viene en la tabla de LO: /api/rentabilidades lo trae de la de LB.
+  // Bovespa Small Cap sigue en la tabla, pero fuera del gráfico y del alfa.
+  Patria_LO_Master_FIA: ["Ibovespa Index"],
 };
 
 // Benchmark por defecto del modo alfa. Sin entrada se usa el primer índice del gráfico.

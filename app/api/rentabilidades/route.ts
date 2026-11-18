@@ -70,6 +70,9 @@ function parseMgmtFee(v: string | null | undefined): number | null {
   return isNaN(n) ? null : n / 100;
 }
 
+// Benchmark de los dos fondos de Brasil (Patria Long Biased y Long Only).
+const BRL_BENCHMARK = "Ibovespa Index";
+
 function isMonedaFund(fundGroup: string | null): boolean {
   if (!fundGroup) return false;
   return fundGroup === "Moneda" || fundGroup === "Other Moneda Funds Returns";
@@ -167,6 +170,25 @@ export async function GET(request: Request) {
     }
   }
 
+  // ── Brasil: el benchmark de ambos fondos es el Ibovespa ───────────────────
+  // El reporte sólo lo trae en la tabla de Long Biased; la de Long Only tiene
+  // Bovespa Small Cap. Se toma de la misma fecha en cualquier tabla BRL. Las
+  // columnas since-inception (dyn1/dyn2, incep) y las de riesgo (sigma/alfa/beta)
+  // de esa fila están medidas desde el inicio del OTRO fondo → van vacías.
+  const borrowBrlBenchmark = currencyFilter === "BRL" && !rows.some((r) => r.fund === BRL_BENCHMARK);
+  if (borrowBrlBenchmark) {
+    const ibovDbRow = await prisma.monedaFundReturn.findFirst({
+      where: { currency: "BRL", fund: BRL_BENCHMARK, reportDate: latestDateRaw },
+    });
+    if (ibovDbRow) {
+      rows.push({
+        ...mapDbRow(ibovDbRow),
+        dyn1: null, dyn2: null, annSinceIncep: null,
+        sigma: null, alpha: null, beta: null,
+      });
+    }
+  }
+
   // ── Determine chart funds ─────────────────────────────────────────────────
   const monedaFunds = rows
     .filter((r) => r.isMoneda)
@@ -205,7 +227,13 @@ export async function GET(request: Request) {
     where:
       pageFilter === "2" && !currencyFilter
         ? { reportDate: { endsWith: `/${year}` }, fund: { in: [...fundSet] } }
-        : { ...scope, reportDate: { endsWith: `/${year}` } },
+        : borrowBrlBenchmark
+          // La serie del Ibovespa prestado también sale de la otra tabla BRL.
+          ? {
+              reportDate: { endsWith: `/${year}` },
+              OR: [scope, { currency: "BRL", fund: BRL_BENCHMARK }],
+            }
+          : { ...scope, reportDate: { endsWith: `/${year}` } },
     select: { reportDate: true, fund: true, ytd: true },
   });
 

@@ -350,9 +350,11 @@ export default function FondosPage() {
 
           {fondoData && !loadingData && fondoData.cartera.length > 0 && (
             <>
-              {/* Portfolio date stepper */}
-              {snapshots.length > 1 && (
-                <div className="flex items-center gap-2 mb-4">
+              {/* Portfolio date stepper — siempre visible (con una sola fecha las
+                  flechas quedan deshabilitadas) para que se sepa dónde ver las
+                  carteras pasadas a medida que se cargan. */}
+              {snapshots.length > 0 && (
+                <div className="flex items-center gap-2 mb-3">
                   <span className="text-xs font-medium mr-1" style={{ color: "rgba(13,13,56,0.45)" }}>Portfolio snapshot:</span>
                   <div
                     className="flex items-center rounded-md overflow-hidden"

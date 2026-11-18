@@ -75,15 +75,67 @@ function fmtDelta(v: number | null): { text: string; color: string; bg: string }
 
 const SORT_ICON = { asc: "↑", desc: "↓", none: "↕" } as const;
 
+// Cortos (peso negativo, sólo en fondos que pueden vender en corto como Patria
+// Long Biased): rosado PATRIA en vez del azul de las posiciones largas.
+const SHORT = "#F8485E";
+const SHORT_BG = "rgba(248,72,94,0.05)";
+
+// Barra por sector en fondos sin benchmark: largos y cortos por separado, para
+// que un corto no quede escondido dentro del neto de su sector.
+interface LongShortDatum {
+  sector: string;
+  long: number;
+  short: number; // ≤ 0
+  net: number;
+  count: number;
+}
+
+function LongShortTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload?: LongShortDatum }>;
+}) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  if (!d) return null;
+  const line = (label: string, value: string, color: string, bold = false) => (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
+      <span style={{ color: "rgba(13,13,56,0.62)" }}>{label}</span>
+      <span style={{ fontWeight: bold ? 700 : 600, color }}>{value}</span>
+    </div>
+  );
+  return (
+    <div
+      style={{
+        background: "#fff",
+        border: "1px solid rgba(13,13,56,0.10)",
+        borderRadius: 8,
+        padding: "8px 12px",
+        fontSize: 12,
+        boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+        minWidth: 180,
+      }}
+    >
+      <div style={{ fontWeight: 700, color: "#0D0D38", marginBottom: 6 }}>{d.sector}</div>
+      <div style={{ display: "grid", gap: 3 }}>
+        {line("Long", fmtPct(d.long), "#001EAF")}
+        {d.short < 0 && line("Short", fmtPct(d.short), SHORT)}
+        {line("Net", fmtPct(d.net), "#0D0D38", true)}
+        {line("Positions", String(d.count), "rgba(13,13,56,0.62)")}
+      </div>
+    </div>
+  );
+}
+
 // ── BarChart tooltip ──────────────────────────────────────────────────────────
 function SectorTooltip({
   active,
   payload,
-  hasBenchmark = true,
 }: {
   active?: boolean;
   payload?: Array<{ payload?: SectorSummary }>;
-  hasBenchmark?: boolean;
 }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
@@ -106,25 +158,16 @@ function SectorTooltip({
           <span style={{ color: "rgba(13,13,56,0.62)" }}>Fund</span>
           <span style={{ fontWeight: 600, color: "#0D0D38" }}>{fmtPct(d.fundWeight)}</span>
         </div>
-        {hasBenchmark ? (
-          <>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
-              <span style={{ color: "rgba(13,13,56,0.62)" }}>Benchmark</span>
-              <span style={{ fontWeight: 600, color: "rgba(13,13,56,0.62)" }}>{fmtPct(d.benchWeight)}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
-              <span style={{ color: "rgba(13,13,56,0.62)" }}>Active</span>
-              <span style={{ fontWeight: 700, color: activeColor(d.activeWeight) }}>
-                {fmtPct(d.activeWeight, true)}
-              </span>
-            </div>
-          </>
-        ) : (
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
-            <span style={{ color: "rgba(13,13,56,0.62)" }}>Positions</span>
-            <span style={{ fontWeight: 600, color: "rgba(13,13,56,0.62)" }}>{d.count}</span>
-          </div>
-        )}
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
+          <span style={{ color: "rgba(13,13,56,0.62)" }}>Benchmark</span>
+          <span style={{ fontWeight: 600, color: "rgba(13,13,56,0.62)" }}>{fmtPct(d.benchWeight)}</span>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
+          <span style={{ color: "rgba(13,13,56,0.62)" }}>Active</span>
+          <span style={{ fontWeight: 700, color: activeColor(d.activeWeight) }}>
+            {fmtPct(d.activeWeight, true)}
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -202,7 +245,7 @@ function HoldingsTable({
     const active = sortCol === col;
     return (
       <th
-        className={`px-3 py-2.5 font-medium cursor-pointer select-none ${
+        className={`px-3 py-2 font-medium cursor-pointer select-none ${
           align === "left" ? "text-left" : "text-right"
         } ${extra}`}
         style={{ ...thStyle, color: active ? "#2044DC" : "rgba(13,13,56,0.62)" }}
@@ -280,13 +323,15 @@ function HoldingsTable({
         </span>
       </div>
 
-      {/* Holdings table */}
-      <div className="overflow-x-auto">
+      {/* Holdings table — desde 1280px va al lado del gráfico con scroll propio
+          (encabezado fijo) en vez de alargar la página; en tablet/teléfono
+          sigue apilada y scrollea la página. */}
+      <div className="overflow-x-auto xl:overflow-y-auto xl:max-h-[calc(100dvh-var(--nav-h)-150px)]">
         <table className="w-full text-xs whitespace-nowrap">
           <thead className="sticky top-0 z-10" style={{ background: "#F5F7FD" }}>
             <tr>
               <th
-                className="hide-phone px-3 py-2.5 text-left font-medium w-7"
+                className="hide-phone px-3 py-2 text-left font-medium w-7"
                 style={thStyle}
               >
                 #
@@ -298,7 +343,7 @@ function HoldingsTable({
               {hasBenchmark && thBtn("overweight", "Active Weight")}
               {hasSectorWeight && (
                 <th
-                  className="px-3 py-2.5 text-right font-medium cursor-pointer select-none"
+                  className="px-3 py-2 text-right font-medium cursor-pointer select-none"
                   style={{
                     ...thStyle,
                     color: sortCol === "sectorWeight" ? "#2044DC" : "#2044DC",
@@ -328,28 +373,42 @@ function HoldingsTable({
               const d1w = fmtDelta(row.delta1W);
               const d1m = fmtDelta(row.delta1M);
               const displaySector = row.macroSector || row.sector || "Unclassified";
+              const isShort = row.portfolioPct < 0;
+              const rowBg = isShort ? SHORT_BG : "transparent";
 
               return (
                 <tr
                   key={row.ticker ?? row.company}
                   className="border-t transition-colors"
-                  style={{ borderColor: "rgba(13,13,56,0.05)" }}
+                  style={{ borderColor: "rgba(13,13,56,0.05)", background: rowBg }}
                   onMouseEnter={(e) =>
                     ((e.currentTarget as HTMLElement).style.background =
-                      "rgba(32,68,220,0.03)")
+                      isShort ? "rgba(248,72,94,0.09)" : "rgba(32,68,220,0.03)")
                   }
                   onMouseLeave={(e) =>
-                    ((e.currentTarget as HTMLElement).style.background = "transparent")
+                    ((e.currentTarget as HTMLElement).style.background = rowBg)
                   }
                 >
                   {/* # */}
-                  <td className="hide-phone px-3 py-2 font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.45)" }}>
+                  <td className="hide-phone px-3 py-1.5 font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.45)" }}>
                     {i + 1}
                   </td>
 
                   {/* Company */}
-                  <td className="px-3 py-2 font-medium wrap-phone" style={{ color: "#0D0D38" }}>
+                  <td className="px-3 py-1.5 font-medium wrap-phone" style={{ color: "#0D0D38" }}>
                     {row.company}
+                    {isShort && (
+                      <span
+                        className="font-secondary"
+                        style={{
+                          marginLeft: 6, fontSize: 9, fontWeight: 800, letterSpacing: "0.06em",
+                          color: SHORT, border: `1px solid ${SHORT}55`, borderRadius: 4, padding: "0 4px",
+                          verticalAlign: "middle",
+                        }}
+                      >
+                        SHORT
+                      </span>
+                    )}
                     {/* Brasil guarda el ticker BBG: va debajo del nombre que salió de la maestra */}
                     {row.ticker && row.ticker !== row.company && (
                       <div className="font-secondary tabular-nums" style={{ fontSize: 10, fontWeight: 400, color: "rgba(13,13,56,0.45)", marginTop: 1 }}>
@@ -363,7 +422,7 @@ function HoldingsTable({
                   </td>
 
                   {/* Sector (new column) */}
-                  <td className="hide-phone px-3 py-2">
+                  <td className="hide-phone px-3 py-1.5">
                     <span
                       className="px-1.5 py-0.5 rounded text-[10px] font-medium"
                       style={{
@@ -377,23 +436,23 @@ function HoldingsTable({
                   </td>
 
                   {/* Fund % */}
-                  <td className="px-3 py-2 text-right">
+                  <td className="px-3 py-1.5 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <div
                         className="hide-phone w-10 h-1.5 rounded-full"
-                        style={{ background: "rgba(32,68,220,0.10)" }}
+                        style={{ background: isShort ? "rgba(248,72,94,0.12)" : "rgba(32,68,220,0.10)" }}
                       >
                         <div
                           className="h-full rounded-full"
                           style={{
-                            width: `${Math.min(100, row.portfolioPct * 500)}%`,
-                            background: "linear-gradient(90deg,#2044DC,#2044DC)",
+                            width: `${Math.min(100, Math.abs(row.portfolioPct) * 500)}%`,
+                            background: isShort ? SHORT : "#2044DC",
                           }}
                         />
                       </div>
                       <span
                         className="font-secondary tabular-nums font-semibold"
-                        style={{ color: "#0D0D38" }}
+                        style={{ color: isShort ? SHORT : "#0D0D38" }}
                       >
                         {fmtPct(row.portfolioPct)}
                       </span>
@@ -403,7 +462,7 @@ function HoldingsTable({
                   {/* Benchmark % */}
                   {hasBenchmark && (
                     <td
-                      className="px-3 py-2 font-secondary tabular-nums text-right"
+                      className="px-3 py-1.5 font-secondary tabular-nums text-right"
                       style={{ color: "rgba(13,13,56,0.62)" }}
                     >
                       {fmtPct(row.benchmarkPct)}
@@ -412,7 +471,7 @@ function HoldingsTable({
 
                   {/* Active Weight */}
                   {hasBenchmark && (
-                    <td className="px-3 py-2 text-right">
+                    <td className="px-3 py-1.5 text-right">
                       <span
                         className="font-secondary tabular-nums font-bold text-[11px] px-2 py-0.5 rounded-full"
                         style={{
@@ -429,7 +488,7 @@ function HoldingsTable({
                   {/* Sector Weight (100%) — only when sector is selected */}
                   {hasSectorWeight && (
                     <td
-                      className="px-3 py-2 text-right"
+                      className="px-3 py-1.5 text-right"
                       style={{ background: "rgba(32,68,220,0.025)" }}
                     >
                       {sectorWt !== null ? (
@@ -462,7 +521,7 @@ function HoldingsTable({
 
                   {/* Δ 1W */}
                   {hasDelta1W && (
-                    <td className="hide-phone px-3 py-2 text-right">
+                    <td className="hide-phone px-3 py-1.5 text-right">
                       <span
                         className="font-secondary tabular-nums font-semibold text-[11px] px-1.5 py-0.5 rounded"
                         style={{ color: d1w.color, background: d1w.bg }}
@@ -474,7 +533,7 @@ function HoldingsTable({
 
                   {/* Δ 1M */}
                   {hasDelta1M && (
-                    <td className="hide-phone px-3 py-2 text-right">
+                    <td className="hide-phone px-3 py-1.5 text-right">
                       <span
                         className="font-secondary tabular-nums font-semibold text-[11px] px-1.5 py-0.5 rounded"
                         style={{ color: d1m.color, background: d1m.bg }}
@@ -520,19 +579,39 @@ export default function CarteraView({
     [tableHoldings]
   );
 
-  // Sin benchmark el "activo" sería el peso mismo contra cero: se grafica el
-  // peso del fondo y lo negativo es posición neta corta (Long Biased).
-  const barKey = hasBenchmark ? "activeWeight" : "fundWeight";
-
-  // BarChart data: sorted by the plotted value, descending
+  // Con benchmark: active weight por sector, ordenado de más a menos.
   const barData = useMemo(
-    () => [...sectorSummary].sort((a, b) => b[barKey] - a[barKey]),
-    [sectorSummary, barKey]
+    () => [...sectorSummary].sort((a, b) => b.activeWeight - a.activeWeight),
+    [sectorSummary]
   );
 
-  // Exposición neta / bruta: la referencia de un fondo sin benchmark.
-  const netExposure   = useMemo(() => cartera.reduce((acc, r) => acc + r.portfolioPct, 0), [cartera]);
-  const grossExposure = useMemo(() => cartera.reduce((acc, r) => acc + Math.abs(r.portfolioPct), 0), [cartera]);
+  // Sin benchmark (Brasil): largos y cortos de cada sector por separado. El
+  // "activo" contra cero sería el neto, y ahí un corto de VBBR quedaba restado
+  // dentro de la barra azul de Oil & Gas sin que se viera. Misma llave de
+  // sector que sectorSummary para que el click filtre la tabla igual.
+  const longShortData = useMemo<LongShortDatum[]>(() => {
+    const groups = new Map<string, LongShortDatum>();
+    for (const r of cartera) {
+      const s = r.macroSector || "Unclassified";
+      const g = groups.get(s) ?? { sector: s, long: 0, short: 0, net: 0, count: 0 };
+      if (r.portfolioPct >= 0) g.long += r.portfolioPct;
+      else g.short += r.portfolioPct;
+      g.net += r.portfolioPct;
+      g.count += 1;
+      groups.set(s, g);
+    }
+    return [...groups.values()].sort((a, b) => b.net - a.net);
+  }, [cartera]);
+
+  // Exposición larga / corta / neta / bruta: la referencia de un fondo sin benchmark.
+  const exposure = useMemo(() => {
+    let long = 0, short = 0;
+    for (const r of cartera) {
+      if (r.portfolioPct >= 0) long += r.portfolioPct;
+      else short += r.portfolioPct;
+    }
+    return { long, short, net: long + short, gross: long - short };
+  }, [cartera]);
 
   if (sectorSummary.length === 0) {
     return (
@@ -542,49 +621,47 @@ export default function CarteraView({
     );
   }
 
-  const chartHeight = Math.max(220, barData.length * 38);
+  // Filas de 26px (antes 38): con 18 sectores el gráfico medía 700px y había
+  // que bajar media página para llegar a la tabla.
+  const sectorCount = hasBenchmark ? barData.length : longShortData.length;
+  const chartHeight = Math.max(180, sectorCount * 26 + 30);
+
+  const pill = (label: string, value: number, color = "#0D0D38", bg = "rgba(13,13,56,0.05)") => (
+    <span className="text-xs font-secondary tabular-nums px-2 py-0.5 rounded" style={{ background: bg, color }}>
+      {label} {fmtPct(value)}
+    </span>
+  );
+
+  // Opacidad por barra: la del sector filtrado va plena, el resto atenuado.
+  const fade = (sector: string) => (selectedSector === null || selectedSector === sector ? 1 : 0.35);
 
   return (
-    <div className="space-y-5">
-      {/* ── Sector Active Weight BarChart ── */}
-      <div className="card p-4">
-        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+    // Desde 1280px gráfico y tabla van lado a lado (5 + 7 columnas) para no
+    // tener que bajar; en tablet y teléfono siguen apilados.
+    <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+      {/* ── Sector BarChart ── */}
+      <div className="card p-4 xl:col-span-5 min-w-0">
+        <div className="flex items-start justify-between mb-2 flex-wrap gap-2">
           <div>
             <p className="text-sm font-semibold" style={{ color: "#0D0D38" }}>
-              {hasBenchmark ? "Sector Allocation — Active Weight" : "Sector Allocation — Fund Weight"}
+              {hasBenchmark ? "Sector Allocation — Active Weight" : "Sector Allocation — Long / Short"}
             </p>
             {/* Va sobre la tarjeta blanca: antes estaba en blanco 72% y no se leía. */}
             <p className="text-xs mt-0.5 font-secondary" style={{ color: "rgba(13,13,56,0.45)" }}>
               {hasBenchmark ? (
                 <>
                   <span style={{ color: "#001EAF", fontWeight: 600 }}>Blue</span> = overweight &nbsp;·&nbsp;{" "}
-                  <span style={{ color: "#F8485E", fontWeight: 600 }}>Red</span> = underweight &nbsp;·&nbsp; Click to filter
+                  <span style={{ color: SHORT, fontWeight: 600 }}>Red</span> = underweight &nbsp;·&nbsp; Click to filter
                 </>
               ) : (
                 <>
-                  No benchmark &nbsp;·&nbsp;{" "}
-                  <span style={{ color: "#F8485E", fontWeight: 600 }}>Red</span> = net short &nbsp;·&nbsp; Click to filter
+                  <span style={{ color: "#001EAF", fontWeight: 600 }}>Blue</span> = long &nbsp;·&nbsp;{" "}
+                  <span style={{ color: SHORT, fontWeight: 600 }}>Pink</span> = short &nbsp;·&nbsp; Click to filter
                 </>
               )}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {!hasBenchmark && (
-              <>
-                <span
-                  className="text-xs font-secondary tabular-nums px-2 py-0.5 rounded"
-                  style={{ background: "rgba(13,13,56,0.05)", color: "#0D0D38" }}
-                >
-                  Net {fmtPct(netExposure)}
-                </span>
-                <span
-                  className="text-xs font-secondary tabular-nums px-2 py-0.5 rounded"
-                  style={{ background: "rgba(13,13,56,0.05)", color: "#0D0D38" }}
-                >
-                  Gross {fmtPct(grossExposure)}
-                </span>
-              </>
-            )}
             {selectedSector && (
               <button
                 onClick={() => setSelectedSector(null)}
@@ -602,73 +679,123 @@ export default function CarteraView({
               className="text-xs font-secondary tabular-nums px-2 py-0.5 rounded"
               style={{ background: "rgba(32,68,220,0.08)", color: "#2044DC" }}
             >
-              {sectorSummary.length} sectors
+              {sectorCount} sectors
             </span>
           </div>
         </div>
 
+        {/* Exposición del fondo sin benchmark: el corto en su color */}
+        {!hasBenchmark && (
+          <div className="flex items-center gap-2 flex-wrap mb-2">
+            {pill("Long", exposure.long, "#001EAF", "rgba(0,30,175,0.08)")}
+            {exposure.short < 0 && pill("Short", exposure.short, SHORT, "rgba(248,72,94,0.08)")}
+            {pill("Net", exposure.net)}
+            {pill("Gross", exposure.gross)}
+          </div>
+        )}
+
         <ResponsiveContainer width="100%" height={chartHeight}>
-          <BarChart
-            layout="vertical"
-            data={barData}
-            margin={{ top: 4, right: 60, bottom: 4, left: 8 }}
-            onClick={(e) => {
-              if (e?.activePayload?.[0]?.payload?.sector) {
-                handleSelect(e.activePayload[0].payload.sector as string);
-              }
-            }}
-            style={{ cursor: "pointer" }}
-          >
-            <XAxis
-              type="number"
-              dataKey={barKey}
-              tickFormatter={(v) => fmtPct(v as number, hasBenchmark)}
-              tick={{ fontSize: 10, fill: "rgba(13,13,56,0.45)" }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <YAxis
-              type="category"
-              dataKey="sector"
-              width={160}
-              tick={{ fontSize: 11, fill: "#0D0D38" }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <Tooltip content={<SectorTooltip hasBenchmark={hasBenchmark} />} cursor={{ fill: "rgba(13,13,56,0.04)" }} />
-            <ReferenceLine x={0} stroke="rgba(13,13,56,0.28)" strokeWidth={1} />
-            <Bar dataKey={barKey} radius={[0, 3, 3, 0]} isAnimationActive={false}>
-              {barData.map((entry, index) => (
-                <Cell
-                  key={`cell-${index}`}
-                  fill={
-                    selectedSector === entry.sector
-                      ? entry[barKey] >= 0
-                        ? "#001EAF"
-                        : "#F8485E"
-                      : entry[barKey] >= 0
-                      ? "rgba(0,30,175,0.75)"
-                      : "rgba(248,72,94,0.75)"
-                  }
-                  stroke={selectedSector === entry.sector ? (entry[barKey] >= 0 ? "#001EAF" : "#F8485E") : "none"}
-                  strokeWidth={selectedSector === entry.sector ? 2 : 0}
-                />
-              ))}
-            </Bar>
-          </BarChart>
+          {hasBenchmark ? (
+            <BarChart
+              layout="vertical"
+              data={barData}
+              margin={{ top: 4, right: 24, bottom: 4, left: 4 }}
+              barCategoryGap="22%"
+              onClick={(e) => {
+                if (e?.activePayload?.[0]?.payload?.sector) {
+                  handleSelect(e.activePayload[0].payload.sector as string);
+                }
+              }}
+              style={{ cursor: "pointer" }}
+            >
+              <XAxis
+                type="number"
+                dataKey="activeWeight"
+                tickFormatter={(v) => fmtPct(v as number, true)}
+                tick={{ fontSize: 10, fill: "rgba(13,13,56,0.45)" }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                type="category"
+                dataKey="sector"
+                width={140}
+                tick={{ fontSize: 10.5, fill: "#0D0D38" }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <Tooltip content={<SectorTooltip />} cursor={{ fill: "rgba(13,13,56,0.04)" }} />
+              <ReferenceLine x={0} stroke="rgba(13,13,56,0.28)" strokeWidth={1} />
+              <Bar dataKey="activeWeight" radius={[0, 3, 3, 0]} isAnimationActive={false}>
+                {barData.map((entry, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={entry.activeWeight >= 0 ? "#001EAF" : SHORT}
+                    fillOpacity={fade(entry.sector)}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          ) : (
+            // stackOffset="sign": los largos se apilan hacia la derecha del cero y
+            // los cortos hacia la izquierda, cada uno desde el eje.
+            <BarChart
+              layout="vertical"
+              data={longShortData}
+              stackOffset="sign"
+              margin={{ top: 4, right: 24, bottom: 4, left: 4 }}
+              barCategoryGap="22%"
+              onClick={(e) => {
+                if (e?.activePayload?.[0]?.payload?.sector) {
+                  handleSelect(e.activePayload[0].payload.sector as string);
+                }
+              }}
+              style={{ cursor: "pointer" }}
+            >
+              <XAxis
+                type="number"
+                tickFormatter={(v) => fmtPct(v as number)}
+                tick={{ fontSize: 10, fill: "rgba(13,13,56,0.45)" }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                type="category"
+                dataKey="sector"
+                width={140}
+                tick={{ fontSize: 10.5, fill: "#0D0D38" }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <Tooltip content={<LongShortTooltip />} cursor={{ fill: "rgba(13,13,56,0.04)" }} />
+              <ReferenceLine x={0} stroke="rgba(13,13,56,0.28)" strokeWidth={1} />
+              <Bar dataKey="long" stackId="ls" radius={[0, 3, 3, 0]} isAnimationActive={false}>
+                {longShortData.map((entry, index) => (
+                  <Cell key={`long-${index}`} fill="#001EAF" fillOpacity={fade(entry.sector)} />
+                ))}
+              </Bar>
+              <Bar dataKey="short" stackId="ls" radius={[3, 0, 0, 3]} isAnimationActive={false}>
+                {longShortData.map((entry, index) => (
+                  <Cell key={`short-${index}`} fill={SHORT} fillOpacity={fade(entry.sector)} />
+                ))}
+              </Bar>
+            </BarChart>
+          )}
         </ResponsiveContainer>
       </div>
 
       {/* ── Full holdings table (always visible, filtered when sector selected) ── */}
-      <HoldingsTable
-        holdings={tableHoldings}
-        allCount={cartera.length}
-        benchmark={benchmark}
-        hasBenchmark={hasBenchmark}
-        selectedSector={selectedSector}
-        totalSectorFundWeight={selectedSector ? totalSectorFundWeight : 0}
-        onClear={() => setSelectedSector(null)}
-      />
+      <div className="xl:col-span-7 min-w-0">
+        <HoldingsTable
+          holdings={tableHoldings}
+          allCount={cartera.length}
+          benchmark={benchmark}
+          hasBenchmark={hasBenchmark}
+          selectedSector={selectedSector}
+          totalSectorFundWeight={selectedSector ? totalSectorFundWeight : 0}
+          onClear={() => setSelectedSector(null)}
+        />
+      </div>
     </div>
   );
 }
