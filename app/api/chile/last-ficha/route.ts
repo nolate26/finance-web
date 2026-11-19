@@ -12,8 +12,13 @@ export const dynamic = "force-dynamic";
 //   GET /api/chile/last-ficha?ticker=X[&fy=&q=]     → la ficha, con trimestre base fy/q
 //                                                    (por defecto el último cargado)
 //
-// Columnas: todos los años ("A") + el LTM de la hoja ("L", uno por compañía) + los últimos 5
-// trimestres terminando en el base, y para el base la Var% YoY y QoQ.
+// Columnas: todos los años ("A") + el LTM de la hoja ("L", uno por compañía) + "Acumulado n-1"
+// y "Acumulado" ("Y", un par por compañía) + los últimos 5 trimestres terminando en el base,
+// y para el base la Var% YoY y QoQ.
+//
+// Moneda: una ficha en CLP se muestra en USD dividiendo los montos por el FX de la última
+// subida (CLP mn ÷ FX = USD mn). Ratios, KPIs y "Otros datos" (salvo Market Cap) quedan como
+// vienen. ?ccy=local la devuelve sin convertir.
 //
 // Filas: la misma plantilla que la hoja "Send Ficha" (TEMPLATE). Las líneas subidas se ubican
 // por nombre; los ratios (márgenes, Net Debt/EBITDA, ROE, ROIC…) se calculan acá a partir de
@@ -46,6 +51,8 @@ export interface LastFichaRow {
   band?: boolean;                // CFO / CFI / CFF: banda celeste
   annual: (number | null)[];     // alineado con `years`
   ltm: number | null;            // columna LTM de la hoja (ver ltmLabel)
+  ytdPrev: number | null;        // "Acumulado n-1" (ver ytd.prev)
+  ytd: number | null;            // "Acumulado" (ver ytd.cur)
   quarterly: (number | null)[];  // alineado con `quarters`
   // Variación del trimestre base. Montos: cur/prev − 1. Ratios y múltiplos: diferencia
   // (cur − prev). null = falta un dato; "NM" = base 0 o cambio de signo.
@@ -73,13 +80,16 @@ export interface LastFichaComment {
 export interface LastFichaPayload {
   ticker: string;
   name: string | null;
-  currency: string;
-  fx: number | null;
+  currency: string;              // moneda en que vienen los montos (USD si se convirtió)
+  reportedCurrency: string;      // moneda de la hoja
+  converted: boolean;            // CLP → USD con `fx`
+  fx: number | null;             // FX de la última subida
   updatedAt: string;
   periods: { fy: number; q: number; label: string }[]; // trimestres disponibles (desc), selector del base
   base: { fy: number; q: number; label: string };
   years: number[];                                      // asc
   ltmLabel: string | null;                              // trimestre al que llega el LTM ("3Q26"); null = sin LTM
+  ytd: { prev: string; cur: string } | null;            // acumulados: { prev: "9M 2025", cur: "9M 2026" }; null = sin columnas
   quarters: { fy: number; q: number; label: string }[]; // los 5 mostrados (asc)
   yoyLabel: string;                                     // "3Q26 vs 3Q25"
   qoqLabel: string;                                     // "3Q26 vs 2Q26"
@@ -98,7 +108,7 @@ const qIdx = (fy: number, q: number) => fy * 4 + (q - 1);
 const PCT_RE = /\b(margin|margen|rate|tasa|growth|crecimiento|yoy|qoq|payout|roe|roic)\b|%/i;
 
 // ── Columnas y acceso a valores ─────────────────────────────────────────────────
-type Col = { t: "A"; y: number } | { t: "L" } | { t: "Q"; i: number };
+type Col = { t: "A"; y: number } | { t: "L" } | { t: "Y"; y: number } | { t: "Q"; i: number };
 type Num = number | null;
 
 const div = (a: Num, b: Num): Num => (a == null || b == null || b === 0 ? null : a / b);
@@ -272,14 +282,18 @@ export async function GET(request: NextRequest) {
     const yoyP = fromIdx(baseI - 4), qoqP = fromIdx(baseI - 1);
     const ltmRow = [...st, ...kp].find((r) => r.periodType === "L");
     const ltmI = ltmRow ? qIdx(ltmRow.year, ltmRow.quarter) : null;
+    // Acumulados: el par más nuevo ("Acumulado" = año mayor; "Acumulado n-1" = el anterior).
+    const ytdRow = [...st, ...kp].filter((r) => r.periodType === "Y").sort((a, b) => b.year - a.year)[0];
+    const ytdHead = (y: number) => `${ytdRow!.quarter * 3}M ${y}`;
 
-    // Valores: "statement|<sección>|<línea>|<A2025 · L · Q8105>"
-    const pk = (c: Col) => (c.t === "A" ? `A${c.y}` : c.t === "L" ? "L" : `Q${c.i}`);
+    // Valores: "statement|<sección>|<línea>|<A2025 · L · Y2026 · Q8105>"
+    const pk = (c: Col) => (c.t === "A" ? `A${c.y}` : c.t === "L" ? "L" : c.t === "Y" ? `Y${c.y}` : `Q${c.i}`);
+    const colOf = (r: { periodType: string; year: number; quarter: number }): Col =>
+      r.periodType === "A" ? { t: "A", y: r.year } : r.periodType === "L" ? { t: "L" } : r.periodType === "Y" ? { t: "Y", y: r.year } : { t: "Q", i: qIdx(r.year, r.quarter) };
     const vals = new Map<string, number>();
     const lineOrder = new Map<string, { section: string; line: string; order: number }>(); // statements subidos
     for (const r of st) {
-      const c: Col = r.periodType === "A" ? { t: "A", y: r.year } : r.periodType === "L" ? { t: "L" } : { t: "Q", i: qIdx(r.year, r.quarter) };
-      vals.set(`statement|${r.section}|${r.line}|${pk(c)}`, Number(r.value));
+      vals.set(`statement|${r.section}|${r.line}|${pk(colOf(r))}`, Number(r.value));
       lineOrder.set(`${r.section}|${r.line}`, { section: r.section, line: r.line, order: r.lineOrder });
     }
 
@@ -287,10 +301,14 @@ export async function GET(request: NextRequest) {
     const ctx: Ctx = {
       raw: (sec, line, c) => {
         const v = get(sec, line, pk(c));
-        // Balance sin columna LTM propia: el saldo del trimestre al que llega el LTM.
-        return v == null && c.t === "L" && sec === BS && ltmI != null ? get(sec, line, `Q${ltmI}`) : v;
+        if (v != null || sec !== BS) return v;
+        // Balance sin valor propio en LTM / acumulado: el saldo del trimestre al que llegan.
+        if (c.t === "L" && ltmI != null) return get(sec, line, `Q${ltmI}`);
+        if (c.t === "Y" && ytdRow) return get(sec, line, `Q${qIdx(c.y, ytdRow.quarter)}`);
+        return null;
       },
       flow12: (line, c) => {
+        if (c.t === "Y") return null; // un acumulado no es un flujo de 12 meses
         if (c.t !== "Q") return get(IS, line, pk(c));
         // 4Q: el año completo sirve igual (y evita depender de que estén los 4 trimestres).
         if (c.i % 4 === 3) { const a = get(IS, line, `A${Math.floor(c.i / 4)}`); if (a != null) return a; }
@@ -299,6 +317,7 @@ export async function GET(request: NextRequest) {
         return s;
       },
       prevStock: (line, c) => {
+        if (c.t === "Y") return null;
         const i = c.t === "A" ? null : c.t === "L" ? ltmI : c.i;
         if (i == null) return c.t === "A" ? get(BS, line, `A${c.y - 1}`) : null;
         return get(BS, line, `Q${i - 4}`) ?? ((i - 4) % 4 === 3 ? get(BS, line, `A${Math.floor((i - 4) / 4)}`) : null);
@@ -310,10 +329,12 @@ export async function GET(request: NextRequest) {
       annual: years.map((y): Col => ({ t: "A", y })),
       quarterly: quarters.map((p): Col => ({ t: "Q", i: qIdx(p.fy, p.q) })),
     };
-    const makeRow = (meta: Omit<LastFichaRow, "annual" | "ltm" | "quarterly" | "yoy" | "qoq">, at: (c: Col) => Num): LastFichaRow => ({
+    const makeRow = (meta: Omit<LastFichaRow, "annual" | "ltm" | "ytdPrev" | "ytd" | "quarterly" | "yoy" | "qoq">, at: (c: Col) => Num): LastFichaRow => ({
       ...meta,
       annual: cols.annual.map(at),
       ltm: ltmRow ? at({ t: "L" }) : null,
+      ytdPrev: ytdRow ? at({ t: "Y", y: ytdRow.year - 1 }) : null,
+      ytd: ytdRow ? at({ t: "Y", y: ytdRow.year }) : null,
       quarterly: cols.quarterly.map(at),
       yoy: variation(at({ t: "Q", i: baseI }), at({ t: "Q", i: baseI - 4 }), meta.fmt),
       qoq: variation(at({ t: "Q", i: baseI }), at({ t: "Q", i: baseI - 1 }), meta.fmt),
@@ -352,8 +373,7 @@ export async function GET(request: NextRequest) {
     const kpiVals = new Map<string, number>();
     const kpiSecs = new Map<string, Map<string, number>>(); // sección → kpi → orden
     for (const r of kp) {
-      const c: Col = r.periodType === "A" ? { t: "A", y: r.year } : r.periodType === "L" ? { t: "L" } : { t: "Q", i: qIdx(r.year, r.quarter) };
-      kpiVals.set(`${r.section}|${r.kpi}|${pk(c)}`, Number(r.value));
+      kpiVals.set(`${r.section}|${r.kpi}|${pk(colOf(r))}`, Number(r.value));
       if (!kpiSecs.has(r.section)) kpiSecs.set(r.section, new Map());
       kpiSecs.get(r.section)!.set(r.kpi, r.kpiOrder);
     }
@@ -367,17 +387,34 @@ export async function GET(request: NextRequest) {
     if (others.length) sections.push({ source: "statement", section: "Otros", title: "Otros datos de la ficha", rows: others });
 
     const comments = await prisma.fichaComment.findMany({ where: { ticker, year: base.fy, quarter: base.q } });
-    const any = st[0] ?? kp[0];
-    const updatedAt = [...st, ...kp].reduce((mx, r) => (r.updatedAt > mx ? r.updatedAt : mx), any.updatedAt);
+    // La fila subida más recientemente manda: su moneda y su FX son los de la última carga.
+    const latest = [...st, ...kp].reduce((mx, r) => (r.updatedAt > mx.updatedAt ? r : mx));
+    const fx = latest.fx == null ? null : Number(latest.fx);
+
+    // CLP → USD: sólo montos de los estados (y Market Cap). Los ratios ya están calculados y
+    // no cambian; las variaciones % tampoco.
+    const converted = latest.currency === "CLP" && fx != null && fx > 0 && request.nextUrl.searchParams.get("ccy") !== "local";
+    if (converted) {
+      const conv = (v: Num) => (v == null ? null : v / fx!);
+      const money = (r: LastFichaRow) =>
+        r.kind === "value" && !r.computed && r.source === "statement" && (r.fmt === "num" || r.line === "Market Cap");
+      for (const s of sections) for (const r of s.rows) if (money(r)) {
+        r.annual = r.annual.map(conv); r.quarterly = r.quarterly.map(conv);
+        r.ltm = conv(r.ltm); r.ytdPrev = conv(r.ytdPrev); r.ytd = conv(r.ytd);
+      }
+    }
 
     const payload: LastFichaPayload = {
       ticker,
       name: names.get(normBBG(ticker) ?? "") ?? null,
-      currency: any.currency,
-      fx: any.fx == null ? null : Number(any.fx),
-      updatedAt: updatedAt.toISOString(),
+      currency: converted ? "USD" : latest.currency,
+      reportedCurrency: latest.currency,
+      converted,
+      fx,
+      updatedAt: latest.updatedAt.toISOString(),
       periods, base, years, quarters,
       ltmLabel: ltmRow ? qLabel(ltmRow.year, ltmRow.quarter) : null,
+      ytd: ytdRow ? { prev: ytdHead(ytdRow.year - 1), cur: ytdHead(ytdRow.year) } : null,
       yoyLabel: `${base.label} vs ${qLabel(yoyP.fy, yoyP.q)}`,
       qoqLabel: `${base.label} vs ${qLabel(qoqP.fy, qoqP.q)}`,
       sections,

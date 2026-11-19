@@ -1507,9 +1507,9 @@ model FichaStatement {
   ticker     String   @db.VarChar(100)                     // Ej: "ANDINAB CI EQUITY" (canónico, MAYÚSCULA)
   currency   String   @db.VarChar(10)                      // Moneda reportada, Ej: "CLP"
   fx         Decimal  @db.Decimal(18, 6)                   // Celda C6 de la hoja
-  periodType String   @map("period_type") @db.VarChar(1)   // "A" anual / "Q" trimestre / "L" LTM
+  periodType String   @map("period_type") @db.VarChar(1)   // "A" anual / "Q" trimestre / "L" LTM / "Y" acumulado del año
   year       Int
-  quarter    Int                                           // 0 si es anual, 1..4 si es trimestre o LTM (trimestre al que llega)
+  quarter    Int                                           // 0 si es anual, 1..4 si es trimestre, LTM o acumulado (trimestre al que llega)
   periodEnd  DateTime @map("period_end") @db.Date
   section    String   @db.VarChar(50)                      // "Income Statement" | "Balance Sheet" | "Cash Flow"
   line       String   @db.VarChar(255)

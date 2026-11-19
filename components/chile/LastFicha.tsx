@@ -96,6 +96,8 @@ export default function LastFicha() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [allYears, setAllYears] = useState(false);
+  // Fichas en CLP: se ven en USD (FX de la última subida); el botón vuelve a CLP.
+  const [local, setLocal] = useState(false);
   // En teléfono la tabla muestra un bloque por vez (chips), como Stock Selection.
   const [phoneView, setPhoneView] = useState<"var" | "quarters" | "years">("var");
   const [editor, setEditor] = useState<EditTarget | null>(null);
@@ -117,10 +119,11 @@ export default function LastFicha() {
       .catch(() => setError("No se pudo cargar la lista de fichas"));
   }, []);
 
-  const load = useCallback((t: string, bk: string | null) => {
+  const load = useCallback((t: string, bk: string | null, loc: boolean) => {
     setLoading(true); setError(null);
     const p = new URLSearchParams({ ticker: t });
     if (bk) { const [fy, q] = bk.split("-"); p.set("fy", fy); p.set("q", q); }
+    if (loc) p.set("ccy", "local");
     fetch(`/api/chile/last-ficha?${p}`)
       .then((r) => r.json())
       .then((d: LastFichaPayload & { error?: string }) => {
@@ -132,7 +135,7 @@ export default function LastFicha() {
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => { if (ticker) load(ticker, baseKey); }, [ticker, baseKey, load]);
+  useEffect(() => { if (ticker) load(ticker, baseKey, local); }, [ticker, baseKey, local, load]);
 
   const chooseTicker = (t: string) => {
     setBaseKey(null); setTicker(t);
@@ -174,6 +177,7 @@ export default function LastFicha() {
   const showVars = !isPhone || phoneView === "var";
   const showComments = !isPhone || phoneView === "var";
   const showLtm = !!data?.ltmLabel && showYears;
+  const showYtd = !!data?.ytd && showYears;
   const gaps = !isPhone; // columnas en blanco entre bloques (en teléfono se ve un bloque solo)
 
   const company = companies?.find((c) => c.ticker === ticker);
@@ -181,7 +185,7 @@ export default function LastFicha() {
   // Bloques de columnas en orden; cada uno sabe pintar su encabezado y sus celdas.
   type Block = { key: string; width: number };
   const blocks: Block[] = data ? [
-    ...(showYears ? [{ key: "years", width: years.length + (showLtm ? 1 : 0) }] : []),
+    ...(showYears ? [{ key: "years", width: years.length + (showLtm ? 1 : 0) + (showYtd ? 2 : 0) }] : []),
     ...(showQuarters ? [{ key: "quarters", width: data.quarters.length }] : []),
     ...(showVars ? [{ key: "vars", width: 2 }] : []),
     ...(showComments ? [{ key: "comments", width: 1 }] : []),
@@ -217,6 +221,10 @@ export default function LastFicha() {
           {b.key === "years" && <>
             {years.map(({ y }) => <th key={y} style={bar}>{y}</th>)}
             {showLtm && <th style={bar} title={`Últimos 12 meses a ${data.ltmLabel}`}>LTM</th>}
+            {showYtd && <>
+              <th style={bar} title="Acumulado n-1: mismo período del año anterior">{data.ytd!.prev}</th>
+              <th style={bar} title="Acumulado del año">{data.ytd!.cur}</th>
+            </>}
           </>}
           {b.key === "quarters" && data.quarters.map((p) => <th key={p.label} style={bar}>{qHead(p.fy, p.q)}</th>)}
           {b.key === "vars" && <>
@@ -265,6 +273,10 @@ export default function LastFicha() {
                 <td key={y} style={cell}>{markable(r, yearTarget(y), String(y), fmtVal(r.annual[i], r.fmt), col(r.annual[i]))}</td>
               ))}
               {showLtm && <td style={cell}>{markable(r, "ltm", `LTM ${data!.ltmLabel}`, fmtVal(r.ltm, r.fmt), col(r.ltm))}</td>}
+              {showYtd && <>
+                <td style={cell}>{markable(r, "ytdp", `Acumulado ${data!.ytd!.prev}`, fmtVal(r.ytdPrev, r.fmt), col(r.ytdPrev))}</td>
+                <td style={cell}>{markable(r, "ytd", `Acumulado ${data!.ytd!.cur}`, fmtVal(r.ytd, r.fmt), col(r.ytd))}</td>
+              </>}
             </>}
             {b.key === "quarters" && data!.quarters.map((p, i) => (
               <td key={p.label} style={cell}>{markable(r, quarterTarget(p.fy, p.q), p.label, fmtVal(r.quarterly[i], r.fmt), col(r.quarterly[i]))}</td>
@@ -311,7 +323,7 @@ export default function LastFicha() {
             </h2>
             {data && (
               <div style={{ fontSize: 11.5, color: TEXT2, marginTop: 3, fontFamily: FONT_SECONDARY }}>
-                {data.ticker} · {data.currency} millones · ficha cargada el {fmtDate(data.updatedAt)}
+                {data.ticker} · {data.currency} millones{data.converted ? ` (convertido desde ${data.reportedCurrency} con el FX de la última subida)` : ""} · ficha cargada el {fmtDate(data.updatedAt)}
               </div>
             )}
           </div>
@@ -334,6 +346,16 @@ export default function LastFicha() {
               </select>
             </label>
           )}
+          {data?.reportedCurrency === "CLP" && (
+            <div style={{ ...ctrlBox, padding: 2, gap: 0 }} title="Fichas en CLP: montos en USD con el FX de la última subida, o en CLP como vienen">
+              {([false, true] as const).map((loc) => (
+                <button key={String(loc)} onClick={() => setLocal(loc)}
+                  style={{ padding: "3px 10px", fontSize: 11.5, fontWeight: 700, border: "none", borderRadius: 4, cursor: "pointer", background: local === loc ? PATRIA.kingBlue : "transparent", color: local === loc ? "#fff" : TEXT2 }}>
+                  {loc ? "CLP" : "USD"}
+                </button>
+              ))}
+            </div>
+          )}
           {canToggleYears && (
             <button onClick={() => setAllYears((v) => !v)} style={{ ...ctrlBox, cursor: "pointer", fontSize: 11.5, fontWeight: 700, color: PATRIA.kingBlue }}
               title={allYears ? `Volver a los últimos ${DEFAULT_YEARS} años` : `Ver los ${data!.years.length} años de la ficha`}>
@@ -347,7 +369,7 @@ export default function LastFicha() {
             </div>
           )}
           {ticker && (
-            <button onClick={() => load(ticker, baseKey)} disabled={loading} title="Volver a leer la ficha" style={iconBtn}>
+            <button onClick={() => load(ticker, baseKey, local)} disabled={loading} title="Volver a leer la ficha" style={iconBtn}>
               <RefreshCw size={13} style={loading ? { animation: "spin 0.8s linear infinite" } : undefined} />
             </button>
           )}
@@ -398,7 +420,8 @@ export default function LastFicha() {
       {data && (
         <div style={{ fontSize: 10.5, color: TEXT3, marginTop: 8, lineHeight: 1.5 }}>
           YoY = {data.yoyLabel} · QoQ = {data.qoqLabel}. Montos: variación porcentual; ratios y múltiplos: diferencia (pp / x). “NM” = base cero o cambio de signo.
-          {data.ltmLabel ? ` LTM a ${data.ltmLabel}.` : ""} Márgenes, Net Debt / EBITDA, Net Debt / Equity, ROE y ROIC se calculan a partir de las líneas de la ficha.
+          {data.ltmLabel ? ` LTM a ${data.ltmLabel}.` : ""}{data.ytd ? ` Acumulados: ${data.ytd.prev} y ${data.ytd.cur}.` : ""}
+          {data.converted ? ` Montos en USD = ${data.reportedCurrency} ÷ ${data.fx?.toLocaleString("en-US")}; ratios y KPIs como vienen en la hoja.` : ""} Márgenes, Net Debt / EBITDA, Net Debt / Equity, ROE y ROIC se calculan a partir de las líneas de la ficha.
           Los comentarios y las marcas son del trimestre {data.base.label}: al elegir otro trimestre se ven los suyos.
           {company?.lastLabel && company.lastLabel !== data.base.label ? ` La ficha llega hasta ${company.lastLabel}.` : ""}
         </div>

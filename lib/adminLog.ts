@@ -11,6 +11,7 @@ export const ENTITY = {
   indexMembership: "index_membership",
   ssHidden: "stock_selection_hidden",
   fichaComment: "ficha_comments",
+  ficha: "ficha_statements",
   weeklyPlan: "weekly_plan",
   sector: "sectors",
   sectorSection: "sector_sections",

@@ -55,7 +55,7 @@ const periodFields = {
   ticker:     reqString('ticker', 100).transform(normalizeTicker),
   currency:   reqString('currency', 10).transform((s) => s.toUpperCase()),
   fx:         reqNumber('fx', MAX_ABS_FX),
-  periodType: z.enum(['A', 'Q', 'L'], { errorMap: () => ({ message: 'periodType debe ser "A" (anual), "Q" (trimestre) o "L" (LTM)' }) }),
+  periodType: z.enum(['A', 'Q', 'L', 'Y'], { errorMap: () => ({ message: 'periodType debe ser "A" (anual), "Q" (trimestre), "L" (LTM) o "Y" (acumulado)' }) }),
   year:       reqInt('year').min(1900, 'year fuera de rango').max(2100, 'year fuera de rango'),
   quarter:    reqInt('quarter'),
   periodEnd,
@@ -63,7 +63,9 @@ const periodFields = {
 
 // "L" = columna LTM de la hoja: year/quarter son los del último trimestre (LTM a 3Q26 →
 // year 2026, quarter 3) y dicen a qué fecha está. Hay UNO por compañía (ver POST).
-function checkQuarter(r: { periodType: 'A' | 'Q' | 'L'; quarter: number }, ctx: z.RefinementCtx) {
+// "Y" = columnas "Acumulado" (year 2026, quarter 3 = 9M26) y "Acumulado n-1" (year 2025,
+// quarter 3 = 9M25): un solo par por compañía, igual que el LTM.
+function checkQuarter(r: { periodType: 'A' | 'Q' | 'L' | 'Y'; quarter: number }, ctx: z.RefinementCtx) {
   if (r.periodType === 'A' && r.quarter !== 0) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['quarter'], message: `quarter debe ser 0 cuando periodType es "A" (llegó ${r.quarter})` });
   }
@@ -229,14 +231,17 @@ export async function POST(request: Request) {
       (r) => `${periodKey(r)}|${r.kpi}`,
     );
 
-    // LTM: uno solo por compañía. Si la planilla trae columna LTM, se borra el anterior (de
-    // cualquier trimestre) y queda el que llega; así tampoco sobreviven líneas renombradas.
-    const ltmTickers = [...new Set([...statements, ...kpis].filter((r) => r.periodType === 'L').map((r) => r.ticker))];
+    // LTM y acumulados: uno solo por compañía. Si la planilla trae esas columnas, se borran
+    // las anteriores (de cualquier trimestre) y quedan las que llegan; así tampoco sobreviven
+    // líneas renombradas.
+    const replaced = (['L', 'Y'] as const)
+      .map((t) => ({ t, tickers: [...new Set([...statements, ...kpis].filter((r) => r.periodType === t).map((r) => r.ticker))] }))
+      .filter((x) => x.tickers.length);
 
     await prisma.$transaction(async (tx) => {
-      if (ltmTickers.length) {
-        await tx.$executeRaw`DELETE FROM ficha_statements WHERE period_type = 'L' AND ticker IN (${Prisma.join(ltmTickers)})`;
-        await tx.$executeRaw`DELETE FROM ficha_kpis WHERE period_type = 'L' AND ticker IN (${Prisma.join(ltmTickers)})`;
+      for (const { t, tickers } of replaced) {
+        await tx.$executeRaw`DELETE FROM ficha_statements WHERE period_type = ${t} AND ticker IN (${Prisma.join(tickers)})`;
+        await tx.$executeRaw`DELETE FROM ficha_kpis WHERE period_type = ${t} AND ticker IN (${Prisma.join(tickers)})`;
       }
       await upsertStatements(tx, statements);
       await upsertKpis(tx, kpis);

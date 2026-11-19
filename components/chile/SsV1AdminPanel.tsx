@@ -59,6 +59,8 @@ const ENTITY_LABEL: Record<string, string> = {
   estimates_hidden: "Estimates ocultas",
   analyst_links: "Useful Links",
   link_sections: "Secciones de Useful Links",
+  ficha_statements: "Fichas",
+  ficha_comments: "Comentarios de Last Ficha",
 };
 // Ediciones del editor genérico de Admin Issues: entity = "db:<tabla>".
 const entityLabel = (e: string) => ENTITY_LABEL[e] ?? (e.startsWith("db:") ? `Tabla ${e.slice(3)}` : e);

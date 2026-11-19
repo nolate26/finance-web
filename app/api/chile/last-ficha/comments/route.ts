@@ -21,8 +21,9 @@ const bodySchema = z.object({
   section: z.string().trim().min(1).max(255),
   line:    z.string().trim().min(1).max(255),
   // "line" = comentario de fila; el resto marca una celda: variación (yoy/qoq), LTM ("ltm"),
-  // año ("A2025") o trimestre ("Q2026-3"). Mismo patrón que el CHECK de la tabla.
-  target:  z.string().regex(/^(line|yoy|qoq|ltm|A\d{4}|Q\d{4}-[1-4])$/, 'target debe ser "line", "yoy", "qoq", "ltm", "A<año>" o "Q<año>-<trimestre>"'),
+  // acumulado del año / del año anterior ("ytd" / "ytdp"), año ("A2025") o trimestre
+  // ("Q2026-3"). Mismo patrón que el CHECK de la tabla.
+  target:  z.string().regex(/^(line|yoy|qoq|ltm|ytd|ytdp|A\d{4}|Q\d{4}-[1-4])$/, 'target debe ser "line", "yoy", "qoq", "ltm", "ytd", "ytdp", "A<año>" o "Q<año>-<trimestre>"'),
   comment: z.string().max(4000, "el comentario supera 4.000 caracteres").transform((s) => s.trim()),
 });
 

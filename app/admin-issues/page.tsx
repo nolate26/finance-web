@@ -3,23 +3,26 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Loader2, Database, Building2 } from "lucide-react";
+import { Loader2, Database, Building2, FileSpreadsheet } from "lucide-react";
 import { PATRIA, FONT_PRIMARY, FONT_SECONDARY, TEXT, BORDER } from "@/lib/patriaTheme";
 import TableEditor from "@/components/admin/TableEditor";
 import SsV1AdminPanel from "@/components/chile/SsV1AdminPanel";
+import FichasAdminPanel from "@/components/admin/FichasAdminPanel";
 import type { PeriodoActivo } from "@/components/chile/SsV1FilasTab";
 
 // Admin Issues: todo lo que corrige DATOS (no usuarios — eso sigue en /admin).
 //   · Database Tables — editor de cualquier tabla, con empresas_industrias_v2 primero:
 //     cambios de ticker, incorporaciones, homologaciones.
 //   · Stock Selection (Chile) — el panel que antes iba plegado arriba de esa tabla.
+//   · Fichas — qué subió la macro "Send Ficha" por ticker, diagnóstico y borrado.
 // Sólo admin: la pestaña del navbar se oculta y las APIs exigen requireAdmin().
 
-type View = "tables" | "stock-selection";
+type View = "tables" | "stock-selection" | "fichas";
 
 const VIEWS: { key: View; label: string; icon: typeof Database }[] = [
   { key: "tables",          label: "Database Tables",         icon: Database  },
   { key: "stock-selection", label: "Stock Selection (Chile)", icon: Building2 },
+  { key: "fichas",          label: "Fichas",                  icon: FileSpreadsheet },
 ];
 
 export default function AdminIssuesPage() {
@@ -94,6 +97,7 @@ export default function AdminIssuesPage() {
 
       {view === "tables" && <TableEditor />}
       {view === "stock-selection" && <SsV1AdminPanel onSourceChanged={() => {}} periodo={periodo} />}
+      {view === "fichas" && <FichasAdminPanel />}
     </div>
   );
 }
