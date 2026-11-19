@@ -12,8 +12,12 @@ export const dynamic = "force-dynamic";
 //   GET /api/chile/last-ficha?ticker=X[&fy=&q=]     → la ficha, con trimestre base fy/q
 //                                                    (por defecto el último cargado)
 //
-// Columnas: todos los años ("A") + el LTM de la hoja ("L", uno por compañía) + los últimos 5 trimestres terminando en el base, y para el
-// base la Var% YoY (vs mismo trimestre del año anterior) y QoQ (vs trimestre anterior).
+// Columnas: todos los años ("A") + el LTM de la hoja ("L", uno por compañía) + los últimos 5
+// trimestres terminando en el base, y para el base la Var% YoY y QoQ.
+//
+// Filas: la misma plantilla que la hoja "Send Ficha" (TEMPLATE). Las líneas subidas se ubican
+// por nombre; los ratios (márgenes, Net Debt/EBITDA, ROE, ROIC…) se calculan acá a partir de
+// esas líneas. Lo que se subió y no está en la plantilla va al final, en "Otros datos".
 
 export interface LastFichaCompany {
   ticker: string;
@@ -22,14 +26,28 @@ export interface LastFichaCompany {
   updatedAt: string;        // última carga de la ficha (ISO)
 }
 
+// num = montos (enteros, negativos entre paréntesis) · dec = KPIs y precios (1 decimal bajo
+// 1.000) · pct = ratio en decimal (0,147 = 14,7%) · x = múltiplo (1.5x)
+export type LastFichaFmt = "num" | "dec" | "pct" | "x";
+
 export interface LastFichaRow {
+  // Clave del comentario: (source, section, line). section es la sección de origen de la
+  // línea, que en "Otros datos" no coincide con la sección donde se muestra.
+  source: "statement" | "kpi";
+  section: string;
   line: string;
-  order: number;
-  pct: boolean;                  // la línea es un ratio (margen, tasa, crecimiento): se muestra en %
+  kind: "value" | "blank";       // blank = fila separadora vacía de la plantilla
+  fmt: LastFichaFmt;
+  computed: boolean;             // calculada acá, no viene de la hoja
+  indent?: boolean;              // sub-línea (COGS, SG&A…): sangría + fondo celeste
+  bold?: boolean;
+  borderTop?: boolean;           // subtotal: raya arriba
+  borderBottom?: boolean;
+  band?: boolean;                // CFO / CFI / CFF: banda celeste
   annual: (number | null)[];     // alineado con `years`
-  ltm: number | null;            // columna LTM de la hoja (una sola por compañía, ver ltmLabel)
+  ltm: number | null;            // columna LTM de la hoja (ver ltmLabel)
   quarterly: (number | null)[];  // alineado con `quarters`
-  // Variación del trimestre base. Montos: cur/prev − 1. Ratios (pct): diferencia en puntos
+  // Variación del trimestre base. Montos: cur/prev − 1. Ratios y múltiplos: diferencia
   // (cur − prev). null = falta un dato; "NM" = base 0 o cambio de signo.
   yoy: number | "NM" | null;
   qoq: number | "NM" | null;
@@ -37,7 +55,8 @@ export interface LastFichaRow {
 
 export interface LastFichaSection {
   source: "statement" | "kpi";
-  section: string;
+  section: string;               // nombre de la sección (KPIs: el subtítulo del bloque)
+  title: string;                 // lo que dice la barra oscura
   rows: LastFichaRow[];
 }
 
@@ -68,20 +87,120 @@ export interface LastFichaPayload {
   comments: LastFichaComment[];
 }
 
-const STATEMENT_ORDER = ["Income Statement", "Balance Sheet", "Cash Flow"];
+const IS = "Income Statement", BS = "Balance Sheet", CF = "Cash Flow";
 const N_QUARTERS = 5;
 
 const qLabel = (fy: number, q: number) => `${q}Q${String(fy).slice(2)}`;
 const qIdx = (fy: number, q: number) => fy * 4 + (q - 1);
 
-// Ratios de la planilla (vienen en decimal: 0,147 = 14,7%). Se detectan por el nombre de la
-// línea o de la sección ("Unit Cases Growth (YoY)"). Palabras completas: "Corporate" contiene
-// "rate" y es un monto.
+// Ratios subidos (KPIs y "Otros datos"): se detectan por el nombre de la línea o de la
+// sección ("Unit Cases Growth (YoY)"). Palabras completas: "Corporate" contiene "rate".
 const PCT_RE = /\b(margin|margen|rate|tasa|growth|crecimiento|yoy|qoq|payout|roe|roic)\b|%/i;
 
-function variation(cur: number | null, prev: number | null, pct: boolean): number | "NM" | null {
+// ── Columnas y acceso a valores ─────────────────────────────────────────────────
+type Col = { t: "A"; y: number } | { t: "L" } | { t: "Q"; i: number };
+type Num = number | null;
+
+const div = (a: Num, b: Num): Num => (a == null || b == null || b === 0 ? null : a / b);
+const abs = (a: Num): Num => (a == null ? null : Math.abs(a));
+
+interface Ctx {
+  /** Valor tal como se subió en la columna (sin cálculos). */
+  raw: (sec: string, line: string, c: Col) => Num;
+  /** Flujo de 12 meses que termina en la columna: año, LTM, o suma de 4 trimestres. */
+  flow12: (line: string, c: Col) => Num;
+  /** Saldo de balance un año antes de la columna (denominador de ROE / ROIC). */
+  prevStock: (line: string, c: Col) => Num;
+}
+
+// ── Plantilla (= hoja "Send Ficha") ────────────────────────────────────────────
+type Style = Pick<LastFichaRow, "indent" | "bold" | "borderTop" | "borderBottom" | "band">;
+type TRow =
+  | ({ k: "line"; line: string; from?: string; fmt?: LastFichaFmt } & Style) // from = otra sección (PP&E del balance)
+  | ({ k: "calc"; line: string; fmt: "pct" | "x"; f: (ctx: Ctx, c: Col) => Num } & Style)
+  | { k: "blank" };
+
+const margin = (num: string, absolute = false) => (x: Ctx, c: Col) => {
+  const n = x.raw(IS, num, c);
+  return div(absolute ? abs(n) : n, x.raw(IS, "Revenues", c));
+};
+
+const TEMPLATE: Record<string, TRow[]> = {
+  [IS]: [
+    { k: "line", line: "Revenues" },
+    { k: "line", line: "Operating Expenses" },
+    { k: "line", line: "COGS", indent: true },
+    { k: "line", line: "SG&A", indent: true },
+    { k: "line", line: "EBIT", bold: true },
+    { k: "line", line: "D&A" },
+    { k: "line", line: "PP&E", from: BS, indent: true },
+    { k: "line", line: "EBITDA", bold: true, borderTop: true },
+    { k: "line", line: "Financial Income" },
+    { k: "line", line: "Financial Expenses" },
+    { k: "line", line: "Equity Income" },
+    { k: "line", line: "Other Income / Expenses" },
+    { k: "line", line: "FX Gain / Loss" },
+    { k: "line", line: "Monetary Correction" },
+    { k: "line", line: "EBT", bold: true, borderTop: true },
+    { k: "line", line: "Tax" },
+    { k: "line", line: "Minorities" },
+    { k: "line", line: "Ectraordinary items / Disc. Oper" },
+    { k: "line", line: "Controlling Net Income", bold: true, borderTop: true, borderBottom: true },
+    // Margen bruto = (Revenues + COGS) / Revenues, con COGS en negativo como en la hoja.
+    { k: "calc", line: "Gross Margin", fmt: "pct", f: (x, c) => {
+      const rev = x.raw(IS, "Revenues", c), cogs = abs(x.raw(IS, "COGS", c));
+      return rev == null || cogs == null ? null : div(rev - cogs, rev);
+    } },
+    { k: "calc", line: "SG&A / Revenues", fmt: "pct", f: margin("SG&A", true) },
+    { k: "calc", line: "EBIT Margin", fmt: "pct", f: margin("EBIT") },
+    { k: "calc", line: "D&A / Revenues", fmt: "pct", f: margin("D&A", true) },
+    { k: "calc", line: "EBITDA Margin", fmt: "pct", f: margin("EBITDA") },
+    { k: "calc", line: "Net Margin", fmt: "pct", f: margin("Controlling Net Income") },
+  ],
+  [BS]: [
+    { k: "line", line: "Cash & Equivalents" },
+    { k: "line", line: "Derivatives" },
+    { k: "line", line: "Financial Debt" },
+    { k: "line", line: "Leases" },
+    { k: "line", line: "Total Net Debt", bold: true, borderTop: true },
+    { k: "blank" },
+    // Deuda neta del cierre sobre EBITDA de 12 meses (en un trimestre: suma de los últimos 4).
+    { k: "calc", line: "Net Debt / EBITDA", fmt: "x", bold: true, f: (x, c) => div(x.raw(BS, "Total Net Debt", c), x.flow12("EBITDA", c)) },
+    { k: "calc", line: "Net Debt / Equity", fmt: "x", bold: true, f: (x, c) => div(x.raw(BS, "Total Net Debt", c), x.raw(BS, "Controlling Equity", c)) },
+    { k: "blank" },
+    // Utilidad de 12 meses sobre el patrimonio de un año antes (como la hoja: 2025 = NI 2025 / Equity 2024).
+    { k: "calc", line: "ROE", fmt: "pct", f: (x, c) => div(x.flow12("Controlling Net Income", c), x.prevStock("Controlling Equity", c)) },
+    { k: "line", line: "Controlling Equity", indent: true },
+    // NOPAT de 12 meses (EBIT × (1 − Tax Rate for ROIC)) sobre el capital invertido de un año
+    // antes (patrimonio controlador + minoritarios + deuda neta).
+    { k: "calc", line: "ROIC", fmt: "pct", f: (x, c) => {
+      const ebit = x.flow12("EBIT", c);
+      const tax = x.raw(IS, "Tax Rate for ROIC", c) ?? x.raw(IS, "Tax Rate for ROIC", { t: "L" });
+      const eq = x.prevStock("Controlling Equity", c), nd = x.prevStock("Total Net Debt", c);
+      if (ebit == null || tax == null || eq == null || nd == null) return null;
+      return div(ebit * (1 - tax), eq + (x.prevStock("Minorities", c) ?? 0) + nd);
+    } },
+  ],
+  [CF]: [
+    { k: "line", line: "CFO", band: true },
+    { k: "line", line: "Acquisitions Capex" },
+    { k: "line", line: "PP&E Capex" },
+    { k: "line", line: "Intangible Capex" },
+    { k: "line", line: "PP&E Sale" },
+    { k: "line", line: "CFI", band: true },
+    { k: "line", line: "Debt changes (Issue + Amort)" },
+    { k: "line", line: "Payment of lease liabilities" },
+    { k: "line", line: "Interest Paid" },
+    { k: "line", line: "Dividends Paid" },
+    { k: "line", line: "Stock Buy Back/Issuance" },
+    { k: "line", line: "CFF", band: true },
+    { k: "line", line: "FX Impact on Cash" },
+  ],
+};
+
+function variation(cur: Num, prev: Num, fmt: LastFichaFmt): number | "NM" | null {
   if (cur == null || prev == null) return null;
-  if (pct) return cur - prev;
+  if (fmt === "pct" || fmt === "x") return cur - prev;
   if (prev === 0 || Math.sign(cur) * Math.sign(prev) < 0) return "NM";
   return cur / prev - 1; // con ambos negativos (costos) mide el crecimiento en magnitud
 }
@@ -151,49 +270,104 @@ export async function GET(request: NextRequest) {
     const quarters = Array.from({ length: N_QUARTERS }, (_, k) => fromIdx(baseI - (N_QUARTERS - 1) + k))
       .map((p) => ({ ...p, label: qLabel(p.fy, p.q) }));
     const yoyP = fromIdx(baseI - 4), qoqP = fromIdx(baseI - 1);
+    const ltmRow = [...st, ...kp].find((r) => r.periodType === "L");
+    const ltmI = ltmRow ? qIdx(ltmRow.year, ltmRow.quarter) : null;
 
-    // Filas: una por (fuente, sección, línea), con sus valores por período.
-    type Acc = { source: "statement" | "kpi"; section: string; line: string; order: number; firstId: number; vals: Map<string, number> };
-    const acc = new Map<string, Acc>();
-    const add = (source: Acc["source"], r: { id: number; section: string; periodType: string; year: number; quarter: number; value: unknown }, line: string, order: number) => {
-      const k = `${source}|${r.section}|${line}`;
-      let a = acc.get(k);
-      if (!a) { a = { source, section: r.section, line, order, firstId: r.id, vals: new Map() }; acc.set(k, a); }
-      // "L" = columna LTM: hay una sola por compañía (el ingest borra la anterior).
-      a.vals.set(r.periodType === "A" ? `A${r.year}` : r.periodType === "L" ? "L" : `Q${qIdx(r.year, r.quarter)}`, Number(r.value));
-    };
-    for (const r of st) add("statement", r, r.line, r.lineOrder);
-    for (const r of kp) add("kpi", r, r.kpi, r.kpiOrder);
-
-    const sectionsMap = new Map<string, LastFichaSection & { firstId: number }>();
-    for (const a of acc.values()) {
-      const sk = `${a.source}|${a.section}`;
-      let s = sectionsMap.get(sk);
-      if (!s) { s = { source: a.source, section: a.section, rows: [], firstId: a.firstId }; sectionsMap.set(sk, s); }
-      s.firstId = Math.min(s.firstId, a.firstId);
-      const pct = PCT_RE.test(a.line) || PCT_RE.test(a.section);
-      const at = (fy: number, q: number) => a.vals.get(`Q${qIdx(fy, q)}`) ?? null;
-      const cur = at(base.fy, base.q);
-      s.rows.push({
-        line: a.line, order: a.order, pct,
-        annual: years.map((y) => a.vals.get(`A${y}`) ?? null),
-        ltm: a.vals.get("L") ?? null,
-        quarterly: quarters.map((p) => at(p.fy, p.q)),
-        yoy: variation(cur, at(yoyP.fy, yoyP.q), pct),
-        qoq: variation(cur, at(qoqP.fy, qoqP.q), pct),
-      });
+    // Valores: "statement|<sección>|<línea>|<A2025 · L · Q8105>"
+    const pk = (c: Col) => (c.t === "A" ? `A${c.y}` : c.t === "L" ? "L" : `Q${c.i}`);
+    const vals = new Map<string, number>();
+    const lineOrder = new Map<string, { section: string; line: string; order: number }>(); // statements subidos
+    for (const r of st) {
+      const c: Col = r.periodType === "A" ? { t: "A", y: r.year } : r.periodType === "L" ? { t: "L" } : { t: "Q", i: qIdx(r.year, r.quarter) };
+      vals.set(`statement|${r.section}|${r.line}|${pk(c)}`, Number(r.value));
+      lineOrder.set(`${r.section}|${r.line}`, { section: r.section, line: r.line, order: r.lineOrder });
     }
-    // Estados en su orden fijo; KPIs en el orden de la planilla (el de inserción).
-    const sections = [...sectionsMap.values()]
-      .sort((a, b) =>
-        a.source !== b.source ? (a.source === "statement" ? -1 : 1)
-        : a.source === "statement" ? STATEMENT_ORDER.indexOf(a.section) - STATEMENT_ORDER.indexOf(b.section)
-        : a.firstId - b.firstId)
-      .map(({ firstId: _f, ...s }) => ({ ...s, rows: s.rows.sort((x, y) => x.order - y.order) }));
+
+    const get = (sec: string, line: string, key: string): Num => vals.get(`statement|${sec}|${line}|${key}`) ?? null;
+    const ctx: Ctx = {
+      raw: (sec, line, c) => {
+        const v = get(sec, line, pk(c));
+        // Balance sin columna LTM propia: el saldo del trimestre al que llega el LTM.
+        return v == null && c.t === "L" && sec === BS && ltmI != null ? get(sec, line, `Q${ltmI}`) : v;
+      },
+      flow12: (line, c) => {
+        if (c.t !== "Q") return get(IS, line, pk(c));
+        // 4Q: el año completo sirve igual (y evita depender de que estén los 4 trimestres).
+        if (c.i % 4 === 3) { const a = get(IS, line, `A${Math.floor(c.i / 4)}`); if (a != null) return a; }
+        let s = 0;
+        for (let i = c.i - 3; i <= c.i; i++) { const v = get(IS, line, `Q${i}`); if (v == null) return null; s += v; }
+        return s;
+      },
+      prevStock: (line, c) => {
+        const i = c.t === "A" ? null : c.t === "L" ? ltmI : c.i;
+        if (i == null) return c.t === "A" ? get(BS, line, `A${c.y - 1}`) : null;
+        return get(BS, line, `Q${i - 4}`) ?? ((i - 4) % 4 === 3 ? get(BS, line, `A${Math.floor((i - 4) / 4)}`) : null);
+      },
+    };
+
+    // Una fila con sus valores en todas las columnas + la variación del base.
+    const cols = {
+      annual: years.map((y): Col => ({ t: "A", y })),
+      quarterly: quarters.map((p): Col => ({ t: "Q", i: qIdx(p.fy, p.q) })),
+    };
+    const makeRow = (meta: Omit<LastFichaRow, "annual" | "ltm" | "quarterly" | "yoy" | "qoq">, at: (c: Col) => Num): LastFichaRow => ({
+      ...meta,
+      annual: cols.annual.map(at),
+      ltm: ltmRow ? at({ t: "L" }) : null,
+      quarterly: cols.quarterly.map(at),
+      yoy: variation(at({ t: "Q", i: baseI }), at({ t: "Q", i: baseI - 4 }), meta.fmt),
+      qoq: variation(at({ t: "Q", i: baseI }), at({ t: "Q", i: baseI - 1 }), meta.fmt),
+    });
+
+    // Estados: plantilla + "Otros datos" con lo subido que la plantilla no usa.
+    const used = new Set<string>();
+    const sections: LastFichaSection[] = [];
+    for (const sec of [IS, BS, CF]) {
+      const rows = TEMPLATE[sec].map((t): LastFichaRow => {
+        if (t.k === "blank") {
+          return makeRow({ source: "statement", section: sec, line: "", kind: "blank", fmt: "num", computed: false }, () => null);
+        }
+        const style: Style = { indent: t.indent, bold: t.bold, borderTop: t.borderTop, borderBottom: t.borderBottom, band: t.band };
+        const meta = { source: "statement" as const, section: sec, line: t.line, kind: "value" as const, ...style };
+        if (t.k === "calc") return makeRow({ ...meta, fmt: t.fmt, computed: true }, (c) => t.f(ctx, c));
+        const from = t.from ?? sec;
+        used.add(`${from}|${t.line}`);
+        return makeRow({ ...meta, fmt: t.fmt ?? "num", computed: false }, (c) => ctx.raw(from, t.line, c));
+      });
+      sections.push({ source: "statement", section: sec, title: sec, rows });
+    }
+    // Comentario de PP&E: es la línea del balance aunque se muestre en el estado de resultados.
+    for (const r of sections[0].rows) if (r.line === "PP&E") r.section = BS;
+
+    const SEC_ORDER = [IS, BS, CF];
+    const others = [...lineOrder.values()]
+      .filter((l) => !used.has(`${l.section}|${l.line}`))
+      .sort((a, b) => SEC_ORDER.indexOf(a.section) - SEC_ORDER.indexOf(b.section) || a.order - b.order)
+      .map((l) => makeRow(
+        { source: "statement", section: l.section, line: l.line, kind: "value", fmt: PCT_RE.test(l.line) ? "pct" : "dec", computed: false },
+        (c) => ctx.raw(l.section, l.line, c),
+      ));
+
+    // KPIs: un bloque por subtítulo, en el orden de la planilla.
+    const kpiVals = new Map<string, number>();
+    const kpiSecs = new Map<string, Map<string, number>>(); // sección → kpi → orden
+    for (const r of kp) {
+      const c: Col = r.periodType === "A" ? { t: "A", y: r.year } : r.periodType === "L" ? { t: "L" } : { t: "Q", i: qIdx(r.year, r.quarter) };
+      kpiVals.set(`${r.section}|${r.kpi}|${pk(c)}`, Number(r.value));
+      if (!kpiSecs.has(r.section)) kpiSecs.set(r.section, new Map());
+      kpiSecs.get(r.section)!.set(r.kpi, r.kpiOrder);
+    }
+    for (const [section, kpis] of kpiSecs) {
+      const rows = [...kpis.entries()].sort((a, b) => a[1] - b[1]).map(([line]) => makeRow(
+        { source: "kpi", section, line, kind: "value", fmt: PCT_RE.test(line) || PCT_RE.test(section) ? "pct" : "dec", computed: false, indent: true },
+        (c) => kpiVals.get(`${section}|${line}|${pk(c)}`) ?? null,
+      ));
+      sections.push({ source: "kpi", section, title: "KPIs", rows });
+    }
+    if (others.length) sections.push({ source: "statement", section: "Otros", title: "Otros datos de la ficha", rows: others });
 
     const comments = await prisma.fichaComment.findMany({ where: { ticker, year: base.fy, quarter: base.q } });
     const any = st[0] ?? kp[0];
-    const ltmRow = [...st, ...kp].find((r) => r.periodType === "L");
     const updatedAt = [...st, ...kp].reduce((mx, r) => (r.updatedAt > mx ? r.updatedAt : mx), any.updatedAt);
 
     const payload: LastFichaPayload = {

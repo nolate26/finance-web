@@ -5,67 +5,70 @@ import { ChevronDown, MessageSquare, RefreshCw, Search, Trash2, X } from "lucide
 import { usePhone } from "@/lib/useBreakpoint";
 import { PATRIA, FONT_PRIMARY, FONT_SECONDARY, TEXT } from "@/lib/patriaTheme";
 import type {
-  LastFichaCompany, LastFichaComment, LastFichaPayload, LastFichaRow, LastFichaSection,
+  LastFichaCompany, LastFichaComment, LastFichaFmt, LastFichaPayload, LastFichaRow,
 } from "@/app/api/chile/last-ficha/route";
 
-// Chile → Last Ficha. Resumen de resultados de una compañía tal como lo subió la macro
-// "Send Ficha": los últimos 3 años (clic para ver todos), los últimos 5 trimestres, la Var%
-// YoY y QoQ del trimestre base, y una columna de comentarios por fila. Entre los años y los
-// trimestres va el LTM de la hoja (uno por compañía, el de la última subida). Clic en CUALQUIER valor
+// Chile → Last Ficha. La ficha de una compañía con el formato de la hoja "Send Ficha":
+// por sección una barra oscura con las etiquetas de columnas, y los bloques Años + LTM |
+// últimos 5 trimestres | Var% YoY y QoQ del trimestre base | comentario del analista,
+// separados por una columna en blanco. Las filas y los ratios calculados vienen armados
+// desde la API (plantilla en app/api/chile/last-ficha/route.ts).
+//
+// Por defecto se ven los últimos 3 años (botón para ver todos). Clic en CUALQUIER valor
 // (año, LTM, trimestre o variación) = marcarlo con un círculo y dejarle un comentario
 // (ficha_comments: target "A2025" / "ltm" / "Q2026-3" / "yoy" / "qoq").
 //
-// Colores: Manual PATRIA. Encabezado de grupos = Regla 1 (dark blue), subtítulo de sección =
-// Regla 2 (king blue), primera columna = Regla 5, filas clave = Regla 3 (fondo claro + bold).
-// Variación positiva = patria-blue, negativa = patria-pink (convención validada). El círculo
-// del analista va en naranja: es la marca de "esto lo tocó una persona", igual que las
-// celdas editadas a mano de Stock Selection.
+// Colores: Manual PATRIA, mapeando los de la planilla — barra de sección = dark blue, sub-
+// líneas = sky blue suave, bandas CFO/CFI/CFF = sky blue. Variación positiva = patria-blue,
+// negativa = patria-pink (convención validada). El círculo del analista va en naranja: es la
+// marca de "esto lo tocó una persona", igual que las celdas editadas de Stock Selection.
 
 const TEXT1 = PATRIA.darkBlue;
 const TEXT2 = TEXT.label;
 const TEXT3 = TEXT.muted;
 const NM_TEXT = TEXT.disabled;
 const BORDER = "rgba(13,13,56,0.09)";
-const RULE = "rgba(13,13,56,0.22)";          // divisoria entre bloques de columnas
 const SURFACE = "#F5F7FD";
-const KEY_BG = "#F5F7FD";                    // Regla 3: filas clave
-const BASE_TINT = "rgba(69,113,255,0.08)";   // columna del trimestre base
-const BASE_TINT_HEAD = "#E9ECFC";            // = rgba(32,68,220,0.10) sobre blanco
-const VAR_TINT = "rgba(70,232,224,0.08)";    // bloque de variaciones
+const TINT = "#E1E9FF";                      // sub-líneas y subtítulos de KPIs (celeste de la hoja) = sky blue 24% sobre blanco; opaco por la columna fija
+const BAND = PATRIA.skyBlue;                 // CFO / CFI / CFF
+const RULE_LINE = `1px solid ${PATRIA.darkBlue}`; // raya de subtotal
 const RING = PATRIA.orange;
 const RING_BG = "rgba(255,107,6,0.10)";
 const POS = PATRIA.blue;
 const NEG = PATRIA.pink;
+const GAP_W = 14;                            // columna en blanco entre bloques
 
-// Años que se ven de entrada; el resto con un clic en el encabezado "Anual".
+// Años que se ven de entrada; el resto con el botón "Ver N años".
 const DEFAULT_YEARS = 3;
-
-// Líneas que se leen primero: van en negrita sobre fondo claro.
-const KEY_LINES = new Set(["Revenues", "EBITDA", "EBIT", "Controlling Net Income", "Total Net Debt", "Controlling Equity"]);
 
 const LS_TICKER = "patria:last-ficha:ticker";
 
 const ckey = (source: string, section: string, line: string, target: string) => `${source}|${section}|${line}|${target}`;
 const yearTarget = (y: number) => `A${y}`;
 const quarterTarget = (fy: number, q: number) => `Q${fy}-${q}`;
+const qHead = (fy: number, q: number) => `${q}Q ${fy}`;
 
-// ── Formato ─────────────────────────────────────────────────────────────────────
-function fmtVal(v: number | null, pct: boolean): string {
-  if (v == null) return "—";
-  if (pct) return (v * 100).toFixed(1) + "%";
+// ── Formato (igual que la hoja) ─────────────────────────────────────────────────
+// Montos enteros con separador de miles, negativos entre paréntesis, cero = "-".
+function fmtVal(v: number | null, fmt: LastFichaFmt): string {
+  if (v == null) return "";
+  if (fmt === "pct") return (v * 100).toFixed(1) + "%";
+  if (fmt === "x") return v.toFixed(1) + "x";
   const a = Math.abs(v);
-  if (a >= 100) return Math.round(v).toLocaleString("en-US");
-  if (a >= 10) return v.toFixed(1);
-  return v.toFixed(2);
+  if (a < 0.0005) return "-";
+  const s = fmt === "dec" && a < 1000
+    ? a.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+    : Math.round(a).toLocaleString("en-US");
+  return v < 0 ? `(${s})` : s;
 }
-function fmtVar(v: number | "NM" | null, pct: boolean): { text: string; color: string } {
-  if (v == null) return { text: "—", color: NM_TEXT };
+function fmtVar(v: number | "NM" | null, fmt: LastFichaFmt): { text: string; color: string } {
+  if (v == null) return { text: "", color: NM_TEXT };
   if (v === "NM") return { text: "NM", color: NM_TEXT };
   const color = v > 0.0005 ? POS : v < -0.0005 ? NEG : TEXT2;
   const sign = v > 0 ? "+" : "";
-  return pct
-    ? { text: `${sign}${(v * 100).toFixed(1)} pp`, color }
-    : { text: `${sign}${(v * 100).toFixed(1)}%`, color };
+  if (fmt === "pct") return { text: `${sign}${(v * 100).toFixed(1)} pp`, color };
+  if (fmt === "x") return { text: `${sign}${v.toFixed(1)}x`, color };
+  return { text: `${(v * 100).toFixed(1)}%`, color };
 }
 const fmtDate = (iso: string | null | undefined) => {
   if (!iso) return "—";
@@ -76,7 +79,6 @@ const who = (email: string | null) => (email ? email.split("@")[0] : "usuario");
 
 // Celda que se está comentando en el editor modal.
 interface EditTarget {
-  section: LastFichaSection;
   row: LastFichaRow;
   target: string;
   label: string;   // "2025" · "3Q26" · "Var% YoY (3Q26 vs 3Q25)" · "Comentario de la línea"
@@ -138,18 +140,18 @@ export default function LastFicha() {
   };
 
   // Guarda (o borra, con texto vacío) un comentario. Devuelve false si falló.
-  const saveComment = useCallback(async (section: LastFichaSection, line: string, target: string, text: string): Promise<boolean> => {
+  const saveComment = useCallback(async (row: LastFichaRow, target: string, text: string): Promise<boolean> => {
     if (!data) return false;
     const res = await fetch("/api/chile/last-ficha/comments", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ticker: data.ticker, year: data.base.fy, quarter: data.base.q, source: section.source, section: section.section, line, target, comment: text }),
+      body: JSON.stringify({ ticker: data.ticker, year: data.base.fy, quarter: data.base.q, source: row.source, section: row.section, line: row.line, target, comment: text }),
     }).catch(() => null);
     if (!res?.ok) return false;
     const d = await res.json() as { comment?: LastFichaComment; deleted?: boolean };
     setComments((prev) => {
       const next = new Map(prev);
-      const k = ckey(section.source, section.section, line, target);
+      const k = ckey(row.source, row.section, row.line, target);
       if (d.comment) next.set(k, d.comment); else next.delete(k);
       return next;
     });
@@ -165,7 +167,6 @@ export default function LastFicha() {
     const all = data.years.map((y, i) => ({ y, i }));
     return allYears ? all : all.slice(-DEFAULT_YEARS);
   }, [data, allYears]);
-  const hiddenYears = data ? data.years.length - years.length : 0;
   const canToggleYears = !!data && data.years.length > DEFAULT_YEARS;
 
   const showYears = !isPhone || phoneView === "years";
@@ -173,52 +174,153 @@ export default function LastFicha() {
   const showVars = !isPhone || phoneView === "var";
   const showComments = !isPhone || phoneView === "var";
   const showLtm = !!data?.ltmLabel && showYears;
-  const baseIdx = data ? data.quarters.length - 1 : -1;
-
-  const nCols = data
-    ? 1 + (showYears ? years.length : 0) + (showLtm ? 1 : 0) + (showQuarters ? data.quarters.length : 0) + (showVars ? 2 : 0) + (showComments ? 1 : 0)
-    : 1;
+  const gaps = !isPhone; // columnas en blanco entre bloques (en teléfono se ve un bloque solo)
 
   const company = companies?.find((c) => c.ticker === ticker);
 
+  // Bloques de columnas en orden; cada uno sabe pintar su encabezado y sus celdas.
+  type Block = { key: string; width: number };
+  const blocks: Block[] = data ? [
+    ...(showYears ? [{ key: "years", width: years.length + (showLtm ? 1 : 0) }] : []),
+    ...(showQuarters ? [{ key: "quarters", width: data.quarters.length }] : []),
+    ...(showVars ? [{ key: "vars", width: 2 }] : []),
+    ...(showComments ? [{ key: "comments", width: 1 }] : []),
+  ] : [];
+
   // Valor clickeable: abre el editor y, si tiene comentario, queda encerrado en un círculo.
-  const markable = (s: LastFichaSection, r: LastFichaRow, target: string, label: string, text: string, color: string, weight: number) => {
-    const c = comments.get(ckey(s.source, s.section, r.line, target));
+  const markable = (r: LastFichaRow, target: string, label: string, text: string, color: string) => {
+    if (!text) return null;
+    const c = comments.get(ckey(r.source, r.section, r.line, target));
     return (
-      <button onClick={() => setEditor({ section: s, row: r, target, label, value: text })}
+      <button onClick={() => setEditor({ row: r, target, label, value: text })}
         title={c ? `${c.comment}\n— ${who(c.updatedBy)} · ${fmtDate(c.updatedAt)}` : `Marcar y comentar ${r.line} · ${label}`}
         style={{
-          font: "inherit", fontVariantNumeric: "tabular-nums", fontWeight: c ? 700 : weight, color, cursor: "pointer",
+          font: "inherit", fontVariantNumeric: "tabular-nums", fontWeight: c ? 700 : "inherit", color, cursor: "pointer",
           background: c ? RING_BG : "transparent", border: `1.5px solid ${c ? RING : "transparent"}`, borderRadius: 999,
-          padding: "1px 7px", margin: "0 -7px 0 0", textAlign: "right", whiteSpace: "nowrap",
+          padding: "0 6px", margin: "0 -6px", whiteSpace: "nowrap",
         }}>
         {text}
       </button>
     );
   };
 
-  const yearsHeader = canToggleYears && (
-    <button onClick={() => setAllYears((v) => !v)}
-      title={allYears ? `Volver a los últimos ${DEFAULT_YEARS} años` : `Ver los ${data!.years.length} años de la ficha`}
-      style={{ marginLeft: 8, font: "inherit", fontSize: 9, fontWeight: 700, letterSpacing: "0.04em", color: PATRIA.darkBlue, background: "#fff", border: "none", borderRadius: 999, padding: "1px 8px", cursor: "pointer" }}>
-      {allYears ? `− ver ${DEFAULT_YEARS}` : `+ ${hiddenYears} años`}
-    </button>
+  const gapCell = (k: string) => gaps ? <td key={k} style={{ width: GAP_W, minWidth: GAP_W, padding: 0, background: "#fff" }} /> : null;
+  const gapHead = (k: string) => gaps ? <th key={k} style={{ width: GAP_W, minWidth: GAP_W, padding: 0, background: "#fff" }} /> : null;
+
+  // Barra oscura de sección: título + etiquetas de todas las columnas (como la hoja).
+  const sectionBar = (title: string) => data && (
+    <tr>
+      <th style={{ ...bar, ...stickyLeft, zIndex: 3, textAlign: "left" }}>{title}</th>
+      {blocks.map((b, bi) => (
+        <Fragment key={b.key}>
+          {bi > 0 && gapHead(`g${b.key}`)}
+          {b.key === "years" && <>
+            {years.map(({ y }) => <th key={y} style={bar}>{y}</th>)}
+            {showLtm && <th style={bar} title={`Últimos 12 meses a ${data.ltmLabel}`}>LTM</th>}
+          </>}
+          {b.key === "quarters" && data.quarters.map((p) => <th key={p.label} style={bar}>{qHead(p.fy, p.q)}</th>)}
+          {b.key === "vars" && <>
+            <th style={bar} title={data.yoyLabel}>YoY</th>
+            <th style={bar} title={data.qoqLabel}>QoQ</th>
+          </>}
+          {b.key === "comments" && <th style={{ ...bar, width: isPhone ? undefined : "30%" }}>Comment</th>}
+        </Fragment>
+      ))}
+    </tr>
   );
+
+  // Fila de una sola banda (subtítulo de KPIs): el color cubre los bloques, no los huecos.
+  const bandRow = (label: string, bg: string) => (
+    <tr>
+      <td style={{ ...td, ...stickyLeft, background: bg, fontWeight: 700, textAlign: "left" }}>{label}</td>
+      {blocks.map((b, bi) => (
+        <Fragment key={b.key}>
+          {bi > 0 && gapCell(`g${b.key}`)}
+          <td colSpan={b.width} style={{ ...td, background: bg }} />
+        </Fragment>
+      ))}
+    </tr>
+  );
+
+  const valueRow = (r: LastFichaRow, rk: string) => {
+    if (r.kind === "blank") return <tr key={rk}><td colSpan={99} style={{ height: 14 }} /></tr>;
+    const bg = r.band ? BAND : r.indent && r.source === "statement" ? TINT : "#fff";
+    const bt = r.borderTop ? RULE_LINE : undefined;
+    const bb = r.borderBottom ? RULE_LINE : undefined;
+    const cell: React.CSSProperties = { ...td, background: bg, borderTop: bt, borderBottom: bb ?? td.borderBottom, fontWeight: r.bold || r.band ? 700 : 400, textAlign: r.fmt === "x" ? "center" : "right" };
+    const lineC = comments.get(ckey(r.source, r.section, r.line, "line"));
+    const col = (v: number | null) => (v == null ? NM_TEXT : TEXT1);
+    return (
+      <tr key={rk}>
+        <td style={{ ...cell, ...stickyLeft, textAlign: "left", paddingLeft: r.indent ? 22 : 6, whiteSpace: isPhone ? "normal" : "nowrap", minWidth: isPhone ? 120 : 210, maxWidth: isPhone ? 150 : undefined }}
+          title={r.computed ? "Calculado a partir de las líneas de la ficha" : undefined}>
+          {r.line}
+          {isPhone && phoneView !== "var" && lineC && <MessageSquare size={10} color={RING} style={{ marginLeft: 4, verticalAlign: "middle" }} />}
+        </td>
+        {blocks.map((b, bi) => (
+          <Fragment key={b.key}>
+            {bi > 0 && gapCell(`g${b.key}`)}
+            {b.key === "years" && <>
+              {years.map(({ y, i }) => (
+                <td key={y} style={cell}>{markable(r, yearTarget(y), String(y), fmtVal(r.annual[i], r.fmt), col(r.annual[i]))}</td>
+              ))}
+              {showLtm && <td style={cell}>{markable(r, "ltm", `LTM ${data!.ltmLabel}`, fmtVal(r.ltm, r.fmt), col(r.ltm))}</td>}
+            </>}
+            {b.key === "quarters" && data!.quarters.map((p, i) => (
+              <td key={p.label} style={cell}>{markable(r, quarterTarget(p.fy, p.q), p.label, fmtVal(r.quarterly[i], r.fmt), col(r.quarterly[i]))}</td>
+            ))}
+            {b.key === "vars" && (["yoy", "qoq"] as const).map((t) => {
+              const v = fmtVar(r[t], r.fmt);
+              return (
+                <td key={t} style={{ ...cell, textAlign: "center" }}>
+                  {markable(r, t, `Var% ${t.toUpperCase()} (${t === "yoy" ? data!.yoyLabel : data!.qoqLabel})`, v.text, v.color)}
+                </td>
+              );
+            })}
+            {b.key === "comments" && (
+              <td style={{ ...cell, textAlign: "left", padding: "1px 6px", minWidth: isPhone ? 44 : 360, whiteSpace: "normal", fontWeight: 400 }}>
+                {isPhone ? (
+                  <button onClick={() => setEditor({ row: r, target: "line", label: "Comentario de la línea", value: "" })}
+                    title={lineC?.comment ?? "Comentar esta línea"} style={{ ...iconBtn, width: 30, height: 26, color: lineC ? RING : TEXT3, borderColor: lineC ? RING : BORDER }}>
+                    <MessageSquare size={13} />
+                  </button>
+                ) : (
+                  <LineComment
+                    key={`${data!.base.fy}-${data!.base.q}-${r.section}-${r.line}`}
+                    value={lineC?.comment ?? ""}
+                    meta={lineC ? `${who(lineC.updatedBy)} · ${fmtDate(lineC.updatedAt)}` : null}
+                    onSave={(text) => saveComment(r, "line", text)}
+                  />
+                )}
+              </td>
+            )}
+          </Fragment>
+        ))}
+      </tr>
+    );
+  };
 
   return (
     <div>
-      {/* ── Encabezado y controles ── */}
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 3, height: 22, background: PATRIA.kingBlue, borderRadius: 2 }} />
-            <h2 style={{ fontSize: 16, fontWeight: 700, color: TEXT1, letterSpacing: "-0.02em", margin: 0, fontFamily: FONT_PRIMARY }}>
-              Last Ficha{data?.name ? ` — ${data.name}` : ""}
+      {/* ── Encabezado (nombre + FX, como la hoja) y controles ── */}
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 28, minWidth: 0, flexWrap: "wrap" }}>
+          <div style={{ minWidth: 0 }}>
+            <h2 style={{ fontSize: 22, fontWeight: 700, color: TEXT1, letterSpacing: "-0.02em", margin: 0, fontFamily: FONT_PRIMARY }}>
+              {data?.name ?? data?.ticker ?? "Last Ficha"}
             </h2>
+            {data && (
+              <div style={{ fontSize: 11.5, color: TEXT2, marginTop: 3, fontFamily: FONT_SECONDARY }}>
+                {data.ticker} · {data.currency} millones · ficha cargada el {fmtDate(data.updatedAt)}
+              </div>
+            )}
           </div>
-          {data && (
-            <div style={{ fontSize: 11.5, color: TEXT2, marginTop: 5, marginLeft: 13, fontFamily: FONT_SECONDARY }}>
-              {data.ticker} · {data.currency} millones{data.fx ? ` · FX ${data.fx.toLocaleString("en-US")}` : ""} · ficha cargada el {fmtDate(data.updatedAt)}
+          {data?.fx != null && (
+            <div style={{ fontFamily: FONT_SECONDARY }}>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: TEXT1, marginBottom: 3 }}>FX (if is chilean ficha in CLP expr. In USD)</div>
+              <div style={{ display: "inline-block", minWidth: 70, padding: "3px 10px", textAlign: "center", fontSize: 12, fontWeight: 700, color: PATRIA.blue, background: "rgba(255,187,141,0.35)", border: `1.5px solid ${PATRIA.darkBlue}` }}>
+                {data.fx.toLocaleString("en-US")}
+              </div>
             </div>
           )}
         </div>
@@ -231,6 +333,12 @@ export default function LastFicha() {
                 {data.periods.map((p) => <option key={`${p.fy}-${p.q}`} value={`${p.fy}-${p.q}`}>{p.label}</option>)}
               </select>
             </label>
+          )}
+          {canToggleYears && (
+            <button onClick={() => setAllYears((v) => !v)} style={{ ...ctrlBox, cursor: "pointer", fontSize: 11.5, fontWeight: 700, color: PATRIA.kingBlue }}
+              title={allYears ? `Volver a los últimos ${DEFAULT_YEARS} años` : `Ver los ${data!.years.length} años de la ficha`}>
+              {allYears ? `Ver ${DEFAULT_YEARS} años` : `Ver ${data!.years.length} años`}
+            </button>
           )}
           {data && (
             <div style={{ ...ctrlBox, gap: 10, fontSize: 11, color: TEXT2 }} title="Comentarios de fila y celdas marcadas con círculo en este trimestre">
@@ -267,102 +375,21 @@ export default function LastFicha() {
       )}
 
       {data && (
-        <div className="scroll-x" style={{ border: `1px solid ${BORDER}`, borderRadius: 8, background: "#fff", opacity: loading ? 0.6 : 1, maxHeight: isPhone ? "75dvh" : undefined, overflowY: isPhone ? "auto" : undefined }}>
-          <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", fontFamily: FONT_SECONDARY, fontSize: 11 }}>
-            <thead>
-              {/* Fila 1 — bloques (Regla 1) */}
-              <tr>
-                <th style={{ ...th1, ...stickyLeft, zIndex: 3, textAlign: "left" }}>{data.currency} mn</th>
-                {showYears && years.length > 0 && (
-                  <th colSpan={years.length} style={{ ...th1, borderLeft: `1px solid rgba(255,255,255,0.18)` }}>Anual{yearsHeader}</th>
-                )}
-                {showLtm && <th style={{ ...th1, background: PATRIA.kingBlue, borderLeft: `1px solid rgba(255,255,255,0.18)` }}>LTM</th>}
-                {showQuarters && <th colSpan={data.quarters.length} style={{ ...th1, background: PATRIA.kingBlue, borderLeft: `1px solid rgba(255,255,255,0.18)` }}>Últimos {data.quarters.length} trimestres</th>}
-                {showVars && <th colSpan={2} style={{ ...th1, borderLeft: `1px solid rgba(255,255,255,0.18)` }}>Var% {data.base.label}</th>}
-                {showComments && <th style={{ ...th1, background: PATRIA.kingBlue, borderLeft: `1px solid rgba(255,255,255,0.18)`, textAlign: "left" }}>Comentarios del analista</th>}
-              </tr>
-              {/* Fila 2 — etiquetas */}
-              <tr>
-                <th style={{ ...th2, ...stickyLeft, zIndex: 3, textAlign: "left" }}>Línea</th>
-                {showYears && years.map(({ y }, i) => <th key={y} style={{ ...th2, borderLeft: i === 0 ? `1px solid ${RULE}` : undefined }}>{y}</th>)}
-                {showLtm && <th style={{ ...th2, borderLeft: `1px solid ${RULE}` }} title={`Últimos 12 meses a ${data.ltmLabel}`}>{data.ltmLabel}</th>}
-                {showQuarters && data.quarters.map((p, i) => (
-                  <th key={p.label} style={{ ...th2, borderLeft: i === 0 ? `1px solid ${RULE}` : undefined, background: i === baseIdx ? BASE_TINT_HEAD : th2.background }}>{p.label}</th>
-                ))}
-                {showVars && <>
-                  <th style={{ ...th2, borderLeft: `1px solid ${RULE}` }} title={data.yoyLabel}>YoY</th>
-                  <th style={th2} title={data.qoqLabel}>QoQ</th>
-                </>}
-                {showComments && <th style={{ ...th2, borderLeft: `1px solid ${RULE}`, textAlign: "left", fontWeight: 600, textTransform: "none", letterSpacing: 0 }}>Clic en cualquier valor para encerrarlo y comentarlo</th>}
-              </tr>
-            </thead>
+        <div className="scroll-x" style={{ background: "#fff", opacity: loading ? 0.6 : 1, maxHeight: isPhone ? "75dvh" : undefined, overflowY: isPhone ? "auto" : undefined }}>
+          <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", fontFamily: FONT_SECONDARY, fontSize: 11, color: TEXT1 }}>
             <tbody>
-              {data.sections.map((s) => (
-                <Fragment key={`${s.source}|${s.section}`}>
-                  {/* Subtítulo de sección (Regla 2) */}
-                  <tr>
-                    <td colSpan={nCols} style={{ padding: 0, background: PATRIA.kingBlue }}>
-                      <div style={{ ...stickyLeft, position: "sticky", display: "inline-block", background: PATRIA.kingBlue, color: "#fff", fontWeight: 700, fontSize: 11, padding: "5px 10px", letterSpacing: "0.02em" }}>
-                        {s.source === "kpi" ? `KPIs · ${s.section}` : s.section}
-                      </div>
-                    </td>
-                  </tr>
-                  {s.rows.map((r) => {
-                    const key = KEY_LINES.has(r.line) && s.source === "statement";
-                    const rowBg = key ? KEY_BG : "#fff";
-                    const lineC = comments.get(ckey(s.source, s.section, r.line, "line"));
-                    const w = key ? 700 : 400;
-                    return (
-                      <tr key={r.line}>
-                        <td style={{ ...td, ...stickyLeft, background: rowBg, color: PATRIA.kingBlue, fontWeight: 700, textAlign: "left", whiteSpace: isPhone ? "normal" : "nowrap", minWidth: isPhone ? 120 : 190, maxWidth: isPhone ? 150 : undefined }}>
-                          {r.line}
-                          {isPhone && phoneView !== "var" && lineC && <MessageSquare size={10} color={RING} style={{ marginLeft: 4, verticalAlign: "middle" }} />}
-                        </td>
-                        {showYears && years.map(({ y, i }, k) => (
-                          <td key={y} style={{ ...td, background: rowBg, borderLeft: k === 0 ? `1px solid ${RULE}` : undefined }}>
-                            {markable(s, r, yearTarget(y), String(y), fmtVal(r.annual[i], r.pct), r.annual[i] == null ? NM_TEXT : TEXT1, w)}
-                          </td>
-                        ))}
-                        {showLtm && (
-                          <td style={{ ...td, background: rowBg, borderLeft: `1px solid ${RULE}` }}>
-                            {markable(s, r, "ltm", `LTM ${data.ltmLabel}`, fmtVal(r.ltm, r.pct), r.ltm == null ? NM_TEXT : TEXT1, w)}
-                          </td>
-                        )}
-                        {showQuarters && data.quarters.map((p, i) => (
-                          <td key={p.label} style={{ ...td, background: i === baseIdx ? BASE_TINT : rowBg, borderLeft: i === 0 ? `1px solid ${RULE}` : undefined }}>
-                            {markable(s, r, quarterTarget(p.fy, p.q), p.label, fmtVal(r.quarterly[i], r.pct), r.quarterly[i] == null ? NM_TEXT : TEXT1, key || i === baseIdx ? 700 : 400)}
-                          </td>
-                        ))}
-                        {showVars && (["yoy", "qoq"] as const).map((t, i) => {
-                          const v = fmtVar(r[t], r.pct);
-                          return (
-                            <td key={t} style={{ ...td, background: VAR_TINT, borderLeft: i === 0 ? `1px solid ${RULE}` : undefined }}>
-                              {markable(s, r, t, `Var% ${t.toUpperCase()} (${t === "yoy" ? data.yoyLabel : data.qoqLabel})`, v.text, v.color, 600)}
-                            </td>
-                          );
-                        })}
-                        {showComments && (
-                          <td style={{ ...td, background: rowBg, borderLeft: `1px solid ${RULE}`, textAlign: "left", padding: "2px 6px", minWidth: isPhone ? 44 : 420, width: isPhone ? undefined : "40%", whiteSpace: "normal" }}>
-                            {isPhone ? (
-                              <button onClick={() => setEditor({ section: s, row: r, target: "line", label: "Comentario de la línea", value: "" })}
-                                title={lineC?.comment ?? "Comentar esta línea"} style={{ ...iconBtn, width: 30, height: 28, color: lineC ? RING : TEXT3, borderColor: lineC ? RING : BORDER }}>
-                                <MessageSquare size={13} />
-                              </button>
-                            ) : (
-                              <LineComment
-                                key={`${data.base.fy}-${data.base.q}-${s.section}-${r.line}`}
-                                value={lineC?.comment ?? ""}
-                                meta={lineC ? `${who(lineC.updatedBy)} · ${fmtDate(lineC.updatedAt)}` : null}
-                                onSave={(text) => saveComment(s, r.line, "line", text)}
-                              />
-                            )}
-                          </td>
-                        )}
-                      </tr>
-                    );
-                  })}
-                </Fragment>
-              ))}
+              {data.sections.map((s, si) => {
+                const prev = data.sections[si - 1];
+                const newBlock = s.source !== "kpi" || prev?.source !== "kpi"; // los KPIs comparten una sola barra
+                return (
+                  <Fragment key={`${s.source}|${s.section}`}>
+                    {newBlock && si > 0 && <tr><td colSpan={99} style={{ height: 18 }} /></tr>}
+                    {newBlock && sectionBar(s.title)}
+                    {s.source === "kpi" && bandRow(s.section, TINT)}
+                    {s.rows.map((r, ri) => valueRow(r, `${ri}|${r.line}`))}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -370,8 +397,9 @@ export default function LastFicha() {
 
       {data && (
         <div style={{ fontSize: 10.5, color: TEXT3, marginTop: 8, lineHeight: 1.5 }}>
-          YoY = {data.yoyLabel} · QoQ = {data.qoqLabel}. Montos: variación porcentual; ratios (márgenes, tasas, crecimientos): diferencia en puntos (pp).
-          “NM” = base cero o cambio de signo. Los comentarios y las marcas son del trimestre {data.base.label}: al elegir otro trimestre se ven los suyos.
+          YoY = {data.yoyLabel} · QoQ = {data.qoqLabel}. Montos: variación porcentual; ratios y múltiplos: diferencia (pp / x). “NM” = base cero o cambio de signo.
+          {data.ltmLabel ? ` LTM a ${data.ltmLabel}.` : ""} Márgenes, Net Debt / EBITDA, Net Debt / Equity, ROE y ROIC se calculan a partir de las líneas de la ficha.
+          Los comentarios y las marcas son del trimestre {data.base.label}: al elegir otro trimestre se ven los suyos.
           {company?.lastLabel && company.lastLabel !== data.base.label ? ` La ficha llega hasta ${company.lastLabel}.` : ""}
         </div>
       )}
@@ -379,11 +407,11 @@ export default function LastFicha() {
       {editor && data && (
         <CommentEditor
           title={editor.target === "line" ? editor.row.line : `${editor.row.line} · ${editor.label}`}
-          subtitle={editor.target === "line" ? `${editor.section.section} · ${data.base.label}` : `${editor.section.section} · valor: ${editor.value}`}
+          subtitle={editor.target === "line" ? `${editor.row.section} · ${data.base.label}` : `${editor.row.section} · valor: ${editor.value}`}
           placeholder={editor.target === "line" ? "Comentario sobre esta línea…" : "¿Qué explica este número?"}
-          initial={comments.get(ckey(editor.section.source, editor.section.section, editor.row.line, editor.target))}
+          initial={comments.get(ckey(editor.row.source, editor.row.section, editor.row.line, editor.target))}
           onClose={() => setEditor(null)}
-          onSave={(text) => saveComment(editor.section, editor.row.line, editor.target, text)}
+          onSave={(text) => saveComment(editor.row, editor.target, text)}
         />
       )}
     </div>
@@ -462,7 +490,7 @@ function LineComment({ value, meta, onSave }: { value: string; meta: string | nu
   // Alto al contenido: una línea vacía, crece con el texto.
   useEffect(() => {
     const el = ref.current; if (!el) return;
-    el.style.height = "auto"; el.style.height = `${Math.max(24, el.scrollHeight)}px`;
+    el.style.height = "auto"; el.style.height = `${Math.max(20, el.scrollHeight)}px`;
   }, [draft]);
   const commit = async () => {
     setFocused(false);
@@ -472,19 +500,21 @@ function LineComment({ value, meta, onSave }: { value: string; meta: string | nu
   };
   return (
     <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
-      <textarea ref={ref} value={draft} rows={1} placeholder="Agregar comentario…"
+      <textarea ref={ref} value={draft} rows={1} placeholder={focused ? "Agregar comentario…" : ""}
         onChange={(e) => setDraft(e.target.value)} onFocus={() => setFocused(true)} onBlur={commit}
         onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) (e.target as HTMLTextAreaElement).blur(); }}
         style={{
-          flex: 1, resize: "none", overflow: "hidden", fontFamily: FONT_SECONDARY, fontSize: 11, lineHeight: 1.4, color: TEXT1,
-          padding: "3px 6px", borderRadius: 5, outline: "none",
+          flex: 1, resize: "none", overflow: "hidden", fontFamily: FONT_SECONDARY, fontSize: 11, lineHeight: 1.35, color: TEXT1,
+          padding: "1px 5px", borderRadius: 4, outline: "none",
           border: `1px solid ${state === "error" ? NEG : focused ? PATRIA.kingBlue : draft ? "rgba(255,107,6,0.45)" : "transparent"}`,
           background: draft || focused ? "#fff" : "transparent",
         }}
       />
-      <span style={{ fontSize: 9.5, color: state === "error" ? NEG : TEXT3, whiteSpace: "nowrap", paddingTop: 5 }}>
-        {state === "saving" ? "guardando…" : state === "error" ? "no se guardó" : meta ?? ""}
-      </span>
+      {(state !== "idle" || meta) && (
+        <span style={{ fontSize: 9.5, color: state === "error" ? NEG : TEXT3, whiteSpace: "nowrap", paddingTop: 3 }}>
+          {state === "saving" ? "guardando…" : state === "error" ? "no se guardó" : meta}
+        </span>
+      )}
     </div>
   );
 }
@@ -543,18 +573,15 @@ function CommentEditor({ title, subtitle, placeholder, initial, onClose, onSave 
 }
 
 // ── Estilos ─────────────────────────────────────────────────────────────────────
-const stickyLeft: React.CSSProperties = { position: "sticky", left: 0, zIndex: 1, borderRight: `1px solid ${RULE}` };
-const th1: React.CSSProperties = {
-  background: PATRIA.darkBlue, color: "#fff", fontFamily: FONT_PRIMARY, fontWeight: 700, fontSize: 9.5,
-  textTransform: "uppercase", letterSpacing: "0.06em", padding: "6px 8px", textAlign: "center", whiteSpace: "nowrap",
-};
-const th2: React.CSSProperties = {
-  background: SURFACE, color: PATRIA.kingBlue, fontWeight: 700, fontSize: 9.5, textTransform: "uppercase",
-  letterSpacing: "0.05em", padding: "5px 8px", textAlign: "right", whiteSpace: "nowrap", borderBottom: `2px solid ${PATRIA.darkBlue}`,
+const stickyLeft: React.CSSProperties = { position: "sticky", left: 0, zIndex: 1 };
+// Barra de sección (la franja oscura de la hoja): título a la izquierda, etiquetas centradas.
+const bar: React.CSSProperties = {
+  background: PATRIA.darkBlue, color: "#fff", fontFamily: FONT_SECONDARY, fontWeight: 700, fontSize: 10.5,
+  padding: "3px 8px", textAlign: "center", whiteSpace: "nowrap",
 };
 const td: React.CSSProperties = {
-  padding: "3px 8px", textAlign: "right", color: TEXT1, fontVariantNumeric: "tabular-nums",
-  borderBottom: `1px solid ${BORDER}`, whiteSpace: "nowrap", verticalAlign: "middle",
+  padding: "1px 8px", lineHeight: 1.35, textAlign: "right", color: TEXT1, fontVariantNumeric: "tabular-nums",
+  borderBottom: "1px solid transparent", whiteSpace: "nowrap", verticalAlign: "middle",
 };
 const ctrlBox: React.CSSProperties = { display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 8px", borderRadius: 6, border: `1px solid ${BORDER}`, background: SURFACE };
 const ctrlLabel: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: TEXT2 };
