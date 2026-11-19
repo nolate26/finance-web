@@ -185,7 +185,9 @@ export default function LastFicha() {
   // Bloques de columnas en orden; cada uno sabe pintar su encabezado y sus celdas.
   type Block = { key: string; width: number };
   const blocks: Block[] = data ? [
-    ...(showYears ? [{ key: "years", width: years.length + (showLtm ? 1 : 0) + (showYtd ? 2 : 0) }] : []),
+    ...(showYears ? [{ key: "years", width: years.length + (showLtm ? 1 : 0) }] : []),
+    ...(showYtd ? [{ key: "ytd", width: 2 }] : []), // isla propia, separada del LTM
+
     ...(showQuarters ? [{ key: "quarters", width: data.quarters.length }] : []),
     ...(showVars ? [{ key: "vars", width: 2 }] : []),
     ...(showComments ? [{ key: "comments", width: 1 }] : []),
@@ -221,10 +223,10 @@ export default function LastFicha() {
           {b.key === "years" && <>
             {years.map(({ y }) => <th key={y} style={bar}>{y}</th>)}
             {showLtm && <th style={bar} title={`Últimos 12 meses a ${data.ltmLabel}`}>LTM</th>}
-            {showYtd && <>
-              <th style={bar} title="Acumulado n-1: mismo período del año anterior">{data.ytd!.prev}</th>
-              <th style={bar} title="Acumulado del año">{data.ytd!.cur}</th>
-            </>}
+          </>}
+          {b.key === "ytd" && <>
+            <th style={bar} title="Acumulado n-1: mismo período del año anterior">{data.ytd!.prev}</th>
+            <th style={bar} title="Acumulado del año">{data.ytd!.cur}</th>
           </>}
           {b.key === "quarters" && data.quarters.map((p) => <th key={p.label} style={bar}>{qHead(p.fy, p.q)}</th>)}
           {b.key === "vars" && <>
@@ -273,10 +275,10 @@ export default function LastFicha() {
                 <td key={y} style={cell}>{markable(r, yearTarget(y), String(y), fmtVal(r.annual[i], r.fmt), col(r.annual[i]))}</td>
               ))}
               {showLtm && <td style={cell}>{markable(r, "ltm", `LTM ${data!.ltmLabel}`, fmtVal(r.ltm, r.fmt), col(r.ltm))}</td>}
-              {showYtd && <>
-                <td style={cell}>{markable(r, "ytdp", `Acumulado ${data!.ytd!.prev}`, fmtVal(r.ytdPrev, r.fmt), col(r.ytdPrev))}</td>
-                <td style={cell}>{markable(r, "ytd", `Acumulado ${data!.ytd!.cur}`, fmtVal(r.ytd, r.fmt), col(r.ytd))}</td>
-              </>}
+            </>}
+            {b.key === "ytd" && <>
+              <td style={cell}>{markable(r, "ytdp", `Acumulado ${data!.ytd!.prev}`, fmtVal(r.ytdPrev, r.fmt), col(r.ytdPrev))}</td>
+              <td style={cell}>{markable(r, "ytd", `Acumulado ${data!.ytd!.cur}`, fmtVal(r.ytd, r.fmt), col(r.ytd))}</td>
             </>}
             {b.key === "quarters" && data!.quarters.map((p, i) => (
               <td key={p.label} style={cell}>{markable(r, quarterTarget(p.fy, p.q), p.label, fmtVal(r.quarterly[i], r.fmt), col(r.quarterly[i]))}</td>
