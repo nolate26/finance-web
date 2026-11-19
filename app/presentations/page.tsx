@@ -123,8 +123,8 @@ function FileRow({
   onOpenComment: (p: Presentation) => void;
 }) {
   const pending = pres.review_status === "pending";
-  // En un sectorial update la descripción es texto largo: se lee en su panel, como en fichas.
-  const isSector = pres.category === SECTOR_CATEGORY;
+  // En sectorial updates y economics la descripción es texto largo: se lee en su panel, como en fichas.
+  const commentLabel = presCommentLabel(pres);
   return (
     <div
       className="flex flex-wrap sm:flex-nowrap items-center gap-x-4 gap-y-2 px-4 sm:px-5 py-4 border-b border-patria-dark-blue/[0.06] last:border-0 transition-colors"
@@ -148,7 +148,7 @@ function FileRow({
             </span>
           )}
         </div>
-        {pres.description && !isSector && (
+        {pres.description && !commentLabel && (
           <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "rgba(13,13,56,0.62)" }}>{pres.description}</p>
         )}
         {pres.tickers.length > 0 && (
@@ -199,7 +199,7 @@ function FileRow({
         </button>
       )}
 
-      {isSector && pres.description?.trim() && <CommentButton label="Sector comment" onClick={() => onOpenComment(pres)} />}
+      {commentLabel && pres.description?.trim() && <CommentButton label={commentLabel} onClick={() => onOpenComment(pres)} />}
       <PdfLink href={pres.file_url} />
 
       {/* Eliminar — sólo admin, igual que en fichas */}
@@ -241,8 +241,15 @@ const fichaComment = (f: Ficha): CommentDoc => ({
   subtitle: f.title, text: f.description ?? "", createdAt: f.created_at, fileUrl: f.file_url,
 });
 
-const sectorComment = (p: Presentation): CommentDoc => ({
-  badge: "Sector comment", tickers: p.tickers.map((t) => t.ticker.replace(/ EQUITY$/i, "")).join(" · "),
+// Categorías cuya descripción va en panel propio (null = se muestra en línea).
+function presCommentLabel(p: Presentation): string | null {
+  if (p.category === SECTOR_CATEGORY) return "Sector comment";
+  if (p.category === "economics_team") return "Economics comment";
+  return null;
+}
+
+const presComment = (p: Presentation): CommentDoc => ({
+  badge: presCommentLabel(p) ?? "Comment", tickers: p.tickers.map((t) => t.ticker.replace(/ EQUITY$/i, "")).join(" · "),
   heading: p.title, text: p.description ?? "", createdAt: p.created_at, fileUrl: p.file_url,
 });
 
@@ -600,6 +607,10 @@ export default function PresentationsPage() {
     }
     return true;
   });
+  // Economics: el más nuevo primero (fecha del documento si la tiene; si no, la de carga).
+  if (mainCategory === "economics_team") {
+    displayFiles.sort((a, b) => (b.case_date ?? b.created_at).localeCompare(a.case_date ?? a.created_at));
+  }
 
   // Países presentes en las fichas individuales, con conteo, ordenados por nombre
   // visible. Las multi no entran acá: tienen su propio chip "Multi-company".
@@ -1035,7 +1046,7 @@ export default function PresentationsPage() {
                 deleting={deletingId === pres.id}
                 onReview={setReviewing}
                 onDelete={handleDeletePresentation}
-                onOpenComment={(p) => setComment(sectorComment(p))}
+                onOpenComment={(p) => setComment(presComment(p))}
               />
             ))}
           </div>
