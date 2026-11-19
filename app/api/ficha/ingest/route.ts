@@ -55,18 +55,20 @@ const periodFields = {
   ticker:     reqString('ticker', 100).transform(normalizeTicker),
   currency:   reqString('currency', 10).transform((s) => s.toUpperCase()),
   fx:         reqNumber('fx', MAX_ABS_FX),
-  periodType: z.enum(['A', 'Q'], { errorMap: () => ({ message: 'periodType debe ser "A" (anual) o "Q" (trimestre)' }) }),
+  periodType: z.enum(['A', 'Q', 'L'], { errorMap: () => ({ message: 'periodType debe ser "A" (anual), "Q" (trimestre) o "L" (LTM)' }) }),
   year:       reqInt('year').min(1900, 'year fuera de rango').max(2100, 'year fuera de rango'),
   quarter:    reqInt('quarter'),
   periodEnd,
 };
 
-function checkQuarter(r: { periodType: 'A' | 'Q'; quarter: number }, ctx: z.RefinementCtx) {
+// "L" = columna LTM de la hoja: year/quarter son los del último trimestre (LTM a 3Q26 →
+// year 2026, quarter 3) y dicen a qué fecha está. Hay UNO por compañía (ver POST).
+function checkQuarter(r: { periodType: 'A' | 'Q' | 'L'; quarter: number }, ctx: z.RefinementCtx) {
   if (r.periodType === 'A' && r.quarter !== 0) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['quarter'], message: `quarter debe ser 0 cuando periodType es "A" (llegó ${r.quarter})` });
   }
-  if (r.periodType === 'Q' && (r.quarter < 1 || r.quarter > 4)) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['quarter'], message: `quarter debe ser 1 a 4 cuando periodType es "Q" (llegó ${r.quarter})` });
+  if (r.periodType !== 'A' && (r.quarter < 1 || r.quarter > 4)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['quarter'], message: `quarter debe ser 1 a 4 cuando periodType es "${r.periodType}" (llegó ${r.quarter})` });
   }
 }
 
@@ -227,7 +229,15 @@ export async function POST(request: Request) {
       (r) => `${periodKey(r)}|${r.kpi}`,
     );
 
+    // LTM: uno solo por compañía. Si la planilla trae columna LTM, se borra el anterior (de
+    // cualquier trimestre) y queda el que llega; así tampoco sobreviven líneas renombradas.
+    const ltmTickers = [...new Set([...statements, ...kpis].filter((r) => r.periodType === 'L').map((r) => r.ticker))];
+
     await prisma.$transaction(async (tx) => {
+      if (ltmTickers.length) {
+        await tx.$executeRaw`DELETE FROM ficha_statements WHERE period_type = 'L' AND ticker IN (${Prisma.join(ltmTickers)})`;
+        await tx.$executeRaw`DELETE FROM ficha_kpis WHERE period_type = 'L' AND ticker IN (${Prisma.join(ltmTickers)})`;
+      }
       await upsertStatements(tx, statements);
       await upsertKpis(tx, kpis);
     }, { timeout: 20_000 });

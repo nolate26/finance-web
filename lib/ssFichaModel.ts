@@ -51,7 +51,8 @@ export const FICHA_LINES: { metric: string; section: string; line: string; serie
 /** Fundamentales de todas las fichas cargadas, por ticker normalizado ("ANDINAB CI"). */
 export async function loadFichaFunds(): Promise<Map<string, Fund>> {
   const rows = await prisma.fichaStatement.findMany({
-    where: { OR: FICHA_LINES.map(({ section, line }) => ({ section, line })) },
+    // Sin la columna LTM ("L"): Stock Selection arma su LTM sumando trimestres.
+    where: { periodType: { in: ["A", "Q"] }, OR: FICHA_LINES.map(({ section, line }) => ({ section, line })) },
     select: { ticker: true, currency: true, periodType: true, year: true, quarter: true, section: true, line: true, value: true },
   });
   const byLine = new Map(FICHA_LINES.map((m) => [`${m.section}|${m.line}`, m]));

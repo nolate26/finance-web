@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 //   GET /api/chile/last-ficha?ticker=X[&fy=&q=]     → la ficha, con trimestre base fy/q
 //                                                    (por defecto el último cargado)
 //
-// Columnas: todos los años ("A") + los últimos 5 trimestres terminando en el base, y para el
+// Columnas: todos los años ("A") + el LTM de la hoja ("L", uno por compañía) + los últimos 5 trimestres terminando en el base, y para el
 // base la Var% YoY (vs mismo trimestre del año anterior) y QoQ (vs trimestre anterior).
 
 export interface LastFichaCompany {
@@ -27,6 +27,7 @@ export interface LastFichaRow {
   order: number;
   pct: boolean;                  // la línea es un ratio (margen, tasa, crecimiento): se muestra en %
   annual: (number | null)[];     // alineado con `years`
+  ltm: number | null;            // columna LTM de la hoja (una sola por compañía, ver ltmLabel)
   quarterly: (number | null)[];  // alineado con `quarters`
   // Variación del trimestre base. Montos: cur/prev − 1. Ratios (pct): diferencia en puntos
   // (cur − prev). null = falta un dato; "NM" = base 0 o cambio de signo.
@@ -44,7 +45,7 @@ export interface LastFichaComment {
   source: "statement" | "kpi";
   section: string;
   line: string;
-  target: string;            // "line" | "yoy" | "qoq" | "A2025" | "Q2026-3"
+  target: string;            // "line" | "yoy" | "qoq" | "ltm" | "A2025" | "Q2026-3"
   comment: string;
   updatedBy: string | null;
   updatedAt: string;
@@ -59,6 +60,7 @@ export interface LastFichaPayload {
   periods: { fy: number; q: number; label: string }[]; // trimestres disponibles (desc), selector del base
   base: { fy: number; q: number; label: string };
   years: number[];                                      // asc
+  ltmLabel: string | null;                              // trimestre al que llega el LTM ("3Q26"); null = sin LTM
   quarters: { fy: number; q: number; label: string }[]; // los 5 mostrados (asc)
   yoyLabel: string;                                     // "3Q26 vs 3Q25"
   qoqLabel: string;                                     // "3Q26 vs 2Q26"
@@ -157,7 +159,8 @@ export async function GET(request: NextRequest) {
       const k = `${source}|${r.section}|${line}`;
       let a = acc.get(k);
       if (!a) { a = { source, section: r.section, line, order, firstId: r.id, vals: new Map() }; acc.set(k, a); }
-      a.vals.set(r.periodType === "A" ? `A${r.year}` : `Q${qIdx(r.year, r.quarter)}`, Number(r.value));
+      // "L" = columna LTM: hay una sola por compañía (el ingest borra la anterior).
+      a.vals.set(r.periodType === "A" ? `A${r.year}` : r.periodType === "L" ? "L" : `Q${qIdx(r.year, r.quarter)}`, Number(r.value));
     };
     for (const r of st) add("statement", r, r.line, r.lineOrder);
     for (const r of kp) add("kpi", r, r.kpi, r.kpiOrder);
@@ -174,6 +177,7 @@ export async function GET(request: NextRequest) {
       s.rows.push({
         line: a.line, order: a.order, pct,
         annual: years.map((y) => a.vals.get(`A${y}`) ?? null),
+        ltm: a.vals.get("L") ?? null,
         quarterly: quarters.map((p) => at(p.fy, p.q)),
         yoy: variation(cur, at(yoyP.fy, yoyP.q), pct),
         qoq: variation(cur, at(qoqP.fy, qoqP.q), pct),
@@ -189,6 +193,7 @@ export async function GET(request: NextRequest) {
 
     const comments = await prisma.fichaComment.findMany({ where: { ticker, year: base.fy, quarter: base.q } });
     const any = st[0] ?? kp[0];
+    const ltmRow = [...st, ...kp].find((r) => r.periodType === "L");
     const updatedAt = [...st, ...kp].reduce((mx, r) => (r.updatedAt > mx ? r.updatedAt : mx), any.updatedAt);
 
     const payload: LastFichaPayload = {
@@ -198,6 +203,7 @@ export async function GET(request: NextRequest) {
       fx: any.fx == null ? null : Number(any.fx),
       updatedAt: updatedAt.toISOString(),
       periods, base, years, quarters,
+      ltmLabel: ltmRow ? qLabel(ltmRow.year, ltmRow.quarter) : null,
       yoyLabel: `${base.label} vs ${qLabel(yoyP.fy, yoyP.q)}`,
       qoqLabel: `${base.label} vs ${qLabel(qoqP.fy, qoqP.q)}`,
       sections,

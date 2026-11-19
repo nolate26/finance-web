@@ -14,7 +14,7 @@ COMMENT ON COLUMN ficha_statements.id IS 'Autoincremental, sin significado de ne
 COMMENT ON COLUMN ficha_statements.ticker IS 'Ticker Bloomberg canónico (trim + espacios colapsados + MAYÚSCULA), p.ej. "ANDINAB CI EQUITY". Mismo formato que empresas_industrias_v2.ticker_bloomberg, pero SIN FK.';
 COMMENT ON COLUMN ficha_statements.currency IS 'Moneda en que reporta la empresa (celda C7 de la hoja), en MAYÚSCULA, p.ej. "CLP". Se repite en todas las filas del ticker; la última carga la pisa.';
 COMMENT ON COLUMN ficha_statements.fx IS 'Tipo de cambio de la celda C6 de la hoja (moneda local por USD, p.ej. 972.6 para CLP). Se repite en todas las filas del ticker; la última carga lo pisa.';
-COMMENT ON COLUMN ficha_statements.period_type IS '"A" = año completo, "Q" = trimestre (CHECK ficha_statements_period_check).';
+COMMENT ON COLUMN ficha_statements.period_type IS '"A" = año completo, "Q" = trimestre, "L" = LTM (últimos 12 meses) a ese trimestre (CHECK ficha_statements_period_check).';
 COMMENT ON COLUMN ficha_statements.year IS 'Año del período (para "3Q 2026" es 2026).';
 COMMENT ON COLUMN ficha_statements.quarter IS 'Trimestre 1..4 si period_type = "Q"; 0 si es anual (nunca NULL, para que entre en la clave única). Filtrar anuales con quarter = 0 o period_type = ''A''.';
 COMMENT ON COLUMN ficha_statements.period_end IS 'Fecha de cierre del período (fila "Period End" de la hoja), p.ej. 2026-09-30 para 3Q 2026. Útil para ordenar anuales y trimestrales juntos.';
@@ -31,7 +31,7 @@ COMMENT ON COLUMN ficha_kpis.id IS 'Autoincremental, sin significado de negocio.
 COMMENT ON COLUMN ficha_kpis.ticker IS 'Ticker Bloomberg canónico en MAYÚSCULA, p.ej. "ANDINAB CI EQUITY". Sin FK.';
 COMMENT ON COLUMN ficha_kpis.currency IS 'Moneda reportada de la empresa (C7). Ojo: muchos KPIs no son montos (volúmenes, %, unidades).';
 COMMENT ON COLUMN ficha_kpis.fx IS 'Tipo de cambio de la celda C6 (moneda local por USD).';
-COMMENT ON COLUMN ficha_kpis.period_type IS '"A" = año completo, "Q" = trimestre.';
+COMMENT ON COLUMN ficha_kpis.period_type IS '"A" = año completo, "Q" = trimestre, "L" = LTM a ese trimestre.';
 COMMENT ON COLUMN ficha_kpis.year IS 'Año del período.';
 COMMENT ON COLUMN ficha_kpis.quarter IS '1..4 si period_type = "Q"; 0 si es anual (nunca NULL).';
 COMMENT ON COLUMN ficha_kpis.period_end IS 'Fecha de cierre del período.';

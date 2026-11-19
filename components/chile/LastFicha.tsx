@@ -10,9 +10,10 @@ import type {
 
 // Chile → Last Ficha. Resumen de resultados de una compañía tal como lo subió la macro
 // "Send Ficha": los últimos 3 años (clic para ver todos), los últimos 5 trimestres, la Var%
-// YoY y QoQ del trimestre base, y una columna de comentarios por fila. Clic en CUALQUIER
-// valor (año, trimestre o variación) = marcarlo con un círculo y dejarle un comentario
-// (ficha_comments: target "A2025" / "Q2026-3" / "yoy" / "qoq").
+// YoY y QoQ del trimestre base, y una columna de comentarios por fila. Entre los años y los
+// trimestres va el LTM de la hoja (uno por compañía, el de la última subida). Clic en CUALQUIER valor
+// (año, LTM, trimestre o variación) = marcarlo con un círculo y dejarle un comentario
+// (ficha_comments: target "A2025" / "ltm" / "Q2026-3" / "yoy" / "qoq").
 //
 // Colores: Manual PATRIA. Encabezado de grupos = Regla 1 (dark blue), subtítulo de sección =
 // Regla 2 (king blue), primera columna = Regla 5, filas clave = Regla 3 (fondo claro + bold).
@@ -171,10 +172,11 @@ export default function LastFicha() {
   const showQuarters = !isPhone || phoneView === "quarters";
   const showVars = !isPhone || phoneView === "var";
   const showComments = !isPhone || phoneView === "var";
+  const showLtm = !!data?.ltmLabel && showYears;
   const baseIdx = data ? data.quarters.length - 1 : -1;
 
   const nCols = data
-    ? 1 + (showYears ? years.length : 0) + (showQuarters ? data.quarters.length : 0) + (showVars ? 2 : 0) + (showComments ? 1 : 0)
+    ? 1 + (showYears ? years.length : 0) + (showLtm ? 1 : 0) + (showQuarters ? data.quarters.length : 0) + (showVars ? 2 : 0) + (showComments ? 1 : 0)
     : 1;
 
   const company = companies?.find((c) => c.ticker === ticker);
@@ -274,6 +276,7 @@ export default function LastFicha() {
                 {showYears && years.length > 0 && (
                   <th colSpan={years.length} style={{ ...th1, borderLeft: `1px solid rgba(255,255,255,0.18)` }}>Anual{yearsHeader}</th>
                 )}
+                {showLtm && <th style={{ ...th1, background: PATRIA.kingBlue, borderLeft: `1px solid rgba(255,255,255,0.18)` }}>LTM</th>}
                 {showQuarters && <th colSpan={data.quarters.length} style={{ ...th1, background: PATRIA.kingBlue, borderLeft: `1px solid rgba(255,255,255,0.18)` }}>Últimos {data.quarters.length} trimestres</th>}
                 {showVars && <th colSpan={2} style={{ ...th1, borderLeft: `1px solid rgba(255,255,255,0.18)` }}>Var% {data.base.label}</th>}
                 {showComments && <th style={{ ...th1, background: PATRIA.kingBlue, borderLeft: `1px solid rgba(255,255,255,0.18)`, textAlign: "left" }}>Comentarios del analista</th>}
@@ -282,6 +285,7 @@ export default function LastFicha() {
               <tr>
                 <th style={{ ...th2, ...stickyLeft, zIndex: 3, textAlign: "left" }}>Línea</th>
                 {showYears && years.map(({ y }, i) => <th key={y} style={{ ...th2, borderLeft: i === 0 ? `1px solid ${RULE}` : undefined }}>{y}</th>)}
+                {showLtm && <th style={{ ...th2, borderLeft: `1px solid ${RULE}` }} title={`Últimos 12 meses a ${data.ltmLabel}`}>{data.ltmLabel}</th>}
                 {showQuarters && data.quarters.map((p, i) => (
                   <th key={p.label} style={{ ...th2, borderLeft: i === 0 ? `1px solid ${RULE}` : undefined, background: i === baseIdx ? BASE_TINT_HEAD : th2.background }}>{p.label}</th>
                 ))}
@@ -319,6 +323,11 @@ export default function LastFicha() {
                             {markable(s, r, yearTarget(y), String(y), fmtVal(r.annual[i], r.pct), r.annual[i] == null ? NM_TEXT : TEXT1, w)}
                           </td>
                         ))}
+                        {showLtm && (
+                          <td style={{ ...td, background: rowBg, borderLeft: `1px solid ${RULE}` }}>
+                            {markable(s, r, "ltm", `LTM ${data.ltmLabel}`, fmtVal(r.ltm, r.pct), r.ltm == null ? NM_TEXT : TEXT1, w)}
+                          </td>
+                        )}
                         {showQuarters && data.quarters.map((p, i) => (
                           <td key={p.label} style={{ ...td, background: i === baseIdx ? BASE_TINT : rowBg, borderLeft: i === 0 ? `1px solid ${RULE}` : undefined }}>
                             {markable(s, r, quarterTarget(p.fy, p.q), p.label, fmtVal(r.quarterly[i], r.pct), r.quarterly[i] == null ? NM_TEXT : TEXT1, key || i === baseIdx ? 700 : 400)}

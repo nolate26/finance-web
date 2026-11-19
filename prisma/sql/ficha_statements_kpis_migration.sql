@@ -63,10 +63,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS "ficha_kpis_ticker_period_type_year_quarter_se
 -- "A" ⇒ quarter = 0 · "Q" ⇒ quarter 1..4
 ALTER TABLE "ficha_statements" DROP CONSTRAINT IF EXISTS "ficha_statements_period_check";
 ALTER TABLE "ficha_statements" ADD CONSTRAINT "ficha_statements_period_check"
-  CHECK ((period_type = 'A' AND quarter = 0) OR (period_type = 'Q' AND quarter BETWEEN 1 AND 4));
+  CHECK ((period_type = 'A' AND quarter = 0) OR (period_type IN ('Q', 'L') AND quarter BETWEEN 1 AND 4));
 
 ALTER TABLE "ficha_kpis" DROP CONSTRAINT IF EXISTS "ficha_kpis_period_check";
 ALTER TABLE "ficha_kpis" ADD CONSTRAINT "ficha_kpis_period_check"
-  CHECK ((period_type = 'A' AND quarter = 0) OR (period_type = 'Q' AND quarter BETWEEN 1 AND 4));
+  CHECK ((period_type = 'A' AND quarter = 0) OR (period_type IN ('Q', 'L') AND quarter BETWEEN 1 AND 4));
 
 COMMIT;
