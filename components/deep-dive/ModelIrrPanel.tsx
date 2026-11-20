@@ -80,7 +80,7 @@ function irrTone(v: number | null, ke: number): { color: string; bg: string } {
 // Input numérico con borrador local: deja tipear libremente y sólo confirma al salir o
 // con Enter. Muestra `decimals` decimales; si el texto no cambió no confirma nada (así
 // redondear la vista no pisa el valor exacto). Vacío → onClear (vuelve al valor del modelo).
-function NumInput({ value, onCommit, onClear, suffix, decimals = 1, step, min, width = 84, compact = false, edited = false }: {
+export function NumInput({ value, onCommit, onClear, suffix, decimals = 1, step, min, width = 84, compact = false, edited = false }: {
   value: number | null; onCommit: (v: number) => void; onClear?: () => void;
   suffix?: string; decimals?: number; step?: number; min?: number; width?: number | string;
   compact?: boolean; edited?: boolean;
@@ -117,7 +117,7 @@ function NumInput({ value, onCommit, onClear, suffix, decimals = 1, step, min, w
   );
 }
 
-function Field({ label, hint, children }: { label: string; hint?: React.ReactNode; children: React.ReactNode }) {
+export function Field({ label, hint, children }: { label: string; hint?: React.ReactNode; children: React.ReactNode }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
       <span style={{ fontSize: 11.5, fontWeight: 700, color: C.TXT2, letterSpacing: "0.02em" }}>{label}</span>
@@ -127,7 +127,7 @@ function Field({ label, hint, children }: { label: string; hint?: React.ReactNod
   );
 }
 
-function LinkBtn({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+export function LinkBtn({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
   return (
     <button type="button" onClick={onClick} style={{
       background: "none", border: "none", padding: 0, cursor: "pointer",
@@ -137,7 +137,7 @@ function LinkBtn({ onClick, children }: { onClick: () => void; children: React.R
 }
 
 // Quita un año de un mapa de overrides (vaciar la celda = volver al valor del modelo).
-const without = (m: Record<number, number>, year: number) => {
+export const without = (m: Record<number, number>, year: number) => {
   const next = { ...m };
   delete next[year];
   return next;

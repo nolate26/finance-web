@@ -1,17 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { Table2, GitCompareArrows } from "lucide-react";
+import { Table2, GitCompareArrows, FileSpreadsheet } from "lucide-react";
 import ModelsExtractor from "@/components/extract/ModelsExtractor";
 import ConsensusExtractor from "@/components/extract/ConsensusExtractor";
+import FichaExtractor from "@/components/extract/FichaExtractor";
 import { TEXT, BORDER, PATRIA } from "@/lib/patriaTheme";
 
 // Extract Data: query builder visual sobre los modelos de analista y el consenso
 // Bloomberg. Sin SQL: filtros → selección → tabla → Excel / PDF.
 //   · Financial Models — exportador masivo (último snapshot por empresa/banco).
+//   · Ficha            — fichas trimestrales (macro "Send Ficha"): estados + KPIs por período.
 //   · Consensus View   — consenso vs modelo por año objetivo, última foto o historia.
 
-type View = "models" | "consensus";
+type View = "models" | "ficha" | "consensus";
 
 const VIEWS: { key: View; label: string; icon: typeof Table2; sub: string }[] = [
   {
@@ -19,6 +21,12 @@ const VIEWS: { key: View; label: string; icon: typeof Table2; sub: string }[] = 
     label: "Financial Models",
     icon:  Table2,
     sub:   "Bulk extract of analyst models · filter by country, sector, model type and ticker · pick the metrics and years · export to Excel / PDF",
+  },
+  {
+    key:   "ficha",
+    label: "Ficha",
+    icon:  FileSpreadsheet,
+    sub:   "Quarterly fichas (Send Ficha macro) · pick companies, period types (annual, quarterly, LTM, YTD) and lines · export to Excel / PDF",
   },
   {
     key:   "consensus",
@@ -72,8 +80,9 @@ export default function ExtractPage() {
         })}
       </div>
 
-      {/* Las dos vistas se mantienen montadas para no perder la selección al cambiar de pestaña. */}
+      {/* Las vistas se mantienen montadas para no perder la selección al cambiar de pestaña. */}
       <div hidden={view !== "models"}><ModelsExtractor /></div>
+      <div hidden={view !== "ficha"}><FichaExtractor /></div>
       <div hidden={view !== "consensus"}><ConsensusExtractor /></div>
     </div>
   );

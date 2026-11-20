@@ -23,6 +23,7 @@ import { PATRIA, FONT_PRIMARY, FONT_SECONDARY, TEXT, BORDER } from "@/lib/patria
 import { computeBands } from "@/lib/stats";
 import { computeModelIrr, irrYears } from "@/lib/modelIrr";
 import ModelIrrPanel, { type IrrInputs, type IrrDefaults } from "@/components/deep-dive/ModelIrrPanel";
+import ModelDcfPanel, { runDcf, type DcfInputs, type DcfContext } from "@/components/deep-dive/ModelDcfPanel";
 import type { ValuationPoint } from "@/app/api/companies/[ticker]/route";
 
 // ── Estimate-evolution chart metrics (Recommendation por defecto) ───────────────
@@ -427,6 +428,11 @@ const IRR_DEFAULT_KE      = 0.10;
 const IRR_DEFAULT_PE_STEP = 2;
 const IRR_FALLBACK_PE     = 10;
 
+// Supuestos por defecto del DCF (FCFF a WACC).
+const DCF_DEFAULT_WACC   = 0.10;
+const DCF_DEFAULT_GROWTH = 0.03;
+const DCF_DEFAULT_STEP   = 0.005;
+
 // Mediana del P/E Fwd de los últimos 5 años (desde la última fecha con dato).
 function peMedian5y(points: ValuationPoint[]): number | null {
   const last = points.at(-1)?.date;
@@ -453,6 +459,8 @@ export default function ModelExplorer({ ticker, consensusEstimates = [], valuati
   const [showIrr,      setShowIrr]      = useState(false);
   // Sólo lo que el usuario editó; el resto sale de los defaults calculados.
   const [irrEdits,     setIrrEdits]     = useState<Partial<IrrInputs>>({});
+  const [showDcf,      setShowDcf]      = useState(false);
+  const [dcfEdits,     setDcfEdits]     = useState<Partial<DcfInputs>>({});
   const [revising,     setRevising]     = useState(false);
   // Se incrementa tras una revisión manual para volver a pedir el historial.
   const [reloadKey,    setReloadKey]    = useState(0);
@@ -465,6 +473,7 @@ export default function ModelExplorer({ ticker, consensusEstimates = [], valuati
     setHistory(null);
     setSelectedDate("");
     setIrrEdits({});
+    setDcfEdits({});
 
     fetch(`/api/companies/${tickerPath(ticker)}/model`)
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
@@ -625,6 +634,42 @@ export default function ModelExplorer({ ticker, consensusEstimates = [], valuati
     baseOverrides:   irrInputs.baseOverrides,
   });
   const irrHorizon = Math.min(irrInputs.horizon, irrYearsData.length);
+
+  // ── DCF (FCFF desde el EBIT, a WACC) ────────────────────────────────────────
+  // FCFF = EBIT × (1 − t) + D&A − Capex − Var WK en todos los años proyectados; el puente
+  // usa deuda neta y minoritarios al cierre del año base (ver lib/modelDcf).
+  const dcfCtx = useMemo<DcfContext>(() => {
+    const first = enriched.find(d => d.isEst);
+    const at    = (y: number) => byYear.get(y) ?? null;
+    return {
+      currentYear: new Date().getFullYear(),
+      fcffSeries:  enriched.map(d => ({
+        year: d.year, isEst: d.isEst, revenue: d.revenue, ebit: d.ebit, taxRate: d.taxRate,
+        da: d.da, capex: d.capex, wc: d.workingCapital, netDebt: d.netDebt,
+      })),
+      terminalFor:    (_g, lastFlow) => lastFlow,
+      terminalSource: "FCFF del último año proyectado",
+      bridgeFor: (base) => [
+        { key: "netDebt",    label: `Net debt ${base}`,   value: at(base)?.netDebt ?? null },
+        { key: "minorities", label: `Minorities ${base}`, value: at(base)?.minorities ?? null },
+      ],
+      refMcap:  first?.effMarketCap ?? null,
+      refPrice: first?.effPrice ?? null,
+    };
+  }, [enriched, byYear]);
+  const dcfInputs: DcfInputs = {
+    rate:            DCF_DEFAULT_WACC,
+    growth:          DCF_DEFAULT_GROWTH,
+    rateStep:        DCF_DEFAULT_STEP,
+    growthStep:      DCF_DEFAULT_STEP,
+    includeCurrent:  false,
+    flowOverrides:   {},
+    fcffOverrides:   {},
+    terminalFlow:    null,
+    bridgeOverrides: {},
+    ...dcfEdits,
+  };
+  const dcfResult = runDcf(dcfCtx, dcfInputs);
 
   // ── Loading / error states ─────────────────────────────────────────────────
   if (loading) {
@@ -989,6 +1034,21 @@ export default function ModelExplorer({ ticker, consensusEstimates = [], valuati
                       <span style={{ fontSize: 10.5, color: C.TXT2, ...MONO }}>exit P/E {irrInputs.exitPe.toFixed(1)}x</span>
                     </span>
                   : <span style={{ color: C.TXT2 }}>—</span> },
+              { label: "DCF value",       value: dcfResult.price !== null
+                  ? <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontWeight: 800, color: C.TXT, ...MONO }}>{fmtSmall(dcfResult.price)}</span>
+                      {dcfResult.upside !== null && (
+                        <span style={{
+                          padding: "1px 10px", borderRadius: 4, fontWeight: 800, ...MONO,
+                          background: dcfResult.upside >= 0 ? "rgba(0,30,175,0.12)" : "rgba(248,72,94,0.12)",
+                          color: dcfResult.upside >= 0 ? C.GREEN : C.RED,
+                        }}>{fmtPct(dcfResult.upside)}</span>
+                      )}
+                      <span style={{ fontSize: 10.5, color: C.TXT2, ...MONO }}>
+                        WACC {(dcfInputs.rate * 100).toFixed(1)}% · g {(dcfInputs.growth * 100).toFixed(1)}%
+                      </span>
+                    </span>
+                  : <span style={{ color: C.TXT2 }}>—</span> },
               { label: "Thesis",          value: header.thesis
                   ? <span style={{ color: C.TXT, fontStyle: "italic" }}>{header.thesis}</span>
                   : <span style={{ color: C.TXT2 }}>—</span> },
@@ -1107,6 +1167,24 @@ export default function ModelExplorer({ ticker, consensusEstimates = [], valuati
             <span style={{ ...MONO, fontWeight: 800, opacity: 0.85 }}>· {fmtPct(irrResult.irr, true)}</span>
           )}
         </button>
+        <button
+          type="button"
+          onClick={() => setShowDcf(v => !v)}
+          aria-pressed={showDcf}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "4px 12px", borderRadius: 5, cursor: "pointer",
+            border: `1px solid ${C.ACC}`,
+            background: showDcf ? C.ACC : C.WHITE,
+            color:      showDcf ? C.WHITE : C.ACC,
+            fontFamily: FONT_SECONDARY, fontWeight: 700, fontSize: 12.5, letterSpacing: "0.02em",
+          }}
+        >
+          DCF automático
+          {dcfResult.price !== null && (
+            <span style={{ ...MONO, fontWeight: 800, opacity: 0.85 }}>· {fmtSmall(dcfResult.price)}</span>
+          )}
+        </button>
         </div>
       </div>
 
@@ -1122,6 +1200,19 @@ export default function ModelExplorer({ ticker, consensusEstimates = [], valuati
           years={irrYearsData}
           refPrice={irrRefPrice}
           asOf={irrAsOf}
+          ccyLabel={ccySuffix(header.currency, header.unit)}
+        />
+      )}
+
+      {showDcf && (
+        <ModelDcfPanel
+          mode="fcff"
+          inputs={dcfInputs}
+          defaults={{ rate: DCF_DEFAULT_WACC, growth: DCF_DEFAULT_GROWTH }}
+          ctx={dcfCtx}
+          result={dcfResult}
+          onChange={patch => setDcfEdits(prev => ({ ...prev, ...patch }))}
+          onReset={() => setDcfEdits({})}
           ccyLabel={ccySuffix(header.currency, header.unit)}
         />
       )}

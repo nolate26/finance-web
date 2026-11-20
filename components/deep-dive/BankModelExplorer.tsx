@@ -22,6 +22,8 @@ import { useIsAdmin } from "@/lib/useIsAdmin";
 import { PATRIA, FONT_PRIMARY, FONT_SECONDARY, TEXT, BORDER } from "@/lib/patriaTheme";
 import { computeModelIrr, irrYears } from "@/lib/modelIrr";
 import ModelIrrPanel, { exitMultipleOf, type IrrInputs, type IrrDefaults } from "@/components/deep-dive/ModelIrrPanel";
+import { dcfYears } from "@/lib/modelDcf";
+import ModelDcfPanel, { runDcf, type DcfInputs, type DcfContext } from "@/components/deep-dive/ModelDcfPanel";
 
 // ── Estimate-evolution chart metrics (Net Income default) ────────────────────────
 // Banks don't carry EBITDA / FCFE, so we track the closest analogues.
@@ -312,6 +314,11 @@ const IRR_DEFAULT_KE       = 0.12;
 const IRR_DEFAULT_GROWTH   = 0.04;
 const IRR_DEFAULT_ROE_STEP = 0.02;
 
+// Supuestos por defecto del DCF de bancos (DDM a Ke): los mismos Ke y g de la TIR.
+const DCF_DEFAULT_KE     = IRR_DEFAULT_KE;
+const DCF_DEFAULT_GROWTH = IRR_DEFAULT_GROWTH;
+const DCF_DEFAULT_STEP   = 0.005;
+
 // ── Cell renderer ──────────────────────────────────────────────────────────────
 function renderCell(value: number | null, fmt: Fmt, colorize: boolean): { text: string; color: string } {
   if (value === null) return { text: "-", color: "rgba(13,13,56,0.45)" };
@@ -426,6 +433,8 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
   const [showIrr,      setShowIrr]      = useState(false);
   // Sólo lo que el usuario editó; el resto sale de los defaults calculados.
   const [irrEdits,     setIrrEdits]     = useState<Partial<IrrInputs>>({});
+  const [showDcf,      setShowDcf]      = useState(false);
+  const [dcfEdits,     setDcfEdits]     = useState<Partial<DcfInputs>>({});
   const [revising,     setRevising]     = useState(false);
   // Se incrementa tras una revisión manual para volver a pedir el historial.
   const [reloadKey,    setReloadKey]    = useState(0);
@@ -438,6 +447,7 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
     setHistory(null);
     setSelectedDate("");
     setIrrEdits({});
+    setDcfEdits({});
 
     fetch(`/api/companies/${tickerPath(ticker)}/bank-model`)
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
@@ -592,6 +602,45 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
     baseOverrides:   irrInputs.baseOverrides,
   });
   if (irrMultiple === null && irrYearsData.length > 0) irrResult.issue = "Ke ≤ g: el P/BV teórico no está definido.";
+
+  // ── DCF (DDM: dividendos + recompras a Ke) ──────────────────────────────────
+  // Todos los años proyectados con Net Income (el dividendo puede faltar → 0). Flujo
+  // terminal sugerido = NI × (1 − g / ROE) del último año: lo repartible creciendo a g.
+  const dcfCtx = useMemo<DcfContext>(() => {
+    const projected = enriched.filter(d => d.isEst);
+    const years = dcfYears(projected.map(d => ({
+      year: d.year,
+      flow: d.controllingNetIncome === null ? null : divBuyback(byYear, d.year) ?? 0,
+    })));
+    const lastYear = years.at(-1)?.year;
+    const lastNi   = lastYear !== undefined ? fld(byYear, lastYear, "controllingNetIncome") : null;
+    const lastRoe  = lastYear !== undefined ? roeOf(byYear, lastYear) : null;
+    const first    = projected[0];
+    return {
+      currentYear: new Date().getFullYear(),
+      years,
+      terminalFor: (g, lastFlow) => lastNi !== null && lastRoe !== null && lastRoe > 0 ? lastNi * (1 - g / lastRoe) : lastFlow,
+      terminalSource: lastRoe !== null && lastRoe > 0
+        ? `NI ${lastYear}E × (1 − g / ROE ${(lastRoe * 100).toFixed(1)}%)`
+        : "Dividendos + recompras del último año (sin ROE)",
+      bridgeFor: () => [],
+      refMcap:   first?.effMarketCap ?? null,
+      refPrice:  first?.effPrice ?? null,
+    };
+  }, [enriched, byYear]);
+  const dcfInputs: DcfInputs = {
+    rate:            DCF_DEFAULT_KE,
+    growth:          DCF_DEFAULT_GROWTH,
+    rateStep:        DCF_DEFAULT_STEP,
+    growthStep:      DCF_DEFAULT_STEP,
+    includeCurrent:  false,
+    fcffOverrides:   {},
+    flowOverrides:   {},
+    terminalFlow:    null,
+    bridgeOverrides: {},
+    ...dcfEdits,
+  };
+  const dcfResult = runDcf(dcfCtx, dcfInputs);
 
   // ── Loading / error states ─────────────────────────────────────────────────
   if (loading) {
@@ -905,6 +954,21 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
                       )}
                     </span>
                   : <span style={{ color: C.TXT2 }}>—</span> },
+              { label: "DCF value (DDM)", value: dcfResult.price !== null
+                  ? <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontWeight: 800, color: C.TXT, ...MONO }}>{fmtMoney(dcfResult.price)}</span>
+                      {dcfResult.upside !== null && (
+                        <span style={{
+                          padding: "1px 10px", borderRadius: 4, fontWeight: 800, ...MONO,
+                          background: dcfResult.upside >= 0 ? "rgba(0,30,175,0.12)" : "rgba(248,72,94,0.12)",
+                          color: dcfResult.upside >= 0 ? C.GREEN : C.RED,
+                        }}>{fmtPct(dcfResult.upside, true)}</span>
+                      )}
+                      <span style={{ fontSize: 10.5, color: C.TXT2, ...MONO }}>
+                        Ke {(dcfInputs.rate * 100).toFixed(1)}% · g {(dcfInputs.growth * 100).toFixed(1)}%
+                      </span>
+                    </span>
+                  : <span style={{ color: C.TXT2 }}>—</span> },
               { label: "Thesis",          value: header.thesis
                   ? <span style={{ color: C.TXT, fontStyle: "italic" }}>{header.thesis}</span>
                   : <span style={{ color: C.TXT2 }}>—</span> },
@@ -1017,6 +1081,24 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
               <span style={{ ...MONO, fontWeight: 800, opacity: 0.85 }}>· {fmtPct(irrResult.irr)}</span>
             )}
           </button>
+          <button
+            type="button"
+            onClick={() => setShowDcf(v => !v)}
+            aria-pressed={showDcf}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "4px 12px", borderRadius: 5, cursor: "pointer",
+              border: `1px solid ${C.ACC}`,
+              background: showDcf ? C.ACC : C.WHITE,
+              color:      showDcf ? C.WHITE : C.ACC,
+              fontFamily: FONT_SECONDARY, fontWeight: 700, fontSize: 12.5, letterSpacing: "0.02em",
+            }}
+          >
+            DCF automático
+            {dcfResult.price !== null && (
+              <span style={{ ...MONO, fontWeight: 800, opacity: 0.85 }}>· {fmtMoney(dcfResult.price)}</span>
+            )}
+          </button>
         </div>
       </div>
 
@@ -1032,6 +1114,19 @@ export default function BankModelExplorer({ ticker, consensusEstimates = [] }: B
           years={irrYearsData}
           refPrice={irrRefPrice}
           asOf={irrAsOf}
+          ccyLabel={ccySuffix(header.currency, header.unit)}
+        />
+      )}
+
+      {showDcf && (
+        <ModelDcfPanel
+          mode="ddm"
+          inputs={dcfInputs}
+          defaults={{ rate: DCF_DEFAULT_KE, growth: DCF_DEFAULT_GROWTH }}
+          ctx={dcfCtx}
+          result={dcfResult}
+          onChange={patch => setDcfEdits(prev => ({ ...prev, ...patch }))}
+          onReset={() => setDcfEdits({})}
           ccyLabel={ccySuffix(header.currency, header.unit)}
         />
       )}

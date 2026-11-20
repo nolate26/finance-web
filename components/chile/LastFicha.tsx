@@ -1,8 +1,9 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Download, MessageSquare, MessageSquareText, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { ChevronDown, Download, FileDown, Loader2, MessageSquare, MessageSquareText, RefreshCw, Search, Trash2, X } from "lucide-react";
 import type { FichaRow as FichaDoc } from "@/app/api/fichas/route";
+import { downloadLastFichaPdf, type PdfCell, type PdfRow } from "@/lib/lastFichaPdf";
 import { usePhone } from "@/lib/useBreakpoint";
 import { PATRIA, FONT_PRIMARY, FONT_SECONDARY, TEXT } from "@/lib/patriaTheme";
 import type {
@@ -216,6 +217,67 @@ export default function LastFicha({ initialTicker = null }: { initialTicker?: st
     ...(showComments ? [{ key: "comments", width: 1 }] : []),
   ] : [];
 
+  // ── PDF: Earnings comment + todas las filas con su comentario a la derecha ──
+  // Siempre con todos los bloques de escritorio (aunque se descargue desde el teléfono) y con
+  // los años que se están viendo. Las celdas marcadas salen en naranja y su nota va a la
+  // columna de comentarios junto al comentario de la línea.
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const exportPdf = async () => {
+    if (!data) return;
+    setPdfBusy(true);
+    try {
+      type PdfCol = { head: string; target: string; label: string; cell: (r: LastFichaRow) => PdfCell };
+      const num = (v: number | null, f: LastFichaFmt): PdfCell => ({ text: fmtVal(v, f) });
+      const cols: PdfCol[] = [
+        ...years.map(({ y, i }): PdfCol => ({ head: String(y), target: yearTarget(y), label: String(y), cell: (r) => num(r.annual[i], r.fmt) })),
+        ...(data.ltmLabel ? [{ head: "LTM", target: "ltm", label: `LTM ${data.ltmLabel}`, cell: (r: LastFichaRow) => num(r.ltm, r.fmt) }] : []),
+        ...(data.ytd ? [
+          { head: data.ytd.prev, target: "ytdp", label: `Acumulado ${data.ytd.prev}`, cell: (r: LastFichaRow) => num(r.ytdPrev, r.fmt) },
+          { head: data.ytd.cur, target: "ytd", label: `Acumulado ${data.ytd.cur}`, cell: (r: LastFichaRow) => num(r.ytd, r.fmt) },
+        ] : []),
+        ...data.quarters.map((p, i): PdfCol => ({ head: qHead(p.fy, p.q), target: quarterTarget(p.fy, p.q), label: p.label, cell: (r) => num(r.quarterly[i], r.fmt) })),
+        ...(["yoy", "qoq"] as const).map((t): PdfCol => ({
+          head: t.toUpperCase(), target: t, label: `Var% ${t.toUpperCase()}`,
+          cell: (r) => { const v = fmtVar(r[t], r.fmt); return { text: v.text, tone: v.color === POS ? "pos" : v.color === NEG ? "neg" : "muted" }; },
+        })),
+      ];
+      const rows: PdfRow[] = [];
+      data.sections.forEach((s, si) => {
+        const prev = data.sections[si - 1];
+        const newBlock = s.source !== "kpi" || prev?.source !== "kpi";
+        if (newBlock && si > 0) rows.push({ kind: "blank", label: "" });
+        if (newBlock) rows.push({ kind: "section", label: s.title });
+        if (s.source === "kpi") rows.push({ kind: "band", label: s.section });
+        for (const r of s.rows) {
+          if (r.kind === "blank") { rows.push({ kind: "blank", label: "" }); continue; }
+          const notes: string[] = [];
+          const lc = comments.get(ckey(r.source, r.section, r.line, "line"));
+          if (lc) notes.push(lc.comment);
+          const cells = cols.map((c) => {
+            const out = c.cell(r);
+            const cm = comments.get(ckey(r.source, r.section, r.line, c.target));
+            if (!cm || !out.text) return out;
+            notes.push(`• ${c.label}: ${cm.comment}`);
+            return { ...out, tone: "marked" as const };
+          });
+          rows.push({ kind: "value", label: r.line, cells, comment: notes.join("\n"), bold: r.bold, indent: r.indent && r.source === "statement", band: r.band, ruleTop: r.borderTop });
+        }
+      });
+      const main = docs?.find((d) => !d.multi) ?? null;
+      const name = data.name ?? data.ticker;
+      await downloadLastFichaPdf({
+        filename: `last-ficha-${name.replace(/[^\w-]+/g, "-")}-${data.base.label.replace(/\s+/g, "")}`,
+        title: name,
+        subtitle: `${data.ticker} · ${data.currency} millones${data.converted ? ` (desde ${data.reportedCurrency} con FX ${data.fx?.toLocaleString("en-US")})` : ""} · trimestre ${data.base.label} · ficha cargada el ${fmtDate(data.updatedAt)}`,
+        earnings: main ? { badge: main.quarter_label, title: main.title, text: main.description ?? "" } : null,
+        headers: cols.map((c) => c.head),
+        rows,
+      });
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
   // Valor clickeable: abre el editor y, si tiene comentario, queda encerrado en un círculo.
   const markable = (r: LastFichaRow, target: string, label: string, text: string, color: string) => {
     if (!text) return null;
@@ -422,6 +484,19 @@ export default function LastFicha({ initialTicker = null }: { initialTicker?: st
 
       {/* Ficha PDF de Presentations: comentario del quarter + PDF. */}
       {data && docs && <FichaDocPanel docs={docs} baseLabel={data.base.label} />}
+      {data && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", margin: "-4px 0 14px" }}>
+          <button onClick={() => void exportPdf()} disabled={pdfBusy || docs == null}
+            title="Descarga el Earnings comment y toda la ficha con los comentarios de la derecha y las celdas marcadas"
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 6, fontSize: 12, fontWeight: 700, color: "#fff", background: PATRIA.kingBlue, border: "none", cursor: pdfBusy ? "default" : "pointer", opacity: pdfBusy || docs == null ? 0.7 : 1 }}>
+            {pdfBusy ? <Loader2 size={13} style={{ animation: "spin 0.8s linear infinite" }} /> : <FileDown size={13} />}
+            {pdfBusy ? "Armando PDF…" : "Descargar ficha en PDF"}
+          </button>
+          <span style={{ fontSize: 11, color: TEXT3 }}>
+            Earnings comment + todas las filas con su comentario · {years.length} años{data.ltmLabel ? " + LTM" : ""}{data.ytd ? " + acumulados" : ""} + trimestres
+          </span>
+        </div>
+      )}
 
       {error && <div style={{ padding: 24, textAlign: "center", color: NEG, fontSize: 13 }}>{error}</div>}
       {!error && companies && companies.length === 0 && (
