@@ -130,7 +130,7 @@ const roePct = (v: number | null | undefined): string =>
   v == null ? "—" : !isFinite(v) ? "NM" : (v * 100).toFixed(1) + "%";
 
 // ── conv() ───────────────────────────────────────────────────────────────────────
-function makeConv(tc: number) {
+export function makeConv(tc: number) {
   return (x: number | null | undefined, ccy: string | null | undefined): number | null => {
     if (x == null || !isFinite(x)) return null;
     if (ccy === "CLP") return x / tc;
@@ -247,7 +247,7 @@ export interface CompanyGroup { cons: DisplayRow; series: DisplayRow[]; units: U
 
 // Ticker Bloomberg → unidad agregable, para cruzar las carteras (que vienen con ticker y
 // nada más). El denominador del ponderador viaja acá mismo: las acciones de ESA unidad.
-interface TickerUnitRef { unitKey: string; shares: number | null; company: string; series: string }
+export interface TickerUnitRef { unitKey: string; shares: number | null; company: string; series: string }
 
 /**
  * Índice ticker → unidad a partir de lo que la vista ya tiene resuelto.
@@ -258,7 +258,7 @@ interface TickerUnitRef { unitKey: string; shares: number | null; company: strin
  * posición se cargaría contra la unidad equivocada. Verificado contra la base: con esta
  * regla los 10 tickers de serie resuelven bien y no hay una sola colisión.
  */
-function buildUnitByTicker(companies: SsV1Company[]): Map<string, TickerUnitRef> {
+export function buildUnitByTicker(companies: SsV1Company[]): Map<string, TickerUnitRef> {
   const m = new Map<string, TickerUnitRef>();
   for (const c of companies) {
     const base = normName(c.company);
@@ -279,7 +279,7 @@ function buildUnitByTicker(companies: SsV1Company[]): Map<string, TickerUnitRef>
 const dividendosOf = (a: Alloc): number | null =>
   a.payout != null && a.util26Usd != null ? Math.max(a.payout * a.util26Usd, 0) : null;
 
-function mcapOf(s: SsV1Series, tc: number): number | null {
+export function mcapOf(s: SsV1Series, tc: number): number | null {
   if (s.price == null || s.shares == null) return null;
   const raw = s.price * s.shares;
   return s.currency === "CLP" ? raw / tc : s.currency === "USD" ? raw : null;
@@ -395,7 +395,7 @@ const addAlloc = (target: Alloc, src: Alloc, w: number): void => {
   }
 };
 const UNIT_ALIAS: Record<string, string> = { sqm: "soquimich" };
-const toUnitKey = (imCompany: string): string => {
+export const toUnitKey = (imCompany: string): string => {
   let k = normName(imCompany);
   for (const a in UNIT_ALIAS) if (k === a || k.startsWith(a + "-")) k = UNIT_ALIAS[a] + k.slice(a.length);
   return k;

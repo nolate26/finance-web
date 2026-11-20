@@ -6,16 +6,18 @@ import TabSpacer from "@/components/TabSpacer";
 import ActiveDecisions from "@/components/chile/ActiveDecisions";
 import StockSelectionV1 from "@/components/chile/StockSelectionV1";
 import LastFicha from "@/components/chile/LastFicha";
+import ResumenResultados from "@/components/chile/ResumenResultados";
 
 // Top Picks salió de acá: vive en Analyst Estimates como "Top Picks Chile".
 // Projections se eliminó (2026-11-18): las proyecciones salen de los modelos del analista.
-type ActiveTab = "stock-selection" | "last-ficha" | "active-decisions";
+type ActiveTab = "stock-selection" | "last-ficha" | "resumen" | "active-decisions";
 
-// `spacerBefore` abre un separador antes de la pestaña: agrupa Stock Selection y
-// Last Ficha a la izquierda y despega Multiples Range del bloque principal.
+// `spacerBefore` abre un separador antes de la pestaña: agrupa Stock Selection, Last
+// Ficha y Resumen de Resultados a la izquierda y despega Multiples Range del bloque principal.
 const TABS: { key: ActiveTab; label: string; spacerBefore?: boolean }[] = [
   { key: "stock-selection",  label: "Stock Selection" },
   { key: "last-ficha",       label: "Last Ficha"      },
+  { key: "resumen",          label: "Resumen de Resultados" },
   { key: "active-decisions", label: "Multiples Range", spacerBefore: true },
 ];
 const isTab = (t: string | null): t is ActiveTab => TABS.some((x) => x.key === t);
@@ -92,6 +94,9 @@ function ChilePageContent() {
       {/* ── Last Ficha ──────────────────────────────────────────────────────── */}
       {/* key: un link nuevo a otra compañía vuelve a montar la vista en esa compañía. */}
       {activeTab === "last-ficha" && <LastFicha key={tickerParam ?? ""} initialTicker={tabParam === "last-ficha" ? tickerParam : null} />}
+
+      {/* ── Resumen de Resultados ──────────────────────────────────────────── */}
+      {activeTab === "resumen" && <ResumenResultados />}
 
       {/* ── Active Decisions ────────────────────────────────────────────────── */}
       {activeTab === "active-decisions" && <ActiveDecisions />}
