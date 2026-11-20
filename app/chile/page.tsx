@@ -1,6 +1,7 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import TabSpacer from "@/components/TabSpacer";
 import ActiveDecisions from "@/components/chile/ActiveDecisions";
 import StockSelectionV1 from "@/components/chile/StockSelectionV1";
@@ -17,9 +18,25 @@ const TABS: { key: ActiveTab; label: string; spacerBefore?: boolean }[] = [
   { key: "last-ficha",       label: "Last Ficha"      },
   { key: "active-decisions", label: "Multiples Range", spacerBefore: true },
 ];
+const isTab = (t: string | null): t is ActiveTab => TABS.some((x) => x.key === t);
 
+// useSearchParams necesita un Suspense alrededor (Next 15).
 export default function ChilePage() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>("stock-selection");
+  return (
+    <Suspense fallback={null}>
+      <ChilePageContent />
+    </Suspense>
+  );
+}
+
+function ChilePageContent() {
+  // Deep link: /chile?tab=last-ficha&ticker=ANDINAB%20CI%20EQUITY (mini botón de Stock
+  // Selection). Se re-lee en cada navegación: el link apunta a esta misma página.
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const tickerParam = searchParams.get("ticker");
+  const [activeTab, setActiveTab] = useState<ActiveTab>(isTab(tabParam) ? tabParam : "stock-selection");
+  useEffect(() => { if (isTab(tabParam)) setActiveTab(tabParam); }, [tabParam, tickerParam]);
 
   return (
     <div className="max-w-[1600px] mx-auto page-shell">
@@ -73,7 +90,8 @@ export default function ChilePage() {
       {activeTab === "stock-selection" && <StockSelectionV1 />}
 
       {/* ── Last Ficha ──────────────────────────────────────────────────────── */}
-      {activeTab === "last-ficha" && <LastFicha />}
+      {/* key: un link nuevo a otra compañía vuelve a montar la vista en esa compañía. */}
+      {activeTab === "last-ficha" && <LastFicha key={tickerParam ?? ""} initialTicker={tabParam === "last-ficha" ? tickerParam : null} />}
 
       {/* ── Active Decisions ────────────────────────────────────────────────── */}
       {activeTab === "active-decisions" && <ActiveDecisions />}

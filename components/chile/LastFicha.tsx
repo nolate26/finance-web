@@ -1,7 +1,8 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, MessageSquare, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { ChevronDown, Download, MessageSquare, MessageSquareText, RefreshCw, Search, Trash2, X } from "lucide-react";
+import type { FichaRow as FichaDoc } from "@/app/api/fichas/route";
 import { usePhone } from "@/lib/useBreakpoint";
 import { PATRIA, FONT_PRIMARY, FONT_SECONDARY, TEXT } from "@/lib/patriaTheme";
 import type {
@@ -17,6 +18,10 @@ import type {
 // Por defecto se ven los últimos 3 años (botón para ver todos). Clic en CUALQUIER valor
 // (año, LTM, trimestre o variación) = marcarlo con un círculo y dejarle un comentario
 // (ficha_comments: target "A2025" / "ltm" / "Q2026-3" / "yoy" / "qoq").
+//
+// Arriba de la tabla va la ficha PDF de Presentations (comentario del quarter + PDF), la
+// misma que se sube en Presentations → Fichas. Se abre en una compañía con
+// ?tab=last-ficha&ticker=… (mini botón de Stock Selection) vía `initialTicker`.
 //
 // Colores: Manual PATRIA, mapeando los de la planilla — barra de sección = dark blue, sub-
 // líneas = sky blue suave, bandas CFO/CFI/CFF = sky blue. Variación positiva = patria-blue,
@@ -86,7 +91,7 @@ interface EditTarget {
 }
 
 // ── Componente ──────────────────────────────────────────────────────────────────
-export default function LastFicha() {
+export default function LastFicha({ initialTicker = null }: { initialTicker?: string | null }) {
   const isPhone = usePhone();
   const [companies, setCompanies] = useState<LastFichaCompany[] | null>(null);
   const [ticker, setTicker] = useState<string | null>(null);
@@ -101,6 +106,7 @@ export default function LastFicha() {
   // En teléfono la tabla muestra un bloque por vez (chips), como Stock Selection.
   const [phoneView, setPhoneView] = useState<"var" | "quarters" | "years">("var");
   const [editor, setEditor] = useState<EditTarget | null>(null);
+  const [linkMiss, setLinkMiss] = useState<string | null>(null); // ticker del link sin ficha cargada
 
   // Lista de compañías. Abre la última consultada por este usuario, o la ficha subida más
   // recientemente.
@@ -112,12 +118,29 @@ export default function LastFicha() {
         setCompanies(d.companies);
         let saved: string | null = null;
         try { saved = localStorage.getItem(LS_TICKER); } catch { /* sin storage */ }
-        const pick = d.companies.find((c) => c.ticker === saved)
+        // Prioridad: la compañía del link, la última consultada, la ficha más nueva.
+        const wanted = initialTicker?.trim().toUpperCase().replace(/\s+/g, " ");
+        const linked = wanted ? d.companies.find((c) => c.ticker === wanted) : undefined;
+        if (wanted && !linked) setLinkMiss(wanted);
+        const pick = linked
+          ?? d.companies.find((c) => c.ticker === saved)
           ?? [...d.companies].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+        if (linked) { try { localStorage.setItem(LS_TICKER, linked.ticker); } catch { /* sin storage */ } }
         setTicker(pick?.ticker ?? null);
       })
       .catch(() => setError("No se pudo cargar la lista de fichas"));
-  }, []);
+  }, [initialTicker]);
+
+  // Ficha PDF de Presentations (comentario + PDF) de la compañía abierta.
+  const [docs, setDocs] = useState<FichaDoc[] | null>(null);
+  useEffect(() => {
+    if (!data?.ticker) return;
+    setDocs(null);
+    fetch(`/api/fichas?ticker=${encodeURIComponent(data.ticker)}`)
+      .then((r) => r.json())
+      .then((d: { fichas?: FichaDoc[] }) => setDocs(d.fichas ?? []))
+      .catch(() => setDocs([]));
+  }, [data?.ticker]);
 
   const load = useCallback((t: string, bk: string | null, loc: boolean) => {
     setLoading(true); setError(null);
@@ -390,6 +413,16 @@ export default function LastFicha() {
         </div>
       )}
 
+      {linkMiss && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", marginBottom: 10, borderRadius: 6, fontSize: 12, color: TEXT1, background: "rgba(255,107,6,0.08)", border: "1px solid rgba(255,107,6,0.28)" }}>
+          {linkMiss} todavía no tiene ficha cargada (se sube con la macro “Send Ficha”); se muestra otra compañía.
+          <button onClick={() => setLinkMiss(null)} aria-label="Cerrar" style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: TEXT3 }}><X size={13} /></button>
+        </div>
+      )}
+
+      {/* Ficha PDF de Presentations: comentario del quarter + PDF. */}
+      {data && docs && <FichaDocPanel docs={docs} baseLabel={data.base.label} />}
+
       {error && <div style={{ padding: 24, textAlign: "center", color: NEG, fontSize: 13 }}>{error}</div>}
       {!error && companies && companies.length === 0 && (
         <div style={{ padding: 24, textAlign: "center", color: TEXT3, fontSize: 13 }}>Todavía no hay fichas cargadas. Se suben con la macro “Send Ficha”.</div>
@@ -440,6 +473,85 @@ export default function LastFicha() {
         />
       )}
     </div>
+  );
+}
+
+// ── Ficha PDF de Presentations ──────────────────────────────────────────────────
+// La ficha individual (hay una viva por ticker: subir otra la reemplaza) con su comentario
+// del quarter y el PDF; debajo, las multi-empresa que incluyen a la compañía. El
+// comentario se recorta a unas líneas con "Ver todo" para no empujar la tabla.
+const CLAMP_PX = 118;
+
+function FichaDocPanel({ docs, baseLabel }: { docs: FichaDoc[]; baseLabel: string }) {
+  const [open, setOpen] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+  const textRef = useRef<HTMLParagraphElement>(null);
+  const main = docs.find((d) => !d.multi) ?? null;
+  const multis = docs.filter((d) => d.multi);
+  const text = main?.description?.trim() ?? "";
+  useEffect(() => {
+    const el = textRef.current;
+    setOverflows(!!el && el.scrollHeight > CLAMP_PX + 4);
+  }, [text]);
+
+  if (!main && multis.length === 0) {
+    return (
+      <div style={{ fontSize: 11.5, color: TEXT3, marginBottom: 12 }}>
+        Sin ficha PDF en Presentations para esta compañía (se sube en Presentations → Fichas).
+      </div>
+    );
+  }
+  return (
+    <div style={{ border: `1px solid ${BORDER}`, borderLeft: `3px solid ${PATRIA.orange}`, borderRadius: 8, background: "#fff", marginBottom: 14, overflow: "hidden" }}>
+      {main && <>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "8px 12px", background: SURFACE, borderBottom: text ? `1px solid ${BORDER}` : undefined }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 9.5, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "#C25205", background: "rgba(255,107,6,0.10)", border: "1px solid rgba(255,107,6,0.28)", borderRadius: 5, padding: "2px 7px" }}>
+            <MessageSquareText size={11} /> Earnings comment
+          </span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: TEXT1, background: "rgba(13,13,56,0.06)", border: "1px solid rgba(13,13,56,0.14)", borderRadius: 5, padding: "1px 7px", fontFamily: FONT_SECONDARY }}>{main.quarter_label}</span>
+          <span style={{ fontSize: 12.5, fontWeight: 700, color: TEXT1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: "1 1 200px" }}>{main.title}</span>
+          {main.quarter_label !== baseLabel && (
+            <span style={{ fontSize: 10.5, color: PATRIA.orange, fontWeight: 600 }} title="La ficha PDF es de otro trimestre que el que se está revisando">
+              ≠ trimestre {baseLabel}
+            </span>
+          )}
+          <span style={{ fontSize: 10.5, color: TEXT3, fontFamily: FONT_SECONDARY }}>subida el {fmtDate(main.created_at)}</span>
+          <PdfButton href={main.file_url} />
+        </div>
+        {text && (
+          <div style={{ padding: "10px 14px" }}>
+            <p ref={textRef} style={{ margin: 0, fontFamily: FONT_SECONDARY, fontSize: 12.5, lineHeight: 1.6, color: TEXT1, whiteSpace: "pre-wrap", maxHeight: open ? undefined : CLAMP_PX, overflow: "hidden", position: "relative" }}>
+              {text}
+            </p>
+            {(overflows || open) && (
+              <button onClick={() => setOpen((v) => !v)} style={{ marginTop: 6, background: "none", border: "none", padding: 0, fontSize: 11.5, fontWeight: 700, color: PATRIA.kingBlue, cursor: "pointer" }}>
+                {open ? "Ver menos" : "Ver todo el comentario"}
+              </button>
+            )}
+          </div>
+        )}
+      </>}
+      {multis.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "7px 12px", borderTop: main ? `1px solid ${BORDER}` : undefined, fontSize: 11.5, color: TEXT2 }}>
+          <span style={{ fontWeight: 700 }}>También en fichas multi-empresa:</span>
+          {multis.map((m) => (
+            <a key={m.id} href={m.file_url} target="_blank" rel="noopener noreferrer" title={m.description ?? m.title}
+              style={{ display: "inline-flex", alignItems: "center", gap: 4, color: PATRIA.kingBlue, fontWeight: 600, textDecoration: "none" }}>
+              <Download size={11} /> {m.title} · {m.quarter_label}
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PdfButton({ href }: { href: string }) {
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer"
+      style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 11px", borderRadius: 6, fontSize: 11.5, fontWeight: 700, color: PATRIA.kingBlue, background: "rgba(32,68,220,0.08)", border: "1px solid rgba(32,68,220,0.22)", textDecoration: "none", whiteSpace: "nowrap" }}>
+      <Download size={12} /> PDF
+    </a>
   );
 }
 

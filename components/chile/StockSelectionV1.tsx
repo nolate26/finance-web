@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { RefreshCw, LayoutGrid, X, Check, Plus, Save, Search, Pencil, RotateCcw, Lock, FileSpreadsheet, Printer, Maximize2, Minimize2 } from "lucide-react";
+import Link from "next/link";
+import { RefreshCw, LayoutGrid, X, Check, Plus, Save, Search, Pencil, RotateCcw, Lock, FileSpreadsheet, Printer, Maximize2, Minimize2, LineChart } from "lucide-react";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { usePhone } from "@/lib/useBreakpoint";
 import SsV1PrintView, { type PrintColGroup } from "./SsV1PrintView";
@@ -232,6 +233,9 @@ export interface DisplayRow {
   // se marca en la columna Empresa. Opcionales: las filas agregadas (índices, fondos) no tienen.
   fundSource?: SsV1Company["fundSource"];
   projSource?: SsV1Company["projSource"];
+  // Destinos de los links de la columna Empresa (formato normBBG: "ANDINAB CI").
+  modelTicker?: string | null;
+  fichaTicker?: string | null;
 }
 // Unidad agregable para el sumaproducto por índice: los primitivos aditivos (Alloc en
 // USD mn) + su M.Cap + su dividendo estimado. `key` = nombre normalizado (single/consol
@@ -337,7 +341,7 @@ function computeGroup(c: SsV1Company, tc: number): CompanyGroup {
   const base = normName(c.company);
 
   const ovr = c.overrides;
-  const src = { fundSource: c.fundSource, projSource: c.projSource };
+  const src = { fundSource: c.fundSource, projSource: c.projSource, modelTicker: c.modelTicker, fichaTicker: c.fichaTicker };
   if (!c.dual) {
     const s = c.series[0];
     const v = withPriceFields(computeV(seriesMcaps[0], whole), s);
@@ -1317,7 +1321,32 @@ export default function StockSelectionV1() {
                         <>
                           <div style={{ fontSize: isPhone ? 12.5 : 11, fontWeight: 600, color: TEXT1, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 5 }}>
                             {editMode && <Pencil size={11} color={EDIT_BORDER} />}
-                            {r.company}
+                            {/* Nombre → modelo del analista en el deep-dive (ModelExplorer o
+                                BankModelExplorer según la compañía). En modo edición el clic
+                                abre el editor, así que ahí no hay link. */}
+                            {editMode || !(r.modelTicker ?? r.tickerBBG) ? r.company : (
+                              // Se ve como link siempre (azul + subrayado punteado), no sólo al pasar el mouse.
+                              <Link href={modelHref(r)}
+                                title={r.projSource === "model" ? "Abrir el modelo del analista" : "Abrir la compañía (todavía sin modelo del analista)"}
+                                style={companyLink}
+                                onMouseEnter={(e) => { e.currentTarget.style.textDecorationStyle = "solid"; e.currentTarget.style.color = PATRIA.blue; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.textDecorationStyle = "dotted"; e.currentTarget.style.color = PATRIA.kingBlue; }}>
+                                {r.company}
+                              </Link>
+                            )}
+                            {/* Mini botón "modelo" (mismo destino que el nombre), al lado del de ficha. */}
+                            {!editMode && r.projSource === "model" && (
+                              <Link href={modelHref(r)} title="Abrir el modelo del analista" style={miniLinkBtn}>
+                                <LineChart size={10} />
+                              </Link>
+                            )}
+                            {/* Mini botón → Chile / Last Ficha de la compañía, último trimestre. */}
+                            {r.fichaTicker && !editMode && (
+                              <Link href={`/chile?tab=last-ficha&ticker=${encodeURIComponent(fullBBG(r.fichaTicker))}`}
+                                title="Ver su Last Ficha (último trimestre)" style={miniLinkBtn}>
+                                <FileSpreadsheet size={10} />
+                              </Link>
+                            )}
                             {r.kind === "consolidated" && <span style={consBadge}>consol.</span>}
                             {noFicha && !isPhone && <span style={noFichaBadge}>sin ficha</span>}
                             {r.projSource != null && r.projSource !== "model" && !isPhone && <span style={noModelBadge}>sin modelo</span>}
@@ -1859,7 +1888,20 @@ const retryBtn: React.CSSProperties = { marginTop: 10, padding: "6px 16px", bord
 // USD se marca algo más fuerte que CLP (es la excepción en un listado mayormente CLP).
 const ccyBadge = (ccy: "CLP" | "USD"): React.CSSProperties => ({ marginLeft: 5, fontSize: 9, fontWeight: 700, color: ccy === "USD" ? TEXT1 : TEXT3, background: ccy === "USD" ? "rgba(13,13,56,0.09)" : "rgba(13,13,56,0.05)", borderRadius: 3, padding: "1px 4px" });
 const consBadge: React.CSSProperties = { marginLeft: 6, fontSize: 8.5, fontWeight: 700, color: NAVY, background: "rgba(13,13,56,0.10)", borderRadius: 3, padding: "1px 5px", textTransform: "uppercase", letterSpacing: "0.04em" };
-const noFichaBadge: React.CSSProperties = { marginLeft: 6, fontSize: 8.5, fontWeight: 700, color: PATRIA.pink, background: "rgba(248,72,94,0.12)", borderRadius: 3, padding: "1px 5px", letterSpacing: "0.02em" };
+// Links de la columna Empresa: los tickers de ficha/modelo vienen como normBBG ("ANDINAB
+// CI"); el deep-dive y Last Ficha buscan el ticker completo ("ANDINAB CI EQUITY").
+const fullBBG = (t: string) => (/\bEQUITY$/i.test(t.trim()) ? t.trim() : `${t.trim()} EQUITY`);
+const modelHref = (r: DisplayRow) => `/companies?ticker=${encodeURIComponent(fullBBG(r.modelTicker ?? r.tickerBBG ?? ""))}&tab=model`;
+const companyLink: React.CSSProperties = {
+  color: PATRIA.kingBlue, textDecoration: "underline", textDecorationStyle: "dotted",
+  textDecorationColor: "rgba(32,68,220,0.55)", textUnderlineOffset: 2,
+};
+// Mini botones de la columna Empresa: modelo del analista y Last Ficha.
+const miniLinkBtn: React.CSSProperties = {
+  display: "inline-flex", alignItems: "center", justifyContent: "center", width: 16, height: 16, borderRadius: 4,
+  color: PATRIA.kingBlue, background: "rgba(32,68,220,0.08)", border: "1px solid rgba(32,68,220,0.22)", flexShrink: 0,
+};
+const noFichaBadge: React.CSSProperties ={ marginLeft: 6, fontSize: 8.5, fontWeight: 700, color: PATRIA.pink, background: "rgba(248,72,94,0.12)", borderRadius: 3, padding: "1px 5px", letterSpacing: "0.02em" };
 const noModelBadge: React.CSSProperties = { marginLeft: 4, fontSize: 8.5, fontWeight: 700, color: TEXT2, background: "rgba(13,13,56,0.07)", borderRadius: 3, padding: "1px 5px", letterSpacing: "0.02em" };
 
 /** Tooltip de la columna Empresa: de dónde salen los datos de la fila. */
