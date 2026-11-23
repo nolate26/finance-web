@@ -18,7 +18,7 @@ const GREY   = TEXT.label;
 
 // consensus_estimates NET_INCOME / EBITDA vienen en MILLONES de la moneda de reporte.
 const NI_SCALE = 1e6;
-// ss_universe.net_debt viene en CLP mil-millones (positivo = deuda, negativo = caja).
+// netDebt viene en CLP mil-millones (último balance de la ficha; positivo = deuda, negativo = caja).
 const NETDEBT_SCALE = 1e9;
 // Si precio/implícito(asumiendo CLP) supera esto ⇒ el NI estaba en USD (≈ USDCLP).
 const USD_DETECT_RATIO = 50;
@@ -200,7 +200,7 @@ export default function ActiveDecisions() {
           low = band.lower * eps; mid = band.avg * eps; high = band.upper * eps;
         } else if (metric === "ev" && co.ebitda != null && co.ebitda > 0 && co.netDebt != null) {
           const ebitdaCLP = co.ebitda * NI_SCALE * fx;                 // consenso → CLP absoluto
-          const ndCLP = co.netDebt * NETDEBT_SCALE;                    // ss_universe (CLP)
+          const ndCLP = co.netDebt * NETDEBT_SCALE;                    // ficha → CLP absoluto
           const px = (m: number) => (m * ebitdaCLP - ndCLP) / co.shares!;  // (EV − deuda) / acciones
           low = px(band.lower); mid = px(band.avg); high = px(band.upper);
         }
@@ -276,7 +276,7 @@ export default function ActiveDecisions() {
             <strong>Metodología:</strong>{" "}
             {metric === "pe"
               ? <>precio implícito = <strong>P/E</strong> × (NET_INCOME / acciones), con NET_INCOME del consenso (año forward).</>
-              : <>precio implícito = (<strong>EV/EBITDA</strong> × EBITDA − Deuda Neta) / acciones, con EBITDA del consenso y deuda neta de ss_universe.</>}
+              : <>precio implícito = (<strong>EV/EBITDA</strong> × EBITDA − Deuda Neta) / acciones, con EBITDA del consenso y deuda neta del último balance de la ficha.</>}
             {" "}Comparamos el precio actual contra la banda <strong>±1σ</strong> del múltiplo histórico forward (10A).
             {data.asOf ? ` Valuación al ${data.asOf}.` : ""}{priced && usdClp ? ` USDCLP ${usdClp.toFixed(0)}.` : ""}
           </p>
@@ -373,7 +373,8 @@ export default function ActiveDecisions() {
                         {fmtMM(r.ebitda)}
                         {r.niCurrency && <span style={ccyBadge(r.niCurrency)}>{r.niCurrency}</span>}
                       </td>
-                      <td className="hide-phone" style={{ ...td, textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", color: r.netDebt != null ? (r.netDebt < 0 ? GREEN : TEXT1) : TEXT3 }}>
+                      <td className="hide-phone" style={{ ...td, textAlign: "right", fontFamily: FONT_SECONDARY, fontVariantNumeric: "tabular-nums", color: r.netDebt != null ? (r.netDebt < 0 ? GREEN : TEXT1) : TEXT3 }}
+                        title={r.netDebtPeriod ? `Ficha ${r.netDebtPeriod}` : "Sin ficha cargada"}>
                         {fmtBn(r.netDebt)}
                         {r.netDebt != null && r.netDebt < 0 && <span style={{ marginLeft: 4, fontSize: 9, color: GREEN }}>caja</span>}
                       </td>
@@ -406,7 +407,7 @@ export default function ActiveDecisions() {
       <div className="hide-phone" style={{ marginTop: 10, fontSize: 11, color: TEXT2, lineHeight: 1.6 }}>
         <div><strong>{rows.length} empresas.</strong> <strong>avg</strong> = promedio histórico del múltiplo forward (10A); la <strong>banda</strong> es avg ±1σ; <strong>n</strong> = nº de observaciones mensuales. Podés <strong>editar</strong> los múltiplos (low/avg/high con cualquier número) y el implícito se recalcula.</div>
         <div><strong>Monedas:</strong> los múltiplos no tienen moneda (son ratios). El NET_INCOME / EBITDA del consenso vienen en la moneda de reporte de la empresa; las que reportan en <span style={{ color: "#FF6B06", fontWeight: 700 }}>USD</span> se detectan y convierten a CLP con USDCLP (badge <span style={{ color: "#FF6B06", fontWeight: 700 }}>USD</span>). El precio está en CLP.</div>
-        {metric === "ev" && <div><strong>EV/EBITDA:</strong> Equity = EV − Deuda Neta (<code>ss_universe.net_debt</code>, CLP; negativo = caja neta). Se ignoran minoritarios/asociadas. Precio implícito = Equity / acciones.</div>}
+        {metric === "ev" && <div><strong>EV/EBITDA:</strong> Equity = EV − Deuda Neta (<code>Total Net Debt</code> del último trimestre de la ficha, en CLP; las que reportan en USD se convierten con el FX de la ficha; negativo = caja neta; sin ficha = sin precio implícito). Se ignoran minoritarios/asociadas. Precio implícito = Equity / acciones.</div>}
         <div><strong>Señal:</strong> <span style={{ color: GREY, fontWeight: 700 }}>gris = dentro de la banda</span> · <span style={{ color: GREEN, fontWeight: 700 }}>verde = bajo la banda (barata)</span> · <span style={{ color: RED, fontWeight: 700 }}>rojo = sobre la banda (cara)</span>.</div>
       </div>
     </div>

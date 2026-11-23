@@ -29,8 +29,10 @@ export interface ADCompany {
   // de reporte de la empresa (CLP para la mayoría; USD para Copec/CMPC/etc.).
   netIncome:   number | null;
   ebitda:      number | null;
-  // Deuda neta desde ss_universe.net_debt (CLP mil-millones; positivo = deuda, negativo = caja).
-  netDebt:     number | null;
+  // Deuda neta del último balance de la ficha (ficha_statements "Total Net Debt"), en CLP
+  // MIL-MILLONES; positivo = deuda, negativo = caja. null = la empresa no tiene ficha.
+  netDebt:       number | null;
+  netDebtPeriod: string | null;   // trimestre del balance usado, "3Q26"
   // Solo con ?withPrices=true
   currentPrice?: number | null;
   currency?:     string | null;
@@ -47,7 +49,7 @@ export interface ActiveDecisionsPayload {
 interface CompanyRow { ticker: string; name: string; chile: string | null; latam: string | null; gics: string | null; isin: string | null; yahoo: string | null; }
 interface SeriesRow  { tk: string; pe: number | null; ev: number | null; }
 interface ConsRow    { tk: string; metric: string; value: number; }
-interface SsRow      { company: string; net_debt: number | null; }
+interface NdRow      { tk: string; currency: string; fx: number | null; year: number; quarter: number; value: number; }
 
 const CHILE_FILTER =
   "(UPPER(e.moneda) = 'CLP' OR UPPER(e.country_risk) IN ('CHILE', 'CL'))";
@@ -106,12 +108,15 @@ export async function GET(request: NextRequest) {
       `SELECT MAX(date) AS asof FROM valuation_history`,
     );
 
-    // ── 4. Deuda neta del último cierre de ss_universe (match por nombre) ─────
-    const ssRows = await prisma.$queryRawUnsafe<SsRow[]>(`
-      SELECT company, net_debt
-      FROM ss_universe
-      WHERE cierre_cartera = (SELECT MAX(cierre_cartera) FROM ss_universe)
-        AND record_type = 'company'
+    // ── 4. Deuda neta: último balance de la ficha de cada ticker ──────────────
+    // Es un saldo, así que vale el período más reciente de cualquier tipo; a igual fecha se
+    // prefiere la fila trimestral ("Q"). Montos en MILLONES de la moneda reportada.
+    const ndRows = await prisma.$queryRawUnsafe<NdRow[]>(`
+      SELECT DISTINCT ON (f.ticker)
+             f.ticker AS tk, f.currency, f.fx::float AS fx, f.year, f.quarter, f.value::float AS value
+      FROM ficha_statements f
+      WHERE f.section = 'Balance Sheet' AND f.line = 'Total Net Debt'
+      ORDER BY f.ticker, f.period_end DESC, (f.period_type = 'Q') DESC
     `);
 
     // ── Agrupación por ticker (ya canónico en ambos lados) ───────────────────
@@ -128,17 +133,30 @@ export async function GET(request: NextRequest) {
       if (r.metric === "NET_INCOME") niByTk.set(r.tk, r.value);
       else if (r.metric === "EBITDA") ebByTk.set(r.tk, r.value);
     }
-    const ndByName = new Map<string, number>();
-    for (const r of ssRows) {
-      const k = r.company?.toLowerCase().trim();
-      if (k && r.net_debt != null && !ndByName.has(k)) ndByName.set(k, r.net_debt);
+    // Millones de la moneda reportada → CLP mil-millones. Las que reportan en USD (Blumar,
+    // Camanchaca, Multix…) se pasan a CLP con el fx de su ficha (CLP por USD): ss_universe
+    // las traía en USD mn rotuladas como CLP bn, y el EV implícito salía ~970x corto.
+    type Nd = { bn: number; period: string };
+    const ndByTk = new Map<string, Nd>();
+    for (const r of ndRows) {
+      const clpMn = r.currency === "CLP" ? r.value : r.currency === "USD" && r.fx ? r.value * r.fx : null;
+      if (clpMn == null) continue;
+      ndByTk.set(r.tk, { bn: clpMn / 1000, period: `${r.quarter}Q${String(r.year).slice(-2)}` });
     }
-    const netDebtOf = (c: CompanyRow): number | null =>
-      ndByName.get((c.chile ?? "").toLowerCase().trim()) ??
-      ndByName.get((c.latam ?? "").toLowerCase().trim()) ?? null;
+    // La deuda neta es de la COMPAÑÍA, no de la serie: la ficha de Andina viene por ANDINAB y
+    // vale igual para ANDINAA. Se comparte entre los tickers con el mismo nombre_latam.
+    const ndByName = new Map<string, Nd>();
+    for (const c of companyRows) {
+      const nd = ndByTk.get(c.ticker);
+      const k = c.latam?.toLowerCase().trim();
+      if (nd && k && !ndByName.has(k)) ndByName.set(k, nd);
+    }
+    const netDebtOf = (c: CompanyRow): Nd | null =>
+      ndByTk.get(c.ticker) ?? ndByName.get(c.latam?.toLowerCase().trim() ?? "") ?? null;
 
     const companies: ADCompany[] = companyRows.map((c) => {
       const tk = c.ticker;
+      const nd = netDebtOf(c);
       return {
         ticker:      c.ticker,
         name:        c.name,
@@ -148,7 +166,8 @@ export async function GET(request: NextRequest) {
         evEbitda:    band(evByTk.get(tk) ?? []),
         netIncome:   niByTk.get(tk) ?? null,
         ebitda:      ebByTk.get(tk) ?? null,
-        netDebt:     netDebtOf(c),
+        netDebt:       nd?.bn ?? null,
+        netDebtPeriod: nd?.period ?? null,
       };
     });
 

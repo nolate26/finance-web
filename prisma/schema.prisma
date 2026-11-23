@@ -247,65 +247,9 @@ model TotalReturnIndex {
 // reemplazada por EmpresasIndustriasV2. Respaldo en backups/ y DROP en
 // prisma/sql/phase_a_cleanup_2026-11-23.sql.
 
-model SsUniverse {
-  cierreCartera  DateTime @map("cierre_cartera") @db.Date
-  recordType     String   @map("record_type") @db.VarChar(10)
-  company        String   @db.VarChar(200)
-  sourceFile     String?  @map("source_file") @db.VarChar(255)
-  precios        String?  @db.VarChar(30)
-  resultados     String?  @db.VarChar(30)
-
-  mrvVsIpsa      String?  @map("mrv_vs_ipsa") @db.VarChar(50)
-  price          Float?
-  ret1m          Float?   @map("ret_1m")
-  retYtd         Float?   @map("ret_ytd")
-  ret1y          Float?   @map("ret_1y")
-  ret5y          Float?   @map("ret_5y")
-  mktCapBn       Float?   @map("mkt_cap_bn")
-  netDebt        Float?   @map("net_debt")
-  fv             Float?
-
-  ebitdaPrev     Float?   @map("ebitda_prev")
-  ebitdaAct      Float?   @map("ebitda_act")
-  ebitdaChg      Float?   @map("ebitda_chg")
-
-  netIncomePrev  Float?   @map("net_income_prev")
-  netIncomeAct   Float?   @map("net_income_act")
-  netIncomeChg   Float?   @map("net_income_chg")
-
-  ebitdaLtm      Float?   @map("ebitda_ltm")
-  ebitdaYr1e     Float?   @map("ebitda_yr1e")
-  ebitdaYr2e     Float?   @map("ebitda_yr2e")
-
-  fvEbitdaLtm    Float?   @map("fv_ebitda_ltm")
-  fvEbitdaYr1e   Float?   @map("fv_ebitda_yr1e")
-  fvEbitdaYr2e   Float?   @map("fv_ebitda_yr2e")
-
-  niLtm          Float?   @map("ni_ltm")
-  niYr1e         Float?   @map("ni_yr1e")
-  niYr2e         Float?   @map("ni_yr2e")
-
-  peLtm          Float?   @map("pe_ltm")
-  peYr1e         Float?   @map("pe_yr1e")
-  peYr2e         Float?   @map("pe_yr2e")
-
-  pCeLtm         Float?   @map("p_ce_ltm")
-  pBvLtm         Float?   @map("p_bv_ltm")
-  roeLtm         Float?   @map("roe_ltm")
-  roeYr1e        Float?   @map("roe_yr1e")
-  fvSLtm         Float?   @map("fv_s_ltm")
-  
-  poolDiv        String?  @map("pool_div") @db.VarChar(100)
-  divYield       Float?   @map("div_yield")
-  roicLtm        Float?   @map("roic_ltm")
-  fvIc           Float?   @map("fv_ic")
-  recommendation String?  @db.VarChar(50)
-
-  targetPrice    Float?   @map("target_price")
-
-  @@id([cierreCartera, recordType, company])
-  @@map("ss_universe")
-}
+// ss_universe (foto del universo Stock Selection, un solo corte 2026-03-31) se eliminó el
+// 2026-11-23: la deuda neta de Active Decisions sale de ficha_statements y el formulario viejo
+// de Top Picks Chile que la usaba era código muerto. DROP en prisma/sql/phase_b2_drop_2026-11-23.sql.
 
 model MonedaFundReturn {
   reportDate    String  @map("report_date") @db.VarChar(30)
