@@ -2,10 +2,10 @@
 //   · Fundamentales trimestrales → ficha_statements (macro SubirFicha → POST /api/ficha/ingest)
 //   · Proyecciones, payout, Rec y TP → model_headers/model_financials y bank_headers/bank_financials
 //
-// Reemplazan a stock_selection_v1 y a proyecciones_financieras (+ proyecciones_override, ya
-// eliminadas). Mientras no todas las compañías tengan ficha, la ruta cae a stock_selection_v1;
-// sin modelo, las proyecciones quedan vacías. Lo informa en fundSource / projSource para que la
-// vista lo pinte.
+// Reemplazan a stock_selection_v1 y a proyecciones_financieras (+ proyecciones_override), todas
+// eliminadas. Sin ficha del período, los fundamentales quedan vacíos; sin modelo, las
+// proyecciones. Lo informa en fundSource / projSource para que la vista lo pinte. Las acciones
+// también salen sólo de la ficha.
 //
 // Todo se cruza por TICKER Bloomberg (normBBG), no por nombre: es lo que trae la ficha y el
 // modelo, y evita la homologación por nombre de las tablas viejas.
@@ -14,7 +14,7 @@ import { normBBG } from "@/lib/bbg";
 
 export const qKey = (fy: number, q: number) => fy * 10 + q;
 
-/** Fundamentales de una compañía. Misma forma para la ficha y para stock_selection_v1. */
+/** Fundamentales de una compañía, tal como salen de la ficha. */
 export interface Fund {
   currency: "CLP" | "USD";
   metrics: Map<string, Map<number, number>>;      // métrica → qKey → valor (serie TOTAL)
@@ -162,7 +162,7 @@ export async function loadModelPicks(years: number[]): Promise<Map<string, Model
  * La etiqueta `unit` del header no es confiable: Entel dice "000 mn" y viene en millones, LTM
  * dice "000 mn" en USD y también viene en millones; Andina dice "bn" y sí viene en miles de
  * millones. Por eso se mide: el año reportado del modelo contra el mismo año reportado de la
- * compañía (ficha o stock_selection_v1), y el cociente se aproxima a ×1 o ×1000. Sólo con la
+ * compañía (ficha), y el cociente se aproxima a ×1 o ×1000. Sólo con la
  * MISMA moneda — CLP/USD ≈ 970 se confundiría con ×1000 — y sólo si el cociente cae cerca
  * (±40%). Si no hay con qué medir, la etiqueta:
  * "bn"/"000 mn" en CLP → ×1000; todo lo demás → ×1.

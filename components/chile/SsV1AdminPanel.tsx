@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Shield, Search, Save, RotateCcw, Activity, Link2, Zap, AlertTriangle, Check, RefreshCw, Rows3, Trash2, Wallet, ListOrdered, Copy } from "lucide-react";
+import { Shield, Search, Save, RotateCcw, Activity, Link2, Zap, AlertTriangle, Check, RefreshCw, Rows3, Trash2, Wallet, ListOrdered, Plus } from "lucide-react";
 import { PATRIA, FONT_SECONDARY, TEXT } from "@/lib/patriaTheme";
 import type { EmpresaAdminRow } from "@/app/api/admin/empresas/route";
 import type { VerifyResult } from "@/app/api/admin/empresas/verify/route";
@@ -116,7 +116,6 @@ function HomologacionTab({ onSourceChanged }: { onSourceChanged: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [onlySs, setOnlySs] = useState(false);
 
-  const [cloning, setCloning] = useState<EmpresaAdminRow | null>(null);
   const [drafts, setDrafts] = useState<Record<number, Draft>>({});
   const [checks, setChecks] = useState<Record<number, VerifyResult>>({});
   const [busy, setBusy] = useState<Record<number, "verify" | "save">>({});
@@ -142,6 +141,24 @@ function HomologacionTab({ onSourceChanged }: { onSourceChanged: () => void }) {
   }, [q, load]);
 
   const dropKey = <T,>(id: number) => (p: Record<number, T>): Record<number, T> => { const n = { ...p }; delete n[id]; return n; };
+
+  // Homologada pero fuera del universo: la suma a stock_selection_orden (sección "Otros"), que es
+  // lo que define qué compañías tiene la vista. Mismo nombre que usa "Sumar compañía" en Filas:
+  // nombre_chile primero, que es con el que la vista homologa.
+  const sumarAVista = (r: EmpresaAdminRow) => {
+    setBusy((p) => ({ ...p, [r.id]: "save" })); setRowMsg(dropKey<{ text: string; ok: boolean }>(r.id));
+    fetch("/api/admin/ss-rows", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ company: r.nombreChile.trim() || r.nombreLatam }),
+    })
+      .then(async (res) => { const d = await res.json(); if (!res.ok) throw new Error(d.error || "No se pudo sumar"); })
+      .then(() => {
+        setRowMsg((p) => ({ ...p, [r.id]: { text: "Sumada al orden (Otros)", ok: true } }));
+        load(q.trim()); onSourceChanged();
+      })
+      .catch((e: Error) => setRowMsg((p) => ({ ...p, [r.id]: { text: e.message, ok: false } })))
+      .finally(() => setBusy(dropKey<"verify" | "save">(r.id)));
+  };
 
   const draftOf = (r: EmpresaAdminRow): Draft =>
     drafts[r.id] ?? { yahooFinanceTicker: r.yahooFinanceTicker ?? "", tickerBloomberg: r.tickerBloomberg };
@@ -276,14 +293,13 @@ Para solo sacarla de la tabla, usa Ocultar en la pestana Filas.`)) return;
                       )}
                     </div>
                     <div style={{ fontSize: 9.5, color: TEXT3, whiteSpace: "nowrap" }}>{r.nombreChile}</div>
-                    {/* Homologada pero sin datos: no aparece en Stock Selection porque la vista
-                        se arma desde stock_selection_v1. Clonar el historial de otra compañía es
-                        la forma de arrancarla sin esperar al cargador. */}
+                    {/* Homologada pero fuera del universo (stock_selection_orden): no aparece en
+                        Stock Selection hasta que se suma al orden. */}
                     {!r.inStockSelection && (
-                      <button onClick={() => setCloning(r)}
-                        title="Esta empresa está homologada pero no tiene datos, así que todavía no se ve en la tabla. Cloná el historial de otra compañía para que aparezca."
-                        style={{ marginTop: 3, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9.5, fontWeight: 700, color: INK, background: "transparent", border: `1px solid ${INK}66`, borderRadius: 4, padding: "1px 6px", cursor: "pointer" }}>
-                        <Copy size={9} /> Clonar historial
+                      <button onClick={() => sumarAVista(r)} disabled={!!b}
+                        title="Esta empresa está homologada pero no está en el orden de Stock Selection, así que no se ve en la tabla. Sumala (queda en la sección “Otros”)."
+                        style={{ marginTop: 3, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9.5, fontWeight: 700, color: INK, background: "transparent", border: `1px solid ${INK}66`, borderRadius: 4, padding: "1px 6px", cursor: b ? "default" : "pointer" }}>
+                        <Plus size={9} /> Sumar a la vista
                       </button>
                     )}
                   </td>
@@ -366,96 +382,6 @@ Para solo sacarla de la tabla, usa Ocultar en la pestana Filas.`)) return;
         El <strong style={{ color: TEXT2 }}>ticker Yahoo</strong> es el que trae precio y retornos; el <strong style={{ color: TEXT2 }}>Bloomberg</strong> es la llave que cruza la recomendación del analista.
         Probá con <Zap size={10} style={{ display: "inline", verticalAlign: "-1px" }} /> antes de guardar: un símbolo deslistado deja la fila sin precio y no avisa.
         Ojo — el cargador que puebla esta tabla puede volver a pisar el valor; esta corrección es sobre la base, no sobre el cargador.
-      </div>
-
-      {cloning && (
-        <ClonarHistorial
-          destino={cloning}
-          onClose={() => setCloning(null)}
-          onDone={() => { setCloning(null); load(q.trim()); onSourceChanged(); }}
-        />
-      )}
-    </div>
-  );
-}
-
-// ── Clonar historial hacia una empresa ya homologada ────────────────────────────
-// Atajo desde Homologación al mismo clonado que ofrece "Sumar compañía" en la pestaña
-// Filas: una empresa sin filas en stock_selection_v1 no aparece en esa lista.
-function ClonarHistorial({ destino, onClose, onDone }: {
-  destino: EmpresaAdminRow; onClose: () => void; onDone: () => void;
-}) {
-  const [fuentes, setFuentes] = useState<string[] | null>(null);
-  const [from, setFrom] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [hecho, setHecho] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch("/api/admin/ss-rows")
-      .then((r) => r.json())
-      .then((d: { rows?: { company: string; quarters: number }[] }) =>
-        setFuentes((d.rows ?? []).filter((r) => r.quarters > 0).map((r) => r.company).sort((a, b) => a.localeCompare(b, "es"))))
-      .catch(() => setFuentes([]));
-  }, []);
-
-  const clonar = () => {
-    if (!from || busy) return;
-    setBusy(true); setError(null);
-    fetch("/api/admin/ss-clone", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ from, to: destino.nombreLatam }),
-    })
-      .then(async (r) => { const d = await r.json(); if (!r.ok) throw new Error(d.error || "No se pudo clonar"); return d as { copiadas: number; omitidas: number; desde: string | null; hasta: string | null }; })
-      .then((d) => {
-        setHecho(`${d.copiadas} filas copiadas${d.desde ? ` · ${d.desde} → ${d.hasta}` : ""}${d.omitidas ? ` · ${d.omitidas} omitidas (ya existían)` : ""}.`);
-        setTimeout(onDone, 1200);
-      })
-      .catch((e: Error) => { setError(e.message); setBusy(false); });
-  };
-
-  return (
-    <div onClick={onClose} className="modal-overlay" style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(13,13,56,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div onClick={(e) => e.stopPropagation()} className="modal-card" style={{ background: "#fff", borderRadius: 12, width: "min(470px, 96vw)", boxShadow: "0 12px 48px rgba(13,13,56,0.35)", overflow: "hidden" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "13px 16px", background: NAVY, color: "#fff" }}>
-          <Copy size={15} />
-          <span style={{ fontSize: 14, fontWeight: 700 }}>Clonar historial → {destino.nombreLatam}</span>
-        </div>
-        <div style={{ padding: "12px 16px" }}>
-          <div style={{ fontSize: 11.5, color: TEXT2, lineHeight: 1.5, marginBottom: 10 }}>
-            Copia todas las filas de <em>stock_selection_v1</em> de la compañía que elijas bajo el nombre{" "}
-            <strong style={{ color: TEXT1 }}>{destino.nombreLatam}</strong>, así arranca con su serie de fundamentales
-            y múltiplos en vez de estar vacía. No pisa nada que ya exista en el destino.
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ flex: 1, fontSize: 12, fontWeight: 700, color: TEXT1 }}>Clonar desde</span>
-            <select value={from} onChange={(e) => setFrom(e.target.value)} disabled={!fuentes || busy}
-              style={{ width: 230, padding: "6px 8px", fontSize: 12, borderRadius: 6, border: `1px solid ${from ? INK : BORDER}`, background: "#fff", color: TEXT1, outline: "none" }}>
-              <option value="">{fuentes ? "— elegí una compañía —" : "cargando…"}</option>
-              {(fuentes ?? []).map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-          {from && (
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 6, marginTop: 10, padding: "7px 9px", borderRadius: 6, background: "rgba(255,107,6,0.08)", border: `1px solid ${WARN}44`, fontSize: 10.5, color: TEXT1, lineHeight: 1.45 }}>
-              <AlertTriangle size={12} color={WARN} style={{ flexShrink: 0, marginTop: 1 }} />
-              <span>
-                Las filas quedan marcadas como clonadas y <strong>el cargador no las va a pisar</strong>. Cuando el
-                script empiece a mandar datos reales de {destino.nombreLatam}, borralas con “Borrar clonadas” en la
-                pestaña Filas.
-              </span>
-            </div>
-          )}
-          {error && <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10, fontSize: 11.5, color: NEG, fontWeight: 600 }}><AlertTriangle size={13} /> {error}</div>}
-          {hecho && <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10, fontSize: 11.5, color: POS, fontWeight: 600 }}><Check size={13} /> {hecho}</div>}
-        </div>
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, padding: "10px 16px", borderTop: `1px solid ${BORDER}`, background: SURFACE }}>
-          <button onClick={onClose} style={{ padding: "7px 14px", borderRadius: 6, fontSize: 12.5, fontWeight: 600, border: `1px solid ${BORDER}`, background: "#fff", color: TEXT2, cursor: "pointer" }}>Cerrar</button>
-          <button onClick={clonar} disabled={!from || busy || !!hecho}
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 16px", borderRadius: 6, fontSize: 12.5, fontWeight: 600, border: "none", color: "#fff", background: from && !busy && !hecho ? INK : "rgba(13,13,56,0.35)", cursor: from && !busy && !hecho ? "pointer" : "default" }}>
-            {busy ? <RefreshCw size={13} style={{ animation: "spin 0.8s linear infinite" }} /> : <Copy size={13} />}
-            {busy ? "Clonando…" : "Clonar"}
-          </button>
-        </div>
       </div>
     </div>
   );

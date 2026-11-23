@@ -4,17 +4,18 @@ import { requireAdmin, getSessionUser } from "@/lib/auth";
 import { logAdminChanges, ENTITY } from "@/lib/adminLog";
 import { normBBG } from "@/lib/bbg";
 import { norm, cleanBBG, NAME_OVERRIDES, SERIES_NAMES } from "@/lib/ssHomologacion";
+import { loadSsUniverse, addToSsOrden, SECCION_NUEVAS } from "@/lib/ssUniverse";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 // Filas de Stock Selection: qué compañías hay, cuáles se ven, y por qué las que no se ven
-// no se ven. Reproduce la resolución de la vista con las MISMAS reglas (lib/ssHomologacion)
-// para que el diagnóstico no mienta.
+// no se ven. Reproduce la resolución de la vista con las MISMAS reglas (lib/ssHomologacion,
+// lib/ssUniverse) para que el diagnóstico no mienta.
 //
-// Existe porque el modo de falla de esta vista es silencioso: si un nombre de
-// stock_selection_v1 no homologa contra empresas_industrias_v2, el loop hace `continue` y
-// la compañía desaparece sin ningún aviso.
+// Existe porque el modo de falla de esta vista es silencioso: si un nombre del universo no
+// homologa contra empresas_industrias_v2, el loop hace `continue` y la compañía desaparece
+// sin ningún aviso.
 
 export type RowStatus = "ok" | "sin-homologacion" | "oculta" | "sin-retornos" | "sembrada";
 
@@ -27,7 +28,7 @@ export interface SsRowSeries {
 }
 
 export interface SsRowStatus {
-  company: string;          // nombre tal cual en stock_selection_v1
+  company: string;          // nombre tal cual en el universo (stock_selection_orden.label)
   key: string;              // normalizado (llave de ocultamiento)
   status: RowStatus;
   visible: boolean;         // ¿la vista la está mostrando?
@@ -39,13 +40,10 @@ export interface SsRowStatus {
   industria: string | null;
   dual: boolean;
   series: SsRowSeries[];    // una entrada por serie que la vista dibuja
-  quarters: number;         // filas cargadas en stock_selection_v1
-  /** Existe sólo por su homologación + overrides; el cargador todavía no la trae. */
+  /** Sección del orden (stock_selection_orden). null = sembrada: fuera del orden. */
+  seccion: string | null;
+  /** Existe sólo por su homologación + overrides, sin estar en el orden. */
   seeded: boolean;
-  /** Filas que vinieron de clonar el historial de otra compañía (cloned_from != null). */
-  clonedRows: number;
-  /** De qué compañía se clonaron. */
-  clonedFrom: string | null;
 }
 
 // ── GET — estado de todas las filas ─────────────────────────────────────────────
@@ -54,8 +52,9 @@ export async function GET() {
   if (deny) return deny;
 
   try {
-    const [ssGroups, empresas, hiddenRows, snapRows, overrideRows, clonedRows] = await Promise.all([
-      prisma.stockSelectionV1.groupBy({ by: ["company"], _count: { _all: true } }),
+    const [universe, empresas, hiddenRows, snapRows] = await Promise.all([
+      // stock_selection_orden + sembradas por overrides, igual que la vista.
+      loadSsUniverse(),
       prisma.empresasIndustriasV2.findMany({
         select: { id: true, nombreLatam: true, nombreChile: true, tickerBloomberg: true, yahooFinanceTicker: true, industriaChile: true },
       }),
@@ -64,25 +63,7 @@ export async function GET() {
       prisma.tickerReturnSnapshot.findMany({
         select: { tickerBBG: true, asOf: true, retMonth: true, retYtd: true, retYear: true, ret3y: true, ret5y: true },
       }).catch(() => []),
-      // Compañías dadas de alta a mano: tienen valores en la capa de overrides pero todavía
-      // ninguna fila en stock_selection_v1. La vista ya las muestra; este panel tiene que
-      // listarlas o el alta quedaría sin ningún lugar donde verse.
-      prisma.stockSelectionOverride.findMany({ select: { company: true } }).catch(() => []),
-      // Filas que salieron de clonar otra compañía. Se muestran aparte porque el cargador
-      // NO las va a pisar (createMany/skipDuplicates): hay que borrarlas a mano cuando
-      // llegue el dato real, y para eso primero hay que poder verlas.
-      prisma.stockSelectionV1.findMany({
-        where: { clonedFrom: { not: null } },
-        select: { company: true, clonedFrom: true },
-      }).catch(() => []),
     ]);
-    const clonadas = new Map<string, { n: number; from: string | null }>();
-    for (const r of clonedRows) {
-      const k = norm(r.company);
-      const cur = clonadas.get(k) ?? { n: 0, from: r.clonedFrom };
-      cur.n++;
-      clonadas.set(k, cur);
-    }
 
     type Emp = (typeof empresas)[number];
     const byName = new Map<string, Emp[]>();
@@ -115,22 +96,8 @@ export async function GET() {
       return { hasReturnRow: true, hasAnyReturn: anyRet, retAsOf: s.asOf.toISOString().slice(0, 10) };
     };
 
-    // Universo del panel = stock_selection_v1 + las sembradas a mano (mismo criterio que
-    // la vista, app/api/chile/stock-selection-v1/route.ts).
-    const cargadas = new Set(ssGroups.map((g) => norm(g.company)));
-    const entradas: { company: string; quarters: number; seeded: boolean }[] = ssGroups.map((g) => ({
-      company: g.company, quarters: g._count._all, seeded: false,
-    }));
-    const sembradasVistas = new Set<string>();
-    for (const o of overrideRows) {
-      const k = norm(o.company);
-      if (!k || cargadas.has(k) || sembradasVistas.has(k)) continue;
-      sembradasVistas.add(k);
-      entradas.push({ company: o.company, quarters: 0, seeded: true });
-    }
-
-    const out: SsRowStatus[] = entradas.map((g) => {
-      const key = norm(g.company);
+    const out: SsRowStatus[] = universe.map((g) => {
+      const key = g.key;
       const emp = resolve(g.company);
       const hid = hiddenMap.get(key) ?? null;
       const sn = SERIES_NAMES[key];
@@ -165,10 +132,8 @@ export async function GET() {
         industria: emp?.industriaChile ?? null,
         dual: !!sn,
         series,
-        quarters: g.quarters,
+        seccion: g.seccion,
         seeded: g.seeded,
-        clonedRows: clonadas.get(key)?.n ?? 0,
-        clonedFrom: clonadas.get(key)?.from ?? null,
       };
     });
     out.sort((a, b) => a.company.localeCompare(b.company));
@@ -194,6 +159,42 @@ export async function GET() {
   } catch (err) {
     console.error("[admin/ss-rows GET]", err);
     return NextResponse.json({ error: "No se pudo cargar el estado de las filas" }, { status: 500 });
+  }
+}
+
+// ── POST — sumar una compañía a la vista ────────────────────────────────────────
+// La agrega al final de stock_selection_orden (sección "Otros"), que es lo que define el
+// universo. Desde ahí se reubica en Orden y secciones. No crea la empresa: tiene que existir
+// en empresas_industrias_v2 con ese nombre para que la vista la resuelva.
+interface PostBody { company?: string }
+
+export async function POST(request: NextRequest) {
+  const deny = await requireAdmin();
+  if (deny) return deny;
+  const user = await getSessionUser();
+
+  let body: PostBody;
+  try { body = await request.json(); } catch { return NextResponse.json({ error: "JSON inválido" }, { status: 400 }); }
+
+  const label = typeof body.company === "string" ? body.company.trim() : "";
+  if (!norm(label)) return NextResponse.json({ error: "Falta la compañía" }, { status: 400 });
+  if (label.length > 120) return NextResponse.json({ error: "Nombre demasiado largo" }, { status: 400 });
+
+  try {
+    const res = await addToSsOrden(label, user?.email ?? null);
+    if (res === "seed") {
+      return NextResponse.json({ error: "El orden todavía es la semilla del código: guardalo una vez desde Orden y secciones y volvé a intentar." }, { status: 409 });
+    }
+    if (res === "added") {
+      await logAdminChanges(
+        [{ entity: "stock_selection_orden", entityKey: norm(label), label, field: "universo", oldValue: null, newValue: SECCION_NUEVAS, action: "create" }],
+        user?.email ?? null,
+      );
+    }
+    return NextResponse.json({ ok: true, company: label, added: res === "added" });
+  } catch (e) {
+    console.error("[admin/ss-rows POST]", e);
+    return NextResponse.json({ error: "No se pudo sumar la compañía" }, { status: 500 });
   }
 }
 

@@ -980,7 +980,7 @@ export default function StockSelectionV1() {
     { title: "Convenciones y fuentes", wide: true, items: [
       { k: "“NM” vs “—”", v: "“—” = dato no disponible. “NM” = no significativo: múltiplos con numerador o denominador ≤ 0 (utilidad, EBITDA, patrimonio o capital invertido negativo), ROE / ROIC negativos o sobre base ≤ 0, y variaciones a/a sobre base ≤ 0 o con período actual negativo. Las filas con NM se ordenan al final." },
       { k: "Fuentes", v: "ficha_statements (fundamentales trimestrales reportados, en millones, moneda local; macro “Send Ficha”) · model_headers / model_financials y bank_headers / bank_financials (proyecciones 2026E–2027E, payout, Rec y TP del modelo del analista) · empresas_industrias_v2 (homologación nombre → ticker Bloomberg / Yahoo y sector) · Yahoo Finance (precios) · ticker_return_snapshot (retornos)." },
-      { k: "Transición", v: "mientras falten fichas o modelos, la compañía cae a las tablas antiguas y se marca: “sin ficha” (columna Empresa en rosa) = fundamentales de stock_selection_v1, o vacíos si esa tabla tampoco tiene el trimestre; “sin modelo” = sin proyecciones ni payout, y Rec/TP de AnalystRecommendationHistory. Nunca se mezclan dos fuentes de fundamentales en una misma compañía." },
+      { k: "Transición", v: "mientras falten fichas o modelos, la compañía se marca: “sin ficha” (columna Empresa en rosa) = fundamentales vacíos para el trimestre; “sin modelo” = sin proyecciones ni payout, y Rec/TP de AnalystRecommendationHistory. Las acciones también salen sólo de la ficha: sin ficha no hay M.Cap ni múltiplos, y la compañía no pesa en los agregados de índices y fondos hasta que se cargue." },
       { k: "Moneda", f: "USD → USD · CLP → ÷ TC", v: "todos los montos quedan en USD millones; el TC USD/CLP es editable arriba. Monedas no soportadas (p. ej. GBp) → “—”." },
       { k: "Períodos", v: `n = ${pN} (último trimestre cargado) · n-4 = ${pN4} (mismo trimestre, año previo) · LTM = suma de los últimos 4 trimestres (${ltmLbl}).` },
       { k: "Series A/B", v: "cada serie usa su propio precio y nº de acciones; las filas A/B prorratean los fundamentales por su % de acciones; la consolidada usa el fundamental completo contra el M.Cap total (Σ de las series)." },
@@ -1058,7 +1058,7 @@ export default function StockSelectionV1() {
       { k: "Precio y retornos", v: "en blanco. Un fondo no tiene precio unitario, y ponderar los retornos de las posiciones no da el retorno del fondo (ignora flujos y rebalanceo), así que no se aproxima." },
     ] },
     { title: "Cobertura del universo y datos de mercado", wide: true, items: [
-      { k: "Qué empresas aparecen", v: "una compañía sólo se muestra si su nombre en stock_selection_v1 homologa a un ticker Yahoo vivo (vía empresas_industrias_v2). Si el nombre no homologa o el ticker está deslistado, la fila se descarta sin aviso. De las 98 compañías de la tabla, 6 no resolvían; ver detalle abajo." },
+      { k: "Qué empresas aparecen", v: "las de Administración → Orden y secciones (más las que tienen valores cargados a mano en el trimestre), siempre que su nombre homologue en empresas_industrias_v2 y no estén ocultas. Si el nombre no homologa, la fila no aparece: la pestaña Filas muestra cuáles y por qué." },
       { k: "Tickers corregidos (jul-2026)", v: "empresas_industrias_v2 / company_isins traían símbolos Yahoo deslistados que dejaban la fila sin precio. Corregidos y verificados contra el precio de referencia: Bicecorp → BICE.SN · Cencosud Shopping → CENCOMALLS.SN · Concha y Toro → CONCHATORO.SN · Itaú Chile → ITAUCL.SN · MultiX → MULTI-X.SN · La Polar → ABC.SN · Oro Blanco → ORO-BLANCO.SN · Clínica Las Condes → LAS-CONDES.SN · Viña Santa Rita → SANTA-RITA.SN · Potasios A/B → POTASIOS-A/B.SN · Cementos (Bío Bío) → CEM.SN." },
       { k: "Excluidas a propósito / pendientes", v: "Grupo Security: deslistada (fusión con Bicecorp, 2024). AES Andes (ex AES Gener): tiene ticker vivo (AESANDES.SN) pero le falta la fila de homologación en empresas_industrias_v2, por eso no aparece. Pampa Calichera y Nitratos: sin ticker Yahoo vivo (probablemente deslistadas / muy ilíquidas). “HF”: nombre sin identificar. Estas 5 no se muestran hasta cargar su homologación." },
       { k: "Advertencia de fuente", v: "estos tickers los escribe el proceso que puebla empresas_industrias_v2; si ese cargador no se corrige en origen, volverá a romperlos. La corrección de acá es sobre la base, no sobre el cargador." },
@@ -1907,8 +1907,8 @@ const noModelBadge: React.CSSProperties = { marginLeft: 4, fontSize: 8.5, fontWe
 /** Tooltip de la columna Empresa: de dónde salen los datos de la fila. */
 function sourceTitle(r: DisplayRow, periodN: string | null): string | undefined {
   const p = periodN ?? "este trimestre";
-  const fund = r.fundSource === "legacy" ? `Sin ficha para ${p}: fundamentales de stock_selection_v1 (fuente antigua).`
-    : r.fundSource === "none" ? `Sin ficha para ${p} y sin datos en la fuente antigua: fundamentales vacíos.` : null;
+  const fund = r.fundSource === "none"
+    ? `Sin ficha para ${p}: fundamentales vacíos${r.fichaTicker ? "." : "; sin acciones, sin M.Cap ni múltiplos."}` : null;
   const proj = r.projSource === "none"
     ? "Sin modelo del analista: proyecciones y payout vacíos; Rec/TP de AnalystRecommendationHistory." : null;
   return fund || proj ? [fund, proj].filter(Boolean).join("\n") : undefined;

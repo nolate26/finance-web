@@ -55,6 +55,8 @@ const RETIRED_TABLES: Record<string, string> = {
   BetaSensitivity:        'beta_sensitivity se eliminó junto con la vista Beta Exposure.',
   PerformanceAttribution: 'performance_attribution se eliminó junto con la pestaña Performance Attribution de Fondos.',
   CompanyIsin:            'company_isins se reemplazó por security_aliases; los nombres nuevos se dan de alta desde el track record (Add Recommendation) o en Admin Issues.',
+  StockSelectionV1:       'stock_selection_v1 se eliminó: los fundamentales de Stock Selection salen de las fichas (macro SubirFicha → /api/ficha/ingest).',
+  TotalReturnIndex:       'total_return_index se eliminó: los retornos salen de TickerReturnSnapshot (también el deep-dive).',
 };
 
 export async function POST(request: Request) {
@@ -255,58 +257,6 @@ export async function POST(request: Request) {
       }
 
 
-      // --- TABLA TOTAL RETURN INDEX (UPSERT) ---
-      case 'TotalReturnIndex':
-        // Mapeamos las filas para crear una lista de operaciones UPSERT.
-        // Ticker canónico como en el resto del deep-dive: Bloomberg manda "AAISA CI Equity" y
-        // /api/companies/[ticker] lee por igualdad contra el ticker en MAYÚSCULA. Sin esto se
-        // acumularon 3.854 filas invisibles (normalizadas el 2026-11-23).
-        const triUpserts = withCanonicalTicker(rows).map((row: any) => {
-          // Extraemos los valores soportando tanto camelCase como snake_case 
-          // dependiendo de cómo los envíe tu script de Python
-          const triToday = row.triToday ?? row.tri_today ?? null;
-          const tri1m = row.tri1m ?? row.tri_1m ?? null;
-          const tri3m = row.tri3m ?? row.tri_3m ?? null;
-          const tri6m = row.tri6m ?? row.tri_6m ?? null;
-          const tri1y = row.tri1y ?? row.tri_1y ?? null;
-          const tri2y = row.tri2y ?? row.tri_2y ?? null;
-
-          return prisma.totalReturnIndex.upsert({
-            // El 'where' busca la llave única compuesta que definiste (@@unique)
-            where: {
-              ticker_date: {
-                ticker: row.ticker,
-                date: new Date(row.date),
-              },
-            },
-            // Si lo encuentra, ACTUALIZA estos campos
-            update: {
-              triToday,
-              tri1m,
-              tri3m,
-              tri6m,
-              tri1y,
-              tri2y,
-            },
-            // Si no lo encuentra, CREA una fila nueva
-            create: {
-              ticker: row.ticker,
-              date: new Date(row.date),
-              triToday,
-              tri1m,
-              tri3m,
-              tri6m,
-              tri1y,
-              tri2y,
-            },
-          });
-        });
-
-        // Ejecutamos todas las operaciones de golpe en la base de datos
-        await prisma.$transaction(triUpserts);
-        break;
-
-
 
 
 
@@ -449,24 +399,6 @@ export async function POST(request: Request) {
         });
       }
       // 👆 HASTA AQUÍ 👆
-      case 'StockSelectionV1':
-        const ssRows = rows.map((r: any) => ({
-          company:     r.company,
-          currency:    r.currency,
-          metric:      r.metric,
-          series:      r.series ?? 'TOTAL',
-          fiscalYear:  r.fiscalYear ?? r.fiscal_year,
-          quarter:     r.quarter,
-          periodLabel: r.periodLabel ?? r.period_label,
-          value:       r.value ?? null,
-        }));
- 
-        await prisma.stockSelectionV1.createMany({
-          data: ssRows,
-          skipDuplicates: true
-        });
-        break;
-
       // --- RETORNOS DE STOCK SELECTION (SNAPSHOT: REEMPLAZO TOTAL) ---
       // ⚠️ ÚNICO caso que BORRA antes de insertar. El resto de las tablas acumulan
       // historia; ésta guarda un solo estado vigente, así que cada corrida pisa la

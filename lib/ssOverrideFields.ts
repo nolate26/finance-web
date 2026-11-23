@@ -23,8 +23,8 @@ export const OVERRIDE_FIELDS: OverrideFieldDef[] = [
   { key: "minorityN",   label: "Int. minoritario (n)",  group: "Balance", scope: "both" },
   { key: "minorityN4",  label: "Int. minoritario (n-4)",group: "Balance", scope: "both" },
 
-  // Los EBITDA / Utilidad editables acá son los HISTÓRICOS: salen de la ficha o de
-  // stock_selection_v1 (trimestrales). Los proyectados (2026E/2027E) NO están en esta lista a propósito —
+  // Los EBITDA / Utilidad editables acá son los HISTÓRICOS: salen de la ficha
+  // (trimestrales). Los proyectados (2026E/2027E) NO están en esta lista a propósito —
   // ver PROJECTION_FIELDS abajo.
   { key: "ebitdaN",     label: "EBITDA (Ac, n)",   group: "EBITDA", scope: "both" },
   { key: "ebitdaN4",    label: "EBITDA (Ac-1, n-4)",group: "EBITDA", scope: "both" },

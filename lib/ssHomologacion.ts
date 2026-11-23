@@ -12,7 +12,7 @@ export const norm = (s: string | null | undefined) => (s ?? "").toLowerCase().re
 /** "CAP CI Equity" → "CAP CI" (conserva mayúsculas/minúsculas originales). */
 export const cleanBBG = (t: string | null | undefined) => (t ? t.replace(/\s+EQUITY$/i, "").trim() : null);
 
-// Nombres de stock_selection_v1 que no calzan con ninguna fila de empresas_industrias_v2
+// Nombres del universo de Stock Selection que no calzan con ninguna fila de empresas_industrias_v2
 // y se redirigen a mano. Clave y valor van normalizados.
 export const NAME_OVERRIDES: Record<string, string> = {
   aguas: "aguas-a", andina: "andina-b", "las condes": "clinica las condes", potasios: "potasios-b",
@@ -42,14 +42,14 @@ export const SERIES_NAMES: Record<string, { A: string; B: string }> = {
 /** Clave de unidad: "watts" (simple) · "andina-a" / "andina-b" (serie). */
 export interface TickerUnit {
   unitKey: string;
-  /** Nombre de la compañía en stock_selection_v1 — para mensajes legibles. */
+  /** Nombre de la compañía en el universo de Stock Selection — para mensajes legibles. */
   company: string;
   /** "TOTAL" | "A" | "B" */
   series: string;
 }
 
 export interface TickerUnitInput {
-  /** Compañías de stock_selection_v1 con su ticker de compañía ya resuelto. */
+  /** Compañías del universo de Stock Selection (lib/ssUniverse) con su ticker ya resuelto. */
   company: string;
   tickerBBG: string | null;
   /** true si la vista la muestra con series A/B (tiene shares de ambas). */

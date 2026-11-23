@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Search, Save, ChevronDown, ChevronRight, RefreshCw, Eye, EyeOff, Plus, X, AlertTriangle } from "lucide-react";
+import { Search, Save, ChevronDown, ChevronRight, RefreshCw, Eye, EyeOff, Plus, X } from "lucide-react";
 import { PATRIA, FONT_SECONDARY, TEXT } from "@/lib/patriaTheme";
 import { OVERRIDE_FIELDS } from "@/lib/ssOverrideFields";
 import { norm } from "@/lib/ssHomologacion";
@@ -10,7 +10,8 @@ import type { SsRowStatus, RowStatus } from "@/app/api/admin/ss-rows/route";
 import type { EmpresaAdminRow } from "@/app/api/admin/empresas/route";
 
 // ── Pestaña "Filas del Stock Selection" ─────────────────────────────────────────
-// Una línea por compañía de stock_selection_v1 con el motivo por el que se ve o no se ve.
+// Una línea por compañía del universo (stock_selection_orden + sembradas, lib/ssUniverse) con
+// el motivo por el que se ve o no se ve.
 // Es la respuesta al modo de falla silencioso de la vista: sin esto, una compañía que no
 // homologa simplemente no aparece y no hay dónde enterarse de que existe.
 
@@ -32,7 +33,7 @@ const STATUS_META: Record<RowStatus, { label: string; color: string; bg: string;
   "sin-homologacion": { label: "Sin homologar", color: NEG, bg: "rgba(248,72,94,0.12)", hint: "No existe en empresas_industrias_v2 → la vista la descarta en silencio. Se crea en Database Tables, con este mismo nombre." },
   oculta: { label: "Oculta", color: TEXT3, bg: "rgba(13,13,56,0.07)", hint: "Ocultada a mano. Los datos siguen intactos." },
   "sin-retornos": { label: "Sin retornos", color: WARN, bg: "rgba(255,107,6,0.12)", hint: "Se ve, pero alguna serie no tiene retorno cargado en el snapshot." },
-  sembrada: { label: "Sembrada", color: INK, bg: "rgba(32,68,220,0.10)", hint: "Dada de alta a mano: se ve en la tabla con los valores que cargaste, pero el script todavía no la trae. Cuando empiece a mandarla, pasa a alimentarse sola." },
+  sembrada: { label: "Sembrada", color: INK, bg: "rgba(32,68,220,0.10)", hint: "No está en el orden: se ve sólo en los trimestres donde tiene valores cargados a mano. Sumala al orden (Orden y secciones) para que quede fija." },
 };
 
 interface FilasPayload {
@@ -75,21 +76,6 @@ export default function SsV1FilasTab({ onSourceChanged, periodo }: { onSourceCha
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ company: r.company, hidden: hide, reason }),
     })
-      .then(async (res) => { const j = await res.json(); if (!res.ok) throw new Error(j.error || "Error"); })
-      .then(() => { load(); onSourceChanged(); })
-      .catch((e: Error) => setError(e.message))
-      .finally(() => setBusy(null));
-  };
-
-  // Deshacer una clonación. Sólo borra las filas marcadas como clonadas: lo que cargó el
-  // script queda intacto, así que es lo que hay que correr cuando llega el dato real.
-  const borrarClonadas = (r: SsRowStatus) => {
-    if (!window.confirm(
-      `Borrar las ${r.clonedRows} filas que se clonaron desde “${r.clonedFrom}” a “${r.company}”.\n\n` +
-      `Las filas que cargó el script NO se tocan. Después de esto, la compañía va a mostrar sólo sus datos propios.`,
-    )) return;
-    setBusy(r.key);
-    fetch(`/api/admin/ss-clone?company=${encodeURIComponent(r.company)}`, { method: "DELETE" })
       .then(async (res) => { const j = await res.json(); if (!res.ok) throw new Error(j.error || "Error"); })
       .then(() => { load(); onSourceChanged(); })
       .catch((e: Error) => setError(e.message))
@@ -167,13 +153,7 @@ export default function SsV1FilasTab({ onSourceChanged, periodo }: { onSourceCha
                     {r.company}
                     {r.dual && <span style={{ marginLeft: 5, fontSize: 8.5, fontWeight: 700, color: INK, background: "rgba(32,68,220,0.10)", borderRadius: 3, padding: "1px 4px" }}>A/B</span>}
                     <div style={{ fontSize: 9, color: TEXT3, fontWeight: 400, ...NUMF }}>
-                      {r.seeded ? "sin filas en SS v1 — a la espera del cargador" : `${r.quarters} filas en SS v1`}
-                      {r.clonedRows > 0 && (
-                        <span title={`${r.clonedRows} de esas filas se clonaron desde ${r.clonedFrom}. El cargador no las va a pisar.`}
-                          style={{ marginLeft: 5, fontWeight: 700, color: WARN, cursor: "help" }}>
-                          · {r.clonedRows} clonadas de {r.clonedFrom}
-                        </span>
-                      )}
+                      {r.seeded ? "fuera del orden — sólo por valores manuales" : r.seccion}
                     </div>
                   </td>
                   <td style={td}>
@@ -202,13 +182,6 @@ export default function SsV1FilasTab({ onSourceChanged, periodo }: { onSourceCha
                   </td>
                   <td style={{ ...td, fontSize: 10, color: TEXT2, maxWidth: 130 }}>{r.industria || "—"}</td>
                   <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>
-                    {r.clonedRows > 0 && (
-                      <button onClick={() => borrarClonadas(r)} disabled={busy === r.key}
-                        title={`Borrar las ${r.clonedRows} filas clonadas desde ${r.clonedFrom}. Las cargadas por el script no se tocan.`}
-                        style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 8px", fontSize: 10, fontWeight: 700, borderRadius: 5, border: `1px solid ${WARN}`, background: "#fff", color: WARN, cursor: busy === r.key ? "default" : "pointer", marginRight: 4 }}>
-                        Borrar clonadas
-                      </button>
-                    )}
                     <button onClick={() => toggleHidden(r)} disabled={busy === r.key}
                       title={r.hidden ? "Volver a mostrarla en la tabla" : "Ocultarla de la tabla (no borra datos)"}
                       style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 8px", fontSize: 10, fontWeight: 700, borderRadius: 5, border: `1px solid ${BORDER}`, background: "#fff", color: r.hidden ? POS : TEXT2, cursor: busy === r.key ? "default" : "pointer" }}>
@@ -241,7 +214,7 @@ export default function SsV1FilasTab({ onSourceChanged, periodo }: { onSourceCha
             <div style={{ padding: "8px 10px", fontSize: 10.5, color: TEXT2, ...NUMF, lineHeight: 1.7, maxHeight: 140, overflow: "auto" }}>
               {data.unusedReturns.join(" · ")}
               <div style={{ marginTop: 6, fontSize: 10, color: TEXT3, fontFamily: "inherit" }}>
-                Son índices, monedas y commodities que carga el script, más empresas sin fila en stock_selection_v1.
+                Son índices, monedas y commodities que carga el script, más empresas que no están en el orden.
                 Si alguna debería verse, el ticker de su fila en Homologación no coincide con el que manda el script.
               </div>
             </div>
@@ -251,7 +224,7 @@ export default function SsV1FilasTab({ onSourceChanged, periodo }: { onSourceCha
 
       <div style={{ fontSize: 10.5, color: TEXT3, marginTop: 8, lineHeight: 1.55 }}>
         <strong style={{ color: TEXT2 }}>Ocultar</strong> no borra nada: marca la compañía en <em>stock_selection_hidden</em> y la vista la saltea. Se revierte con Mostrar.
-        {" "}<strong style={{ color: TEXT2 }}>Sumar compañía</strong> trae a la vista una empresa que ya existe en <em>empresas_industrias_v2</em>.
+        {" "}<strong style={{ color: TEXT2 }}>Sumar compañía</strong> agrega al orden (sección “Otros”) una empresa que ya existe en <em>empresas_industrias_v2</em>; desde Orden y secciones se reubica.
         {" "}Las empresas se crean en <strong style={{ color: TEXT2 }}>Database Tables</strong>; una compañía <em>Sin homologar</em> aparece apenas su nombre exista ahí.
         {" "}Para cambiar el ticker de una fila que ya existe, andá a la pestaña Homologación.
       </div>
@@ -270,14 +243,11 @@ export default function SsV1FilasTab({ onSourceChanged, periodo }: { onSourceCha
 
 // ── Sumar una compañía a la vista ───────────────────────────────────────────────
 // Sólo trabaja con empresas que YA existen en empresas_industrias_v2: crearlas se hace en
-// Database Tables. La vista se arma con stock_selection_v1 más lo sembrado en overrides,
-// así que elegir la empresa no alcanza: hay que darle historial clonado o algún dato
-// inicial, o de lo contrario no aparecería nada.
+// Database Tables. Sumarla = agregarla a stock_selection_orden (sección "Otros"), que es lo
+// que define el universo; con eso ya aparece, y sus fundamentales llegan con la ficha.
 //
-// Los "datos iniciales" NO se escriben en stock_selection_v1 (esa la repuebla el cargador
-// con createMany/skipDuplicates: una fila puesta a mano ahí BLOQUEARÍA el valor real cuando
-// llegue). Van a stock_selection_override, que se aplica encima, es reversible y queda en
-// la bitácora.
+// Los "datos iniciales" opcionales van a stock_selection_override del trimestre activo: se
+// aplican encima de la ficha, son reversibles y quedan en la bitácora.
 function SumarCompania({ rows, periodo, onClose, onSaved }: {
   rows: SsRowStatus[]; periodo: PeriodoActivo | null; onClose: () => void; onSaved: () => void;
 }) {
@@ -285,15 +255,11 @@ function SumarCompania({ rows, periodo, onClose, onSaved }: {
   const [results, setResults] = useState<EmpresaAdminRow[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [empresa, setEmpresa] = useState<EmpresaAdminRow | null>(null);
-  const [clonarDe, setClonarDe] = useState("");
-  // Datos iniciales: sólo los que el usuario escriba se guardan. Vacío = lo llena el script.
+  // Datos iniciales: sólo los que el usuario escriba se guardan. Vacío = lo trae la ficha.
   const [vals, setVals] = useState<Record<string, string>>({});
   const [openData, setOpenData] = useState(false);
-  const [saving, setSaving] = useState<null | "clon" | "datos">(null);
+  const [saving, setSaving] = useState<null | "orden" | "datos">(null);
   const [error, setError] = useState<string | null>(null);
-
-  // Candidatas a clonar: las que tienen fundamentales cargados de verdad.
-  const fuentes = useMemo(() => rows.filter((r) => r.quarters > 0).map((r) => r.company), [rows]);
 
   // Lo que ya está en la vista, por nombre y por ticker: las duales se muestran como una
   // sola compañía pero cada serie tiene su propia fila en la maestra.
@@ -324,26 +290,22 @@ function SumarCompania({ rows, periodo, onClose, onSaved }: {
     .map(([field, raw]) => ({ field, value: Number(String(raw).replace(/\s|,/g, "")) }))
     .filter((c) => String(vals[c.field]).trim() !== "" && Number.isFinite(c.value));
 
-  // nombre_chile primero: es el nombre corto que manda el cargador. Si la sembrada quedara
-  // con otro, al llegar sus datos reales la compañía saldría repetida.
+  // nombre_chile primero: es el nombre corto con el que la vista homologa (y el de los
+  // overrides). Con otro, la compañía podría salir repetida o sin resolver.
   const nombre = empresa ? (empresa.nombreChile.trim() || empresa.nombreLatam) : "";
-  const listo = !!empresa && (!!clonarDe || numericos().length > 0) && saving == null;
+  const listo = !!empresa && saving == null;
 
   const save = async () => {
     if (!listo) return;
     setError(null);
     try {
-      // Va antes de los datos iniciales para que un override escrito a mano quede pisando
-      // a la serie clonada y no al revés.
-      if (clonarDe) {
-        setSaving("clon");
-        const rc = await fetch("/api/admin/ss-clone", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ from: clonarDe, to: nombre }),
-        });
-        const dc = await rc.json();
-        if (!rc.ok) throw new Error(dc.error || "Falló la clonación");
-      }
+      setSaving("orden");
+      const ro = await fetch("/api/admin/ss-rows", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company: nombre }),
+      });
+      const dor = await ro.json();
+      if (!ro.ok) throw new Error(dor.error || "No se pudo sumar al orden");
 
       // Se guardan contra el trimestre activo de la vista: un override vive por período,
       // igual que cualquier otra edición manual.
@@ -430,35 +392,9 @@ function SumarCompania({ rows, periodo, onClose, onSaved }: {
           {empresa && (
             <>
               <div style={{ fontSize: 11, color: TEXT2, margin: "10px 0 0", lineHeight: 1.5 }}>
-                Para que aparezca necesita datos: <strong>clonar un historial</strong> o <strong>cargar algún dato inicial</strong>.
-                Si preferís esperar al cargador, no hace falta sumarla: se muestra sola cuando lleguen sus fundamentales.
-              </div>
-
-              {/* ── Clonar historial ───────────────────────────────────────────── */}
-              <div style={{ marginTop: 10, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "9px 10px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ flex: 1, fontSize: 12, fontWeight: 700, color: TEXT1 }}>Clonar historial desde</span>
-                  <select value={clonarDe} onChange={(e) => setClonarDe(e.target.value)}
-                    style={{ width: 210, padding: "5px 7px", fontSize: 12, borderRadius: 6, border: `1px solid ${clonarDe ? INK : BORDER}`, background: "#fff", color: TEXT1, outline: "none" }}>
-                    <option value="">— sin historial —</option>
-                    {fuentes.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div style={{ fontSize: 10.5, color: TEXT2, lineHeight: 1.5, marginTop: 6 }}>
-                  Copia todas las filas de <em>stock_selection_v1</em> de esa compañía bajo el nombre {nombre}. Es para
-                  continuidad, por ejemplo tras un cambio de razón social. No copia proyecciones ni precios: los precios y
-                  retornos salen del ticker, así que vienen solos.
-                </div>
-                {clonarDe && (
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: 6, marginTop: 6, padding: "6px 8px", borderRadius: 6, background: "rgba(255,107,6,0.08)", border: `1px solid ${WARN}44`, fontSize: 10.5, color: TEXT1, lineHeight: 1.45 }}>
-                    <AlertTriangle size={12} color={WARN} style={{ flexShrink: 0, marginTop: 1 }} />
-                    <span>
-                      Las filas clonadas quedan marcadas y <strong>el cargador no las va a pisar</strong>. Cuando el
-                      script empiece a mandar datos reales de <strong>{nombre}</strong>, borralas desde esta misma
-                      pestaña con “Borrar clonadas”.
-                    </span>
-                  </div>
-                )}
+                Queda en el orden, sección <strong>“Otros”</strong>, y aparece en la tabla desde ya. Sus fundamentales
+                y sus acciones llegan con la <strong>ficha</strong>. Si querés algún
+                número antes, cargalo abajo como dato inicial.
               </div>
 
               {/* ── Datos iniciales ────────────────────────────────────────────── */}
@@ -480,13 +416,13 @@ function SumarCompania({ rows, periodo, onClose, onSaved }: {
                   <div style={{ padding: "9px 10px 11px" }}>
                     <div style={{ fontSize: 10.5, color: TEXT2, lineHeight: 1.5, marginBottom: 8 }}>
                       Todo en <strong>millones</strong> y en la moneda de reporte, igual que la fuente.
-                      Lo que dejes <strong>vacío</strong> lo llena el script cuando cargue la empresa.
+                      Lo que dejes <strong>vacío</strong> lo llena la ficha cuando se cargue.
                       Lo que escribas se guarda como edición manual del trimestre {periodo?.label ?? "activo"} y
                       <strong> sigue ganando sobre el dato cargado</strong> hasta que lo borres desde el panel de edición de la tabla.
                     </div>
                     {!periodo && (
                       <div style={{ fontSize: 10.5, color: WARN, marginBottom: 8 }}>
-                        No hay trimestre activo (la tabla todavía no cargó): abrí Stock Selection y volvé, o usá el clonado.
+                        No hay trimestre activo (la tabla todavía no cargó): abrí Stock Selection y volvé.
                       </div>
                     )}
                     {grupos.map((g) => (
@@ -518,7 +454,7 @@ function SumarCompania({ rows, periodo, onClose, onSaved }: {
           <button onClick={save} disabled={!listo}
             style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 16px", borderRadius: 6, fontSize: 12.5, fontWeight: 600, border: "none", cursor: listo ? "pointer" : "default", color: "#fff", background: listo ? INK : "rgba(13,13,56,0.45)" }}>
             <Save size={13} />
-            {saving === "clon" ? "Clonando historial…" : saving === "datos" ? "Guardando datos…" : "Sumar a la vista"}
+            {saving === "orden" ? "Sumando al orden…" : saving === "datos" ? "Guardando datos…" : "Sumar a la vista"}
           </button>
         </div>
       </div>

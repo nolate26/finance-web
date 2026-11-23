@@ -72,9 +72,10 @@ function fmtTriPrice(v: number | null): { text: string; color: string } {
   return { text: v.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }), color: "#001EAF" };
 }
 
-function fmtTriPct(current: number | null, past: number | null): { text: string; color: string } {
-  if (current === null || past === null || past === 0) return { text: "—", color: "rgba(13,13,56,0.28)" };
-  const pct = (current / past - 1) * 100;
+/** Retorno en decimal (0.0512 = +5%), como lo guarda ticker_return_snapshot. */
+function fmtRet(v: number | null): { text: string; color: string } {
+  if (v === null) return { text: "—", color: "rgba(13,13,56,0.28)" };
+  const pct = v * 100;
   if (pct >  0.5) return { text: `+${Math.round(pct)}%`, color: "#001EAF" };
   if (pct < -0.5) return { text: `${Math.round(pct)}%`,  color: "#F8485E" };
   return               { text: `${Math.round(pct)}%`,    color: "rgba(13,13,56,0.45)" };
@@ -319,17 +320,22 @@ export default function ConsensusMomentumCards({ data, totalReturn, priceRange }
                     </tr>
                   )}
 
-                  {/* Total Return row — only in Net Income card */}
+                  {/* Total Return row — only in Net Income card. Sale de ticker_return_snapshot,
+                      que trae 1M / YTD / 1Y / 3Y / 5Y: las columnas 3M y 2Y quedan en "—" y el
+                      resto va en el tooltip. */}
                   {card.label === "Net Income" && totalReturn && priceRange && (
-                    <tr style={{ borderTop: "1px solid rgba(0,30,175,0.15)" }}>
+                    <tr
+                      style={{ borderTop: "1px solid rgba(0,30,175,0.15)" }}
+                      title={`Retorno total (Bloomberg) al ${totalReturn.asOf} · YTD ${fmtRet(totalReturn.retYtd).text} · 3Y ${fmtRet(totalReturn.ret3y).text} anual · 5Y ${fmtRet(totalReturn.ret5y).text} anual`}
+                    >
                       <td className="text-[10px] font-secondary tabular-nums font-semibold text-patria-dark-blue/45 py-2 pr-2">
-                        TRLC 
+                        TRLC
                       </td>
-                      <td className="text-[10px] font-secondary tabular-nums font-bold text-right py-2 pr-2" style={{ color: fmtTriPrice(totalReturn.triToday).color }}>
+                      <td className="text-[10px] font-secondary tabular-nums font-bold text-right py-2 pr-2" style={{ color: fmtTriPrice(priceRange.pxLast).color }}>
                         {fmtTriPrice(priceRange.pxLast).text}
                       </td>
-                      {([totalReturn.tri1m, totalReturn.tri3m, totalReturn.tri1y, totalReturn.tri2y] as (number | null)[]).map((v, i) => {
-                        const { text, color } = fmtTriPct(totalReturn.triToday, v);
+                      {([totalReturn.retMonth, null, totalReturn.retYear, null] as (number | null)[]).map((v, i) => {
+                        const { text, color } = fmtRet(v);
                         return (
                           <td key={i} className="text-[10px] font-secondary tabular-nums font-bold text-right py-2 pr-1" style={{ color }}>
                             {text}

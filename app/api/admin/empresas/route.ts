@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin, getSessionUser } from "@/lib/auth";
 import { logAdminChanges, ENTITY } from "@/lib/adminLog";
 import { codePatchFor } from "@/lib/yahooTickerFixes";
+import { loadSsUniverse } from "@/lib/ssUniverse";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -38,7 +39,7 @@ export interface EmpresaAdminRow {
   yahooFinanceTicker: string | null;
   /** Símbolo que el parche en código sustituiría (lib/yahooTickerFixes). null = pasa limpio. */
   codePatch: string | null;
-  /** true si algún nombre de esta fila aparece en stock_selection_v1 (o sea, afecta la vista). */
+  /** true si algún nombre de esta fila está en el universo de Stock Selection (lib/ssUniverse). */
   inStockSelection: boolean;
 }
 
@@ -72,12 +73,10 @@ export async function GET(request: NextRequest) {
           industriaChile: true, industriaGics: true, tickerBloomberg: true, yahooFinanceTicker: true,
         },
       }),
-      // groupBy y no findMany+distinct: el DISTINCT baja a SQL en vez de traerse las ~10k
-      // filas de la tabla (98 compañías × métricas × trimestres) en cada búsqueda.
-      prisma.stockSelectionV1.groupBy({ by: ["company"] }),
+      loadSsUniverse(),
     ]);
 
-    const ssSet = new Set(ssNames.map((r) => norm(r.company)));
+    const ssSet = new Set(ssNames.map((r) => r.key));
     const out: EmpresaAdminRow[] = rows.map((r) => ({
       ...r,
       codePatch: codePatchFor(r.yahooFinanceTicker),

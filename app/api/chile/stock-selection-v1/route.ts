@@ -12,6 +12,7 @@ import {
   qKey, hasPeriod, loadFichaFunds, loadModelPicks, modelScale, recLabel,
   type Fund, type ModelPick,
 } from "@/lib/ssFichaModel";
+import { loadSsUniverse } from "@/lib/ssUniverse";
 
 export const dynamic = "force-dynamic";
 
@@ -58,21 +59,19 @@ export interface SsV1Company {
   gics:        string | null;
   dual:        boolean;       // true → tiene series A/B
   /**
-   * true = compañía SEMBRADA a mano: existe sólo por su homologación + los valores
-   * cargados en stock_selection_override, sin ninguna fila todavía en stock_selection_v1.
-   * Es como se prepara una empresa nueva antes de su primera carga. Se apaga sola cuando
-   * el cargador empieza a traerla (o borrando sus overrides).
+   * true = compañía SEMBRADA a mano: no está en stock_selection_orden y existe sólo por su
+   * homologación + los valores cargados en stock_selection_override del período. Se apaga
+   * borrando sus overrides o sumándola al orden (ver lib/ssUniverse).
    */
   seeded?:     boolean;
 
   /**
    * De dónde salieron los fundamentales del período n:
-   *   "ficha"  = ficha_statements (fuente nueva)
-   *   "legacy" = stock_selection_v1 (la compañía todavía no tiene ficha para ese trimestre)
-   *   "none"   = ninguna de las dos tiene ese trimestre → fundamentales vacíos
-   * La vista pinta distinto todo lo que no sea "ficha".
+   *   "ficha" = ficha_statements
+   *   "none"  = la compañía no tiene ficha de ese trimestre → fundamentales vacíos
+   * (stock_selection_v1, la fuente "legacy", se eliminó en la limpieza de la BDD.)
    */
-  fundSource:  "ficha" | "legacy" | "none";
+  fundSource:  "ficha" | "none";
   fichaTicker: string | null;  // ticker de la ficha usada (normalizado), si hay
   /**
    * Proyecciones/payout/Rec/TP: "model" = último modelo en model_* / bank_*. "none" = sin
@@ -280,16 +279,13 @@ export async function GET(request: NextRequest) {
   const qParam = request.nextUrl.searchParams.get("q");
 
   try {
-    const [fichaFunds, modelPicks, ssRows, empresas, aliases, recRows] = await Promise.all([
+    const [fichaFunds, modelPicks, universe, empresas, aliases, recRows] = await Promise.all([
       // Fundamentales de la ficha y proyecciones/Rec/TP del modelo. Del modelo basta el año
       // reportado (para medir la escala) y los dos proyectados.
       loadFichaFunds(),
       loadModelPicks([PROJ_Y0 - 1, PROJ_Y0, PROJ_Y1]),
-      // stock_selection_v1: respaldo de fundamentales mientras falten fichas. Sin filtro de
-      // serie: necesitamos shares A/B además de TOTAL.
-      prisma.stockSelectionV1.findMany({
-        select: { company: true, currency: true, metric: true, series: true, fiscalYear: true, quarter: true, value: true },
-      }),
+      // Qué compañías tiene la vista: stock_selection_orden + sembradas (lib/ssUniverse).
+      loadSsUniverse(),
       prisma.empresasIndustriasV2.findMany({
         select: { nombreLatam: true, nombreChile: true, isin: true, tickerBloomberg: true, industriaChile: true, industriaGics: true, yahooFinanceTicker: true, moneda: true },
       }),
@@ -397,10 +393,8 @@ export async function GET(request: NextRequest) {
     // ── Periodo n (seleccionable vía ?fy=&q=) ─────────────────────────────────
     const labelOf = (fy: number, q: number) => `${q}Q ${fy}`;
 
-    // Quarters presentes en los datos (desc) → para el selector del front. Fichas + tabla vieja:
-    // el más reciente suele estar sólo en fichas (3Q26 hoy), los viejos sólo en la tabla vieja.
+    // Quarters presentes en las fichas (desc) → para el selector del front.
     const periodMap = new Map<number, { fy: number; q: number }>();
-    for (const r of ssRows) { const k = qKey(r.fiscalYear, r.quarter); if (!periodMap.has(k)) periodMap.set(k, { fy: r.fiscalYear, q: r.quarter }); }
     for (const f of fichaFunds.values()) {
       for (const mm of f.metrics.values()) for (const k of mm.keys()) {
         if (!periodMap.has(k)) periodMap.set(k, { fy: Math.floor(k / 10), q: k % 10 });
@@ -438,16 +432,11 @@ export async function GET(request: NextRequest) {
     // viejo sobre un campo de proyección: esos campos salieron de la lista editable, así
     // que las filas que hayan quedado en la base se ignoran acá sin migrar nada.
     const overridesByCompany = new Map<string, Map<string, number>>();
-    // Nombre tal como lo escribió el admin. Es lo que rotula a una compañía SEMBRADA a mano
-    // (ver más abajo): como no tiene filas en stock_selection_v1, no hay otro lugar de donde
-    // sacar el nombre para mostrar.
-    const overrideLabels = new Map<string, string>();
     for (const o of overrideRows) {
       if (o.value == null || !OVERRIDE_FIELD_KEYS.has(o.field)) continue;
       const k = norm(o.company);
       let m = overridesByCompany.get(k); if (!m) { m = new Map(); overridesByCompany.set(k, m); }
       m.set(o.field, o.value);
-      if (!overrideLabels.has(k)) overrideLabels.set(k, o.company);
     }
 
     // Campos numéricos que se asignan directo al objeto compañía (los demás son shares).
@@ -481,25 +470,8 @@ export async function GET(request: NextRequest) {
     };
     const ltmLabels = (() => { const o: string[] = []; let f = selFy, q = selQ; for (let i = 0; i < 4; i++) { o.push(labelOf(f, q)); q--; if (q === 0) { q = 4; f--; } } return o.reverse(); })();
 
-    // ── Fundamentales (serie TOTAL) + shares por serie ────────────────────────
-    // `funds` = stock_selection_v1 por nombre (respaldo). La fuente principal es fichaFunds
-    // (por ticker); la elección se hace por compañía al armar el universo.
-    const funds = new Map<string, Fund>();
-    for (const r of ssRows) {
-      const k = norm(r.company);
-      let f = funds.get(k);
-      if (!f) { f = { currency: r.currency === "USD" ? "USD" : "CLP", metrics: new Map(), sharesSeries: new Map() }; funds.set(k, f); }
-      if (r.value == null) continue;
-      const key = qKey(r.fiscalYear, r.quarter);
-      if (r.metric === "shares" && (r.series === "A" || r.series === "B")) {
-        let mm = f.sharesSeries.get(r.series); if (!mm) { mm = new Map(); f.sharesSeries.set(r.series, mm); }
-        mm.set(key, r.value);
-      } else if (r.series === "TOTAL") {
-        let mm = f.metrics.get(r.metric); if (!mm) { mm = new Map(); f.metrics.set(r.metric, mm); }
-        mm.set(key, r.value);
-      }
-    }
-    const at = (f: Fund, metric: string, key: number): number | null => f.metrics.get(metric)?.get(key) ?? null;
+    // ── Fundamentales (serie TOTAL) + shares por serie: helpers sobre la ficha ──
+    const at =(f: Fund, metric: string, key: number): number | null => f.metrics.get(metric)?.get(key) ?? null;
     const ltmSum = (f: Fund, metric: string): number | null => {
       const mm = f.metrics.get(metric); if (!mm) return null;
       let s = 0, c = 0; for (const key of ltmKeys) { const v = mm.get(key); if (v != null) { s += v; c++; } }
@@ -512,8 +484,8 @@ export async function GET(request: NextRequest) {
       for (const key of keys) { const v = mm.get(key); if (v == null) return null; s += v; }
       return s;
     };
-    // Año calendario reportado: la ficha trae el período anual ("A") tal cual; la tabla vieja
-    // sólo trimestres, así que ahí se suma (estricto: con los 4 trimestres o nada).
+    // Año calendario reportado: el período anual ("A") de la ficha tal cual; si no lo trae,
+    // la suma de sus trimestres (estricto: con los 4 trimestres o nada).
     const fyOf = (f: Fund, metric: string, year: number): number | null =>
       f.annual?.get(metric)?.get(year) ?? sumStrict(f, metric, [1, 2, 3, 4].map((q) => qKey(year, q)));
     const latestOf = (mm: Map<number, number> | undefined): number | null => {
@@ -524,28 +496,16 @@ export async function GET(request: NextRequest) {
     };
 
     // ── Construir universo ────────────────────────────────────────────────────
-    // El universo es stock_selection_v1 MÁS las compañías sembradas a mano: las que un
-    // admin dio de alta desde la web (homologación + valores en stock_selection_override)
-    // y que el cargador todavía no trae. Sin esto no habría forma de preparar una empresa
-    // nueva antes de su primera carga: la vista recorría sólo stock_selection_v1, así que
-    // una compañía sin filas ahí era invisible por muchos overrides que tuviera.
-    //
-    // Se apagan solas: borrando sus overrides desaparecen, y cuando el cargador empieza a
-    // mandarlas entran por la vía normal (los overrides siguen ganando sobre el dato
-    // cargado hasta que se limpien, que es la semántica de siempre de esa capa).
+    // stock_selection_orden + las compañías SEMBRADAS (lib/ssUniverse). Una sembrada entra
+    // sólo en los períodos donde tiene overrides: fuera de eso no hay nada que mostrarle.
     const universo: string[] = [];
     const seen = new Set<string>();
-    for (const r of ssRows) {
-      const k = norm(r.company);
-      if (seen.has(k)) continue;
-      seen.add(k);
-      universo.push(r.company);
-    }
     const sembradas = new Set<string>();
-    for (const [k, label] of overrideLabels) {
-      if (seen.has(k)) continue;
-      seen.add(k); sembradas.add(k);
-      universo.push(label);
+    for (const u of universe) {
+      if (u.seeded && !overridesByCompany.has(u.key)) continue;
+      seen.add(u.key);
+      if (u.seeded) sembradas.add(u.key);
+      universo.push(u.company);
     }
 
     // Tickers con los que una compañía puede aparecer en la ficha o en el modelo: el de la
@@ -556,8 +516,7 @@ export async function GET(request: NextRequest) {
       const raw = [resolved.tickerBBG, sn ? empByName(sn.A)?.tickerBloomberg : null, sn ? empByName(sn.B)?.tickerBloomberg : null];
       return [...new Set(raw.map((t) => normBBG(t)).filter((t): t is string => !!t))];
     };
-    // Compañías con ficha que no están en la tabla vieja: entran con su nombre de la maestra.
-    // Es lo que va a definir el universo cuando stock_selection_v1 se elimine.
+    // Compañías con ficha que no están en el universo: entran con su nombre de la maestra.
     const claimed = new Set<string>();
     for (const name of universo) {
       const r = resolveName(name);
@@ -594,20 +553,15 @@ export async function GET(request: NextRequest) {
       const extra = extraTicker.get(k);
       if (extra && !cands.includes(extra)) cands.push(extra);
 
-      // ── Fundamentales: ficha → tabla vieja → vacío ──
-      // Se elige UNA fuente por compañía para el período n, sin mezclar: la ficha si tiene ese
-      // trimestre; si no, stock_selection_v1 si lo tiene; si ninguna, vacío. Mezclar daría LTM
-      // falsos: la tabla vieja llega hasta 1Q26, y a 3Q26 sumaría medio año como si fuera uno.
+      // ── Fundamentales: ficha del período n, o vacío ──
       const fichaTicker = cands.find((t) => fichaFunds.has(t)) ?? null;
       const ficha = fichaTicker ? fichaFunds.get(fichaTicker) : undefined;
-      const legacy = funds.get(k);
-      const fundSource: SsV1Company["fundSource"] =
-        hasPeriod(ficha, nKey) ? "ficha" : hasPeriod(legacy, nKey) ? "legacy" : "none";
-      const base = ficha ?? legacy;
-      // Sin fuente para n (o sembrada, sin nada cargado): vacío, salvo las acciones, que no
-      // cambian de un trimestre a otro y permiten seguir mostrando M.Cap y series A/B. La
-      // moneda: la de la fuente que exista, o la de la maestra.
-      const f: Fund = fundSource === "ficha" ? ficha! : fundSource === "legacy" ? legacy! : {
+      const fundSource: SsV1Company["fundSource"] = hasPeriod(ficha, nKey) ? "ficha" : "none";
+      const base = ficha;
+      // Sin ficha para n: fundamentales vacíos, pero se conservan las acciones de la ficha que
+      // haya (no cambian de un trimestre a otro y sostienen M.Cap y series A/B). La moneda: la
+      // de la ficha, o la de la maestra.
+      const f: Fund = fundSource === "ficha" ? ficha! : {
         currency: base?.currency ?? (resolved.moneda === "USD" ? "USD" : "CLP"),
         metrics: base?.metrics.has("shares") ? new Map([["shares", base.metrics.get("shares")!]]) : new Map(),
         sharesSeries: base?.sharesSeries ?? new Map(),
@@ -636,9 +590,12 @@ export async function GET(request: NextRequest) {
         ? { rec: recLabel(model.recc)!, recDate: model.updateDate.toISOString().slice(0, 10), tp: model.tp }
         : null;
 
+      // Acciones: SÓLO de la ficha (decisión del usuario al eliminar stock_selection_v1). Sin
+      // ficha no hay acciones, y con eso no hay M.Cap, múltiplos ni peso en los agregados de
+      // índices y fondos: se van completando a medida que se cargan las fichas.
       const sharesTotal = latestOf(f.metrics.get("shares"));
 
-      // ¿Doble serie? Requiere mapeo de nombres de serie + shares A/B.
+      // ¿Doble serie? Requiere mapeo de nombres de serie + shares A/B de la ficha.
       // Ticker Yahoo y BBG por serie salen de empresas_industrias_v2 (fila de cada clase).
       const sn = SERIES_NAMES[k];
       const sharesA = latestOf(f.sharesSeries.get("A"));

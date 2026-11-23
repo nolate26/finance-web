@@ -226,22 +226,8 @@ model TopPickPeriod {
 }
 
 
-// ─── Tabla 7: Total Return Index con dividendos brutos ───────────────────
-model TotalReturnIndex {
-  ticker String
-  date DateTime @db.Date
-  triToday Float? @map("tri_today")
-  tri1m Float? @map("tri_1m")
-  tri3m Float? @map("tri_3m")
-  tri6m Float? @map("tri_6m")
-  tri1y Float? @map("tri_1y")
-  tri2y Float? @map("tri_2y")
-
-  // PK natural: (ticker, date) ya era la llave real. El `id` autoincremental no lo
-  // referenciaba nadie y duplicaba un índice. El @@index([ticker]) sobraba: es prefijo de la PK.
-  @@id([ticker, date])
-  @@map("total_return_index")
-}
+// total_return_index (niveles del índice de retorno total) se eliminó el 2026-11-23: la única
+// tabla de retornos es ticker_return_snapshot, que usan Stock Selection y el deep-dive.
 
 // empresas_industrias (maestra v1) se eliminó el 2026-11-23: sin referencias en el código,
 // reemplazada por EmpresasIndustriasV2. Respaldo en backups/ y DROP en
@@ -938,32 +924,17 @@ model FichaTicker {
 
 
 
-model StockSelectionV1 {
-  company      String   @db.VarChar(120)
-  currency     String   @db.VarChar(3)   // CLP | USD (constante por compañía)
-  metric       String   @db.VarChar(40)  // revenue, ebitda, shares, utilidad, ...
-  series       String   @default("TOTAL") @db.VarChar(10) // TOTAL | A | B
-  fiscalYear   Int      @map("fiscal_year")
-  quarter      Int      // 1..4
-  periodLabel  String   @map("period_label") @db.VarChar(10) // "1Q 2026"
-  value        Float?
-  // Procedencia: nombre de la compañía de la que se COPIÓ esta fila (clonación de
-  // historial al renombrar una empresa). null = fila real del cargador.
-  //
-  // Existe para poder DESHACER: el ingest usa createMany/skipDuplicates, así que una fila
-  // clonada tapa para siempre al dato real cuando el cargador empiece a mandarlo. Con esta
-  // marca se borran exactamente las clonadas, sin tocar nada cargado.
-  clonedFrom   String?  @map("cloned_from") @db.VarChar(120)
-
-  // @@index([company]) eliminado: es prefijo de la PK. Los otros dos no lo son.
-  @@id([company, metric, series, fiscalYear, quarter])
-  @@index([metric])
-  @@index([fiscalYear, quarter])
-  @@map("stock_selection_v1")
-}
+// stock_selection_v1 (fundamentales trimestrales del cargador viejo, hasta 1Q26) se eliminó
+// el 2026-11-23: los fundamentales y las acciones salen de ficha_statements y el universo de
+// stock_selection_orden. Respaldo en backups/ y DROP en
+// prisma/sql/phase_b5_drop_2026-11-23.sql.
 
 // Orden y secciones de las tablas de Chile (Stock Selection y Proyecciones), editable
 // desde Administración → Orden y secciones.
+//
+// Desde la eliminación de stock_selection_v1 define además el UNIVERSO de Stock Selection:
+// una compañía que no está acá (ni sembrada por overrides) no aparece en la vista. Ver
+// lib/ssUniverse.ts.
 //
 // Reemplaza a FIXED_SECTIONS de lib/chileCompanyOrder.ts, que queda como SEMILLA: si esta
 // tabla está vacía, las vistas siguen usando la lista del código, así que el cambio no
@@ -990,8 +961,8 @@ model StockSelectionOrden {
 // POST /api/chile/carteras/upload. Cada carga REEMPLAZA la foto de su mes entera.
 //
 // Alimenta las filas consolidadas por fondo de Stock Selection: el ponderador del
-// sumaproducto es `shares / SsV1Series.shares` — los dos lados en MILLONES de acciones,
-// igual que stock_selection_v1.shares. El Excel viene ya en millones; el parser NO
+// sumaproducto es `shares / SsV1Series.shares` — los dos lados en MILLONES de acciones
+// (las de la vista salen de la ficha). El Excel viene ya en millones; el parser NO
 // reescala.
 //
 // El cruce con la vista es SÓLO por ticker: `tickerBBG` normalizado (sin " Equity")
@@ -1015,7 +986,7 @@ model Carteras {
 }
 
 // Capa de overrides manuales (admin) sobre los inputs del modelo de Stock Selection.
-// NO se edita stock_selection_v1 (la repuebla el proceso de carga): esta tabla es la
+// No se editan las fuentes (ficha_statements, modelos): esta tabla es la
 // fuente de verdad de los cambios, auditable y reversible. Se aplica por período (fy,q):
 // un override hecho mirando 1Q 2026 sólo aplica cuando ese trimestre está seleccionado.
 // `field` = campo del modelo (sharesTotal, sharesA, sharesB, ebitdaN, ebitdaLtm, debtN,
@@ -1302,15 +1273,15 @@ model TaskComment {
 }
 // Filas de Stock Selection ocultadas a mano por un admin.
 //
-// El universo de la vista sale de stock_selection_v1 (lo que carga el script de Bloomberg)
-// y no se puede podar desde ahí sin borrar los fundamentales. Esta tabla es una capa de
-// visibilidad aparte: marcar una compañía acá la saca de la vista sin tocar un solo dato,
-// y desmarcarla la devuelve. Reversible y auditada en admin_change_log.
+// El universo de la vista sale de stock_selection_orden (lib/ssUniverse). Esta tabla es una
+// capa de visibilidad aparte: marcar una compañía acá la saca de la vista sin tocar un solo
+// dato ni su lugar en el orden, y desmarcarla la devuelve. Reversible y auditada en
+// admin_change_log.
 //
-// La llave es el nombre NORMALIZADO (minúsculas, espacios colapsados) de
-// stock_selection_v1.company — la misma forma con la que la vista arma sus filas.
+// La llave es el nombre NORMALIZADO (minúsculas, espacios colapsados) de la compañía —
+// la misma forma con la que la vista arma sus filas (= stock_selection_orden.company).
 model StockSelectionHidden {
-  company  String   @id @db.VarChar(120) // norm(stock_selection_v1.company)
+  company  String   @id @db.VarChar(120) // norm(nombre de la compañía) = stock_selection_orden.company
   label    String?  @db.VarChar(120)     // el nombre tal cual venía, para leerlo a ojo
   reason   String?  @db.VarChar(300)     // por qué se ocultó
   hiddenBy String?  @map("hidden_by") @db.VarChar(200)

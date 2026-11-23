@@ -245,7 +245,7 @@ export default function SsV1PrintView(p: PrintProps) {
           </>
         )}
         <div className="pr-foot">
-          Fundamentales: fichas (millones, moneda local → USD al TC indicado; sin ficha: stock_selection_v1) · Proyecciones, payout y Rec: modelo del analista ·
+          Fundamentales: fichas (millones, moneda local → USD al TC indicado) · Acciones: ficha ·Proyecciones, payout y Rec: modelo del analista ·
           Precios: Yahoo Finance · Retornos: Bloomberg (total return, dividendos brutos) · Índices y fondos = Σ (M.Cap y fundamentales × peso); los múltiplos salen de esas sumas.
           {" "}Columnas impresas = las visibles en pantalla al momento de imprimir.
         </div>

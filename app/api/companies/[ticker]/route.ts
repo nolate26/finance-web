@@ -1,6 +1,7 @@
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { tickerFromPath } from "@/lib/issuer";
+import { normBBG } from "@/lib/bbg";
 
 export const dynamic = "force-dynamic";
 
@@ -55,13 +56,14 @@ export interface PortfolioWeightSnap {
   overweight:      number | null;
 }
 
+/** ticker_return_snapshot: retornos en DECIMAL (0.0512 = +5,12%); 3y y 5y anualizados. */
 export interface TotalReturnSnap {
-  date:     string;
-  triToday: number | null;
-  tri1m:    number | null;
-  tri3m:    number | null;
-  tri1y:    number | null;
-  tri2y:    number | null;
+  asOf:     string;
+  retMonth: number | null;
+  retYtd:   number | null;
+  retYear:  number | null;
+  ret3y:    number | null;
+  ret5y:    number | null;
 }
 
 export interface DeepDivePayload {
@@ -95,7 +97,7 @@ export async function GET(
       select: { nombreLatam: true, companyDescription: true },
     });
 
-    const [valuation, priceEarnings, consensus, analystRec, priceRange, shortInt, rawWeights, triRow] =
+    const [valuation, priceEarnings, consensus, analystRec, priceRange, shortInt, rawWeights, retRow] =
       await Promise.all([
         // 1. Valuation history — ascending date
         prisma.valuationHistory.findMany({
@@ -149,11 +151,12 @@ export async function GET(
             })
           : Promise.resolve([]),
 
-        // 8. Total Return Index — most recent snapshot
-        prisma.totalReturnIndex.findFirst({
-          where:   { ticker: decodedTicker },
-          orderBy: { date: "desc" },
-          select:  { date: true, triToday: true, tri1m: true, tri3m: true, tri1y: true, tri2y: true },
+        // 8. Retorno total (Bloomberg, dividendos brutos) — ticker_return_snapshot, la misma
+        // tabla de Stock Selection. Guarda el ticker sin " Equity" ("CAP CI"). Sólo cubre el
+        // universo que carga el script: para el resto la fila no se muestra.
+        prisma.tickerReturnSnapshot.findUnique({
+          where:  { tickerBBG: normBBG(decodedTicker) ?? "" },
+          select: { asOf: true, retMonth: true, retYtd: true, retYear: true, ret3y: true, ret5y: true },
         }),
       ]);
 
@@ -221,14 +224,14 @@ export async function GET(
       shortInterest: shortInt ? { shortIntRatio: shortInt.shortIntRatio } : null,
       portfolioWeights,
 
-      totalReturn: triRow
+      totalReturn: retRow
         ? {
-            date:     triRow.date.toISOString().split("T")[0],
-            triToday: triRow.triToday ?? null,
-            tri1m:    triRow.tri1m    ?? null,
-            tri3m:    triRow.tri3m    ?? null,
-            tri1y:    triRow.tri1y    ?? null,
-            tri2y:    triRow.tri2y    ?? null,
+            asOf:     retRow.asOf.toISOString().split("T")[0],
+            retMonth: retRow.retMonth,
+            retYtd:   retRow.retYtd,
+            retYear:  retRow.retYear,
+            ret3y:    retRow.ret3y,
+            ret5y:    retRow.ret5y,
           }
         : null,
     };

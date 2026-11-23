@@ -7,6 +7,8 @@ import {
   norm, cleanBBG, NAME_OVERRIDES, SERIES_NAMES,
   buildTickerUnits, type TickerUnitInput,
 } from "@/lib/ssHomologacion";
+import { loadSsUniverse } from "@/lib/ssUniverse";
+import { loadFichaFunds } from "@/lib/ssFichaModel";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -20,7 +22,7 @@ export const runtime = "nodejs";
 //   3 Andina-A   ANDINAA CI EQUITY    9.568     0      0
 //
 // Reglas del archivo (acordadas con el usuario):
-//   · Las acciones vienen en MILLONES, igual que stock_selection_v1.shares. No se reescala.
+//   · Las acciones vienen en MILLONES, igual que las de la ficha ("# Shares (mn)"). No se reescala.
 //   · Vienen SÓLO las series individuales (Andina-A, Andina-B). La fila madre que las suma
 //     NO debe venir: duplicaría la posición, porque cada serie ya se carga aparte.
 //   · El cruce es exclusivamente por TICKER (columna B). El nombre de la columna A se
@@ -90,18 +92,17 @@ function parseAsOf(raw: string | null): Date {
 }
 
 // ── Índice ticker → unidad, resuelto EXACTAMENTE como la vista ─────────────────
-// Réplica de la resolución de app/api/chile/stock-selection-v1/route.ts: mismo
-// NAME_OVERRIDES, mismo SERIES_NAMES, mismo criterio de desempate por ticker Yahoo.
-// Las constantes salen de lib/ssHomologacion.ts para que no puedan divergir.
+// Réplica de la resolución de app/api/chile/stock-selection-v1/route.ts: mismo universo
+// (lib/ssUniverse), mismo NAME_OVERRIDES / SERIES_NAMES, mismo desempate por ticker Yahoo y
+// acciones sólo de la ficha, igual que la vista. Así una unidad "sin acciones" acá es
+// exactamente una fila sin acciones en la vista.
 async function loadTickerUnits() {
-  const [empresas, shareRows] = await Promise.all([
+  const [empresas, universe, fichaFunds] = await Promise.all([
     prisma.empresasIndustriasV2.findMany({
       select: { nombreLatam: true, nombreChile: true, tickerBloomberg: true, yahooFinanceTicker: true },
     }),
-    prisma.stockSelectionV1.findMany({
-      where: { metric: "shares" },
-      select: { company: true, series: true, fiscalYear: true, quarter: true, value: true },
-    }),
+    loadSsUniverse(),
+    loadFichaFunds(),
   ]);
 
   type Emp = (typeof empresas)[number];
@@ -128,24 +129,28 @@ async function loadTickerUnits() {
     return cleanBBG(scored[0].r.tickerBloomberg);
   };
 
-  // Acciones vigentes por compañía/serie (la foto más reciente), igual que latestOf().
-  const latest = new Map<string, { key: number; value: number }>();
-  for (const r of shareRows) {
-    if (r.value == null) continue;
-    const k = `${norm(r.company)}|${r.series}`;
-    const key = r.fiscalYear * 10 + r.quarter;
-    const cur = latest.get(k);
-    if (!cur || key > cur.key) latest.set(k, { key, value: r.value });
-  }
+  // Última foto de una serie de la ficha (como latestOf() de la vista, sin período activo).
+  const lastOf = (mm: Map<number, number> | undefined): number | null => {
+    if (!mm?.size) return null;
+    return mm.get(Math.max(...mm.keys())) ?? null;
+  };
 
-  const names = [...new Set(shareRows.map((r) => r.company))];
-  const inputs: TickerUnitInput[] = names.map((company) => {
-    const k = norm(company);
+  // Acciones por unidad, desde la ficha: la serie A/B y, si no es doble, el total.
+  const sharesByUnit = new Map<string, boolean>();
+  const inputs: TickerUnitInput[] = universe.map(({ company, key: k }) => {
     const sn = SERIES_NAMES[k];
-    const dual = !!sn && latest.has(`${k}|A`) && latest.has(`${k}|B`);
+    const tickerBBG = resolveBBG(company);
+    const cands = [tickerBBG, sn ? empByName(sn.A)?.tickerBloomberg : null, sn ? empByName(sn.B)?.tickerBloomberg : null]
+      .map((t) => normBBG(t)).filter((t): t is string => !!t);
+    const ficha = cands.map((t) => fichaFunds.get(t)).find(Boolean);
+    const sharesA = lastOf(ficha?.sharesSeries.get("A"));
+    const sharesB = lastOf(ficha?.sharesSeries.get("B"));
+    const dual = !!sn && sharesA != null && sharesB != null;
+    sharesByUnit.set(k, lastOf(ficha?.metrics.get("shares")) != null);
+    if (dual) { sharesByUnit.set(`${k}-a`, true); sharesByUnit.set(`${k}-b`, true); }
     return {
       company,
-      tickerBBG: resolveBBG(company),
+      tickerBBG,
       dual,
       bbgA: dual ? cleanBBG(empByName(sn.A)?.tickerBloomberg) : null,
       bbgB: dual ? cleanBBG(empByName(sn.B)?.tickerBloomberg) : null,
@@ -154,10 +159,7 @@ async function loadTickerUnits() {
 
   const { units, collisions } = buildTickerUnits(inputs, normBBG);
   // ¿La unidad tiene acciones para dividir? Sin denominador no hay ponderador.
-  const hasShares = (unitKey: string): boolean => {
-    const m = unitKey.match(/^(.*)-([ab])$/);
-    return m ? latest.has(`${m[1]}|${m[2].toUpperCase()}`) : latest.has(`${unitKey}|TOTAL`);
-  };
+  const hasShares = (unitKey: string): boolean => sharesByUnit.get(unitKey) ?? false;
   return { units, collisions, hasShares };
 }
 
