@@ -46,6 +46,16 @@ function toBool(v: unknown): boolean {
   return false;
 }
 
+// Tablas dadas de baja en la limpieza de la BDD (2026-11). Se responden con 410 y un
+// mensaje explícito, para que el script de Python que todavía las mande lo diga en su log
+// en vez de un "no reconocida" que parece un typo. Respaldo de los datos en backups/.
+const RETIRED_TABLES: Record<string, string> = {
+  LastRun:                'last_run se eliminó (nunca tuvo datos).',
+  LatamEquitySnapshot:    'latam_equity_snapshots se eliminó junto con la vista Perf. Attribution de LatAm.',
+  BetaSensitivity:        'beta_sensitivity se eliminó junto con la vista Beta Exposure.',
+  PerformanceAttribution: 'performance_attribution se eliminó junto con la pestaña Performance Attribution de Fondos.',
+};
+
 export async function POST(request: Request) {
   // Declaramos la variable afuera para que sobreviva si ocurre un error
   let tableName = 'Desconocida';
@@ -57,6 +67,9 @@ export async function POST(request: Request) {
     // 1. Validamos que al menos venga el nombre de la tabla
     if (!table) {
       return NextResponse.json({ error: 'Payload inválido: Falta la tabla' }, { status: 400 });
+    }
+    if (RETIRED_TABLES[table]) {
+      return NextResponse.json({ error: `Tabla ${table} dada de baja: ${RETIRED_TABLES[table]} Quitarla del script.` }, { status: 410 });
     }
 
     // 2. Hacemos la excepción para nuestro modelo de Excel
@@ -102,10 +115,6 @@ export async function POST(request: Request) {
         await prisma.monedaFundReturn.createMany({ data: rows, skipDuplicates: true }); 
         break;
   
-      case 'PerformanceAttribution':
-        await prisma.performanceAttribution.createMany({ data: rows, skipDuplicates: true });
-        break;
-
       case 'EmpresasIndustriasV2':         
         await prisma.empresasIndustriasV2.createMany({data: rows, skipDuplicates: true, });// Protege contra tickers duplicados                 
         break;
@@ -442,19 +451,6 @@ export async function POST(request: Request) {
         });
       }
       // 👆 HASTA AQUÍ 👆
-      // --- VISTA: SS LATAM ---
-      case 'LatamEquitySnapshot':
-        await prisma.latamEquitySnapshot.createMany({ data: rows });
-        break;
-
-
-      case 'BetaSensitivity':
-        await prisma.betaSensitivity.createMany({ 
-          data: rows, 
-          skipDuplicates: true 
-        });
-        break;
-        
       case 'StockSelectionV1':
         const ssRows = rows.map((r: any) => ({
           company:     r.company,

@@ -22,7 +22,6 @@ export const config = {
     "/companies/:path*",
     "/extract/:path*",
     "/chile/:path*",
-    "/latam/:path*",
     "/links/:path*",
     "/economia/:path*",
     "/fondos/:path*",

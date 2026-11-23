@@ -5,7 +5,6 @@ import { PATRIA, FONT_PRIMARY, FONT_SECONDARY } from "@/lib/patriaTheme";
 import { useEffect, useState } from "react";
 import CarteraView from "@/components/fondos/CarteraView";
 import ReturnsDashboard from "@/components/fondos/ReturnsDashboard";
-import PerformanceAttribution from "@/components/fondos/PerformanceAttribution";
 import { RefreshCw, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
 
 type Region = "Chile" | "LATAM" | "Brazil";
@@ -39,20 +38,6 @@ const EXTENDED_RETURNS = new Set(["Patria_Long_Biased_Master_FIM", "Patria_LO_Ma
 const FALLBACK_DISPLAY: Record<string, string> = {
   Patria_Long_Biased_Master_FIM: "Patria Long Biased",
   Patria_LO_Master_FIA: "Patria Long Only",
-};
-
-// ── Fund → Performance Attribution fund identifier (matches FUND column in CSV)
-const FUND_ATTR_MAP: Record<string, string> = {
-  Pionero: "PIONERO",
-  Moneda_Renta_Variable: "MRV",
-  Orange: "ORANGE",
-  "Moneda_Latin_America_Small_Cap_(LX)": "MSC - Moneda Small Cap Latinoamérica",
-  "Moneda_Latin_America_Equities_(LX)": "MLE",
-  Glory: "GLORY",
-  Mercer: "MERCER",
-  // Brasil: aún sin datos; ajustar al valor de la columna FUND cuando se suba.
-  Patria_Long_Biased_Master_FIM: "PATRIA LONG BIASED",
-  Patria_LO_Master_FIA: "PATRIA LONG ONLY",
 };
 
 // ── Business-ordered fund names per region ────────────────────────────────────
@@ -119,7 +104,7 @@ export default function FondosPage() {
   const [loading, setLoading] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
   const [region, setRegion] = useState<Region>("Chile");
-  const [activeTab, setActiveTab] = useState<"cartera" | "returns" | "attribution">("returns");
+  const [activeTab, setActiveTab] = useState<"cartera" | "returns">("returns");
 
   useEffect(() => {
     fetch("/api/fondos")
@@ -287,7 +272,6 @@ export default function FondosPage() {
         {([
           { key: "returns",     label: "Fund Returns"           },
           { key: "cartera",     label: "Portfolio"              },
-          { key: "attribution", label: "Performance Attribution" },
         ] as const).map(({ key, label }) => (
           <button
             key={key}
@@ -447,14 +431,6 @@ export default function FondosPage() {
             </div>
           )}
         </>
-      )}
-
-      {/* ── Attribution tab ───────────────────────────────────────────────────── */}
-      {activeTab === "attribution" && (
-        <PerformanceAttribution
-          fundId={FUND_ATTR_MAP[selectedFundName]}
-          displayName={selectedDisplayName}
-        />
       )}
     </div>
   );
