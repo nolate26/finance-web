@@ -4,6 +4,7 @@ import { normalizeTicker } from '@/lib/issuer';
 import { normBBG } from '@/lib/bbg';
 import { notify } from '@/lib/notify';
 import { previousHeader } from '@/lib/modelRevision';
+import { missingFromMaster, masterMissingMessage } from '@/lib/masterTickers';
 // ❌ ELIMINADO: import { table } from 'console'; (Esto rompe la API en producción)
 
 // createMany necesita que todas las filas tengan el mismo set de claves:
@@ -172,6 +173,10 @@ export async function POST(request: Request) {
             { status: 400 }
           );
         }
+        // FK a la maestra (B6): se valida antes de escribir para devolver un mensaje accionable.
+        if ((await missingFromMaster([bankTicker])).length) {
+          return NextResponse.json({ error: masterMissingMessage([bankTicker]) }, { status: 400 });
+        }
 
         const bankDate = new Date(bHeader.updateDate);
         const bankKey = { ticker: bankTicker, updateDate: bankDate };
@@ -311,6 +316,10 @@ export async function POST(request: Request) {
             { error: 'Payload inválido: el header del modelo no trae ticker' },
             { status: 400 }
           );
+        }
+        // FK a la maestra (B6): se valida antes de escribir para devolver un mensaje accionable.
+        if ((await missingFromMaster([modelTicker])).length) {
+          return NextResponse.json({ error: masterMissingMessage([modelTicker]) }, { status: 400 });
         }
 
         const modelDate = new Date(header.updateDate);

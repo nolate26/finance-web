@@ -6,6 +6,7 @@ import {
   validKey, rowLabel, keyString, type TableMeta, type Row,
 } from "@/lib/adminTables";
 import { normalizeTicker } from "@/lib/issuer";
+import { isFkViolation } from "@/lib/masterTickers";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -47,6 +48,13 @@ function checkMaster(values: Record<string, unknown>): { values: Record<string, 
 // Mensaje legible de un error de Postgres (tipo inválido, NOT NULL, FK, PK duplicada…).
 function pgError(err: unknown): string {
   const s = String((err as { message?: string })?.message ?? err);
+  // FK (fichas, modelos, alias… apuntan a la maestra): el mensaje de Postgres es críptico.
+  if (isFkViolation(err)) {
+    const tables = [...s.matchAll(/on table \\?"([^"\\]+)\\?"/g)].map((m) => m[1]);
+    return /update or delete on table/i.test(s)
+      ? `No se puede borrar ni cambiar esta fila: ${tables[1] ?? "otra tabla"} la referencia. Borrá o reasigná esas filas primero.`
+      : `El ticker no existe en la maestra (empresas_industrias_v2)${tables[0] ? `, y ${tables[0]} lo exige` : ""}. Crealo primero ahí.`;
+  }
   const m = s.match(/(?:ERROR|Message):\s*`?([^`\n]+)/i) ?? s.match(/db error: ERROR: ([^\n]+)/i);
   return (m?.[1] ?? s).slice(0, 300);
 }

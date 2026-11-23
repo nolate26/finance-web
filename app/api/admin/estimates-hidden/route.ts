@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, getSessionUser } from "@/lib/auth";
+import { isFkViolation, masterMissingMessage } from "@/lib/masterTickers";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -43,6 +44,9 @@ export async function POST(request: NextRequest) {
     ]);
     return NextResponse.json({ ok: true, ticker, hidden });
   } catch (err) {
+    if (isFkViolation(err)) {
+      return NextResponse.json({ error: masterMissingMessage([ticker]) }, { status: 400 });
+    }
     console.error("[admin/estimates-hidden]", err);
     return NextResponse.json(
       { error: "No se pudo guardar. ¿Ya se corrió `npx prisma db push` (tabla estimates_hidden)?" },

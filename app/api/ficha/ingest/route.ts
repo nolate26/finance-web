@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { normalizeTicker } from '@/lib/issuer';
+import { missingFromMaster, masterMissingMessage } from '@/lib/masterTickers';
 
 // Ingest de la hoja "Send Ficha" (macro SubirFicha). Mismo criterio que /api/ingest:
 // sin sesión (la macro no manda cookie; la ruta queda fuera del matcher del middleware).
@@ -230,6 +231,13 @@ export async function POST(request: Request) {
       disambiguate(parsed.data.kpis, (r) => r.kpi, (r) => r.kpiOrder, (r, kpi) => ({ ...r, kpi })),
       (r) => `${periodKey(r)}|${r.kpi}`,
     );
+
+    // FK a la maestra (B6): se valida antes de escribir. Sin esto la transacción cae a mitad
+    // de camino con el error crudo de Postgres y la macro sólo ve un 500.
+    const missing = await missingFromMaster([...statements, ...kpis].map((r) => r.ticker));
+    if (missing.length) {
+      return NextResponse.json({ error: masterMissingMessage(missing) }, { status: 400 });
+    }
 
     // LTM y acumulados: uno solo por compañía. Si la planilla trae esas columnas, se borran
     // las anteriores (de cualquier trimestre) y quedan las que llegan; así tampoco sobreviven

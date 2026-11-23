@@ -5,6 +5,7 @@ import { requireAdmin, getSessionUser } from "@/lib/auth";
 import { logAdminChanges, ENTITY } from "@/lib/adminLog";
 import { codePatchFor } from "@/lib/yahooTickerFixes";
 import { loadSsUniverse } from "@/lib/ssUniverse";
+import { isFkViolation } from "@/lib/masterTickers";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -193,6 +194,13 @@ export async function DELETE(request: NextRequest) {
     );
     return NextResponse.json({ ok: true, deleted: id });
   } catch (e) {
+    // Fichas, modelos, presentaciones y alias apuntan a la maestra con RESTRICT.
+    if (isFkViolation(e)) {
+      return NextResponse.json(
+        { error: "No se puede borrar: esta empresa tiene modelos, fichas, presentaciones o alias asociados. Borrá o reasigná esos datos primero." },
+        { status: 409 },
+      );
+    }
     console.error("[admin/empresas DELETE]", e);
     return NextResponse.json({ error: "No se pudo borrar la fila" }, { status: 500 });
   }

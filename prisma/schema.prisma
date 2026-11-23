@@ -535,6 +535,10 @@ model ModelHeader {
   link       String?  @db.VarChar(500)
   financials ModelFinancials[]
   kpis       ModelKPI[]
+  // FK a la maestra (B6, 2026-11-23): un modelo de un ticker que no está en
+  // empresas_industrias_v2 se rechaza (el ingest lo valida antes, lib/masterTickers).
+  // Restrict: no se borra una empresa con modelos. Cascade al renombrar su ticker.
+  empresa    EmpresasIndustriasV2 @relation(fields: [ticker], references: [tickerBloomberg], onDelete: Restrict)
   @@id([ticker, updateDate])
   @@map("model_headers")
 }
@@ -690,6 +694,8 @@ model BankHeader {
 
   financials  BankFinancials[]
   kpis        BankKPI[]
+  // FK a la maestra (B6), igual que ModelHeader.
+  empresa     EmpresasIndustriasV2 @relation(fields: [ticker], references: [tickerBloomberg], onDelete: Restrict)
 
   // PK compuesta, igual que ModelHeader: los hijos ya apuntaban a (ticker, updateDate)
   // y el `id` no lo referenciaba nadie. El selector de Prisma sigue siendo
@@ -855,6 +861,13 @@ model EmpresasIndustriasV2 {
   fichasMulti        FichaTicker[]
   presentaciones     PresentationTicker[]
   aliases            SecurityAlias[]
+  // FKs de B6 (todas Restrict): no se borra una empresa con modelos, fichas o comentarios.
+  modelHeaders       ModelHeader[]
+  bankHeaders        BankHeader[]
+  fichaStatements    FichaStatement[]
+  fichaKpis          FichaKpi[]
+  fichaComments      FichaComment[]
+  estimatesHidden    EstimatesHidden?
 
   // @@index([tickerBloomberg]) eliminado: era un duplicado literal del índice que ya
   // crea el @unique de esa misma columna.
@@ -1302,6 +1315,8 @@ model EstimatesHidden {
   hiddenBy String?  @map("hidden_by") @db.VarChar(200)
   hiddenAt DateTime @default(now()) @map("hidden_at")
 
+  empresa  EmpresasIndustriasV2 @relation(fields: [ticker], references: [tickerBloomberg], onDelete: Restrict) // FK B6
+
   @@map("estimates_hidden")
 }
 
@@ -1362,6 +1377,9 @@ model FichaStatement {
   value      Decimal  @db.Decimal(24, 6)
   updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
 
+  // FK a la maestra (B6): /api/ficha/ingest valida los tickers antes de escribir.
+  empresa    EmpresasIndustriasV2 @relation(fields: [ticker], references: [tickerBloomberg], onDelete: Restrict)
+
   @@unique([ticker, periodType, year, quarter, section, line])
   @@index([ticker, periodType, year, quarter])
   @@index([ticker, periodEnd])
@@ -1382,6 +1400,8 @@ model FichaKpi {
   kpiOrder   Int      @map("kpi_order")
   value      Decimal  @db.Decimal(24, 6)
   updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
+
+  empresa    EmpresasIndustriasV2 @relation(fields: [ticker], references: [tickerBloomberg], onDelete: Restrict) // FK B6
 
   @@unique([ticker, periodType, year, quarter, section, kpi])
   @@index([ticker, periodType, year, quarter])
@@ -1411,6 +1431,8 @@ model FichaComment {
   updatedBy String?  @map("updated_by") @db.VarChar(200)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  empresa   EmpresasIndustriasV2 @relation(fields: [ticker], references: [tickerBloomberg], onDelete: Restrict) // FK B6
 
   @@unique([ticker, year, quarter, source, section, line, target])
   @@index([ticker, year, quarter])
