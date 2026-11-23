@@ -481,10 +481,8 @@ model Presentation {
   file_url     String
   category     String   // ej: 'Investment Cases', 'Client Presentations'
   region       String   // ej: 'Chile', 'LATAM'
-  // Texto libre heredado: un ticker suelto escrito a mano. Para investment cases lo
-  // reemplaza la relación `tickers`, que es la que tiene FK, TP y recomendación. Se
-  // conserva porque lo siguen usando las presentaciones viejas y RelatedReports.
-  company_name String?
+  // (company_name, el ticker suelto en texto libre, se eliminó el 2026-11-23: toda empresa
+  // de una presentación vive en `tickers`, con FK a la maestra.)
   is_sell_side Boolean  @default(false) // <--- NUEVO CAMPO AÑADIDO
   created_at   DateTime @default(now())
 

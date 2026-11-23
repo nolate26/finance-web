@@ -345,8 +345,13 @@ export default function CreatePresentationModal({ defaultCategory, defaultRegion
           region,
           // Economics: sólo título y fecha — sin empresa ni origen, aunque hayan quedado
           // elegidos de otra categoría.
-          company_name: isEcon ? null : companyTicker || null,
           is_sell_side: isEcon ? false : isSellSide,
+          // El resto de las categorías lleva a lo más UNA empresa (el combobox). Va por la
+          // misma relación presentation_tickers que los casos: la columna de texto libre
+          // company_name se eliminó en la limpieza de la BDD (B4).
+          ...(!isEcon && !isCase && !isSector && companyTicker ? {
+            tickers: [{ ticker: companyTicker }],
+          } : {}),
           ...(isEcon ? { case_date: caseDate || null } : {}),
           // Casos y sectorial updates llevan empresas y fecha del informe. TP y rating son
           // sólo de los casos: si se cambió de categoría a mitad de camino, no se arrastran.

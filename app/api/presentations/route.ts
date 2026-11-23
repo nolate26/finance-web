@@ -42,17 +42,15 @@ function parseTickers(raw: unknown): { rows: { ticker: string; targetPrice: numb
 }
 
 // ── GET: list presentations ───────────────────────────────────────────────────
-// `company_name` matchea el texto libre heredado O la relación de tickers, para que
-// el deep-dive de una empresa encuentre también los casos multi-ticker.
+// `ticker` filtra por la relación presentation_tickers, así el deep-dive de una empresa
+// encuentra también los casos multi-ticker.
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const companyName = searchParams.get("company_name")?.trim() || undefined;
+    const ticker = searchParams.get("ticker")?.trim().toUpperCase() || undefined;
 
     const presentations = await prisma.presentation.findMany({
-      where: companyName
-        ? { OR: [{ company_name: companyName }, { tickers: { some: { ticker: companyName.toUpperCase() } } }] }
-        : undefined,
+      where: ticker ? { tickers: { some: { ticker } } } : undefined,
       orderBy: { created_at: "desc" },
       include: PRESENTATION_INCLUDE,
     });
@@ -74,11 +72,11 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as {
       title?: string; description?: string; file_url?: string;
-      category?: string; region?: string; company_name?: string; is_sell_side?: boolean;
+      category?: string; region?: string; is_sell_side?: boolean;
       case_date?: string | null; tickers?: unknown;
     };
 
-    const { title, description, file_url, category, region, company_name, is_sell_side } = body;
+    const { title, description, file_url, category, region, is_sell_side } = body;
 
     if (!title?.trim())    return NextResponse.json({ error: "title is required" },    { status: 400 });
     if (!file_url?.trim()) return NextResponse.json({ error: "file_url is required" }, { status: 400 });
@@ -110,7 +108,6 @@ export async function POST(request: Request) {
         file_url:     file_url.trim(),
         category:     category.trim(),
         region:       region.trim(),
-        company_name: company_name?.trim() || null,
         is_sell_side: is_sell_side ?? false,
         caseDate,
         uploadedBy:   user?.email ?? null,

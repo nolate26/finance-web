@@ -170,13 +170,6 @@ function FileRow({
         {pres.is_sell_side ? "Sell Side" : "Moneda"}
       </span>
 
-      {/* Company chip — sólo el texto libre heredado; los casos usan los chips de arriba */}
-      {pres.company_name && pres.tickers.length === 0 && (
-        <span className="flex-shrink-0 text-xs font-secondary tabular-nums" style={{ color: "rgba(13,13,56,0.45)", whiteSpace: "nowrap" }}>
-          {pres.company_name}
-        </span>
-      )}
-
       {/* Fecha del caso si la tiene; si no, la de carga */}
       <span className="font-secondary tabular-nums text-xs flex-shrink-0 sm:min-w-[90px] sm:text-right" style={{ color: "rgba(13,13,56,0.28)" }}>
         {formatDate(pres.case_date ?? pres.created_at)}

@@ -21,8 +21,6 @@ export interface Presentation {
   file_url: string;
   category: string;
   region: string;
-  /** Texto libre heredado (un ticker suelto). Para investment cases manda `tickers`. */
-  company_name: string | null;
   is_sell_side: boolean;
   created_at: string;
   /** Fecha del caso (la del informe). ISO corto "YYYY-MM-DD" o null. */
@@ -37,7 +35,7 @@ export interface Presentation {
 /** Lo que Prisma devuelve con `include: PRESENTATION_INCLUDE`. */
 interface PresentationRow {
   id: string; title: string; description: string | null; file_url: string;
-  category: string; region: string; company_name: string | null; is_sell_side: boolean;
+  category: string; region: string; is_sell_side: boolean;
   created_at: Date; caseDate: Date | null; uploadedBy: string | null;
   reviewStatus: string; reviewedBy: string | null; reviewedAt: Date | null;
   tickers: {
@@ -61,7 +59,6 @@ export function toPresentationDTO(p: PresentationRow): Presentation {
     file_url:      p.file_url,
     category:      p.category,
     region:        p.region,
-    company_name:  p.company_name,
     is_sell_side:  p.is_sell_side,
     created_at:    p.created_at.toISOString(),
     case_date:     p.caseDate ? p.caseDate.toISOString().slice(0, 10) : null,

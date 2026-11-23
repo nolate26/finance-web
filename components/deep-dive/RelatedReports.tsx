@@ -119,10 +119,10 @@ export default function RelatedReports({ ticker }: Props) {
 
     let cancelled = false;
     setLoading(true);
-    // Dos fuentes en paralelo: presentaciones (company_name = ticker BBG) y fichas
-    // (FK real al ticker). Si una falla, la otra igual se muestra.
+    // Dos fuentes en paralelo: presentaciones (presentation_tickers) y fichas, ambas con
+    // FK real al ticker. Si una falla, la otra igual se muestra.
     Promise.all([
-      fetch(`/api/presentations?company_name=${encodeURIComponent(ticker)}`)
+      fetch(`/api/presentations?ticker=${encodeURIComponent(ticker)}`)
         .then((r) => r.json() as Promise<{ presentations?: Presentation[] }>)
         .then((d) => d.presentations ?? [])
         .catch(() => [] as Presentation[]),
