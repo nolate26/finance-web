@@ -24,3 +24,6 @@ backups/
 .DS_Store
 
 /lib/generated/prisma
+
+# Salida del generador de la capa ai (scripts/gen-ai-schema.cjs)
+scripts/.ai-views.json
