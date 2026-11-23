@@ -250,8 +250,11 @@ export async function POST(request: Request) {
 
       // --- TABLA TOTAL RETURN INDEX (UPSERT) ---
       case 'TotalReturnIndex':
-        // Mapeamos las filas para crear una lista de operaciones UPSERT
-        const triUpserts = rows.map((row: any) => {
+        // Mapeamos las filas para crear una lista de operaciones UPSERT.
+        // Ticker canónico como en el resto del deep-dive: Bloomberg manda "AAISA CI Equity" y
+        // /api/companies/[ticker] lee por igualdad contra el ticker en MAYÚSCULA. Sin esto se
+        // acumularon 3.854 filas invisibles (normalizadas el 2026-11-23).
+        const triUpserts = withCanonicalTicker(rows).map((row: any) => {
           // Extraemos los valores soportando tanto camelCase como snake_case 
           // dependiendo de cómo los envíe tu script de Python
           const triToday = row.triToday ?? row.tri_today ?? null;
@@ -439,10 +442,6 @@ export async function POST(request: Request) {
         });
       }
       // 👆 HASTA AQUÍ 👆
-      case 'LastRun':
-        await prisma.lastRun.createMany({ data: rows, skipDuplicates: true });
-        break;
-
       // --- VISTA: SS LATAM ---
       case 'LatamEquitySnapshot':
         await prisma.latamEquitySnapshot.createMany({ data: rows });

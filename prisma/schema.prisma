@@ -257,15 +257,10 @@ model TotalReturnIndex {
   @@map("total_return_index")
 }
 
-model EmpresasIndustrias {
-  nombreLatam     String  @id @map("nombre_latam") @db.VarChar(200)
-  nombreChile     String? @map("nombre_chile") @db.VarChar(200)
-  industriaGics   String? @map("industria_gics") @db.VarChar(200)
-  industriaChile  String? @map("industria_chile") @db.VarChar(200)
-  tickerBloomberg String? @map("ticker_bloomberg") @db.VarChar(100)
-  companyDescription String? @map("company_description") @db.Text
-  @@map("empresas_industrias")
-}
+// empresas_industrias (maestra v1) se eliminó el 2026-11-23: sin referencias en el código,
+// reemplazada por EmpresasIndustriasV2. Respaldo en backups/ y DROP en
+// prisma/sql/phase_a_cleanup_2026-11-23.sql.
+
 model SsUniverse {
   cierreCartera  DateTime @map("cierre_cartera") @db.Date
   recordType     String   @map("record_type") @db.VarChar(10)
@@ -591,16 +586,8 @@ model AnalystRecommendation {
   @@id([ticker, date])
   @@map("analyst_recommendations")
 }
-// ─── Tracking de corridas incrementales ──────────────────────────────────
-model LastRun {
-  id       Int    @id @default(autoincrement())
-  ticker   String
-  module   String
-  lastDate String
-
-  @@unique([ticker, module])
-  @@map("last_run")
-}
+// last_run (marca de agua de cargas incrementales) se eliminó el 2026-11-23: nunca tuvo
+// una fila. Ver prisma/sql/phase_a_cleanup_2026-11-23.sql.
 
 
 
@@ -1477,9 +1464,9 @@ model LinkSection {
 // Links a herramientas y ejercicios de los analistas (vista Useful Links). Cualquier usuario
 // agrega; sólo el admin edita, ordena y borra. section_id null = link anterior a las
 // secciones, que aparece en "Unassigned" hasta que el admin lo mueva.
+// (La columna legada `region` se eliminó el 2026-11-23: ninguna fila la tenía.)
 model AnalystLink {
   id          Int          @id @default(autoincrement())
-  region      String?      @db.VarChar(10)   // legado: "CHILE" | "LATAM"; los links nuevos no lo llevan
   sectionId   Int?         @map("section_id")
   sortOrder   Int          @default(0) @map("sort_order")
   name        String       @db.VarChar(120)
