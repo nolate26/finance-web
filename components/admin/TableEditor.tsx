@@ -16,7 +16,7 @@ import type { TableInfo, TableMeta, Row } from "@/lib/adminTables";
 // Tablas que el equipo toca seguido, en orden de importancia. Van como accesos directos.
 const KEY_TABLES: { name: string; note: string }[] = [
   { name: "empresas_industrias_v2", note: "Homologación maestra: nombres, tickers Bloomberg/Yahoo, ISIN, industria, país" },
-  { name: "company_isins",          note: "ISIN por compañía" },
+  { name: "security_aliases",       note: "Nombres del track record → ticker Bloomberg (o ISIN/Yahoo si no está en la maestra)" },
   { name: "index_membership",       note: "Pertenencia a índices (IPSA, IGPA…)" },
   { name: "carteras",               note: "Posiciones de los fondos por mes" },
   { name: "model_headers",          note: "Header de los modelos (rec, TP, analista, moneda)" },

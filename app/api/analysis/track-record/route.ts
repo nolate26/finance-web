@@ -1,6 +1,7 @@
 import { NextResponse, NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { TRACK_RECORD, resolveAlias } from "@/lib/securityAliases";
 import YahooFinance from "yahoo-finance2";
 
 // One client per server instance; silence Yahoo's one-time survey notice.
@@ -257,8 +258,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Resolve Yahoo ticker.
-    const isin   = await prisma.companyIsin.findUnique({ where: { companyName: company } });
-    const ticker = isin?.yahooFinanceTicker;
+    const ticker = (await resolveAlias(TRACK_RECORD, company))?.yahoo;
     if (!ticker) {
       return NextResponse.json(
         { error: `No Yahoo Finance ticker mapped for "${company}".` },

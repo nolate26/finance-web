@@ -81,7 +81,7 @@ export default function AddRecommendationModal({
     }
   }, [open, editRow]);
 
-  // A company is "new" when it isn't already mapped in CompanyIsin.
+  // A company is "new" when it isn't already registered in security_aliases (track_record).
   // Al editar, la empresa ya existe → nunca se trata como nueva.
   const isNewCompany = useMemo(() => {
     if (isEditing) return false;
@@ -194,7 +194,7 @@ export default function AddRecommendationModal({
           </Field>
 
           <div style={{ gridColumn: "1 / -1" }}>
-            <Field label="Company" hint={isNewCompany ? "New company — will be added to company_isins" : undefined}>
+            <Field label="Company" hint={isNewCompany ? "New company — will be added to security_aliases" : undefined}>
               <input list="atr-companies" value={company} onChange={e => setCompany(e.target.value)}
                 placeholder="Pick existing or type a new one" style={inputStyle} />
               <datalist id="atr-companies">{(options?.companies ?? []).map(c => <option key={c} value={c} />)}</datalist>

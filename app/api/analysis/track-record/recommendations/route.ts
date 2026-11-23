@@ -2,12 +2,10 @@ import { NextResponse, NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
+import { TRACK_RECORD, aliasFieldsFor } from "@/lib/securityAliases";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-// Thrown inside the transaction to surface a 400 with a friendly message.
-class ValidationError extends Error {}
 
 interface Body {
   date?:               string;
@@ -64,16 +62,25 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // Alias nuevo: se resuelve contra la maestra FUERA de la transacción (sólo lee).
+    const existing = await prisma.securityAlias.findUnique({
+      where: { aliasSource_alias: { aliasSource: TRACK_RECORD, alias: company! } },
+      select: { alias: true },
+    });
+    if (!existing && !ticker) {
+      return NextResponse.json(
+        { error: `"${company}" is a new company — a Yahoo Finance ticker is required.` },
+        { status: 400 },
+      );
+    }
+    const aliasFields = !existing && ticker ? await aliasFieldsFor(ticker, isin) : null;
+
     const result = await prisma.$transaction(async (tx) => {
-      // Create the CompanyIsin mapping if the company is new.
-      const existing = await tx.companyIsin.findUnique({ where: { companyName: company! } });
+      // Registra el nombre en security_aliases si la compañía es nueva para el track record.
       let createdCompany = false;
-      if (!existing) {
-        if (!ticker) {
-          throw new ValidationError(`"${company}" is a new company — a Yahoo Finance ticker is required.`);
-        }
-        await tx.companyIsin.create({
-          data: { companyName: company!, yahooFinanceTicker: ticker, isin },
+      if (aliasFields) {
+        await tx.securityAlias.create({
+          data: { aliasSource: TRACK_RECORD, alias: company!, ...aliasFields },
         });
         createdCompany = true;
       }
@@ -99,9 +106,6 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     );
   } catch (e) {
-    if (e instanceof ValidationError) {
-      return NextResponse.json({ error: e.message }, { status: 400 });
-    }
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       const target = (e.meta?.target as string[] | string | undefined);
       const field = Array.isArray(target) ? target.join(", ") : target ?? "value";

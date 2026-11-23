@@ -1,12 +1,13 @@
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { TRACK_RECORD } from "@/lib/securityAliases";
 
 export const dynamic = "force-dynamic";
 
 export interface TrackRecordOptions {
   analysts:        string[];
   companies:       string[];   // companies seen in AnalystRecommendationHistory
-  mappedCompanies: string[];   // companies already present in CompanyIsin (have a mapping)
+  mappedCompanies: string[];   // companies already registered in security_aliases (track_record)
   types:           string[];   // distinct `type` values (for the add form)
   recTypes:        string[];   // distinct `recType` values (for the add form)
   recommendations: string[];   // distinct `recommendation` values (for the add form)
@@ -43,8 +44,9 @@ export async function GET(request: NextRequest) {
       prisma.analystRecommendationHistory.findMany({
         distinct: ["recommendation"], select: { recommendation: true }, orderBy: { recommendation: "asc" },
       }),
-      prisma.companyIsin.findMany({
-        select: { companyName: true }, orderBy: { companyName: "asc" },
+      prisma.securityAlias.findMany({
+        where: { aliasSource: TRACK_RECORD },
+        select: { alias: true }, orderBy: { alias: "asc" },
       }),
       prisma.analystRecommendationHistory.aggregate({
         _min: { date: true },
@@ -61,7 +63,7 @@ export async function GET(request: NextRequest) {
     const payload: TrackRecordOptions = {
       analysts,
       companies:       companyRows.map((r) => r.company).filter(Boolean),
-      mappedCompanies: mappedRows.map((r) => r.companyName).filter(Boolean),
+      mappedCompanies: mappedRows.map((r) => r.alias).filter(Boolean),
       types:           typeRows.map((r) => r.type).filter(Boolean),
       recTypes:        recTypeRows.map((r) => r.recType).filter(Boolean),
       recommendations: recRows.map((r) => r.recommendation).filter(Boolean),

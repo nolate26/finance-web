@@ -1058,10 +1058,10 @@ export default function StockSelectionV1() {
       { k: "Precio y retornos", v: "en blanco. Un fondo no tiene precio unitario, y ponderar los retornos de las posiciones no da el retorno del fondo (ignora flujos y rebalanceo), así que no se aproxima." },
     ] },
     { title: "Cobertura del universo y datos de mercado", wide: true, items: [
-      { k: "Qué empresas aparecen", v: "una compañía sólo se muestra si su nombre en stock_selection_v1 homologa a un ticker Yahoo vivo (vía empresas_industrias_v2, con fallback por ISIN en company_isins). Si el nombre no homologa o el ticker está deslistado, la fila se descarta sin aviso. De las 98 compañías de la tabla, 6 no resolvían; ver detalle abajo." },
+      { k: "Qué empresas aparecen", v: "una compañía sólo se muestra si su nombre en stock_selection_v1 homologa a un ticker Yahoo vivo (vía empresas_industrias_v2). Si el nombre no homologa o el ticker está deslistado, la fila se descarta sin aviso. De las 98 compañías de la tabla, 6 no resolvían; ver detalle abajo." },
       { k: "Tickers corregidos (jul-2026)", v: "empresas_industrias_v2 / company_isins traían símbolos Yahoo deslistados que dejaban la fila sin precio. Corregidos y verificados contra el precio de referencia: Bicecorp → BICE.SN · Cencosud Shopping → CENCOMALLS.SN · Concha y Toro → CONCHATORO.SN · Itaú Chile → ITAUCL.SN · MultiX → MULTI-X.SN · La Polar → ABC.SN · Oro Blanco → ORO-BLANCO.SN · Clínica Las Condes → LAS-CONDES.SN · Viña Santa Rita → SANTA-RITA.SN · Potasios A/B → POTASIOS-A/B.SN · Cementos (Bío Bío) → CEM.SN." },
       { k: "Excluidas a propósito / pendientes", v: "Grupo Security: deslistada (fusión con Bicecorp, 2024). AES Andes (ex AES Gener): tiene ticker vivo (AESANDES.SN) pero le falta la fila de homologación en empresas_industrias_v2, por eso no aparece. Pampa Calichera y Nitratos: sin ticker Yahoo vivo (probablemente deslistadas / muy ilíquidas). “HF”: nombre sin identificar. Estas 5 no se muestran hasta cargar su homologación." },
-      { k: "Advertencia de fuente", v: "estos tickers los escribe el proceso que puebla empresas_industrias_v2 / company_isins; si ese cargador no se corrige en origen, volverá a romperlos. La corrección de acá es sobre la base, no sobre el cargador." },
+      { k: "Advertencia de fuente", v: "estos tickers los escribe el proceso que puebla empresas_industrias_v2; si ese cargador no se corrige en origen, volverá a romperlos. La corrección de acá es sobre la base, no sobre el cargador." },
     ] },
   ];
 

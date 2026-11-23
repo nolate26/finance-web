@@ -94,19 +94,15 @@ function parseAsOf(raw: string | null): Date {
 // NAME_OVERRIDES, mismo SERIES_NAMES, mismo criterio de desempate por ticker Yahoo.
 // Las constantes salen de lib/ssHomologacion.ts para que no puedan divergir.
 async function loadTickerUnits() {
-  const [empresas, isins, shareRows] = await Promise.all([
+  const [empresas, shareRows] = await Promise.all([
     prisma.empresasIndustriasV2.findMany({
-      select: { nombreLatam: true, nombreChile: true, isin: true, tickerBloomberg: true, yahooFinanceTicker: true },
+      select: { nombreLatam: true, nombreChile: true, tickerBloomberg: true, yahooFinanceTicker: true },
     }),
-    prisma.companyIsin.findMany({ select: { isin: true, yahooFinanceTicker: true } }),
     prisma.stockSelectionV1.findMany({
       where: { metric: "shares" },
       select: { company: true, series: true, fiscalYear: true, quarter: true, value: true },
     }),
   ]);
-
-  const yahooByIsin = new Map<string, string>();
-  for (const c of isins) if (c.isin && c.yahooFinanceTicker?.trim()) yahooByIsin.set(c.isin.trim(), c.yahooFinanceTicker.trim());
 
   type Emp = (typeof empresas)[number];
   const byName = new Map<string, Emp[]>();
@@ -120,8 +116,7 @@ async function loadTickerUnits() {
     if (!norm(e.nombreLatam)) continue;
     addName(e.nombreLatam, e); addName(e.nombreChile, e);
   }
-  const yahooOf = (r: Emp): string | null =>
-    r.yahooFinanceTicker?.trim() || (r.isin ? yahooByIsin.get(r.isin.trim()) ?? null : null);
+  const yahooOf = (r: Emp): string | null => r.yahooFinanceTicker?.trim() || null;
   const empByName = (key: string): Emp | null => byName.get(norm(key))?.[0] ?? null;
   const resolveBBG = (company: string): string | null => {
     const key = norm(company);

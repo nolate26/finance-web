@@ -54,6 +54,7 @@ const RETIRED_TABLES: Record<string, string> = {
   LatamEquitySnapshot:    'latam_equity_snapshots se eliminó junto con la vista Perf. Attribution de LatAm.',
   BetaSensitivity:        'beta_sensitivity se eliminó junto con la vista Beta Exposure.',
   PerformanceAttribution: 'performance_attribution se eliminó junto con la pestaña Performance Attribution de Fondos.',
+  CompanyIsin:            'company_isins se reemplazó por security_aliases; los nombres nuevos se dan de alta desde el track record (Add Recommendation) o en Admin Issues.',
 };
 
 export async function POST(request: Request) {
@@ -124,9 +125,6 @@ export async function POST(request: Request) {
 
       case 'AnalystRecommendationHistory':
         await prisma.analystRecommendationHistory.createMany({ data: rows, skipDuplicates: true });
-        break;
-      case 'CompanyIsin':
-        await prisma.companyIsin.createMany({ data: rows, skipDuplicates: true });
         break;
 
 

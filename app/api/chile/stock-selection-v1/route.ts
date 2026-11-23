@@ -7,6 +7,7 @@ import { OVERRIDE_FIELD_KEYS } from "@/lib/ssOverrideFields";
 import { fixYahooTicker } from "@/lib/yahooTickerFixes";
 import { normBBG } from "@/lib/bbg";
 import { norm, cleanBBG, NAME_OVERRIDES, SERIES_NAMES } from "@/lib/ssHomologacion";
+import { TRACK_RECORD } from "@/lib/securityAliases";
 import {
   qKey, hasPeriod, loadFichaFunds, loadModelPicks, modelScale, recLabel,
   type Fund, type ModelPick,
@@ -279,7 +280,7 @@ export async function GET(request: NextRequest) {
   const qParam = request.nextUrl.searchParams.get("q");
 
   try {
-    const [fichaFunds, modelPicks, ssRows, empresas, isins, recRows] = await Promise.all([
+    const [fichaFunds, modelPicks, ssRows, empresas, aliases, recRows] = await Promise.all([
       // Fundamentales de la ficha y proyecciones/Rec/TP del modelo. Del modelo basta el año
       // reportado (para medir la escala) y los dos proyectados.
       loadFichaFunds(),
@@ -292,17 +293,17 @@ export async function GET(request: NextRequest) {
       prisma.empresasIndustriasV2.findMany({
         select: { nombreLatam: true, nombreChile: true, isin: true, tickerBloomberg: true, industriaChile: true, industriaGics: true, yahooFinanceTicker: true, moneda: true },
       }),
-      // company_isins: company_name → isin (llave de las recos) + fallback de Yahoo.
-      prisma.companyIsin.findMany({ select: { companyName: true, isin: true, yahooFinanceTicker: true } }),
+      // security_aliases (track_record): nombre del track record → ticker BBG (llave de las recos).
+      prisma.securityAlias.findMany({
+        where: { aliasSource: TRACK_RECORD, bbgTicker: { not: null } },
+        select: { alias: true, bbgTicker: true },
+      }),
       // Recomendaciones del analista (Rec./Date/TP). Orden asc → al reducir queda la última.
       prisma.analystRecommendationHistory.findMany({
         orderBy: [{ date: "asc" }, { id: "asc" }],
         select: { company: true, date: true, recommendation: true, targetPrice: true },
       }),
     ]);
-
-    const yahooByIsin = new Map<string, string>();
-    for (const c of isins) if (c.isin && c.yahooFinanceTicker?.trim()) yahooByIsin.set(c.isin.trim(), c.yahooFinanceTicker.trim());
 
     // name(normalizado) → filas candidatas de empresas_industrias_v2
     const byName = new Map<string, EmpRow[]>();
@@ -316,10 +317,10 @@ export async function GET(request: NextRequest) {
       const row: EmpRow = { tickerBloomberg: e.tickerBloomberg, isin: e.isin, industriaChile: e.industriaChile, industriaGics: e.industriaGics, nombreLatam: e.nombreLatam, yahooFinanceTicker: e.yahooFinanceTicker, moneda: e.moneda };
       addName(e.nombreLatam, row); addName(e.nombreChile, row);
     }
-    // Ticker Yahoo: 1) empresas_industrias_v2.yahoo_finance_ticker (fuente curada),
-    // 2) fallback company_isins por ISIN. Luego aplica overrides de tickers rotos.
-    const yahooOf = (row: EmpRow): string | null =>
-      fixYahooTicker(row.yahooFinanceTicker) ?? fixYahooTicker(row.isin ? yahooByIsin.get(row.isin.trim()) : null);
+    // Ticker Yahoo: empresas_industrias_v2.yahoo_finance_ticker con los overrides de tickers
+    // rotos. (El fallback por ISIN contra company_isins se quitó en B3: al migrar se verificó
+    // que no aportaba ningún ticker que la maestra no tuviera.)
+    const yahooOf = (row: EmpRow): string | null => fixYahooTicker(row.yahooFinanceTicker);
     const empByName = (key: string): EmpRow | null => byName.get(norm(key))?.[0] ?? null;
     const resolveName = (company: string): ResolvedName | null => {
       const key = norm(company);
@@ -332,23 +333,16 @@ export async function GET(request: NextRequest) {
       return { tickerBBG: cleanBBG(best.r.tickerBloomberg), yahoo: best.y, industria: best.r.industriaChile || null, gics: best.r.industriaGics || null, moneda: best.r.moneda || null };
     };
 
-    // ── Recomendaciones: ARH.company → company_isins.company_name → isin → bbg ──
-    const isinByCompanyName = new Map<string, string>();
-    for (const ci of isins) {
-      const nm = norm(ci.companyName), isin = ci.isin?.trim();
-      if (nm && isin) isinByCompanyName.set(nm, isin);
-    }
-    const bbgByIsin = new Map<string, string>();
-    for (const e of empresas) {
-      const isin = e.isin?.trim(), bbg = cleanBBG(e.tickerBloomberg);
-      if (isin && bbg && !bbgByIsin.has(isin)) bbgByIsin.set(isin, bbg);
+    // ── Recomendaciones: ARH.company → security_aliases (track_record) → bbg ──
+    const bbgByAlias = new Map<string, string>();
+    for (const a of aliases) {
+      const nm = norm(a.alias), bbg = cleanBBG(a.bbgTicker);
+      if (nm && bbg) bbgByAlias.set(nm, bbg);
     }
     interface RecInfo { rec: string; recDate: string; tp: number | null; }
     const recByBbg = new Map<string, RecInfo>();
     for (const r of recRows) { // recRows viene asc por date,id → el último .set gana = más reciente
-      const isin = isinByCompanyName.get(norm(r.company));
-      if (!isin) continue;
-      const bbg = bbgByIsin.get(isin);
+      const bbg = bbgByAlias.get(norm(r.company));
       if (!bbg) continue;
       recByBbg.set(bbg.toUpperCase(), {
         rec: r.recommendation,

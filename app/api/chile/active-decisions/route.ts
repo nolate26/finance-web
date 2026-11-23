@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
   const withPrices = request.nextUrl.searchParams.get("withPrices") === "true";
 
   try {
-    // ── 1. Universo chileno + GICS + ticker Yahoo (ISIN → company_isins) ──────
+    // ── 1. Universo chileno + GICS + ticker Yahoo de la maestra ───────────────
     const companyRows = await prisma.$queryRawUnsafe<CompanyRow[]>(`
       SELECT e.ticker_bloomberg AS ticker,
              COALESCE(NULLIF(e.nombre_chile, ''), e.nombre_latam) AS name,
@@ -75,11 +75,8 @@ export async function GET(request: NextRequest) {
              NULLIF(e.nombre_latam, '') AS latam,
              NULLIF(e.industria_gics, '') AS gics,
              e.isin AS isin,
-             ci.yahoo_finance_ticker AS yahoo
+             NULLIF(e.yahoo_finance_ticker, '') AS yahoo
       FROM empresas_industrias_v2 e
-      LEFT JOIN company_isins ci
-        ON TRIM(ci.isin) = TRIM(e.isin)
-       AND ci.yahoo_finance_ticker IS NOT NULL AND ci.yahoo_finance_ticker <> ''
       WHERE ${CHILE_FILTER}
         AND e.ticker_bloomberg IS NOT NULL AND e.ticker_bloomberg <> ''
       ORDER BY name ASC
