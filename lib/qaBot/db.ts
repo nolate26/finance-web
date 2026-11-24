@@ -1,9 +1,10 @@
 import { Pool, types } from "pg";
 
-// Acceso a la base del bot de Q&A de Telegram: rol claude_ro, que sólo ve el schema ai (las
-// vistas documentadas de prisma/sql/phase_c_ai_schema_2026-11-23.sql) con search_path = ai y
-// statement_timeout de 30 s. Pool propio con AI_DATABASE_URL: el bot NUNCA usa DATABASE_URL
-// para consultas que escribe el modelo.
+// Acceso a la base del bot de Q&A de Telegram: rol qa_bot_ro, que sólo ve el schema ai (las
+// vistas documentadas de prisma/sql/phase_c_ai_schema_2026-11-23.sql) con search_path = ai,
+// statement_timeout de 30 s y sólo lectura — el mismo alcance que claude_ro (el del MCP de los
+// analistas), con usuario propio para no compartir clave. Pool propio con AI_DATABASE_URL: el
+// bot NUNCA usa DATABASE_URL para consultas que escribe el modelo.
 //
 // Defensa en capas: el rol no puede leer public ni escribir; además cada consulta corre en una
 // transacción READ ONLY, de a una sentencia, con timeout y tope de filas.
@@ -13,7 +14,7 @@ let pool: Pool | null = null;
 function getPool(): Pool {
   if (!pool) {
     const url = process.env.AI_DATABASE_URL;
-    if (!url) throw new Error("Falta AI_DATABASE_URL (conexión de claude_ro al schema ai)");
+    if (!url) throw new Error("Falta AI_DATABASE_URL (conexión de qa_bot_ro al schema ai)");
     // DATE (oid 1082) como texto "2026-11-19": convertirlo a Date lo corre de día según la zona
     // horaria del servidor. Sólo en este pool — tocar pg.types global afectaría a Prisma.
     const DATE_OID = 1082;
@@ -42,7 +43,7 @@ export function validateSelect(raw: string): { sql: string } | { error: string }
   return { sql };
 }
 
-/** Corre un SELECT como claude_ro en una transacción de sólo lectura, con tope de filas. */
+/** Corre un SELECT como qa_bot_ro en una transacción de sólo lectura, con tope de filas. */
 export async function runReadOnly(rawSql: string, maxRows: number, timeoutMs = 20_000): Promise<QueryResult> {
   const v = validateSelect(rawSql);
   if ("error" in v) throw new Error(v.error);

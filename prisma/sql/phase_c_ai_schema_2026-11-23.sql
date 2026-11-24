@@ -869,6 +869,17 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA ai GRANT SELECT ON TABLES T
 -- Nombres sin prefijo ("SELECT * FROM securities") resuelven a ai. Aplica a sesiones nuevas.
 ALTER ROLE claude_ro SET search_path = ai;
 
+-- Bot de Q&A de Telegram (lib/qaBot): mismo alcance que claude_ro, con su propio usuario. El
+-- DROP SCHEMA de arriba le borra los permisos, así que se le vuelven a dar si el rol existe.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'qa_bot_ro') THEN
+    GRANT USAGE ON SCHEMA ai TO qa_bot_ro;
+    GRANT SELECT ON ALL TABLES IN SCHEMA ai TO qa_bot_ro;
+    ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA ai GRANT SELECT ON TABLES TO qa_bot_ro;
+  END IF;
+END $$;
+
 COMMIT;
 
 -- Verificación (deben dar: N vistas / false / true):

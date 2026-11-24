@@ -6,7 +6,7 @@ import { toCsv, toXlsx, safeFilename, documentLink } from "@/lib/qaBot/files";
 import { sendDocumentBuffer, sendDocumentUrl, sendTyping } from "@/lib/qaBot/telegram";
 
 // Agente del bot de Q&A de Telegram: Claude (Messages API) con tres herramientas propias —
-// run_sql sobre el schema ai como claude_ro, send_table_file para tablas largas y send_document
+// run_sql sobre el schema ai como qa_bot_ro, send_table_file para tablas largas y send_document
 // para el PDF de una ficha o presentación. El ciclo corre acá, dentro de la app (Railway).
 
 const MODEL = process.env.QA_BOT_MODEL || "claude-sonnet-5-5";
@@ -109,14 +109,16 @@ function forModel(r: QueryResult): string {
   return json;
 }
 
-interface ToolCtx { chatId: number; replyTo?: number; filesSent: number }
+interface ToolCtx { chatId: number; replyTo?: number; filesSent: number; queries: string[] }
 
 async function runTool(name: string, input: unknown, ctx: ToolCtx): Promise<{ content: string; isError?: boolean }> {
   try {
     if (name === "run_sql") {
       const p = RunSql.safeParse(input);
       if (!p.success) return { content: "Input inválido: falta sql.", isError: true };
-      return { content: forModel(await runReadOnly(p.data.sql, SQL_ROWS_FOR_MODEL)) };
+      const r = await runReadOnly(p.data.sql, SQL_ROWS_FOR_MODEL);
+      ctx.queries.push(p.data.sql);
+      return { content: forModel(r) };
     }
     if (name === "send_table_file") {
       const p = SendTableFile.safeParse(input);
@@ -124,6 +126,7 @@ async function runTool(name: string, input: unknown, ctx: ToolCtx): Promise<{ co
       if (ctx.filesSent >= 3) return { content: "Ya se mandaron 3 archivos en esta respuesta; no mandes más.", isError: true };
       await sendTyping(ctx.chatId, "upload_document");
       const r = await runReadOnly(p.data.sql, FILE_ROWS, 25_000);
+      ctx.queries.push(p.data.sql);
       if (!r.rows.length) return { content: "La consulta no devolvió filas; no se mandó archivo." };
       const file = p.data.format === "csv" ? toCsv(r) : await toXlsx(r);
       const fname = safeFilename(p.data.filename, p.data.format);
@@ -165,9 +168,44 @@ async function runTool(name: string, input: unknown, ctx: ToolCtx): Promise<{ co
 const MAX_PAIRS = 8;
 const IDLE_MS = 3 * 60 * 60 * 1000;
 const memory = new Map<number, { messages: Anthropic.Beta.BetaMessageParam[]; at: number }>();
+// Consultas que usó la última respuesta de cada chat: las muestran /sql y las exporta /excel.
+const lastQueries = new Map<number, string[]>();
 
 export function resetConversation(chatId: number): void {
   memory.delete(chatId);
+  lastQueries.delete(chatId);
+}
+
+/** SQL de la última respuesta del chat (en el orden en que se corrió). */
+export function getLastQueries(chatId: number): string[] {
+  return lastQueries.get(chatId) ?? [];
+}
+
+/** /excel: corre de nuevo la última consulta del chat y manda el resultado completo como Excel. */
+export async function exportLastQuery(chatId: number, replyTo?: number): Promise<{ rows: number } | null> {
+  const sql = getLastQueries(chatId).at(-1);
+  if (!sql) return null;
+  await sendTyping(chatId, "upload_document");
+  const r = await runReadOnly(sql, FILE_ROWS, 25_000);
+  if (!r.rows.length) return { rows: 0 };
+  await sendDocumentBuffer(chatId, await toXlsx(r), `research_hub_${new Date().toISOString().slice(0, 10)}.xlsx`,
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", undefined, replyTo);
+  return { rows: r.rows.length };
+}
+
+/** /status: fecha del último dato de cada fuente, sin pasar por el modelo. */
+export async function dataStatus(): Promise<string> {
+  const { rows } = await runReadOnly(`
+    SELECT 'Precios Bloomberg', max(date)::text FROM mkt_price_snapshots
+    UNION ALL SELECT 'Consenso sell-side', max(snapshot_date)::text FROM mkt_consensus_estimates
+    UNION ALL SELECT 'Múltiplos (valuation)', max(date)::text FROM mkt_valuation_monthly
+    UNION ALL SELECT 'Retornos totales', max(as_of)::text FROM mkt_total_returns
+    UNION ALL SELECT 'Modelos del equipo', max(model_date)::text FROM model_versions
+    UNION ALL SELECT 'Fichas (último cierre)', max(period_end)::text FROM reported_financials
+    UNION ALL SELECT 'Notas de research', max(note_date)::text FROM research_notes
+    UNION ALL SELECT 'Carteras de fondos', max(as_of)::text FROM fund_holdings
+    UNION ALL SELECT 'Macro', max(date)::text FROM macro_indicator_history`, 50);
+  return rows.map(([name, d]) => `${String(name).padEnd(24)} ${d ?? "—"}`).join("\n");
 }
 
 function history(chatId: number): Anthropic.Beta.BetaMessageParam[] {
@@ -193,7 +231,7 @@ export async function answer(chatId: number, question: string, who: string, repl
   ];
   const userText = `[${who}] ${question}`;
   const messages: Anthropic.Beta.BetaMessageParam[] = [...history(chatId), { role: "user", content: userText }];
-  const ctx: ToolCtx = { chatId, replyTo, filesSent: 0 };
+  const ctx: ToolCtx = { chatId, replyTo, filesSent: 0, queries: [] };
   const usage = { input: 0, output: 0, cacheRead: 0 };
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
@@ -230,6 +268,7 @@ export async function answer(chatId: number, question: string, who: string, repl
       console.log(`[qa-bot] chat ${chatId} · ${turn + 1} vueltas · in ${usage.input} (cache ${usage.cacheRead}) · out ${usage.output}`);
       const final = text || (ctx.filesSent ? "Listo, te mandé el archivo." : "No encontré una respuesta.");
       remember(chatId, userText, final);
+      if (ctx.queries.length) lastQueries.set(chatId, ctx.queries);
       return { text: final, filesSent: ctx.filesSent };
     }
 

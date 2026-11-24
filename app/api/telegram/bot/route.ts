@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse, after } from "next/server";
-import { answer, resetConversation } from "@/lib/qaBot/agent";
+import { answer, resetConversation, getLastQueries, exportLastQuery, dataStatus } from "@/lib/qaBot/agent";
 import { getMe, sendReply, sendTyping } from "@/lib/qaBot/telegram";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 //      (La ruta no pasa por el middleware de sesión: Telegram no tiene cookie.)
 //   2. Sólo responde a los usuarios de TELEGRAM_QA_ALLOWED_USER_IDS. A los demás les dice su ID
 //      para que el admin los pueda agregar.
-//   3. La base se lee como claude_ro (sólo el schema ai, sólo lectura) — ver lib/qaBot/db.ts.
+//   3. La base se lee como qa_bot_ro (sólo el schema ai, sólo lectura) — ver lib/qaBot/db.ts.
 //
 // En grupos responde sólo cuando lo mencionan (@bot) o le responden a un mensaje suyo; con la
 // privacy mode de BotFather activa, Telegram ni siquiera le manda el resto.
@@ -43,9 +43,14 @@ const HELP = [
   "• <i>Consenso 2027 de todo el IPSA en Excel</i>",
   "• <i>Mándame la ficha de Andina</i>",
   "",
-  "/nuevo — empezar una conversación nueva",
+  "/new — conversación nueva (borra el contexto)",
+  "/status — fecha del último dato de cada fuente",
+  "/sql — el SQL detrás de la última respuesta",
+  "/excel — la tabla de la última respuesta en Excel",
   "/id — tu ID de Telegram",
 ].join("\n");
+
+const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 const allowedUsers = (): Set<number> =>
   new Set((process.env.TELEGRAM_QA_ALLOWED_USER_IDS ?? "").split(",").map((s) => Number(s.trim())).filter(Number.isFinite));
@@ -105,10 +110,35 @@ async function handle(msg: TgMessage): Promise<void> {
       replyTo);
   }
 
+  // Comandos en inglés (los que se registran en BotFather); /nuevo y /ayuda quedan como alias.
   if (cmd === "start" || cmd === "help" || cmd === "ayuda") return sendReply(chatId, HELP, replyTo);
-  if (cmd === "nuevo" || cmd === "reset") {
+  if (cmd === "new" || cmd === "nuevo" || cmd === "reset") {
     resetConversation(chatId);
     return sendReply(chatId, "Listo, conversación nueva.", replyTo);
+  }
+  if (cmd === "status") {
+    try {
+      return sendReply(chatId, `<b>Último dato por fuente</b>\n<pre>${escapeHtml(await dataStatus())}</pre>`, replyTo);
+    } catch (e) {
+      console.error("[qa-bot] /status:", e);
+      return sendReply(chatId, "No pude leer las fechas de la base.", replyTo);
+    }
+  }
+  if (cmd === "sql") {
+    const qs = getLastQueries(chatId);
+    if (!qs.length) return sendReply(chatId, "La última respuesta no usó consultas (o la conversación es nueva).", replyTo);
+    return sendReply(chatId, qs.map((q, i) => `<b>Consulta ${i + 1}</b>\n<pre>${escapeHtml(q.trim())}</pre>`).join("\n"), replyTo);
+  }
+  if (cmd === "excel") {
+    try {
+      const res = await exportLastQuery(chatId, replyTo);
+      if (!res) return sendReply(chatId, "No hay una consulta reciente para exportar: primero hazme una pregunta.", replyTo);
+      if (!res.rows) return sendReply(chatId, "La última consulta no devuelve filas.", replyTo);
+      return;
+    } catch (e) {
+      console.error("[qa-bot] /excel:", e);
+      return sendReply(chatId, "No pude generar el Excel.", replyTo);
+    }
   }
   if (!text || cmd) return sendReply(chatId, HELP, replyTo);
 
