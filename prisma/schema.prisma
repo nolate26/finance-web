@@ -189,9 +189,9 @@ model TopPick {
 
   // Una empresa no se puede recomendar dos veces en el mismo reporte, ni siquiera
   // desde sectores distintos.
+  // (region, periodDate) lo cubre el prefijo del único: el @@index propio se eliminó (optimización 2026-11).
   @@unique([region, periodDate, nombreLatam])
   @@index([sectorId, periodDate])
-  @@index([region, periodDate])
   @@map("top_picks")
 }
 
@@ -221,7 +221,6 @@ model TopPickPeriod {
   updatedBy  String?   @map("updated_by") @db.VarChar(200)
 
   @@unique([region, periodDate])
-  @@index([region, periodDate])
   @@map("top_pick_periods")
 }
 
@@ -393,11 +392,10 @@ model ConsensusEstimate {
   period  String   // AHORA: '1FY' o '2FY' (antes '2026Y')
   value   Float
 
-  // (ticker, metric) y (period) NO son prefijos de la PK → se conservan.
-  // El @@index([ticker]) sí lo era y se eliminó.
+  // (ticker, metric) NO es prefijo de la PK → se conserva. El @@index([ticker]) sí lo era y
+  // se eliminó; el @@index([period]) también (2 usos en tres meses, optimización 2026-11).
   @@id([ticker, date, metric, period])
   @@index([ticker, metric])
-  @@index([period])
   @@map("consensus_estimates")
 }
 
@@ -408,8 +406,8 @@ model PriceVsEarnings {
   pxLast  Float
   ni1bf   Float?   // NUEVO: Net Income blended 12m
 
+  // @@index([date]) eliminado (4 usos en tres meses, optimización 2026-11): se lee por ticker.
   @@id([ticker, date])
-  @@index([date])
   @@map("price_vs_earnings")
 }
 
@@ -1048,7 +1046,7 @@ model TickerReturnSnapshot {
   source     String?  @db.VarChar(40)   // "bloomberg", nombre del archivo, etc.
   ingestedAt DateTime @default(now()) @map("ingested_at")
 
-  @@index([asOf])
+  // @@index([asOf]) eliminado (optimización 2026-11): ~200 filas, siempre se lee entera.
   @@map("ticker_return_snapshot")
 }
 
@@ -1380,8 +1378,8 @@ model FichaStatement {
   // FK a la maestra (B6): /api/ficha/ingest valida los tickers antes de escribir.
   empresa    EmpresasIndustriasV2 @relation(fields: [ticker], references: [tickerBloomberg], onDelete: Restrict)
 
+  // (ticker, periodType, year, quarter) lo cubre el prefijo del único (optimización 2026-11).
   @@unique([ticker, periodType, year, quarter, section, line])
-  @@index([ticker, periodType, year, quarter])
   @@index([ticker, periodEnd])
   @@map("ficha_statements")
 }
@@ -1403,8 +1401,7 @@ model FichaKpi {
 
   empresa    EmpresasIndustriasV2 @relation(fields: [ticker], references: [tickerBloomberg], onDelete: Restrict) // FK B6
 
-  @@unique([ticker, periodType, year, quarter, section, kpi])
-  @@index([ticker, periodType, year, quarter])
+  @@unique([ticker, periodType, year, quarter, section, kpi]) // su prefijo cubre (ticker, periodType, year, quarter)
   @@index([ticker, periodEnd])
   @@map("ficha_kpis")
 }
@@ -1434,7 +1431,6 @@ model FichaComment {
 
   empresa   EmpresasIndustriasV2 @relation(fields: [ticker], references: [tickerBloomberg], onDelete: Restrict) // FK B6
 
-  @@unique([ticker, year, quarter, source, section, line, target])
-  @@index([ticker, year, quarter])
+  @@unique([ticker, year, quarter, source, section, line, target]) // su prefijo cubre (ticker, year, quarter)
   @@map("ficha_comments")
 }
