@@ -236,37 +236,42 @@ model TopPickPeriod {
 // 2026-11-23: la deuda neta de Active Decisions sale de ficha_statements y el formulario viejo
 // de Top Picks Chile que la usaba era código muerto. DROP en prisma/sql/phase_b2_drop_2026-11-23.sql.
 
+// Excel "Reporte-Rentabilidades-DD-MM-YYYY.xlsx" (una fila por fondo/índice y familia),
+// cargado por rentabilidades_to_db.py → /api/ingest 'MonedaFundReturns', que REEMPLAZA
+// todas las filas de las fechas del payload. Retornos, sigma, alpha y fee en puntos
+// porcentuales (3.5 = 3,5%); beta como ratio (0.98). El mismo índice (IPSA, Ibovespa…)
+// se repite en varias familias con since-inception distinto → familia va en la clave.
+// Rediseñado el 2026-11-25 (antes venía de PDFs por página: page_num / dyn_1..3).
 model MonedaFundReturn {
-  reportDate    String  @map("report_date") @db.VarChar(30)
-  currency      String  @db.VarChar(10)
-  fund          String  @db.VarChar(255)
-  sourceFile    String? @map("source_file") @db.VarChar(255)
-  pageNum       Int?    @map("page_num") @db.SmallInt
-  fundGroup     String? @map("fund_group") @db.VarChar(100)
-  inceptionDate String? @map("inception_date") @db.VarChar(30)
-  manager       String? @db.VarChar(100)
-  mgmtFee       String? @map("mgmt_fee") @db.VarChar(100)
-  nav           Float?
-  aumUsdMm      Float?  @map("aum_usd_mm")
-  incep         Float?
-  mtd           Float?
-  ytd           Float?
-  ret1y         Float?  @map("ret_1y")
-  ret3y         Float?  @map("ret_3y")
-  ret5y         Float?  @map("ret_5y")
-  ret10y        Float?  @map("ret_10y")
-  dyn1Label     String? @map("dyn_1_label") @db.VarChar(80)
-  dyn1          Float?  @map("dyn_1")
-  dyn2Label     String? @map("dyn_2_label") @db.VarChar(80)
-  dyn2          Float?  @map("dyn_2")
-  dyn3Label     String? @map("dyn_3_label") @db.VarChar(80)
-  dyn3          Float?  @map("dyn_3")
-  sigma         Float?
-  sharpe        Float?
-  alpha         Float?
-  beta          Float?
+  reportDate DateTime @map("report_date") @db.Date
+  familia    String   @db.VarChar(100)
+  currency   String   @db.VarChar(10)
+  fund       String   @db.VarChar(255)
+  subfamilia String?  @db.VarChar(100)
+  code       String?  @db.VarChar(100)
+  manager    String?  @db.VarChar(100)
+  sourceFile String?  @map("source_file") @db.VarChar(255)
+  nav        Float?
+  aumUsdMm   Float?   @map("aum_usd_mm")
+  mtd        Float?
+  ytd        Float?
+  ret1y      Float?   @map("ret_1y")
+  ret2y      Float?   @map("ret_2y")
+  cum2y      Float?   @map("cum_2y")
+  ret3y      Float?   @map("ret_3y")
+  ret5y      Float?   @map("ret_5y")
+  ret10y     Float?   @map("ret_10y")
+  si1Cum     Float?   @map("si1_cum")
+  si1Ann     Float?   @map("si1_ann")
+  si2Ann     Float?   @map("si2_ann")
+  sigma      Float?
+  sharpe     Float?
+  alpha      Float?
+  beta       Float?
+  mgmtFee    Float?   @map("mgmt_fee")
 
-  @@id([reportDate, currency, fund])
+  @@id([reportDate, familia, currency, fund])
+  @@index([familia, reportDate])
   @@map("moneda_fund_returns")
 }
 

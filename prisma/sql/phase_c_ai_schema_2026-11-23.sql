@@ -728,40 +728,42 @@ COMMENT ON COLUMN ai.fund_benchmark_weights.overweight IS 'Sobre/sub-ponderació
 
 -- ── ai.fund_peer_returns ─────────────────────────────────────────────────────
 CREATE VIEW ai.fund_peer_returns AS
-SELECT (CASE WHEN r.report_date ~ '^[0-9]{1,2}/[A-Za-z]{3}/[0-9]{4}$' THEN to_date(r.report_date, 'DD/Mon/YYYY') END) AS report_date,
-       r.report_date AS report_date_raw, r.currency, r.fund, r.fund_group, NULLIF(btrim(r.manager), '') AS manager, (CASE WHEN btrim(replace(replace(r.mgmt_fee, '%', ''), ',', '')) ~ '^[+-]?[0-9]*\.?[0-9]+$' THEN btrim(replace(replace(r.mgmt_fee, '%', ''), ',', ''))::numeric END) AS mgmt_fee_pct,
-       r.nav, r.aum_usd_mm, r.mtd AS ret_mtd_pct, r.ytd AS ret_ytd_pct, r.ret_1y AS ret_1y_pct, r.ret_3y AS ret_3y_pct,
-       r.ret_5y AS ret_5y_pct, r.ret_10y AS ret_10y_pct, r.incep AS ret_since_inception_pct, NULLIF(btrim(r.inception_date), '') AS inception_date_raw,
-       r.dyn_1_label, r.dyn_1, r.dyn_2_label, r.dyn_2, r.dyn_3_label, r.dyn_3, r.sigma, r.sharpe, r.alpha, r.beta
+SELECT r.report_date, r.familia AS family, r.currency, r.fund, r.subfamilia AS fund_group, (r.subfamilia = 'Moneda Funds') AS is_moneda,
+       NULLIF(btrim(r.code), '') AS code, NULLIF(btrim(r.manager), '') AS manager, r.mgmt_fee AS mgmt_fee_pct, r.nav, r.aum_usd_mm,
+       r.mtd AS ret_mtd_pct, r.ytd AS ret_ytd_pct, r.ret_1y AS ret_1y_pct, r.ret_2y AS ret_2y_ann_pct, r.cum_2y AS ret_2y_cum_pct,
+       r.ret_3y AS ret_3y_ann_pct, r.ret_5y AS ret_5y_ann_pct, r.ret_10y AS ret_10y_ann_pct,
+       r.si1_cum AS since_inception_1_cum_pct, r.si1_ann AS since_inception_1_ann_pct, r.si2_ann AS since_inception_2_ann_pct,
+       r.sigma AS volatility_pct, r.sharpe, r.alpha AS alpha_pct, r.beta,
+       (r.report_date = max(r.report_date) OVER (PARTITION BY r.familia)) AS is_latest
   FROM moneda_fund_returns r;
-COMMENT ON VIEW ai.fund_peer_returns IS 'Retornos y métricas de fondos de Moneda, fondos pares e índices (informe semanal de rentabilidades). Granularidad: fondo/serie, no acción. Retornos en % (68.6 = 68,6%).';
+COMMENT ON VIEW ai.fund_peer_returns IS 'Retornos y métricas de fondos de Moneda, fondos pares, índices y monedas (Excel de rentabilidades, varios informes por semana). Granularidad: fondo/serie DENTRO DE UNA FAMILIA (estrategia de comparación). OJO: el mismo índice (IPSA, Ibovespa, CEMBI…) se repite en varias familias con since-inception distinto → filtrá por family y no sumes/promedies entre familias. Retornos, sigma, alpha y fee en % (68.6 = 68,6%); beta como ratio.';
 COMMENT ON COLUMN ai.fund_peer_returns.report_date IS 'Fecha del informe.';
-COMMENT ON COLUMN ai.fund_peer_returns.report_date_raw IS 'Fecha como texto original (''9/Oct/2026'').';
-COMMENT ON COLUMN ai.fund_peer_returns.currency IS 'Moneda del fondo/serie.';
-COMMENT ON COLUMN ai.fund_peer_returns.fund IS 'Fondo o serie (''Pionero A'').';
-COMMENT ON COLUMN ai.fund_peer_returns.fund_group IS 'Grupo (''Moneda'', pares, índices).';
+COMMENT ON COLUMN ai.fund_peer_returns.family IS 'Familia (estrategia) del informe: ''Chilean Equities SC'' (Pionero), ''Chilean Equities LC'' (MRV, Orange), ''Latam Equities LC'' (MLE), ''Latam Equities SC'' (MSC), ''Latam Equities LC - Glory'', ''Latam Equities LC - MDELA'' (Mercer), ''Brazil Long Bias'', ''Brazil Long Only'', renta fija, CLO, etc.';
+COMMENT ON COLUMN ai.fund_peer_returns.currency IS 'Moneda en que están medidos los retornos de la fila.';
+COMMENT ON COLUMN ai.fund_peer_returns.fund IS 'Fondo, serie o índice (''Pionero A'', ''IPSA'').';
+COMMENT ON COLUMN ai.fund_peer_returns.fund_group IS 'Subfamilia: ''Moneda Funds'', ''Peer Group (…)'', ''Indices'', ''Currencies''.';
+COMMENT ON COLUMN ai.fund_peer_returns.is_moneda IS 'true = fondo/serie de Moneda.';
+COMMENT ON COLUMN ai.fund_peer_returns.code IS 'Código Bloomberg o interno de la fila (''CFIPIONERO'', ''IPSA Index'').';
 COMMENT ON COLUMN ai.fund_peer_returns.manager IS 'Administradora.';
 COMMENT ON COLUMN ai.fund_peer_returns.mgmt_fee_pct IS 'Comisión de administración, %.';
-COMMENT ON COLUMN ai.fund_peer_returns.nav IS 'Valor cuota.';
+COMMENT ON COLUMN ai.fund_peer_returns.nav IS 'Valor cuota (o nivel del índice).';
 COMMENT ON COLUMN ai.fund_peer_returns.aum_usd_mm IS 'Patrimonio en MILLONES de USD.';
 COMMENT ON COLUMN ai.fund_peer_returns.ret_mtd_pct IS 'Retorno del mes, %.';
 COMMENT ON COLUMN ai.fund_peer_returns.ret_ytd_pct IS 'Retorno del año, %.';
 COMMENT ON COLUMN ai.fund_peer_returns.ret_1y_pct IS 'Retorno 12 meses, %.';
-COMMENT ON COLUMN ai.fund_peer_returns.ret_3y_pct IS 'Retorno 3 años, %.';
-COMMENT ON COLUMN ai.fund_peer_returns.ret_5y_pct IS 'Retorno 5 años, %.';
-COMMENT ON COLUMN ai.fund_peer_returns.ret_10y_pct IS 'Retorno 10 años, %.';
-COMMENT ON COLUMN ai.fund_peer_returns.ret_since_inception_pct IS 'Retorno desde el inicio, %.';
-COMMENT ON COLUMN ai.fund_peer_returns.inception_date_raw IS 'Fecha de inicio (texto).';
-COMMENT ON COLUMN ai.fund_peer_returns.dyn_1_label IS 'Etiqueta de la métrica dinámica 1 (cambia por tabla del informe).';
-COMMENT ON COLUMN ai.fund_peer_returns.dyn_1 IS 'Valor de la métrica dinámica 1.';
-COMMENT ON COLUMN ai.fund_peer_returns.dyn_2_label IS 'Etiqueta de la métrica dinámica 2.';
-COMMENT ON COLUMN ai.fund_peer_returns.dyn_2 IS 'Valor de la métrica dinámica 2.';
-COMMENT ON COLUMN ai.fund_peer_returns.dyn_3_label IS 'Etiqueta de la métrica dinámica 3.';
-COMMENT ON COLUMN ai.fund_peer_returns.dyn_3 IS 'Valor de la métrica dinámica 3.';
-COMMENT ON COLUMN ai.fund_peer_returns.sigma IS 'Volatilidad.';
+COMMENT ON COLUMN ai.fund_peer_returns.ret_2y_ann_pct IS 'Retorno 2 años ANUALIZADO, %.';
+COMMENT ON COLUMN ai.fund_peer_returns.ret_2y_cum_pct IS 'Retorno 2 años ACUMULADO, %.';
+COMMENT ON COLUMN ai.fund_peer_returns.ret_3y_ann_pct IS 'Retorno 3 años anualizado, %.';
+COMMENT ON COLUMN ai.fund_peer_returns.ret_5y_ann_pct IS 'Retorno 5 años anualizado, %.';
+COMMENT ON COLUMN ai.fund_peer_returns.ret_10y_ann_pct IS 'Retorno 10 años anualizado, %.';
+COMMENT ON COLUMN ai.fund_peer_returns.since_inception_1_cum_pct IS 'Retorno ACUMULADO desde el inicio de referencia 1 de la familia, %.';
+COMMENT ON COLUMN ai.fund_peer_returns.since_inception_1_ann_pct IS 'Retorno ANUALIZADO desde el inicio de referencia 1 de la familia, %.';
+COMMENT ON COLUMN ai.fund_peer_returns.since_inception_2_ann_pct IS 'Retorno ANUALIZADO desde el inicio de referencia 2 de la familia (p.ej. el de Orange en Chilean Equities LC), %.';
+COMMENT ON COLUMN ai.fund_peer_returns.volatility_pct IS 'Volatilidad (sigma), %.';
 COMMENT ON COLUMN ai.fund_peer_returns.sharpe IS 'Sharpe.';
-COMMENT ON COLUMN ai.fund_peer_returns.alpha IS 'Alpha.';
-COMMENT ON COLUMN ai.fund_peer_returns.beta IS 'Beta.';
+COMMENT ON COLUMN ai.fund_peer_returns.alpha_pct IS 'Alpha, %.';
+COMMENT ON COLUMN ai.fund_peer_returns.beta IS 'Beta (ratio, 0.98).';
+COMMENT ON COLUMN ai.fund_peer_returns.is_latest IS 'true = es la foto más reciente de esa familia (último informe cargado). Filtrá por esto para "el dato actual".';
 
 -- ── ai.analysts ──────────────────────────────────────────────────────────────
 CREATE VIEW ai.analysts AS

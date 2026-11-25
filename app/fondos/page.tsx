@@ -15,23 +15,21 @@ const REGIONS: { key: Region; label: string }[] = [
   { key: "Brazil", label: "Brazil" },
 ];
 
-// ── Fund → /api/rentabilidades query ─────────────────────────────────────────
-// Chile/LATAM se identifican por page_num. Brasil por moneda (la página del PDF
-// puede moverse; ojo que el grupo "BRL Returns" de la página USD NO es Brasil) y
-// cada tabla por el fondo Patria que aparece en su dyn_1_label.
-const FUND_RETURNS_QUERY: Record<string, string> = {
-  Pionero: "page=1",
-  Moneda_Renta_Variable: "page=2",
-  Orange: "page=2",
-  "Moneda_Latin_America_Small_Cap_(LX)": "page=3",
-  "Moneda_Latin_America_Equities_(LX)": "page=4",
-  Glory: "page=4",
-  Mercer: "page=4",
-  Patria_Long_Biased_Master_FIM: "currency=BRL&dyn1=LONG%20BIAS",
-  Patria_LO_Master_FIA: "currency=BRL&dyn1=LONG%20ONLY",
+// ── Fund → FAMILIA del Excel de rentabilidades (/api/rentabilidades?familia=…) ──
+// MRV y Orange comparten familia (y tabla), igual que en el informe.
+const FUND_FAMILIA: Record<string, string> = {
+  Pionero: "Chilean Equities SC",
+  Moneda_Renta_Variable: "Chilean Equities LC",
+  Orange: "Chilean Equities LC",
+  "Moneda_Latin_America_Equities_(LX)": "Latam Equities LC",
+  "Moneda_Latin_America_Small_Cap_(LX)": "Latam Equities SC",
+  Glory: "Latam Equities LC - Glory",
+  Mercer: "Latam Equities LC - MDELA",
+  Patria_Long_Biased_Master_FIM: "Brazil Long Bias",
+  Patria_LO_Master_FIA: "Brazil Long Only",
 };
 
-// Brasil trae NAV, since-inception dinámicos, sigma, alpha y beta.
+// Brasil agrega NAV, sigma, alpha y beta a la tabla.
 const EXTENDED_RETURNS = new Set(["Patria_Long_Biased_Master_FIM", "Patria_LO_Master_FIA"]);
 
 // Nombre visible para fondos que aún no tienen cartera cargada (la API no los lista).
@@ -294,7 +292,7 @@ export default function FondosPage() {
       {/* ── Returns tab ───────────────────────────────────────────────────────── */}
       {activeTab === "returns" && (
         <ReturnsDashboard
-          query={FUND_RETURNS_QUERY[selectedFundName] ?? "page=1"}
+          query={`familia=${encodeURIComponent(FUND_FAMILIA[selectedFundName] ?? FUND_FAMILIA.Pionero)}`}
           fundDisplayName={selectedDisplayName}
           fundKey={selectedFundName}
           columns={EXTENDED_RETURNS.has(selectedFundName) ? "extended" : "standard"}

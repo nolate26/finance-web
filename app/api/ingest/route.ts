@@ -115,9 +115,40 @@ export async function POST(request: Request) {
         break;
       // 'ProyeccionesFinancieras' se eliminó (2026-11-18): las proyecciones salen de los
       // modelos del analista (AnalystModel / BankModel). Un envío viejo cae en el default (400).
-      case 'MonedaFundReturns':
-        await prisma.monedaFundReturn.createMany({ data: rows, skipDuplicates: true }); 
-        break;
+      // Excel de rentabilidades (rentabilidades_to_db.py): cada payload trae el informe
+      // COMPLETO de una o más fechas → se borran esas fechas y se reinsertan. Así re-subir
+      // un Excel corregido lo pisa, en vez de que skipDuplicates lo ignore en silencio.
+      // El script manda un Excel por request; partirlo en lotes borraría el lote anterior.
+      case 'MonedaFundReturns': {
+        const fundRows = dedupeBy(
+          normalizeRows(
+            (rows as any[]).map((r) => ({
+              ...r,
+              reportDate: r.reportDate ? new Date(r.reportDate) : null,
+            })),
+          ).filter(
+            (r) => r.reportDate && !isNaN(r.reportDate.getTime()) && r.familia && r.currency && r.fund,
+          ),
+          (r) => `${r.reportDate.toISOString()}|${r.familia}|${r.currency}|${r.fund}`,
+        );
+        if (fundRows.length === 0) {
+          return NextResponse.json(
+            { error: 'Ninguna fila válida (faltan reportDate, familia, currency o fund). No se borró nada.' },
+            { status: 400 },
+          );
+        }
+        const dates = [...new Set(fundRows.map((r) => r.reportDate.toISOString()))].map((d) => new Date(d));
+        const [{ count: replaced }] = await prisma.$transaction([
+          prisma.monedaFundReturn.deleteMany({ where: { reportDate: { in: dates } } }),
+          prisma.monedaFundReturn.createMany({ data: fundRows }),
+        ]);
+        return NextResponse.json({
+          success: true,
+          message: `Rentabilidades ${dates.map((d) => d.toISOString().slice(0, 10)).join(', ')}: ${replaced} filas reemplazadas, ${fundRows.length} escritas (de ${rows.length} recibidas).`,
+          replaced,
+          written: fundRows.length,
+        });
+      }
   
       case 'EmpresasIndustriasV2':         
         await prisma.empresasIndustriasV2.createMany({data: rows, skipDuplicates: true, });// Protege contra tickers duplicados                 

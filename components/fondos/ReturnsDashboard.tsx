@@ -25,15 +25,16 @@ interface RentabilidadRow {
   mtd: number | null;
   ytd: number | null;
   oneYear: number | null;
+  twoYears: number | null;
   threeYears: number | null;
   fiveYears: number | null;
   tenYears: number | null;
   aum: number | null;
   sharpe: number | null;
   mgmtFee: number | null;
-  annSinceIncep: number | null;
-  dyn1: number | null;
-  dyn2: number | null;
+  si1Cum: number | null;
+  si1Ann: number | null;
+  si2Ann: number | null;
   sigma: number | null;
   alpha: number | null;
   beta: number | null;
@@ -44,7 +45,6 @@ type NRow = RentabilidadRow & { displayGroup: string };
 
 interface ApiResponse {
   reportDate: string;
-  file: string;
   rows: RentabilidadRow[];
   timeseries?: TimeseriesPoint[];
   fundMeta?: Record<string, FundMeta>;
@@ -61,11 +61,11 @@ interface TimeseriesPoint {
 }
 
 interface Props {
-  /** Query string de /api/rentabilidades: "page=1" o "currency=BRL&dyn1=LONG BIAS". */
+  /** Query string de /api/rentabilidades: "familia=Chilean%20Equities%20SC". */
   query: string;
   fundDisplayName: string;
   fundKey?: string;
-  /** "extended" agrega NAV, since-inception dinámicos y riesgo (página de Brasil). */
+  /** "extended" agrega NAV, sigma, alpha y beta (Brasil). */
   columns?: "standard" | "extended";
 }
 
@@ -76,7 +76,7 @@ const CHART_LINES: Record<string, string[]> = {
   Orange: ["FTSE Chile All Cap TR Gross Orange", "Orange"],
   "Moneda_Latin_America_Equities_(LX)": ["MLE I (LX)", "iShares Latam 40 ETF", "DWS Invest Latam Equities", "BCI SICAV Latam Equity Fund","MSCI Latam 10/40 Net" ],
   "Moneda_Latin_America_Small_Cap_(LX)": ["MSC I (LX)", "LarrainVial Small & Mid Cap (LX)", "Zurich AM SICAV SC Latam I", "MSCI EM Latam SC Net"],
-  Glory: ["Glory", "MSCI Latam TR Net"],
+  Glory: ["Glory", "MSCI TR Latam Gross"],
   Mercer: ["Mercer", "Moneda All Caps A", "MSCI EM Latam IMI"],
 };
 
@@ -84,8 +84,7 @@ const CHART_LINES: Record<string, string[]> = {
 // No afecta la tabla, sólo el gráfico y las opciones de benchmark del modo alfa.
 const CHART_INDICES: Record<string, string[]> = {
   Patria_Long_Biased_Master_FIM: ["Ibovespa Index"],
-  // El Ibovespa no viene en la tabla de LO: /api/rentabilidades lo trae de la de LB.
-  // Bovespa Small Cap sigue en la tabla, pero fuera del gráfico y del alfa.
+  // Bovespa Small Cap sigue en la tabla de LO, pero fuera del gráfico y del alfa.
   Patria_LO_Master_FIA: ["Ibovespa Index"],
 };
 
@@ -103,12 +102,13 @@ type SortableKey =
   | "mtd"
   | "ytd"
   | "oneYear"
+  | "twoYears"
   | "threeYears"
   | "fiveYears"
   | "tenYears"
-  | "annSinceIncep"
-  | "dyn1"
-  | "dyn2"
+  | "si1Cum"
+  | "si1Ann"
+  | "si2Ann"
   | "sigma"
   | "sharpe"
   | "alpha"
@@ -154,15 +154,8 @@ function pctColor(v: number | null): string {
   return "rgba(13,13,56,0.62)";
 }
 
-/** Normalize CSV group → display group name */
-function normalizeGroup(group: string, fund: string): string {
-  if (group === "Moneda") return "Moneda Funds";
-  if (group === "Other Moneda Funds Returns") {
-    if (fund === "Glory" || fund === "Mercer") return "Moneda Funds";
-    return "Other Moneda Funds";
-  }
-  return group;
-}
+// Los grupos son la SUBFAMILIA del Excel tal cual ("Moneda Funds", "Peer Group (…)",
+// "Indices", "Currencies"); la tabla los ordena Moneda → pares → índices → monedas.
 
 // ── Column definitions ────────────────────────────────────────────────────────
 
@@ -220,9 +213,19 @@ const PERIOD_COLS: ColDef[] = [
   pctColDef("MTD", (r) => r.mtd, "mtd"),
   pctColDef("YTD", (r) => r.ytd, "ytd"),
   pctColDef("1 YEAR", (r) => r.oneYear, "oneYear"),
+  pctColDef("2 YEARS", (r) => r.twoYears, "twoYears"),
   pctColDef("3 YEARS", (r) => r.threeYears, "threeYears"),
   pctColDef("5 YEARS", (r) => r.fiveYears, "fiveYears"),
   pctColDef("10 YEARS", (r) => r.tenYears, "tenYears"),
+];
+
+// Since inception del Excel: SI1 acumulado y anualizado, SI2 anualizado (segundo inicio
+// de referencia de la familia, p.ej. Orange en Chilean Equities LC). Las columnas que
+// vienen vacías en toda la tabla se ocultan (Brasil no trae SI2).
+const SINCE_INCEP_COLS: ColDef[] = [
+  pctColDef("CUM. S. INCEP.", (r) => r.si1Cum, "si1Cum"),
+  pctColDef("ANN. S. INCEP.", (r) => r.si1Ann, "si1Ann"),
+  pctColDef("ANN. S. INCEP. 2", (r) => r.si2Ann, "si2Ann"),
 ];
 
 const AUM_COL = plainColDef("AUM ($MM)", (r) => r.aum, fmtAum, "aum");
@@ -233,19 +236,17 @@ const STANDARD_COLS: ColDef[] = [
   MANAGER_COL,
   AUM_COL,
   ...PERIOD_COLS,
-  pctColDef("SINCE INCEP.", (r) => r.annSinceIncep, "annSinceIncep"),
+  ...SINCE_INCEP_COLS,
   SHARPE_COL,
   FEE_COL,
 ];
 
-// Brasil: dyn_1 = acumulado desde el inicio del fondo Patria de la tabla, dyn_2 = anualizado.
 const EXTENDED_COLS: ColDef[] = [
   MANAGER_COL,
   plainColDef("NAV", (r) => r.nav, fmtNav, "nav"),
   AUM_COL,
   ...PERIOD_COLS,
-  pctColDef("CUM. S. INCEP.", (r) => r.dyn1, "dyn1"),
-  pctColDef("ANN. S. INCEP.", (r) => r.dyn2, "dyn2"),
+  ...SINCE_INCEP_COLS,
   plainColDef("SIGMA", (r) => r.sigma, (v) => fmtPct(v), "sigma"),
   SHARPE_COL,
   pctColDef("ALPHA", (r) => r.alpha, "alpha"),
@@ -257,13 +258,14 @@ const EXTENDED_COLS: ColDef[] = [
 // eligen por etiqueta, así sirven igual para el set estándar y el extendido (Brasil).
 const PHONE_SETS = [
   { id: "ret",  label: "Retornos",    cols: ["MTD", "YTD", "1 YEAR", "3 YEARS"] },
-  { id: "long", label: "Largo plazo", cols: ["5 YEARS", "10 YEARS", "SINCE INCEP.", "ANN. S. INCEP."] },
+  { id: "long", label: "Largo plazo", cols: ["5 YEARS", "10 YEARS", "CUM. S. INCEP.", "ANN. S. INCEP."] },
   { id: "fund", label: "Fondo",       cols: ["AUM ($MM)", "SHARPE", "MGMT FEE"] },
 ] as const;
 type PhoneSet = (typeof PHONE_SETS)[number]["id"];
 const PHONE_LABEL: Record<string, string> = {
-  "1 YEAR": "1Y", "3 YEARS": "3Y", "5 YEARS": "5Y", "10 YEARS": "10Y",
-  "SINCE INCEP.": "S. INCEP.", "ANN. S. INCEP.": "S. INCEP.", "AUM ($MM)": "AUM $MM", "MGMT FEE": "FEE",
+  "1 YEAR": "1Y", "2 YEARS": "2Y", "3 YEARS": "3Y", "5 YEARS": "5Y", "10 YEARS": "10Y",
+  "CUM. S. INCEP.": "S.I. CUM", "ANN. S. INCEP.": "S.I. ANN", "ANN. S. INCEP. 2": "S.I.2 ANN",
+  "AUM ($MM)": "AUM $MM", "MGMT FEE": "FEE",
 };
 
 // ── Chart helpers ─────────────────────────────────────────────────────────────
@@ -280,7 +282,6 @@ function seriesStyle(meta?: FundMeta): { stroke: string; width: number; dash?: s
   if (!meta) return { stroke: "rgba(13,13,56,0.28)", width: 1.5 };
   if (meta.group === "Moneda") return { stroke: PATRIA.darkBlue, width: 3 };
   if (meta.group === "Indices") return { stroke: PATRIA.orange, width: 1.5 };
-  if (meta.group === "Other Moneda") return { stroke: "rgba(13,13,56,0.45)", width: 1.5, dash: "4 4" };
   if (meta.group.startsWith("Peer")) return { stroke: "rgba(13,13,56,0.28)", width: 1.5, dash: "5 5" };
   return { stroke: "rgba(13,13,56,0.28)", width: 1.5 };
 }
@@ -358,10 +359,7 @@ function compareRows(a: NRow, b: NRow, cfg: SortConfig): number {
 export default function ReturnsDashboard({ query, fundDisplayName, fundKey, columns = "standard" }: Props) {
   const isPhone = usePhone();
   const [phoneSet, setPhoneSet] = useState<PhoneSet>("ret");
-  const ALL_COLS = columns === "extended" ? EXTENDED_COLS : STANDARD_COLS;
   const phoneCols: readonly string[] = PHONE_SETS.find((x) => x.id === phoneSet)!.cols;
-  const TABLE_COLS = isPhone ? ALL_COLS.filter((c) => phoneCols.includes(c.label)) : ALL_COLS;
-  const TOTAL_COLS = 1 + TABLE_COLS.length;
   const colLabel = (c: ColDef) => (isPhone ? PHONE_LABEL[c.label] ?? c.label : c.label);
 
   const [rows, setRows] = useState<RentabilidadRow[]>([]);
@@ -408,33 +406,30 @@ export default function ReturnsDashboard({ query, fundDisplayName, fundKey, colu
 
   const MONEDA = "Moneda Funds";
   const INDICES = "Indices";
-  const OTHER = "Other Moneda Funds";
+  const CURRENCIES = "Currencies";
 
   const normalized: NRow[] = useMemo(
-    () => rows.map((r) => ({ ...r, displayGroup: normalizeGroup(r.group, r.fund) })),
+    () => rows.map((r) => ({ ...r, displayGroup: r.group || "Other" })),
     [rows]
   );
 
-  // Stable ordered group list (always Moneda → Peers → Indices → Other)
+  // Columnas: se ocultan las que vienen vacías en toda la familia (p.ej. SI2 en Brasil).
+  const ALL_COLS = (columns === "extended" ? EXTENDED_COLS : STANDARD_COLS).filter(
+    (c) => c === MANAGER_COL || normalized.some((r) => c.textValue(r) !== "—")
+  );
+  const TABLE_COLS = isPhone ? ALL_COLS.filter((c) => phoneCols.includes(c.label)) : ALL_COLS;
+  const TOTAL_COLS = 1 + TABLE_COLS.length;
+
+  // Orden estable de grupos: Moneda → pares (orden del Excel) → índices → monedas.
   const orderedGroups = useMemo<string[]>(() => {
-    const seenGroups = new Set<string>();
     const result: string[] = [];
-    if (normalized.some((r) => r.displayGroup === MONEDA)) {
-      seenGroups.add(MONEDA);
-      result.push(MONEDA);
-    }
+    if (normalized.some((r) => r.displayGroup === MONEDA)) result.push(MONEDA);
     for (const r of normalized) {
-      if (
-        !seenGroups.has(r.displayGroup) &&
-        r.displayGroup !== INDICES &&
-        r.displayGroup !== OTHER
-      ) {
-        seenGroups.add(r.displayGroup);
-        result.push(r.displayGroup);
-      }
+      const g = r.displayGroup;
+      if (!result.includes(g) && g !== MONEDA && g !== INDICES && g !== CURRENCIES) result.push(g);
     }
     if (normalized.some((r) => r.displayGroup === INDICES)) result.push(INDICES);
-    if (normalized.some((r) => r.displayGroup === OTHER)) result.push(OTHER);
+    if (normalized.some((r) => r.displayGroup === CURRENCIES)) result.push(CURRENCIES);
     return result;
   }, [normalized]);
 
@@ -451,15 +446,11 @@ export default function ReturnsDashboard({ query, fundDisplayName, fundKey, colu
       }
       if (groupFilter !== "All") {
         if (groupFilter === "Moneda") {
-          if (r.displayGroup !== MONEDA && r.displayGroup !== OTHER) return false;
+          if (r.displayGroup !== MONEDA) return false;
         } else if (groupFilter === "Indices") {
-          if (r.displayGroup !== INDICES) return false;
+          if (r.displayGroup !== INDICES && r.displayGroup !== CURRENCIES) return false;
         } else if (groupFilter === "Peer Group") {
-          if (
-            r.displayGroup === MONEDA ||
-            r.displayGroup === INDICES ||
-            r.displayGroup === OTHER
-          ) return false;
+          if (!r.displayGroup.startsWith("Peer")) return false;
         }
       }
       return true;

@@ -1,26 +1,35 @@
 import { NextResponse } from "next/server";
-import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+
+// Fuente: moneda_fund_returns, cargada desde el Excel de rentabilidades (una fila por
+// fondo/índice y FAMILIA). Cada vista de /fondos pide una familia
+// (?familia=Chilean%20Equities%20SC) y recibe la tabla del último informe + la serie YTD
+// del año. Cada familia trae sus propios benchmarks (IPSA en Chilean Equities LC,
+// Ibovespa en Brazil Long Only…), así que no hace falta pedir filas de otra tabla.
 
 export interface RentabilidadRow {
   fund: string;
   manager: string;
+  /** SUBFAMILIA tal cual viene del Excel: "Moneda Funds", "Peer Group (Large Cap)", "Indices", "Currencies". */
   group: string;
   currency: string;
   nav: number | null;
   mtd: number | null;
   ytd: number | null;
   oneYear: number | null;
+  twoYears: number | null;
   threeYears: number | null;
   fiveYears: number | null;
   tenYears: number | null;
   aum: number | null;
   sharpe: number | null;
   mgmtFee: number | null;
-  annSinceIncep: number | null;
-  // Columnas dinámicas (dyn_1/dyn_2) y de riesgo: sólo las trae la página de Brasil.
-  dyn1: number | null;
-  dyn2: number | null;
+  /** SINCE INCEPTION 1: acumulado desde el inicio de referencia 1 de la familia. */
+  si1Cum: number | null;
+  /** ANUALIZADO SINCE INCEPTION 1. */
+  si1Ann: number | null;
+  /** ANUALIZADO SINCE INCEPTION 2 (segundo inicio de referencia, p.ej. Orange en Chilean Equities LC). */
+  si2Ann: number | null;
   sigma: number | null;
   alpha: number | null;
   beta: number | null;
@@ -32,231 +41,108 @@ export interface FundMeta {
   isMoneda: boolean;
 }
 
-// ── Date parsing ───────────────────────────────────────────────────────────────
-// DB stores report_date as VARCHAR in "D/MMM/YYYY" format (e.g. "9/Jan/2026")
-// Frontend expects ISO "YYYY-MM-DD" for date rendering and sorting.
+const MONEDA_GROUP = "Moneda Funds";
 
-const MONTH_MAP: Record<string, string> = {
-  Jan: "01", Feb: "02", Mar: "03", Apr: "04", May: "05", Jun: "06",
-  Jul: "07", Aug: "08", Sep: "09", Oct: "10", Nov: "11", Dec: "12",
-};
-
-/** "9/Jan/2026" → "2026-01-09". Passthrough if already ISO or unrecognised. */
-function parseDateToISO(raw: string): string {
-  const match = raw.match(/^(\d{1,2})\/([A-Za-z]{3})\/(\d{4})$/);
-  if (match) {
-    const [, day, mon, year] = match;
-    const mm = MONTH_MAP[mon] ?? "01";
-    return `${year}-${mm}-${day.padStart(2, "0")}`;
-  }
-  return raw;
-}
-
-// ── Numeric helpers ────────────────────────────────────────────────────────────
-// Return fields are stored as percentages (e.g. 3.5 = 3.5%).
-// The frontend multiplies by 100 to display, so we divide here to give decimals.
-
-/** Percentage stored in DB → decimal for frontend (3.5 → 0.035). */
+/** Puntos porcentuales en la BDD (3.5) → decimal para el frontend (0.035). */
 function toDec(v: number | null | undefined): number | null {
-  if (v == null) return null;
-  return v / 100;
+  return v == null ? null : v / 100;
 }
 
-// mgmt_fee is stored as a varchar like "1.25%" in the DB — parse to decimal
-function parseMgmtFee(v: string | null | undefined): number | null {
-  if (!v) return null;
-  const s = v.replace(/%/g, "").trim();
-  const n = parseFloat(s);
-  return isNaN(n) ? null : n / 100;
-}
+const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
-// Benchmark de los dos fondos de Brasil (Patria Long Biased y Long Only).
-const BRL_BENCHMARK = "Ibovespa Index";
-
-function isMonedaFund(fundGroup: string | null): boolean {
-  if (!fundGroup) return false;
-  return fundGroup === "Moneda" || fundGroup === "Other Moneda Funds Returns";
+/** Grupo para el gráfico: Moneda / Peer Group / Indices. Otros (Currencies) no se grafican. */
+function chartGroup(subfamilia: string): string | null {
+  if (subfamilia === MONEDA_GROUP) return "Moneda";
+  if (subfamilia.startsWith("Peer")) return "Peer Group";
+  if (subfamilia === "Indices") return "Indices";
+  return null;
 }
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const pageFilter = searchParams.get("page");
-  // Brasil se identifica por moneda (la página del PDF puede moverse) y, dentro de
-  // ella, cada tabla por su dyn_1_label. El label no es estable entre reportes
-  // ("CUMULATIVE S. INCEP. PATRIA LONG BIAS" vs "S. INCEP. PATRIA LONG BIAS"), así
-  // que se matchea por substring ("LONG BIAS" / "LONG ONLY").
-  const currencyFilter = searchParams.get("currency");
-  const dyn1Filter = searchParams.get("dyn1");
+  const familia = searchParams.get("familia");
 
-  const scope: Prisma.MonedaFundReturnWhereInput = currencyFilter
-    ? {
-        currency: currencyFilter,
-        ...(dyn1Filter ? { dyn1Label: { contains: dyn1Filter, mode: "insensitive" } } : {}),
-      }
-    : pageFilter
-      ? { pageNum: parseInt(pageFilter, 10) }
-      : {};
+  if (!familia) {
+    // Sin familia: sólo la fecha del último informe cargado.
+    const last = await prisma.monedaFundReturn.findFirst({
+      orderBy: { reportDate: "desc" },
+      select: { reportDate: true },
+    });
+    if (!last) return NextResponse.json({ error: "No returns data found" }, { status: 404 });
+    return NextResponse.json({ reportDate: isoDay(last.reportDate) });
+  }
 
-  // ── Find the most recent report_date ──────────────────────────────────────
-  // Can't rely on DB ORDER BY because "D/MMM/YYYY" strings sort lexicographically,
-  // not chronologically. Fetch all distinct dates, parse to ISO, then sort in JS.
-  const allDateRecords = await prisma.monedaFundReturn.findMany({
-    where: scope,
+  const latest = await prisma.monedaFundReturn.findFirst({
+    where: { familia },
+    orderBy: { reportDate: "desc" },
     select: { reportDate: true },
-    distinct: ["reportDate"],
   });
-
-  if (allDateRecords.length === 0) {
-    return NextResponse.json({ error: "No returns data found" }, { status: 404 });
+  if (!latest) {
+    return NextResponse.json({ error: `No returns data found for familia "${familia}"` }, { status: 404 });
   }
+  const latestDate = latest.reportDate;
+  const reportDate = isoDay(latestDate);
 
-  const sortedDates = allDateRecords
-    .map((r) => ({ raw: r.reportDate, iso: parseDateToISO(r.reportDate) }))
-    .sort((a, b) => a.iso.localeCompare(b.iso));
-
-  const latestEntry = sortedDates[sortedDates.length - 1];
-  const latestDateRaw = latestEntry.raw; // "9/Jan/2026" — used for DB WHERE clause
-  const latestDateISO = latestEntry.iso; // "2026-01-09" — sent to frontend
-  const reportDate = latestDateISO;
-
-  // ── Query latest snapshot rows ────────────────────────────────────────────
   const dbRows = await prisma.monedaFundReturn.findMany({
-    where: { ...scope, reportDate: latestDateRaw },
+    where: { familia, reportDate: latestDate },
+    orderBy: { fund: "asc" },
   });
 
-  if (!pageFilter && !currencyFilter) {
-    return NextResponse.json({ reportDate, pages: {} });
-  }
-
-  // ── Map DB rows → RentabilidadRow ─────────────────────────────────────────
-  function mapDbRow(r: (typeof dbRows)[number]): RentabilidadRow {
-    const group = r.fundGroup ?? "";
-    const fund = r.fund ?? "";
+  const rows: RentabilidadRow[] = dbRows.map((r) => {
+    const group = r.subfamilia ?? "";
     return {
-      fund,
+      fund: r.fund,
       manager: r.manager ?? "",
       group,
-      currency: r.currency ?? "",
-      nav: r.nav ?? null,
+      currency: r.currency,
+      nav: r.nav,
       mtd: toDec(r.mtd),
       ytd: toDec(r.ytd),
       oneYear: toDec(r.ret1y),
+      twoYears: toDec(r.ret2y),
       threeYears: toDec(r.ret3y),
       fiveYears: toDec(r.ret5y),
       tenYears: toDec(r.ret10y),
-      aum: r.aumUsdMm ?? null,
-      sharpe: r.sharpe ?? null,
-      mgmtFee: parseMgmtFee(r.mgmtFee),
-      annSinceIncep: toDec(r.incep),
-      dyn1: toDec(r.dyn1),
-      dyn2: toDec(r.dyn2),
+      aum: r.aumUsdMm,
+      sharpe: r.sharpe,
+      mgmtFee: toDec(r.mgmtFee),
+      si1Cum: toDec(r.si1Cum),
+      si1Ann: toDec(r.si1Ann),
+      si2Ann: toDec(r.si2Ann),
       sigma: toDec(r.sigma),
       alpha: toDec(r.alpha),
-      beta: r.beta ?? null,
-      isMoneda: isMonedaFund(group),
+      beta: r.beta,
+      isMoneda: group === MONEDA_GROUP,
     };
-  }
-
-  const rows: RentabilidadRow[] = dbRows.map(mapDbRow);
-
-  // ── For MRV (page 2): also fetch IPSA if it lives on a different page ──────
-  // IPSA is the MRV benchmark but may be stored under page 1 (Pionero).
-  if (pageFilter === "2" && !rows.some((r) => r.fund === "IPSA")) {
-    const ipsaDbRow = await prisma.monedaFundReturn.findFirst({
-      where: { fund: "IPSA", reportDate: latestDateRaw },
-    });
-    if (ipsaDbRow) {
-      rows.push(mapDbRow(ipsaDbRow));
-    }
-  }
-
-  // ── Brasil: el benchmark de ambos fondos es el Ibovespa ───────────────────
-  // El reporte sólo lo trae en la tabla de Long Biased; la de Long Only tiene
-  // Bovespa Small Cap. Se toma de la misma fecha en cualquier tabla BRL. Las
-  // columnas since-inception (dyn1/dyn2, incep) y las de riesgo (sigma/alfa/beta)
-  // de esa fila están medidas desde el inicio del OTRO fondo → van vacías.
-  const borrowBrlBenchmark = currencyFilter === "BRL" && !rows.some((r) => r.fund === BRL_BENCHMARK);
-  if (borrowBrlBenchmark) {
-    const ibovDbRow = await prisma.monedaFundReturn.findFirst({
-      where: { currency: "BRL", fund: BRL_BENCHMARK, reportDate: latestDateRaw },
-    });
-    if (ibovDbRow) {
-      rows.push({
-        ...mapDbRow(ibovDbRow),
-        dyn1: null, dyn2: null, annSinceIncep: null,
-        sigma: null, alpha: null, beta: null,
-      });
-    }
-  }
-
-  // ── Determine chart funds ─────────────────────────────────────────────────
-  const monedaFunds = rows
-    .filter((r) => r.isMoneda)
-    .map((r) => ({ fund: r.fund, group: r.group, isMoneda: true }));
-
-  const peerFunds = rows
-    .filter((r) => !r.isMoneda && r.group.startsWith("Peer"))
-    .map((r) => ({ fund: r.fund, group: r.group, isMoneda: false }));
-
-  const indexFunds = rows
-    .filter((r) => r.group === "Indices")
-    .map((r) => ({ fund: r.fund, group: r.group, isMoneda: false }));
-
-  const chartFunds = [...monedaFunds, ...peerFunds, ...indexFunds];
-  const fundSet = new Set(chartFunds.map((f) => f.fund));
-
-  const fundMeta: Record<string, FundMeta> = {};
-  for (const f of chartFunds) {
-    const normalizedGroup =
-      f.group === "Moneda" ? "Moneda" :
-      f.group === "Other Moneda Funds Returns" && (f.fund === "Glory" || f.fund === "Mercer") ? "Moneda" :
-      f.group === "Other Moneda Funds Returns" ? "Other Moneda" :
-      f.group.startsWith("Peer") ? "Peer Group" :
-      f.group;
-    fundMeta[f.fund] = { group: normalizedGroup, isMoneda: f.isMoneda };
-  }
-
-  // ── Build YTD timeseries for current year ─────────────────────────────────
-  // Year extracted from the ISO date ("2026-01-09" → "2026").
-  // Dates in DB end with "/<year>" (e.g. "9/Jan/2026"), so use endsWith filter.
-  const year = latestDateISO.substring(0, 4);
-
-  // For MRV (page 2): fetch by fund name set (includes IPSA from any page).
-  // For all other pages (and Brasil): same scope as the snapshot.
-  const yearRows = await prisma.monedaFundReturn.findMany({
-    where:
-      pageFilter === "2" && !currencyFilter
-        ? { reportDate: { endsWith: `/${year}` }, fund: { in: [...fundSet] } }
-        : borrowBrlBenchmark
-          // La serie del Ibovespa prestado también sale de la otra tabla BRL.
-          ? {
-              reportDate: { endsWith: `/${year}` },
-              OR: [scope, { currency: "BRL", fund: BRL_BENCHMARK }],
-            }
-          : { ...scope, reportDate: { endsWith: `/${year}` } },
-    select: { reportDate: true, fund: true, ytd: true },
   });
 
-  // Sort chronologically using parsed ISO dates
-  yearRows.sort((a, b) =>
-    parseDateToISO(a.reportDate).localeCompare(parseDateToISO(b.reportDate))
-  );
+  // ── Series del gráfico: Moneda + pares + índices de la familia ─────────────
+  const fundMeta: Record<string, FundMeta> = {};
+  for (const r of rows) {
+    const g = chartGroup(r.group);
+    if (g) fundMeta[r.fund] = { group: g, isMoneda: r.isMoneda };
+  }
+  const fundSet = new Set(Object.keys(fundMeta));
 
-  // Group by ISO date → one chart point per date
+  // YTD de cada informe del año del último reporte (varios por semana).
+  const yearStart = new Date(Date.UTC(latestDate.getUTCFullYear(), 0, 1));
+  const yearRows = await prisma.monedaFundReturn.findMany({
+    where: { familia, reportDate: { gte: yearStart, lte: latestDate }, fund: { in: [...fundSet] } },
+    select: { reportDate: true, fund: true, ytd: true },
+    orderBy: { reportDate: "asc" },
+  });
+
   const dateMap = new Map<string, Record<string, string | number | null>>();
   for (const row of yearRows) {
-    const d = parseDateToISO(row.reportDate);
-    if (!dateMap.has(d)) {
-      const point: Record<string, string | number | null> = { date: d };
-      for (const fund of fundSet) point[fund] = null;
+    const d = isoDay(row.reportDate);
+    let point = dateMap.get(d);
+    if (!point) {
+      point = { date: d };
+      for (const f of fundSet) point[f] = null;
       dateMap.set(d, point);
     }
-    if (fundSet.has(row.fund)) {
-      dateMap.get(d)![row.fund] = toDec(row.ytd);
-    }
+    point[row.fund] = toDec(row.ytd);
   }
 
-  const timeseries = Array.from(dateMap.values());
-
-  return NextResponse.json({ reportDate, file: latestDateRaw, rows, timeseries, fundMeta });
+  return NextResponse.json({ reportDate, rows, timeseries: [...dateMap.values()], fundMeta });
 }

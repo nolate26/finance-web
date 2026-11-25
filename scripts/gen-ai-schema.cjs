@@ -575,23 +575,28 @@ SELECT w.fund_name AS fund, w.report_date, w.company AS security,
   });
 
 V("fund_peer_returns",
-  "Retornos y métricas de fondos de Moneda, fondos pares e índices (informe semanal de rentabilidades). Granularidad: fondo/serie, no acción. Retornos en % (68.6 = 68,6%).",
+  "Retornos y métricas de fondos de Moneda, fondos pares, índices y monedas (Excel de rentabilidades, varios informes por semana). Granularidad: fondo/serie DENTRO DE UNA FAMILIA (estrategia de comparación). OJO: el mismo índice (IPSA, Ibovespa, CEMBI…) se repite en varias familias con since-inception distinto → filtrá por family y no sumes/promedies entre familias. Retornos, sigma, alpha y fee en % (68.6 = 68,6%); beta como ratio.",
   `
-SELECT (CASE WHEN r.report_date ~ '^[0-9]{1,2}/[A-Za-z]{3}/[0-9]{4}$' THEN to_date(r.report_date, 'DD/Mon/YYYY') END) AS report_date,
-       r.report_date AS report_date_raw, r.currency, r.fund, r.fund_group, ${nz("r.manager")} AS manager, ${num("r.mgmt_fee")} AS mgmt_fee_pct,
-       r.nav, r.aum_usd_mm, r.mtd AS ret_mtd_pct, r.ytd AS ret_ytd_pct, r.ret_1y AS ret_1y_pct, r.ret_3y AS ret_3y_pct,
-       r.ret_5y AS ret_5y_pct, r.ret_10y AS ret_10y_pct, r.incep AS ret_since_inception_pct, ${nz("r.inception_date")} AS inception_date_raw,
-       r.dyn_1_label, r.dyn_1, r.dyn_2_label, r.dyn_2, r.dyn_3_label, r.dyn_3, r.sigma, r.sharpe, r.alpha, r.beta
+SELECT r.report_date, r.familia AS family, r.currency, r.fund, r.subfamilia AS fund_group, (r.subfamilia = 'Moneda Funds') AS is_moneda,
+       ${nz("r.code")} AS code, ${nz("r.manager")} AS manager, r.mgmt_fee AS mgmt_fee_pct, r.nav, r.aum_usd_mm,
+       r.mtd AS ret_mtd_pct, r.ytd AS ret_ytd_pct, r.ret_1y AS ret_1y_pct, r.ret_2y AS ret_2y_ann_pct, r.cum_2y AS ret_2y_cum_pct,
+       r.ret_3y AS ret_3y_ann_pct, r.ret_5y AS ret_5y_ann_pct, r.ret_10y AS ret_10y_ann_pct,
+       r.si1_cum AS since_inception_1_cum_pct, r.si1_ann AS since_inception_1_ann_pct, r.si2_ann AS since_inception_2_ann_pct,
+       r.sigma AS volatility_pct, r.sharpe, r.alpha AS alpha_pct, r.beta,
+       (r.report_date = max(r.report_date) OVER (PARTITION BY r.familia)) AS is_latest
   FROM moneda_fund_returns r`,
   {
-    report_date: "Fecha del informe.", report_date_raw: "Fecha como texto original ('9/Oct/2026').", currency: "Moneda del fondo/serie.",
-    fund: "Fondo o serie ('Pionero A').", fund_group: "Grupo ('Moneda', pares, índices).", manager: "Administradora.", mgmt_fee_pct: "Comisión de administración, %.",
-    nav: "Valor cuota.", aum_usd_mm: "Patrimonio en MILLONES de USD.", ret_mtd_pct: "Retorno del mes, %.", ret_ytd_pct: "Retorno del año, %.",
-    ret_1y_pct: "Retorno 12 meses, %.", ret_3y_pct: "Retorno 3 años, %.", ret_5y_pct: "Retorno 5 años, %.", ret_10y_pct: "Retorno 10 años, %.",
-    ret_since_inception_pct: "Retorno desde el inicio, %.", inception_date_raw: "Fecha de inicio (texto).",
-    dyn_1_label: "Etiqueta de la métrica dinámica 1 (cambia por tabla del informe).", dyn_1: "Valor de la métrica dinámica 1.",
-    dyn_2_label: "Etiqueta de la métrica dinámica 2.", dyn_2: "Valor de la métrica dinámica 2.", dyn_3_label: "Etiqueta de la métrica dinámica 3.", dyn_3: "Valor de la métrica dinámica 3.",
-    sigma: "Volatilidad.", sharpe: "Sharpe.", alpha: "Alpha.", beta: "Beta.",
+    report_date: "Fecha del informe.", family: "Familia (estrategia) del informe: 'Chilean Equities SC' (Pionero), 'Chilean Equities LC' (MRV, Orange), 'Latam Equities LC' (MLE), 'Latam Equities SC' (MSC), 'Latam Equities LC - Glory', 'Latam Equities LC - MDELA' (Mercer), 'Brazil Long Bias', 'Brazil Long Only', renta fija, CLO, etc.",
+    currency: "Moneda en que están medidos los retornos de la fila.", fund: "Fondo, serie o índice ('Pionero A', 'IPSA').",
+    fund_group: "Subfamilia: 'Moneda Funds', 'Peer Group (…)', 'Indices', 'Currencies'.", is_moneda: "true = fondo/serie de Moneda.",
+    code: "Código Bloomberg o interno de la fila ('CFIPIONERO', 'IPSA Index').", manager: "Administradora.", mgmt_fee_pct: "Comisión de administración, %.",
+    nav: "Valor cuota (o nivel del índice).", aum_usd_mm: "Patrimonio en MILLONES de USD.", ret_mtd_pct: "Retorno del mes, %.", ret_ytd_pct: "Retorno del año, %.",
+    ret_1y_pct: "Retorno 12 meses, %.", ret_2y_ann_pct: "Retorno 2 años ANUALIZADO, %.", ret_2y_cum_pct: "Retorno 2 años ACUMULADO, %.",
+    ret_3y_ann_pct: "Retorno 3 años anualizado, %.", ret_5y_ann_pct: "Retorno 5 años anualizado, %.", ret_10y_ann_pct: "Retorno 10 años anualizado, %.",
+    since_inception_1_cum_pct: "Retorno ACUMULADO desde el inicio de referencia 1 de la familia, %.", since_inception_1_ann_pct: "Retorno ANUALIZADO desde el inicio de referencia 1 de la familia, %.",
+    since_inception_2_ann_pct: "Retorno ANUALIZADO desde el inicio de referencia 2 de la familia (p.ej. el de Orange en Chilean Equities LC), %.",
+    volatility_pct: "Volatilidad (sigma), %.", sharpe: "Sharpe.", alpha_pct: "Alpha, %.", beta: "Beta (ratio, 0.98).",
+    is_latest: LATEST("de esa familia (último informe cargado)"),
   });
 
 // ════════════════════════ EQUIPO / PLANIFICACIÓN ════════════════════════

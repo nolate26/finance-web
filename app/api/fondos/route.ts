@@ -2,16 +2,6 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { normalizeTicker } from "@/lib/issuer";
 
-const FUND_PAGE_MAP: Record<string, string> = {
-  Pionero: "1",
-  Moneda_Renta_Variable: "2",
-  Orange: "2",
-  "Moneda_Latin_America_Small_Cap_(LX)": "3",
-  "Moneda_Latin_America_Equities_(LX)": "4",
-  Glory: "4",
-  Mercer: "4",
-};
-
 const DISPLAY_NAMES: Record<string, string> = {
   Moneda_Renta_Variable: "MRV",
   "Moneda_Latin_America_Equities_(LX)": "LA Equities (LX)",
@@ -74,8 +64,6 @@ export interface FondoData extends FondoMeta {
   cartera: CarteraRow[];
   sectorSummary: SectorSummary[];
   error?: string;
-  timeseries?: Record<string, string | number | null>[];
-  fundMeta?: Record<string, { group: string; isMoneda: boolean }>;
 }
 
 // ── Industry maps (built from empresas_industrias_v2 DB table) ───────────────
@@ -141,106 +129,6 @@ function buildSectorSummary(cartera: CarteraRow[]): SectorSummary[] {
     activeWeight: g.fundWeight - g.benchWeight,
     count: g.count,
   }));
-}
-
-// ── Date / numeric helpers (same logic as rentabilidades/route.ts) ─────────────
-const MONTH_MAP: Record<string, string> = {
-  Jan: "01", Feb: "02", Mar: "03", Apr: "04", May: "05", Jun: "06",
-  Jul: "07", Aug: "08", Sep: "09", Oct: "10", Nov: "11", Dec: "12",
-};
-
-/** "9/Jan/2026" → "2026-01-09". Passthrough if already ISO or unrecognised. */
-function parseDateToISO(raw: string): string {
-  const match = raw.match(/^(\d{1,2})\/([A-Za-z]{3})\/(\d{4})$/);
-  if (match) {
-    const [, day, mon, year] = match;
-    const mm = MONTH_MAP[mon] ?? "01";
-    return `${year}-${mm}-${day.padStart(2, "0")}`;
-  }
-  return raw;
-}
-
-/** Percentage stored in DB (e.g. 3.5) → decimal for frontend (0.035). */
-function toDec(v: number | null | undefined): number | null {
-  if (v == null) return null;
-  return v / 100;
-}
-
-// ── Rentabilidades timeseries (from moneda_fund_returns) ──────────────────────
-async function buildRentabilidadesTimeseries(pageNum: string): Promise<{
-  timeseries: Record<string, string | number | null>[];
-  fundMeta: Record<string, { group: string; isMoneda: boolean }>;
-}> {
-  const pageInt = parseInt(pageNum, 10);
-
-  // Can't rely on DB ORDER BY for "D/MMM/YYYY" strings — sort in JS after parsing.
-  const allDateRecords = await prisma.monedaFundReturn.findMany({
-    where: { pageNum: pageInt },
-    select: { reportDate: true },
-    distinct: ["reportDate"],
-  });
-  if (allDateRecords.length === 0) return { timeseries: [], fundMeta: {} };
-
-  const sortedDates = allDateRecords
-    .map((r) => ({ raw: r.reportDate, iso: parseDateToISO(r.reportDate) }))
-    .sort((a, b) => a.iso.localeCompare(b.iso));
-
-  const latestEntry = sortedDates[sortedDates.length - 1];
-  const latestDateRaw = latestEntry.raw; // used for DB WHERE
-  const latestDateISO = latestEntry.iso; // used for year extraction
-  const year = latestDateISO.substring(0, 4);
-
-  // Get all rows for latest date to determine chart funds
-  const latestRows = await prisma.monedaFundReturn.findMany({
-    where: { pageNum: pageInt, reportDate: latestDateRaw },
-    select: { fund: true, fundGroup: true },
-  });
-
-  // Select chart funds: Moneda + all peers + indices
-  const fundMeta: Record<string, { group: string; isMoneda: boolean }> = {};
-  for (const r of latestRows) {
-    const group = r.fundGroup ?? "";
-    const fund = r.fund;
-    const isMoneda =
-      group === "Moneda" || group === "Other Moneda Funds Returns";
-    if (isMoneda || group.startsWith("Peer") || group === "Indices") {
-      fundMeta[fund] = {
-        group: isMoneda ? "Moneda" : group.startsWith("Peer") ? "Peer Group" : "Indices",
-        isMoneda,
-      };
-    }
-  }
-
-  const fundSet = new Set(Object.keys(fundMeta));
-  if (fundSet.size === 0) return { timeseries: [], fundMeta: {} };
-
-  // Dates in DB end with "/<year>" (e.g. "9/Jan/2026") — use endsWith filter.
-  const yearRows = await prisma.monedaFundReturn.findMany({
-    where: {
-      pageNum: pageInt,
-      reportDate: { endsWith: `/${year}` },
-      fund: { in: Array.from(fundSet) },
-    },
-    select: { reportDate: true, fund: true, ytd: true },
-  });
-
-  // Sort chronologically using parsed ISO dates
-  yearRows.sort((a, b) =>
-    parseDateToISO(a.reportDate).localeCompare(parseDateToISO(b.reportDate))
-  );
-
-  const dateMap = new Map<string, Record<string, string | number | null>>();
-  for (const row of yearRows) {
-    const d = parseDateToISO(row.reportDate); // ISO date for the frontend
-    if (!dateMap.has(d)) {
-      const point: Record<string, string | number | null> = { date: d };
-      for (const f of fundSet) point[f] = null;
-      dateMap.set(d, point);
-    }
-    dateMap.get(d)![row.fund] = toDec(row.ytd);
-  }
-
-  return { timeseries: Array.from(dateMap.values()), fundMeta };
 }
 
 export async function GET(request: Request) {
@@ -393,11 +281,6 @@ export async function GET(request: Request) {
 
       const sectorSummary = buildSectorSummary(cartera);
 
-      // ── Build rentabilidades timeseries ──────────────────────────────────
-      const pageNum = FUND_PAGE_MAP[fundName];
-      const { timeseries, fundMeta } = pageNum
-        ? await buildRentabilidadesTimeseries(pageNum)
-        : { timeseries: [], fundMeta: {} };
 
       return NextResponse.json({
         ...meta,
@@ -405,8 +288,6 @@ export async function GET(request: Request) {
         hasBenchmark,
         cartera,
         sectorSummary,
-        timeseries,
-        fundMeta,
       });
     } catch (err) {
       return NextResponse.json({
