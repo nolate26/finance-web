@@ -3,7 +3,8 @@ import { z } from "zod";
 import { runReadOnly, cellValue, type QueryResult } from "@/lib/qaBot/db";
 import { loadCatalog } from "@/lib/qaBot/catalog";
 import { toCsv, toXlsx, safeFilename, documentLink } from "@/lib/qaBot/files";
-import { sendDocumentBuffer, sendDocumentUrl, sendTyping } from "@/lib/qaBot/telegram";
+import { sendDocumentBuffer, sendDocumentUrl, sendPhotoBuffer, sendTyping } from "@/lib/qaBot/telegram";
+import { parseChartData, renderChartPng, MAX_SERIES } from "@/lib/qaBot/chart";
 
 // Agente del bot de Q&A de Telegram: Claude (Messages API) con tres herramientas propias —
 // run_sql sobre el schema ai como qa_bot_ro, send_table_file para tablas largas y send_document
@@ -28,6 +29,7 @@ Cómo trabajar
 - Si la pregunta es ambigua en algo que cambia el resultado (qué empresa, qué período), pregunta en una línea antes de consultar.
 - Si el resultado tiene más de ~15 filas, o te piden "en Excel"/"en CSV"/"archivo", usa send_table_file (Excel por defecto) y en el mensaje resume lo principal.
 - Si piden el PDF de una ficha o de una presentación, busca su id en tearsheet_pdfs o presentations y usa send_document.
+- Si piden un gráfico, usa send_chart: "line" para series en el tiempo, "bar" para comparar empresas o categorías (barras horizontales; ordénalas en el SQL). Máximo ${MAX_SERIES} series y una sola unidad por gráfico (nunca dos escalas: si las magnitudes no se comparan, haz dos gráficos o indexa). Para series largas agrega por mes. En el mensaje que acompaña, da los números clave, porque la imagen no se puede consultar.
 
 Formato de respuesta (Telegram)
 - En español, directo: primero la respuesta, después el detalle mínimo. Siempre di la fecha del dato y de qué vista sale (p.ej. "consenso al 30/11/26").
@@ -46,6 +48,15 @@ const SendTableFile = z.object({
   caption: z.string(),
 });
 const SendDocument = z.object({ kind: z.enum(["tearsheet", "presentation"]), id: z.string().min(1) });
+const SendChart = z.object({
+  kind: z.enum(["line", "bar"]),
+  sql: z.string().min(1),
+  title: z.string().min(1),
+  subtitle: z.string(),
+  value_format: z.enum(["number", "percent", "fraction_percent", "multiple"]),
+  decimals: z.number().int().min(0).max(4),
+  source_note: z.string(),
+});
 
 const TOOLS: Anthropic.Beta.BetaTool[] = [
   {
@@ -88,6 +99,29 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
         id: { type: "string", description: "tearsheet_pdfs.id o presentations.id." },
       },
       required: ["kind", "id"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+  {
+    name: "send_chart",
+    description:
+      `Dibuja un gráfico con el manual de marca de PATRIA y lo manda como imagen al chat. Los datos salen de una consulta SELECT sobre el schema ai: la PRIMERA columna es el eje X (fecha 'YYYY-MM-DD', año o etiqueta de categoría) y las siguientes son las series numéricas (1 a ${MAX_SERIES}), con alias legibles porque el alias es el nombre de la serie en la leyenda. kind "line" para series en el tiempo (ordenadas por fecha ascendente, hasta 3.000 puntos); kind "bar" para comparar categorías en barras horizontales (hasta 30, ya ordenadas en el SQL). Devuelve cuántos puntos se dibujaron.`,
+    input_schema: {
+      type: "object",
+      properties: {
+        kind: { type: "string", enum: ["line", "bar"] },
+        sql: { type: "string", description: "SELECT: primera columna = eje X; las siguientes = series numéricas con alias legibles." },
+        title: { type: "string", description: "Título corto (se muestra en mayúsculas)." },
+        subtitle: { type: "string", description: "Qué se mide y en qué unidad/moneda (puede ir vacío)." },
+        value_format: {
+          type: "string", enum: ["number", "percent", "fraction_percent", "multiple"],
+          description: "number = tal cual; percent = el valor ya está en % (5.2 → 5,2%); fraction_percent = decimal (0.052 → 5,2%); multiple = veces (11.1 → 11,1x).",
+        },
+        decimals: { type: "integer", description: "Decimales de las etiquetas (0 a 4)." },
+        source_note: { type: "string", description: "Pie: fuente y fecha del dato, p.ej. 'Fuente: consenso Bloomberg al 30/11/26' (puede ir vacío)." },
+      },
+      required: ["kind", "sql", "title", "subtitle", "value_format", "decimals", "source_note"],
       additionalProperties: false,
     },
     strict: true,
@@ -151,6 +185,23 @@ async function runTool(name: string, input: unknown, ctx: ToolCtx): Promise<{ co
         console.warn("[qa-bot] no se pudo adjuntar el PDF, va el link:", String(e).slice(0, 160));
       }
       return { content: JSON.stringify({ title: link.title, attached, url: link.url, link_valid_for: link.signed ? "1 hora" : "requiere login en la app" }) };
+    }
+    if (name === "send_chart") {
+      const p = SendChart.safeParse(input);
+      if (!p.success) return { content: "Input inválido para send_chart.", isError: true };
+      if (ctx.filesSent >= 3) return { content: "Ya se mandaron 3 archivos o gráficos en esta respuesta; no mandes más.", isError: true };
+      const r = await runReadOnly(p.data.sql, 3001);
+      ctx.queries.push(p.data.sql);
+      const data = parseChartData(r, p.data.kind);
+      if ("error" in data) return { content: data.error, isError: true };
+      await sendTyping(ctx.chatId, "upload_photo");
+      const png = await renderChartPng({
+        kind: p.data.kind, title: p.data.title, subtitle: p.data.subtitle,
+        valueFormat: p.data.value_format, decimals: p.data.decimals, sourceNote: p.data.source_note,
+      }, data);
+      await sendPhotoBuffer(ctx.chatId, png, undefined, ctx.replyTo);
+      ctx.filesSent++;
+      return { content: JSON.stringify({ sent: true, points: data.x.length, series: data.series.map((s) => s.name) }) };
     }
     return { content: `Herramienta desconocida: ${name}`, isError: true };
   } catch (e) {

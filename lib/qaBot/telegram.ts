@@ -28,7 +28,7 @@ export async function getMe(): Promise<{ id: number; username: string }> {
   return me;
 }
 
-export async function sendTyping(chatId: number, action: "typing" | "upload_document" = "typing"): Promise<void> {
+export async function sendTyping(chatId: number, action: "typing" | "upload_document" | "upload_photo" = "typing"): Promise<void> {
   await call("sendChatAction", { chat_id: chatId, action }).catch(() => {});
 }
 
@@ -79,6 +79,16 @@ export async function sendDocumentBuffer(
   if (caption) form.append("caption", caption.slice(0, 1024));
   if (replyTo) form.append("reply_parameters", JSON.stringify({ message_id: replyTo, allow_sending_without_reply: true }));
   await call("sendDocument", form);
+}
+
+/** Sube una imagen PNG generada en el servidor (gráficos). Telegram la muestra en el chat. */
+export async function sendPhotoBuffer(chatId: number, png: Buffer, caption?: string, replyTo?: number): Promise<void> {
+  const form = new FormData();
+  form.append("chat_id", String(chatId));
+  form.append("photo", new Blob([new Uint8Array(png)], { type: "image/png" }), "grafico.png");
+  if (caption) form.append("caption", caption.slice(0, 1024));
+  if (replyTo) form.append("reply_parameters", JSON.stringify({ message_id: replyTo, allow_sending_without_reply: true }));
+  await call("sendPhoto", form);
 }
 
 /** Manda un documento por URL: Telegram lo descarga (PDF hasta 20 MB). */

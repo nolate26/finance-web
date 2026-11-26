@@ -42,6 +42,7 @@ const HELP = [
   "• <i>P/E forward de los bancos chilenos vs su promedio, en tabla</i>",
   "• <i>Consenso 2027 de todo el IPSA en Excel</i>",
   "• <i>Mándame la ficha de Andina</i>",
+  "• <i>Gráfico del P/E forward de CCU de los últimos 5 años</i>",
   "",
   "/new — conversación nueva (borra el contexto)",
   "/status — fecha del último dato de cada fuente",

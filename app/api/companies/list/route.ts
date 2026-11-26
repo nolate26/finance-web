@@ -9,6 +9,16 @@ export interface CompanyListItem {
   kind:   "company" | "bank";
   /** true = tiene datos en alguna pestaña del deep-dive; false = sólo existe en la maestra. */
   hasData: boolean;
+  /**
+   * Qué pestañas del deep-dive tienen contenido. El sidebar lo pinta como cuatro
+   * íconos por fila para que se vea la cobertura antes de abrir la empresa.
+   */
+  coverage: {
+    model:     boolean;   // model_headers ∪ bank_headers
+    consensus: boolean;   // consensus_estimates
+    reports:   boolean;   // presentation_tickers ∪ fichas ∪ ficha_tickers
+    research:  boolean;   // email_research (no descartadas)
+  };
 }
 
 /**
@@ -41,7 +51,10 @@ export async function GET() {
     // Los tickers están normalizados en la base (Fase 1), así que se comparan con
     // igualdad directa: nada de UPPER()/BTRIM() sobre la columna, que impedía usar
     // los índices y forzaba escaneo secuencial de tablas enteras.
-    const rows = await prisma.$queryRaw<{ ticker: string; nombre: string; kind: string; has_data: boolean }[]>`
+    const rows = await prisma.$queryRaw<{
+      ticker: string; nombre: string; kind: string; has_data: boolean;
+      has_model: boolean; has_consensus: boolean; has_reports: boolean; has_research: boolean;
+    }[]>`
       WITH have_data AS (
         SELECT ei.ticker_bloomberg AS ticker
         FROM fund_portfolio_weights fpw
@@ -81,7 +94,20 @@ export async function GET() {
                             WHERE mh.ticker = ei.ticker_bloomberg)
                THEN 'bank' ELSE 'company'
              END AS kind,
-             (d.ticker IS NOT NULL) AS has_data
+             (d.ticker IS NOT NULL) AS has_data,
+             -- Cobertura por pestaña: los mismos filtros que usa cada pestaña al
+             -- cargar, para que el ícono no prometa algo que después sale vacío.
+             -- Son sondeos por índice (ticker) sobre ~550 filas de la maestra.
+             (EXISTS (SELECT 1 FROM model_headers mh WHERE mh.ticker = ei.ticker_bloomberg)
+               OR EXISTS (SELECT 1 FROM bank_headers bh WHERE bh.ticker = ei.ticker_bloomberg)
+             ) AS has_model,
+             EXISTS (SELECT 1 FROM consensus_estimates ce WHERE ce.ticker = ei.ticker_bloomberg) AS has_consensus,
+             (EXISTS (SELECT 1 FROM presentation_tickers pt WHERE pt.ticker = ei.ticker_bloomberg)
+               OR EXISTS (SELECT 1 FROM fichas f WHERE f.ticker = ei.ticker_bloomberg)
+               OR EXISTS (SELECT 1 FROM ficha_tickers ft WHERE ft.ticker = ei.ticker_bloomberg)
+             ) AS has_reports,
+             EXISTS (SELECT 1 FROM email_research er
+                     WHERE er.company = ei.ticker_bloomberg AND er.dismissed_at IS NULL) AS has_research
       FROM empresas_industrias_v2 ei
       LEFT JOIN have_data d ON d.ticker = ei.ticker_bloomberg
       WHERE ei.ticker_bloomberg IS NOT NULL AND ei.ticker_bloomberg <> ''
@@ -99,6 +125,12 @@ export async function GET() {
       nombre:  r.nombre,
       kind:    r.kind === "bank" ? "bank" : "company",
       hasData: r.has_data === true,
+      coverage: {
+        model:     r.has_model === true,
+        consensus: r.has_consensus === true,
+        reports:   r.has_reports === true,
+        research:  r.has_research === true,
+      },
     }));
 
     // `companies` conserva exactamente el contrato anterior (sólo con datos); el
