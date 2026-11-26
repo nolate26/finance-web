@@ -89,32 +89,41 @@ export async function POST(request: Request) {
     const images = await processResearchImages(String(rawHtml), attachments, source?.messageId);
     const html = images.html;
 
+    const messageId: string | null = source?.messageId || null;
+
     const reports = await Promise.all(
-      companies.map((ticker: string) =>
-        prisma.emailResearch.create({
-          data: {
-            schemaVersion: schemaVersion || "1.0",
-            company: ticker,
-            date: finalDate, // ✅ AQUÍ USAMOS LA FECHA YA PARSEADA Y SEGURA
-            category: category || 'Uncategorized',
-            title: title || null,
-            recommendation: recommendation || null,
-            targetPrice: parsedTargetPrice,
-            subject: subject || null,
-            html: html,
-            from: source?.from || null,
-            receivedAt: source?.receivedAt
-              ? new Date(source.receivedAt)
-              : null,
-            messageId: source?.messageId || null,
-          }
-        })
-      )
+      companies.map((ticker: string) => {
+        const data = {
+          schemaVersion: schemaVersion || "1.0",
+          company: ticker,
+          date: finalDate, // ✅ AQUÍ USAMOS LA FECHA YA PARSEADA Y SEGURA
+          category: category || 'Uncategorized',
+          title: title || null,
+          recommendation: recommendation || null,
+          targetPrice: parsedTargetPrice,
+          subject: subject || null,
+          html: html,
+          from: source?.from || null,
+          receivedAt: source?.receivedAt
+            ? new Date(source.receivedAt)
+            : null,
+          messageId,
+        };
+        // Reprocesar el mismo correo (Resubmit en Power Automate) actualiza la nota en vez
+        // de chocar con @@unique([messageId, company]) y devolver 500. `dismissedAt` no
+        // se toca: si el admin la dejó como general, sigue así.
+        if (!messageId) return prisma.emailResearch.create({ data });
+        return prisma.emailResearch.upsert({
+          where:  { messageId_company: { messageId, company: ticker } },
+          create: data,
+          update: data,
+        });
+      })
     );
- 
+
     return NextResponse.json({
       success: true,
-      message: `${reports.length} registros creados`,
+      message: `${reports.length} registros guardados`,
       ids: reports.map(r => r.id),
       images: { uploaded: images.uploaded, skipped: images.skipped },
     });
