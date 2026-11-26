@@ -1,11 +1,22 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { normalizeTickerList } from '@/lib/issuer';
+import { processResearchImages } from '@/lib/researchImages';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
+  // Clave compartida con Power Automate (header x-ingest-key). Sólo se exige cuando
+  // INGEST_EMAIL_KEY está definida, para no cortar el flujo antes de que se configure.
+  const ingestKey = process.env.INGEST_EMAIL_KEY;
+  if (ingestKey && request.headers.get('x-ingest-key') !== ingestKey) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+  }
+
   try {
     const data = await request.json();
- 
+
     const {
       schemaVersion,
       company,
@@ -15,12 +26,13 @@ export async function POST(request: Request) {
       recommendation,
       target_price,
       subject,
-      html,
-      source
+      html: rawHtml,
+      source,
+      attachments,
     } = data;
  
     // Validación
-    if (!company || !html) {
+    if (!company || !rawHtml) {
       return NextResponse.json(
         { error: 'Faltan campos críticos (company o html)' },
         { status: 400 }
@@ -72,6 +84,11 @@ export async function POST(request: Request) {
       }
     }
  
+    // Imágenes inline (attachments del flujo) → R2, y los `cid:` del HTML pasan a ser
+    // links a /api/research/image/…. Una sola subida aunque el correo traiga N tickers.
+    const images = await processResearchImages(String(rawHtml), attachments, source?.messageId);
+    const html = images.html;
+
     const reports = await Promise.all(
       companies.map((ticker: string) =>
         prisma.emailResearch.create({
@@ -98,7 +115,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       message: `${reports.length} registros creados`,
-      ids: reports.map(r => r.id)
+      ids: reports.map(r => r.id),
+      images: { uploaded: images.uploaded, skipped: images.skipped },
     });
  
   } catch (error) {

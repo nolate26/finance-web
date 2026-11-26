@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { normalizeTicker } from "@/lib/issuer";
+import { deleteResearchImages } from "@/lib/researchImages";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -129,7 +130,16 @@ export async function DELETE(
   }
 
   try {
-    await prisma.emailResearch.delete({ where: { id: numericId } });
+    const deleted = await prisma.emailResearch.delete({
+      where: { id: numericId },
+      select: { messageId: true },
+    });
+    // Las filas de un mismo correo (una por ticker) comparten la carpeta de imágenes en
+    // R2: sólo se borra cuando se va la última.
+    if (deleted.messageId) {
+      const siblings = await prisma.emailResearch.count({ where: { messageId: deleted.messageId } });
+      if (siblings === 0) await deleteResearchImages(deleted.messageId);
+    }
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {

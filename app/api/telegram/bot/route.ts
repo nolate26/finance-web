@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse, after } from "next/server";
-import { answer, resetConversation, getLastQueries, exportLastQuery, dataStatus } from "@/lib/qaBot/agent";
+import { answer, resetConversation, getLastQueries, exportLastQuery, dataStatus, MODEL } from "@/lib/qaBot/agent";
 import { getMe, sendReply, sendTyping } from "@/lib/qaBot/telegram";
 
 export const dynamic = "force-dynamic";
@@ -119,7 +119,7 @@ async function handle(msg: TgMessage): Promise<void> {
   }
   if (cmd === "status") {
     try {
-      return sendReply(chatId, `<b>Último dato por fuente</b>\n<pre>${escapeHtml(await dataStatus())}</pre>`, replyTo);
+      return sendReply(chatId, `<b>Modelo:</b> <code>${escapeHtml(MODEL)}</code>\n\n<b>Último dato por fuente</b>\n<pre>${escapeHtml(await dataStatus())}</pre>`, replyTo);
     } catch (e) {
       console.error("[qa-bot] /status:", e);
       return sendReply(chatId, "No pude leer las fechas de la base.", replyTo);

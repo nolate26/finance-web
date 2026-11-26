@@ -15,12 +15,19 @@ export function prepareResearchHtml(raw: string | null | undefined): string {
   if (typeof window === "undefined" || typeof DOMParser === "undefined") {
     return raw
       .replace(/<(style|script|title)\b[^>]*>[\s\S]*?<\/\1>/gi, "")
-      .replace(/<\/?(?:html|head|body|meta|link)\b[^>]*>/gi, "");
+      .replace(/<\/?(?:html|head|body|meta|link)\b[^>]*>/gi, "")
+      .replace(/<img\b[^>]*\bsrc\s*=\s*["']cid:[^>]*>/gi, "");
   }
 
   try {
     const doc = new DOMParser().parseFromString(raw, "text/html");
     doc.querySelectorAll("style, script, title, meta, link, base").forEach((el) => el.remove());
+    doc.querySelectorAll("img").forEach((img) => {
+      // `cid:` = imagen del correo que nunca se subió (notas anteriores a la ingesta de
+      // imágenes, o una que falló): se quita en vez de mostrar un ícono roto.
+      if (/^cid:/i.test(img.getAttribute("src") ?? "")) { img.remove(); return; }
+      img.setAttribute("loading", "lazy");
+    });
     return doc.body?.innerHTML ?? raw;
   } catch {
     return raw;

@@ -10,7 +10,7 @@ import { parseChartData, renderChartPng, MAX_SERIES } from "@/lib/qaBot/chart";
 // run_sql sobre el schema ai como qa_bot_ro, send_table_file para tablas largas y send_document
 // para el PDF de una ficha o presentación. El ciclo corre acá, dentro de la app (Railway).
 
-const MODEL = process.env.QA_BOT_MODEL || "claude-sonnet-5-5";
+export const MODEL = process.env.QA_BOT_MODEL || "claude-sonnet-5-5";
 const MAX_TURNS = 12;            // vueltas modelo → herramientas por pregunta
 const SQL_ROWS_FOR_MODEL = 200;  // filas que ve el modelo por consulta
 const FILE_ROWS = 50_000;        // filas máximas en un CSV / Excel
