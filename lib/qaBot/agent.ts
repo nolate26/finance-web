@@ -5,10 +5,11 @@ import { loadCatalog } from "@/lib/qaBot/catalog";
 import { toCsv, toXlsx, safeFilename, documentLink } from "@/lib/qaBot/files";
 import { sendDocumentBuffer, sendDocumentUrl, sendPhotoBuffer, sendTyping } from "@/lib/qaBot/telegram";
 import { parseChartData, renderChartPng, MAX_SERIES } from "@/lib/qaBot/chart";
+import { renderTablePng, MAX_TABLE_ROWS, MAX_TABLE_COLS } from "@/lib/qaBot/table";
 
 // Agente del bot de Q&A de Telegram: Claude (Messages API) con tres herramientas propias —
-// run_sql sobre el schema ai como qa_bot_ro, send_table_file para tablas largas y send_document
-// para el PDF de una ficha o presentación. El ciclo corre acá, dentro de la app (Railway).
+// run_sql sobre el schema ai como qa_bot_ro, send_table / send_chart (imágenes PATRIA),
+// send_table_file para tablas largas y send_document para el PDF de una ficha o presentación. El ciclo corre acá, dentro de la app (Railway).
 
 export const MODEL = process.env.QA_BOT_MODEL || "claude-sonnet-5-5";
 const MAX_TURNS = 12;            // vueltas modelo → herramientas por pregunta
@@ -27,14 +28,14 @@ Cómo trabajar
 - Para "el dato actual" usa is_latest / is_latest_version. La recomendación y el target price oficiales del equipo son los de security_recommendations con source = 'analyst_model' e is_latest_for_source; las otras fuentes son contexto.
 - Respeta las unidades y monedas que indican los comentarios de cada columna (millones vs unidades, decimal vs %, retornos anualizados, dividendos negativos en los modelos) y explicítalas en la respuesta.
 - Si la pregunta es ambigua en algo que cambia el resultado (qué empresa, qué período), pregunta en una línea antes de consultar.
-- Si el resultado tiene más de ~15 filas, o te piden "en Excel"/"en CSV"/"archivo", usa send_table_file (Excel por defecto) y en el mensaje resume lo principal.
+- Tablas: si la respuesta tiene 3 o más filas con 2 o más columnas de datos (comparar empresas, múltiplos, estimaciones por año, recomendaciones), mándala con send_table, que la dibuja como imagen bien alineada. Hasta ${MAX_TABLE_ROWS} filas y ${MAX_TABLE_COLS} columnas; ordena las filas en el SQL, pon alias cortos y legibles con la unidad ("P/E 26e", "Div. yield %", "Mkt cap USD mn") y elige el formato de cada columna. Con más filas, o si piden "en Excel"/"en CSV"/"archivo", usa send_table_file (Excel por defecto). En el mensaje que acompaña, resume lo principal en 2-4 líneas; no repitas la tabla en texto.
 - Si piden el PDF de una ficha o de una presentación, busca su id en tearsheet_pdfs o presentations y usa send_document.
 - Si piden un gráfico, usa send_chart: "line" para series en el tiempo, "bar" para comparar empresas o categorías (barras horizontales; ordénalas en el SQL). Máximo ${MAX_SERIES} series y una sola unidad por gráfico (nunca dos escalas: si las magnitudes no se comparan, haz dos gráficos o indexa). Para series largas agrega por mes. En el mensaje que acompaña, da los números clave, porque la imagen no se puede consultar.
 
 Formato de respuesta (Telegram)
 - En español, directo: primero la respuesta, después el detalle mínimo. Siempre di la fecha del dato y de qué vista sale (p.ej. "consenso al 30/11/26").
 - Usa solo HTML de Telegram: <b>, <i>, <code>, <pre>, <a href="...">. Nada de Markdown ni tablas con |. Escapa los signos < y > que no sean etiquetas como &lt; y &gt;.
-- Tablas de hasta ~15 filas dentro de <pre>, con columnas alineadas y pocas columnas (se lee en celular).
+- Nunca armes tablas en texto ni alinees columnas con espacios dentro de <pre>: en Telegram se desarman. Para pocos datos usa una lista corta (una línea por empresa: "<b>CCU</b>: P/E 26e 14,2x · div. yield 4,1%"); para más, send_table.
 - Máximo ~3.000 caracteres por respuesta.
 - No muestres el SQL salvo que te lo pidan.`;
 
@@ -55,6 +56,14 @@ const SendChart = z.object({
   subtitle: z.string(),
   value_format: z.enum(["number", "percent", "fraction_percent", "multiple"]),
   decimals: z.number().int().min(0).max(4),
+  source_note: z.string(),
+});
+const COLUMN_FORMATS = ["text", "number", "compact", "percent", "fraction_percent", "multiple", "date"] as const;
+const SendTable = z.object({
+  sql: z.string().min(1),
+  title: z.string().min(1),
+  subtitle: z.string(),
+  columns: z.array(z.object({ format: z.enum(COLUMN_FORMATS), decimals: z.number().int().min(0).max(4) })),
   source_note: z.string(),
 });
 
@@ -122,6 +131,36 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
         source_note: { type: "string", description: "Pie: fuente y fecha del dato, p.ej. 'Fuente: consenso Bloomberg al 30/11/26' (puede ir vacío)." },
       },
       required: ["kind", "sql", "title", "subtitle", "value_format", "decimals", "source_note"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+  {
+    name: "send_table",
+    description:
+      `Dibuja una tabla con el manual de marca de PATRIA (columnas medidas y alineadas en código, números a la derecha) y la manda como imagen al chat. Los datos salen de una consulta SELECT sobre el schema ai: la primera columna es la etiqueta de la fila (empresa, ticker, año) y las siguientes los datos; los alias de columna son los encabezados. Hasta ${MAX_TABLE_ROWS} filas y ${MAX_TABLE_COLS} columnas, en el orden del SQL. Devuelve cuántas filas se dibujaron.`,
+    input_schema: {
+      type: "object",
+      properties: {
+        sql: { type: "string", description: "SELECT con alias cortos y legibles (se muestran como encabezados), ya ordenado." },
+        title: { type: "string", description: "Título corto (se muestra en mayúsculas)." },
+        subtitle: { type: "string", description: "Moneda, unidades y fecha del dato (puede ir vacío)." },
+        columns: {
+          type: "array",
+          description: "Un formato por columna del SELECT, en el mismo orden (incluida la primera). text = tal cual; number = número con separador de miles; compact = montos grandes abreviados (1,2 M / 3,4 mil M); percent = el valor ya está en % (5.2 → 5,2%); fraction_percent = decimal (0.052 → 5,2%); multiple = veces (11.1 → 11,1x); date = 'YYYY-MM-DD' → dd/mm/aa.",
+          items: {
+            type: "object",
+            properties: {
+              format: { type: "string", enum: [...COLUMN_FORMATS] },
+              decimals: { type: "integer", description: "Decimales (0 a 4); en text y date no se usa." },
+            },
+            required: ["format", "decimals"],
+            additionalProperties: false,
+          },
+        },
+        source_note: { type: "string", description: "Pie: fuente y fecha, p.ej. 'Fuente: consenso Bloomberg al 30/11/26' (puede ir vacío)." },
+      },
+      required: ["sql", "title", "subtitle", "columns", "source_note"],
       additionalProperties: false,
     },
     strict: true,
@@ -202,6 +241,21 @@ async function runTool(name: string, input: unknown, ctx: ToolCtx): Promise<{ co
       await sendPhotoBuffer(ctx.chatId, png, undefined, ctx.replyTo);
       ctx.filesSent++;
       return { content: JSON.stringify({ sent: true, points: data.x.length, series: data.series.map((s) => s.name) }) };
+    }
+    if (name === "send_table") {
+      const p = SendTable.safeParse(input);
+      if (!p.success) return { content: "Input inválido para send_table.", isError: true };
+      if (ctx.filesSent >= 3) return { content: "Ya se mandaron 3 archivos o imágenes en esta respuesta; no mandes más.", isError: true };
+      const r = await runReadOnly(p.data.sql, MAX_TABLE_ROWS + 1);
+      ctx.queries.push(p.data.sql);
+      await sendTyping(ctx.chatId, "upload_photo");
+      const png = await renderTablePng(r, {
+        title: p.data.title, subtitle: p.data.subtitle, sourceNote: p.data.source_note, columns: p.data.columns,
+      });
+      if (!Buffer.isBuffer(png)) return { content: png.error, isError: true };
+      await sendPhotoBuffer(ctx.chatId, png, undefined, ctx.replyTo);
+      ctx.filesSent++;
+      return { content: JSON.stringify({ sent: true, rows: r.rows.length, columns: r.columns }) };
     }
     return { content: `Herramienta desconocida: ${name}`, isError: true };
   } catch (e) {

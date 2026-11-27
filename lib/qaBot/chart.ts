@@ -24,7 +24,7 @@ const POS = PATRIA.kingBlue;
 const NEG = PATRIA.pink;
 const GRID = "rgba(13,13,56,0.08)";
 const BASELINE = "rgba(13,13,56,0.30)";
-const FONT = "Arimo";
+export const FONT = "Arimo";
 const W = 640;
 const PAD = 20;
 
@@ -40,13 +40,13 @@ export interface ChartSpec {
 
 // ── Utilidades ──────────────────────────────────────────────────────────────────
 
-const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+export const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 /**
  * Ancho aproximado de un texto en Arimo/Arial, por tipo de carácter (en em): las mayúsculas
  * ocupan bastante más que las minúsculas, y la negrita ~6% más. Se usa para reservar el margen
  * de las etiquetas, así que pecar de ancho es preferible a cortarlas.
  */
-function textW(s: string, size: number, bold = false): number {
+export function textW(s: string, size: number, bold = false): number {
   let em = 0;
   for (const ch of s) {
     if (ch === " ") em += 0.28;
@@ -58,9 +58,9 @@ function textW(s: string, size: number, bold = false): number {
   }
   return em * size * (bold ? 1.06 : 1);
 }
-const clip = (s: string, max: number) => (s.length > max ? s.slice(0, max - 1) + "…" : s);
+export const clip = (s: string, max: number) => (s.length > max ? s.slice(0, max - 1) + "…" : s);
 
-const nf = (d: number) => new Intl.NumberFormat("es-CL", { minimumFractionDigits: d, maximumFractionDigits: d });
+export const nf = (d: number) => new Intl.NumberFormat("es-CL", { minimumFractionDigits: d, maximumFractionDigits: d });
 
 export function formatValue(v: number, fmt: ValueFormat, decimals: number): string {
   const d = Math.max(0, Math.min(4, Math.round(decimals)));
@@ -271,14 +271,18 @@ export function chartSvg(spec: ChartSpec, data: Parsed): string {
   return spec.kind === "line" ? lineSvg(spec, data) : barSvg(spec, data);
 }
 
-/** PNG de 1280 px de ancho. resvg se importa en diferido: es un binario nativo. */
-export async function renderChartPng(spec: ChartSpec, data: Parsed): Promise<Buffer> {
+/** SVG → PNG al doble de su tamaño lógico. resvg se importa en diferido: es un binario nativo. */
+export async function renderSvgPng(svg: string): Promise<Buffer> {
   const { Resvg } = await import("@resvg/resvg-js");
-  const svg = chartSvg(spec, data);
   const png = new Resvg(svg, {
-    fitTo: { mode: "width", value: 1280 },
+    fitTo: { mode: "zoom", value: 2 },
     background: "#FFFFFF",
     font: { fontFiles: fonts(), loadSystemFonts: false, defaultFontFamily: FONT },
   }).render().asPng();
   return Buffer.from(png);
+}
+
+/** PNG de 1280 px de ancho (el gráfico mide 640 lógicos). */
+export async function renderChartPng(spec: ChartSpec, data: Parsed): Promise<Buffer> {
+  return renderSvgPng(chartSvg(spec, data));
 }
